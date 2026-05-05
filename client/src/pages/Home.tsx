@@ -7,7 +7,7 @@ import { ChatPanel } from '@/components/ChatPanel';
 import { APIKeyModal } from '@/components/APIKeyModal';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
-import { Language } from '@/lib/i18n';
+import { Language, getTranslation } from '@/lib/i18n';
 import { toast } from 'sonner';
 
 // ─── 3D Helpers ────────────────────────────────────────────────────────────────
@@ -131,13 +131,13 @@ function MetricRow({ label, value, unit = '', highlight = false }: {
   );
 }
 
-function StatusChip({ status }: { status: 'good' | 'warning' | 'critical' }) {
+function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'; label: string }) {
   const cfg = {
-    good:     { label: 'NOMINAL',  cls: 'text-emerald-400 border-emerald-400/30 bg-emerald-400/5' },
-    warning:  { label: 'CAUTION', cls: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/5' },
-    critical: { label: 'CRITICAL', cls: 'text-red-400 border-red-400/30 bg-red-400/5' },
+    good:     { cls: 'text-emerald-400 border-emerald-400/30 bg-emerald-400/5' },
+    warning:  { cls: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/5' },
+    critical: { cls: 'text-red-400 border-red-400/30 bg-red-400/5' },
   }[status];
-  return <span className={`text-xs font-mono px-2 py-0.5 border rounded-sm ${cfg.cls}`}>{cfg.label}</span>;
+  return <span className={`text-xs font-mono px-2 py-0.5 border rounded-sm ${cfg.cls}`}>{label}</span>;
 }
 
 // ─── Home ──────────────────────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ export default function Home() {
     setUploadedModel(model);
     setTab('geometry');
     setQuickReport('');
-    toast.success('STL parsed — ' + model.fileName);
+    toast.success(t('stlParsed') + model.fileName);
   };
 
   const getModelData = (): ModelData | null => {
@@ -186,10 +186,11 @@ export default function Home() {
   const analysis = uploadedModel?.analysis;
   const modelData = getModelData();
   const providerLabel = getActiveProvider() ? { claude: 'Claude', openai: 'GPT-4o', gemini: 'Gemini' }[getActiveProvider()!] : null;
+  const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
 
   return (
     <div className="relative w-full min-h-screen bg-background grid-bg overflow-x-hidden">
-      {showAPIModal && <APIKeyModal onClose={() => setShowAPIModal(false)} />}
+      {showAPIModal && <APIKeyModal onClose={() => setShowAPIModal(false)} language={language} />}
 
       {/* ── Header ── */}
       <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-5 py-3 border-b border-border bg-background/95 backdrop-blur-sm">
@@ -217,7 +218,7 @@ export default function Home() {
                 ? 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10'
                 : 'border-border text-muted-foreground hover:border-primary/40 hover:text-primary'
             }`}>
-            {providerLabel ? `AI: ${providerLabel}` : 'API KEYS'}
+            {providerLabel ? `${t('api')}: ${providerLabel}` : t('apiKeys')}
           </button>
         </div>
       </header>
@@ -228,8 +229,8 @@ export default function Home() {
         {/* Left: 3D Viewport */}
         <div className="lg:w-1/2 h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
           <div className="absolute top-3 left-4 z-10 font-mono text-xs text-muted-foreground/40 space-y-0.5 hidden lg:block">
-            <div>// VIEWPORT</div>
-            <div>// drag: rotate · scroll: zoom</div>
+            <div>// {t('viewport')}</div>
+            <div>// {t('viewportHint')}</div>
           </div>
           <Canvas gl={{ antialias: true, alpha: true }} style={{ background: 'transparent' }}>
             <PerspectiveCamera makeDefault position={[0, 3, 10]} fov={60} />
@@ -249,8 +250,8 @@ export default function Home() {
 
             {/* Upload */}
             <div>
-              <div className="text-xs text-muted-foreground/50 mb-2 font-mono tracking-widest">// INPUT</div>
-              <STLUploadHandler onModelLoaded={handleModelLoaded} onError={e => toast.error(e)} />
+              <div className="text-xs text-muted-foreground/50 mb-2 font-mono tracking-widest">// {t('input')}</div>
+              <STLUploadHandler onModelLoaded={handleModelLoaded} onError={e => toast.error(e)} language={language} />
             </div>
 
             {/* Analysis tabs */}
@@ -258,12 +259,12 @@ export default function Home() {
               <div className="space-y-0 fade-up">
                 {/* Tabs */}
                 <div className="flex border-b border-border">
-                  {(['geometry', 'report', 'chat'] as const).map(t => (
-                    <button key={t} onClick={() => setTab(t)}
+                  {(['geometry', 'report', 'chat'] as const).map(tabKey => (
+                    <button key={tabKey} onClick={() => setTab(tabKey)}
                       className={`text-xs font-mono px-4 py-2.5 border-b-2 transition-all ${
-                        tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                        tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
                       }`}>
-                      {t === 'geometry' ? 'GEOMETRY' : t === 'report' ? 'REPORT' : 'CHAT AI'}
+                      {tabKey === 'geometry' ? t('geometry').toUpperCase() : tabKey === 'report' ? t('report').toUpperCase() : t('chatAI').toUpperCase()}
                     </button>
                   ))}
                 </div>
@@ -273,27 +274,27 @@ export default function Home() {
                   <div className="space-y-4 pt-4">
                     <div className="grid grid-cols-2 gap-3">
                       <div className="p-3 border border-border rounded-sm bg-card">
-                        <div className="text-xs text-muted-foreground mb-2 font-mono">WALL THICKNESS</div>
-                        <StatusChip status={analysis.wallThickness.status} />
+                        <div className="text-xs text-muted-foreground mb-2 font-mono">{t('wallThicknessLabel')}</div>
+                        <StatusChip status={analysis.wallThickness.status} label={t(analysis.wallThickness.status)} />
                       </div>
                       <div className="p-3 border border-border rounded-sm bg-card">
-                        <div className="text-xs text-muted-foreground mb-2 font-mono">OVERHANG</div>
-                        <StatusChip status={analysis.overhang.status} />
+                        <div className="text-xs text-muted-foreground mb-2 font-mono">{t('overhangLabel')}</div>
+                        <StatusChip status={analysis.overhang.status} label={t(analysis.overhang.status)} />
                       </div>
                     </div>
                     <div className="border border-border rounded-sm bg-card p-4">
                       <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">GEOMETRY DATA</div>
-                      <MetricRow label="MIN THICKNESS" value={analysis.wallThickness.minThickness.toFixed(3)} unit="mm" highlight />
-                      <MetricRow label="VOLUME" value={analysis.volume.toFixed(1)} unit="mm³" />
-                      <MetricRow label="SURFACE AREA" value={analysis.surfaceArea.toFixed(1)} unit="mm²" />
-                      <MetricRow label="DIM X" value={modelData.dims.x.toFixed(2)} unit="mm" />
-                      <MetricRow label="DIM Y" value={modelData.dims.y.toFixed(2)} unit="mm" />
-                      <MetricRow label="DIM Z" value={modelData.dims.z.toFixed(2)} unit="mm" />
-                      <MetricRow label="OVERHANG FACES" value={analysis.overhang.areas} />
+                      <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness.toFixed(3)} unit="mm" highlight />
+                      <MetricRow label={t('volume')} value={analysis.volume.toFixed(1)} unit="mm³" />
+                      <MetricRow label={t('surfaceArea')} value={analysis.surfaceArea.toFixed(1)} unit="mm²" />
+                      <MetricRow label={t('dimX')} value={modelData.dims.x.toFixed(2)} unit="mm" />
+                      <MetricRow label={t('dimY')} value={modelData.dims.y.toFixed(2)} unit="mm" />
+                      <MetricRow label={t('dimZ')} value={modelData.dims.z.toFixed(2)} unit="mm" />
+                      <MetricRow label={t('overhangFaces')} value={analysis.overhang.areas} />
                     </div>
                     <button onClick={() => setTab('report')}
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
-                      GENERATE REPORT →
+                      {t('generateReport')}
                     </button>
                   </div>
                 )}
@@ -304,30 +305,30 @@ export default function Home() {
                     {!quickReport && (
                       <button onClick={handleGenerateReport} disabled={reportLoading}
                         className="w-full py-3 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all disabled:opacity-50">
-                        {reportLoading ? '▋ ANALYZING...' : '⚡ GENERATE QUICK REPORT (FREE)'}
+                        {reportLoading ? '▋ ' + t('analyze') : t('generateQuickReport')}
                       </button>
                     )}
                     {quickReport && (
                       <div className="border border-border rounded-sm bg-card p-4 fade-up">
                         <div className="flex items-center justify-between mb-3">
-                          <span className="text-xs font-mono text-primary tracking-widest">ANALYSIS REPORT</span>
-                          <span className="text-xs font-mono text-muted-foreground/40">[LOCAL ENGINE]</span>
+                          <span className="text-xs font-mono text-primary tracking-widest">{t('analysisReport')}</span>
+                          <span className="text-xs font-mono text-muted-foreground/40">{t('localEngine')}</span>
                         </div>
                         <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap leading-relaxed">
                           {quickReport}
                         </pre>
                         <button onClick={() => setQuickReport('')}
                           className="mt-4 text-xs font-mono text-muted-foreground hover:text-primary transition-colors">
-                          ↺ REGENERATE
+                          {t('regenerate')}
                         </button>
                       </div>
                     )}
                     <div className="border border-dashed border-border/40 rounded-sm p-4 text-center space-y-2">
-                      <div className="text-xs font-mono text-muted-foreground">DEEP AI ANALYSIS</div>
-                      <div className="text-xs text-muted-foreground/50">Full AI report with Claude / GPT-4o / Gemini</div>
+                      <div className="text-xs font-mono text-muted-foreground">{t('deepAnalysis')}</div>
+                      <div className="text-xs text-muted-foreground/50">{t('deepAnalysisDesc')}</div>
                       <button onClick={() => { setShowAPIModal(true); }}
                         className="text-xs font-mono px-4 py-2 border border-primary/30 text-primary hover:bg-primary/10 rounded-sm transition-all">
-                        {hasAnyKey() ? 'SWITCH TO CHAT →' : 'CONFIGURE API KEY →'}
+                        {hasAnyKey() ? t('switchToChat') : t('configureApiKey')}
                       </button>
                     </div>
                   </div>
@@ -351,20 +352,20 @@ export default function Home() {
               <div className="space-y-4">
                 <div className="border border-dashed border-border/30 rounded-sm p-8 text-center space-y-2">
                   <div className="text-muted-foreground/20 text-3xl font-mono">[ ]</div>
-                  <div className="text-xs text-muted-foreground/50 font-mono">Upload STL to begin</div>
+                  <div className="text-xs text-muted-foreground/50 font-mono">{t('uploadStlBegin')}</div>
                 </div>
                 <div className="space-y-2">
                   <div className="text-xs text-muted-foreground/40 font-mono tracking-widest">// FEATURES</div>
                   {[
-                    ['FREE', 'Geometry analysis — wall, overhang, dims'],
-                    ['FREE', 'Quick report — material, settings, time estimate'],
-                    ['FREE', 'Common Q&A — instant local answers'],
-                    ['AI KEY', 'Deep chat — Claude / GPT-4o / Gemini'],
-                    ['AI KEY', 'Complex design optimization advice'],
+                    [t('featureFree'), t('feature1')],
+                    [t('featureFree'), t('feature2')],
+                    [t('featureFree'), t('feature3')],
+                    [t('featureAiKey'), t('feature4')],
+                    [t('featureAiKey'), t('feature5')],
                   ].map(([badge, desc]) => (
                     <div key={desc} className="flex items-center gap-3 p-2.5 border border-border/20 rounded-sm hover:border-border/50 transition-all">
                       <span className={`text-xs font-mono px-1.5 py-0.5 rounded-sm border shrink-0 ${
-                        badge === 'FREE' ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/5' : 'text-primary border-primary/30 bg-primary/5'
+                        badge === t('featureFree') ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/5' : 'text-primary border-primary/30 bg-primary/5'
                       }`}>{badge}</span>
                       <span className="text-xs text-muted-foreground">{desc}</span>
                     </div>

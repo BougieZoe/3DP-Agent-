@@ -1,14 +1,59 @@
 import { useState } from 'react';
 import { APIKeys, getAPIKeys, saveAPIKeys } from '@/lib/apiKeys';
+import { Language } from '@/lib/i18n';
 
 interface APIKeyModalProps {
   onClose: () => void;
+  language?: Language;
 }
 
-export function APIKeyModal({ onClose }: APIKeyModalProps) {
+const labels = {
+  en: {
+    header: 'API CONFIG',
+    esc: '[ ESC ]',
+    desc1: 'Keys stored locally in your browser. Never sent to our servers.',
+    desc2: 'Add at least one key to unlock AI analysis.',
+    hide: 'HIDE',
+    show: 'SHOW',
+    clear: 'CLR',
+    save: 'SAVE KEYS',
+    saved: '✓ SAVED',
+    cancel: 'CANCEL',
+    getKeys: 'Get keys: console.anthropic.com · platform.openai.com · aistudio.google.com',
+  },
+  ja: {
+    header: 'API 設定',
+    esc: '[ ESC ]',
+    desc1: 'キーはブラウザにローカル保存。当社のサーバーに送信されません。',
+    desc2: '少なくとも1つのキーを追加してAI分析をアンロック。',
+    hide: '非表示',
+    show: '表示',
+    clear: 'クリア',
+    save: 'キーを保存',
+    saved: '✓ 保存済み',
+    cancel: 'キャンセル',
+    getKeys: 'キー取得: console.anthropic.com · platform.openai.com · aistudio.google.com',
+  },
+  zh: {
+    header: 'API 配置',
+    esc: '[ ESC ]',
+    desc1: '密钥存储在本地浏览器中，绝不会发送到我们的服务器。',
+    desc2: '添加至少一个密钥以解锁 AI 分析。',
+    hide: '隐藏',
+    show: '显示',
+    clear: '清除',
+    save: '保存密钥',
+    saved: '✓ 已保存',
+    cancel: '取消',
+    getKeys: '获取密钥: console.anthropic.com · platform.openai.com · aistudio.google.com',
+  },
+};
+
+export function APIKeyModal({ onClose, language = 'en' }: APIKeyModalProps) {
   const [keys, setKeys] = useState<APIKeys>(getAPIKeys());
   const [saved, setSaved] = useState(false);
   const [show, setShow] = useState<Record<string, boolean>>({});
+  const t = labels[language];
 
   const handleSave = () => {
     saveAPIKeys(keys);
@@ -29,15 +74,15 @@ export function APIKeyModal({ onClose }: APIKeyModalProps) {
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-primary rounded-full" />
-            <span className="text-xs font-mono text-primary tracking-widest">API CONFIG</span>
+            <span className="text-xs font-mono text-primary tracking-widest">{t.header}</span>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xs font-mono">[ ESC ]</button>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xs font-mono">{t.esc}</button>
         </div>
 
         <div className="p-5 space-y-5">
           <p className="text-xs text-muted-foreground font-mono leading-relaxed">
-            {'>'} Keys stored locally in your browser. Never sent to our servers.<br />
-            {'>'} Add at least one key to unlock AI analysis.
+            {'>'} {t.desc1}<br />
+            {'>'} {t.desc2}
           </p>
 
           {providers.map(({ id, label, placeholder, color }) => (
@@ -55,14 +100,14 @@ export function APIKeyModal({ onClose }: APIKeyModalProps) {
                   onClick={() => setShow(s => ({ ...s, [id]: !s[id] }))}
                   className="text-xs font-mono px-2 border border-border rounded-sm text-muted-foreground hover:text-foreground"
                 >
-                  {show[id] ? 'HIDE' : 'SHOW'}
+                  {show[id] ? t.hide : t.show}
                 </button>
                 {keys[id] && (
                   <button
                     onClick={() => setKeys(k => ({ ...k, [id]: '' }))}
                     className="text-xs font-mono px-2 border border-red-900/50 rounded-sm text-red-400 hover:bg-red-900/20"
                   >
-                    CLR
+                    {t.clear}
                   </button>
                 )}
               </div>
@@ -78,15 +123,15 @@ export function APIKeyModal({ onClose }: APIKeyModalProps) {
                   : 'bg-primary text-primary-foreground hover:bg-primary/90'
               }`}
             >
-              {saved ? '✓ SAVED' : 'SAVE KEYS'}
+              {saved ? t.saved : t.save}
             </button>
             <button onClick={onClose} className="px-4 py-2 text-xs font-mono border border-border rounded-sm text-muted-foreground hover:text-foreground">
-              CANCEL
+              {t.cancel}
             </button>
           </div>
 
           <p className="text-xs text-muted-foreground/40 font-mono text-center">
-            Get keys: console.anthropic.com · platform.openai.com · aistudio.google.com
+            {t.getKeys}
           </p>
         </div>
       </div>
