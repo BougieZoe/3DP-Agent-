@@ -1,7 +1,4 @@
-cd "~/Desktop/3DP-Agent" && \
-git remote set-url origin https://github.com/BougieZoe/3DP-Agent-.git && \
-git pull origin main --no-rebase && \
-cat > README.md << 'EOF'
+
 # 3DP AGENT
 ### a place to see, feel, and question a 3D print before it exists
 
