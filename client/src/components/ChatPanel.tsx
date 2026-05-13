@@ -25,19 +25,141 @@ const PROVIDER_LABELS: Record<string, string> = {
 };
 
 const SUGGESTED: Record<Language, string[]> = {
-  en: ['Can this model be printed?', 'What material should I use?', 'Do I need support structures?', 'Estimated print time?', 'Recommended print settings?'],
-  ja: ['このモデルは印刷できますか？', 'どの素材を使うべきですか？', 'サポートは必要ですか？', '印刷時間の目安は？', '推奨設定を教えてください'],
-  zh: ['这个模型能打印吗？', '推荐什么材料？', '需要支撑结构吗？', '预计打印时间？', '推荐的打印设置？'],
+  en: [
+    'Where will this warp or fail first?',
+    'Is PETG or PLA the right call here?',
+    'How do I reduce support material?',
+    'What layer height gives the best tradeoff?',
+    'Should I reorient this before slicing?',
+  ],
+  ja: [
+    'どこが反りやすいですか？',
+    'PETGかPLAどちらが適切ですか？',
+    'サポート材を減らすには？',
+    '最適なレイヤー高さは？',
+    'スライス前に向きを変えるべきですか？',
+  ],
+  zh: [
+    '这个模型哪里最容易翘曲或失败？',
+    '这里用PETG还是PLA更合适？',
+    '怎么减少支撑材料用量？',
+    '最佳层高应该选多少？',
+    '切片前需要调整摆放方向吗？',
+  ],
 };
 
+// ─── CORE UPGRADE: The system prompt ─────────────────────────────────────────
+// Old prompt told AI to "answer concisely". That produces chatbot behavior.
+// This prompt gives the AI a role, a reasoning framework, and a personality.
+// It reads the real geometry data and is told to reason from it — not just
+// acknowledge it. The difference in output quality is significant.
 function buildSystemPrompt(model: ModelData, lang: Language): string {
-  return `You are an expert 3D printing engineer. Answer concisely and technically.
-Model: ${model.fileName}
-Dims: ${model.dims.x.toFixed(1)}×${model.dims.y.toFixed(1)}×${model.dims.z.toFixed(1)}mm
-Wall thickness: ${model.wallThickness.minThickness.toFixed(2)}mm (${model.wallThickness.status})
-Overhang: ${model.overhang.areas} faces >45° (${model.overhang.status})
-Volume: ${model.volume.toFixed(0)}mm³
-Reply in ${lang === 'zh' ? 'Chinese (Simplified)' : lang === 'ja' ? 'Japanese' : 'English'}. Be direct and specific.`;
+  const wallStatus = model.wallThickness.status;
+  const overhangStatus = model.overhang.status;
+  const hasCritical = wallStatus === 'critical' || overhangStatus === 'critical';
+  const hasWarning = wallStatus === 'warning' || overhangStatus === 'warning';
+
+  const riskLevel = hasCritical ? 'HIGH RISK' : hasWarning ? 'MODERATE RISK' : 'LOW RISK';
+
+  return `You are a senior DfAM (Design for Additive Manufacturing) consultant with 15 years of experience across FDM, SLA, SLS, and MJF processes. You have reviewed thousands of files before they go to print. You are direct, specific, and you catch things others miss.
+
+## YOUR ROLE
+You are NOT a general AI assistant. You are a fabrication specialist reviewing this specific file. Your job is to reason from the geometry data below and give actionable manufacturing guidance — the kind a real consultant charges for.
+
+## FILE UNDER REVIEW
+Name: ${model.fileName}
+Dimensions: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm
+Volume: ${model.volume.toFixed(0)} mm³
+Risk Assessment: ${riskLevel}
+
+## GEOMETRY FINDINGS
+Wall Thickness:
+  - Minimum: ${model.wallThickness.minThickness.toFixed(2)} mm
+  - Status: ${wallStatus.toUpperCase()}
+  - Affected areas: ${model.wallThickness.areas}
+  ${wallStatus === 'critical' ? '⚠ CRITICAL: Walls below 0.8mm will not survive FDM printing. Structural failure likely.' : ''}
+  ${wallStatus === 'warning' ? '⚠ WARNING: Some walls are thin. Material choice and orientation matter here.' : ''}
+
+Overhang Analysis:
+  - Faces beyond 45°: ${model.overhang.areas}
+  - Status: ${overhangStatus.toUpperCase()}
+  ${overhangStatus === 'critical' ? '⚠ CRITICAL: Severe overhangs detected. Support strategy is mandatory.' : ''}
+  ${overhangStatus === 'warning' ? '⚠ WARNING: Moderate overhangs. Evaluate orientation before adding supports.' : ''}
+
+## HOW YOU RESPOND
+- Reason from the actual numbers above. Reference them when relevant.
+- Give a clear verdict first, then explain why.
+- When you recommend something, say what happens if they ignore it.
+- Think about print orientation, not just geometry in abstract.
+- Consider material properties when relevant (PLA vs PETG vs ABS vs resin).
+- If something looks risky, say so directly. Do not hedge to be polite.
+- Keep answers focused. No generic disclaimers. No "as an AI" language.
+- You can ask one clarifying question if the intent is unclear — but answer first.
+
+## LANGUAGE
+Reply in ${lang === 'zh' ? 'Chinese (Simplified)' : lang === 'ja' ? 'Japanese' : 'English'}.`;
+}
+
+// ─── UPGRADE: First message is now a real assessment, not a greeting ──────────
+function buildInitialAssessment(model: ModelData, lang: Language): string {
+  const wallStatus = model.wallThickness.status;
+  const overhangStatus = model.overhang.status;
+  const hasCritical = wallStatus === 'critical' || overhangStatus === 'critical';
+  const hasWarning = wallStatus === 'warning' || overhangStatus === 'warning';
+  const dims = `${model.dims.x.toFixed(0)}×${model.dims.y.toFixed(0)}×${model.dims.z.toFixed(0)}mm`;
+
+  if (lang === 'zh') {
+    if (hasCritical) {
+      return `已扫描 ${model.fileName}（${dims}）。\n\n⚠ 发现严重问题：${
+        wallStatus === 'critical' ? `最小壁厚 ${model.wallThickness.minThickness.toFixed(2)}mm，低于FDM可打印阈值。` : ''
+      }${
+        overhangStatus === 'critical' ? `检测到 ${model.overhang.areas} 个严重悬垂面。` : ''
+      }\n\n打印前必须处理这些问题。你想先从哪里开始？`;
+    }
+    if (hasWarning) {
+      return `已扫描 ${model.fileName}（${dims}）。\n\n模型基本可打印，但有几个需要注意的地方：${
+        wallStatus === 'warning' ? `\n— 部分区域壁厚偏薄（最小 ${model.wallThickness.minThickness.toFixed(2)}mm），材料选择和摆放方向会影响结果` : ''
+      }${
+        overhangStatus === 'warning' ? `\n— ${model.overhang.areas} 个悬垂面超过45°，建议评估是否需要支撑` : ''
+      }\n\n你想优先解决哪个问题？`;
+    }
+    return `已扫描 ${model.fileName}（${dims}）。\n\n几何结构良好——壁厚和悬垂角度都在可接受范围内。这个模型打印风险较低。\n\n你想讨论材料选择、打印参数，还是有其他问题？`;
+  }
+
+  if (lang === 'ja') {
+    if (hasCritical) {
+      return `${model.fileName}（${dims}）をスキャンしました。\n\n⚠ 重大な問題を検出：${
+        wallStatus === 'critical' ? `最小肉厚 ${model.wallThickness.minThickness.toFixed(2)}mm はFDM印刷の閾値以下です。` : ''
+      }${
+        overhangStatus === 'critical' ? `${model.overhang.areas} 箇所の深刻なオーバーハングを検出。` : ''
+      }\n\n印刷前にこれらを修正する必要があります。どこから確認しますか？`;
+    }
+    if (hasWarning) {
+      return `${model.fileName}（${dims}）をスキャンしました。\n\n基本的には印刷可能ですが、注意点があります：${
+        wallStatus === 'warning' ? `\n— 一部の壁が薄い（最小 ${model.wallThickness.minThickness.toFixed(2)}mm）。素材と向きの選択が重要です` : ''
+      }${
+        overhangStatus === 'warning' ? `\n— ${model.overhang.areas} 箇所が45°を超えるオーバーハング。サポートを検討してください` : ''
+      }\n\nどこから対処しますか？`;
+    }
+    return `${model.fileName}（${dims}）をスキャンしました。\n\nジオメトリは良好です。肉厚とオーバーハングともに許容範囲内です。印刷リスクは低いと判断します。\n\n素材選択や印刷設定について質問はありますか？`;
+  }
+
+  // English
+  if (hasCritical) {
+    return `Scanned ${model.fileName} (${dims}).\n\n⚠ Critical issues found:${
+      wallStatus === 'critical' ? `\n— Min wall thickness ${model.wallThickness.minThickness.toFixed(2)}mm — below the FDM survival threshold. These walls will not hold.` : ''
+    }${
+      overhangStatus === 'critical' ? `\n— ${model.overhang.areas} faces with severe overhang. Support strategy is not optional here.` : ''
+    }\n\nThis needs to be addressed before you send this to a printer. What do you want to tackle first?`;
+  }
+  if (hasWarning) {
+    return `Scanned ${model.fileName} (${dims}).\n\nPrintable, but there are things to watch:${
+      wallStatus === 'warning' ? `\n— Some areas are thin (min ${model.wallThickness.minThickness.toFixed(2)}mm). Material choice and orientation will matter here.` : ''
+    }${
+      overhangStatus === 'warning' ? `\n— ${model.overhang.areas} faces beyond 45°. Worth evaluating orientation before committing to supports.` : ''
+    }\n\nWhat do you want to dig into?`;
+  }
+  return `Scanned ${model.fileName} (${dims}).\n\nGeometry looks clean — wall thickness and overhangs are both within acceptable range. Low print risk.\n\nWhat do you want to talk through — material, settings, or something else?`;
 }
 
 export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
@@ -45,9 +167,7 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
     {
       id: '0',
       role: 'assistant',
-      content: language === 'zh' ? '你好！我是3DP分析助手。你可以问我关于这个模型的任何问题。' :
-        language === 'ja' ? 'こんにちは！3DP分析アシスタントです。このモデルについて何でも聞いてください。' :
-        'Hello! I\'m your 3DP analysis assistant. Ask me anything about this model.',
+      content: buildInitialAssessment(model, language),
       source: 'local',
     }
   ]);
@@ -67,11 +187,9 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
     setInput('');
     setIsLoading(true);
 
-    // Classify question
     const { needsAI, category } = classifyQuestion(text);
     const provider = getActiveProvider();
 
-    // Try local first
     if (!needsAI) {
       const localAnswer = answerLocally(category, model, language);
       if (localAnswer) {
@@ -87,17 +205,16 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
       }
     }
 
-    // Need AI — check if key exists
     if (!provider) {
       await new Promise(r => setTimeout(r, 300));
       setMessages(prev => [...prev, {
         id: Date.now().toString() + '_a',
         role: 'assistant',
         content: language === 'zh'
-          ? '这个问题需要AI分析。请配置API Key以解锁高级分析功能。'
+          ? '这个问题需要AI推理。配置API Key后我可以给你更深入的制造分析。'
           : language === 'ja'
-          ? 'この質問にはAI分析が必要です。API Keyを設定してください。'
-          : 'This question requires AI analysis. Please configure your API key to unlock advanced analysis.',
+          ? 'この質問にはAI推論が必要です。API Keyを設定すると、より深い製造分析が可能になります。'
+          : 'This needs AI reasoning. Add an API key and I can give you a proper fabrication analysis.',
         source: 'local',
       }]);
       setIsLoading(false);
@@ -105,7 +222,6 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
       return;
     }
 
-    // Call AI
     const key = getKey(provider)!;
     try {
       const answer = await callAI(provider, key, buildSystemPrompt(model, language), text);
@@ -141,7 +257,7 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-          <span className="text-xs font-mono text-primary tracking-widest">CHAT INTERFACE</span>
+          <span className="text-xs font-mono text-primary tracking-widest">FABRICATION CONSULTANT</span>
         </div>
         <span className="text-xs font-mono text-muted-foreground/40">
           {getActiveProvider() ? `AI: ${PROVIDER_LABELS[getActiveProvider()!]}` : 'LOCAL MODE'}
@@ -171,7 +287,7 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
         {isLoading && (
           <div className="flex justify-start">
             <div className="text-xs font-mono text-muted-foreground px-3 py-2 border border-border/50 rounded-sm bg-background">
-              <span className="animate-pulse">▋ processing...</span>
+              <span className="animate-pulse">▋ analyzing...</span>
             </div>
           </div>
         )}
@@ -200,7 +316,11 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
-          placeholder={language === 'zh' ? '输入问题...' : language === 'ja' ? '質問を入力...' : 'Ask a question...'}
+          placeholder={
+            language === 'zh' ? '问关于这个模型的制造问题...' :
+            language === 'ja' ? 'このモデルの製造について質問...' :
+            'Ask about this model...'
+          }
           className="flex-1 bg-background border border-border rounded-sm px-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/50"
         />
         <button
