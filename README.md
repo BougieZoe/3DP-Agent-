@@ -3,6 +3,7 @@
 **a place to see, feel, and question a 3D print before it exists**
 
 [![live demo](https://img.shields.io/badge/▲-live%20demo-black)](https://3dp-agent.vercel.app) [![license MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE) ![stars](https://img.shields.io/github/stars/BougieZoe/3DP-Agent-) [![React](https://img.shields.io/badge/React-19-61dafb)](https://react.dev) [![Three.js](https://img.shields.io/badge/Three.js-r184-black)](https://threejs.org)
+![3DP Agent demo](https://github.com/user-attachments/assets/68affce1-8acf-4e53-a1e9-eddce109e42a)
 
 live → https://3dp-agent.vercel.app
 
