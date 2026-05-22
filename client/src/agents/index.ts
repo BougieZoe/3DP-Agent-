@@ -1,0 +1,10 @@
+export { AgentOrchestrator } from './orchestrator';
+export { BaseAgent, type AgentContext } from './baseAgent';
+export { GeometryAnalyst } from './geometryAnalyst';
+export { PrintabilityScorer } from './printabilityScorer';
+export { FailurePredictor } from './failurePredictor';
+export { OptimizationAdvisor } from './optimizationAdvisor';
+export { VisionProvider, visionProvider } from './visionProvider';
+export type { AgentResultWithExplanation, AgentRunSummary, AgentStageConfig, VotingRecord } from './types';
+export { getAgentLabel, getAgentDescription, DEFAULT_AGENT_CONFIGS } from './types';
+export type { AgentConsensus, AgentOutput, AgentId, RiskMarker } from '@shared/domain/agent';

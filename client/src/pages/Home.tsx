@@ -10,6 +10,8 @@ import { modelAnalysisToModelData, toModelAnalysis } from '@/lib/modelAnalysisAd
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
 import { Language, getTranslation } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
+import { computeGeometryMetrics } from '@/lib/geometryMetrics';
+import { AgentOrchestrator, AgentRunSummary, getAgentLabel, getAgentDescription } from '@/agents';
 import { toast } from 'sonner';
 
 // ─── 3D Helpers ────────────────────────────────────────────────────────────────
@@ -147,16 +149,45 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
 export default function Home() {
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
-  const [tab, setTab] = useState<'geometry' | 'report' | 'chat'>('geometry');
+  const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents'>('geometry');
   const [showAPIModal, setShowAPIModal] = useState(false);
   const [quickReport, setQuickReport] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
+  const [agentRun, setAgentRun] = useState<AgentRunSummary | null>(null);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const orchestratorRef = useRef<AgentOrchestrator | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  if (!orchestratorRef.current) {
+    orchestratorRef.current = new AgentOrchestrator();
+  }
 
   const handleModelLoaded = (model: UploadedModel) => {
     setUploadedModel(model);
     setTab('geometry');
     setQuickReport('');
+    setAgentRun(null);
     toast.success(t('stlParsed') + model.fileName);
+    runAgentAnalysis(model);
+  };
+
+  const runAgentAnalysis = async (model: UploadedModel) => {
+    if (!orchestratorRef.current) return;
+    setAgentLoading(true);
+    try {
+      const metrics = computeGeometryMetrics(model.geometry);
+      const summary = await orchestratorRef.current.runFullAnalysis(
+        model.geometry,
+        metrics,
+        model.analysis,
+        model.fileName,
+      );
+      setAgentRun(summary);
+    } catch (err) {
+      console.error('Agent analysis failed:', err);
+    } finally {
+      setAgentLoading(false);
+    }
   };
 
   const getModelData = (): ModelData | null => {
@@ -254,12 +285,15 @@ export default function Home() {
               <div className="space-y-0 fade-up">
                 {/* Tabs */}
                 <div className="flex border-b border-border">
-                  {(['geometry', 'report', 'chat'] as const).map(tabKey => (
+                  {(['geometry', 'report', 'agents', 'chat'] as const).map(tabKey => (
                     <button key={tabKey} onClick={() => setTab(tabKey)}
                       className={`text-xs font-mono px-4 py-2.5 border-b-2 transition-all ${
                         tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
                       }`}>
-                      {tabKey === 'geometry' ? t('geometry').toUpperCase() : tabKey === 'report' ? t('report').toUpperCase() : t('chatAI').toUpperCase()}
+                      {tabKey === 'geometry' ? t('geometry').toUpperCase()
+                        : tabKey === 'report' ? t('report').toUpperCase()
+                        : tabKey === 'agents' ? 'AGENTS'
+                        : t('chatAI').toUpperCase()}
                     </button>
                   ))}
                 </div>
@@ -326,6 +360,99 @@ export default function Home() {
                         {hasAnyKey() ? t('switchToChat') : t('configureApiKey')}
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* AGENTS TAB */}
+                {tab === 'agents' && (
+                  <div className="pt-4 space-y-4">
+                    {agentLoading && (
+                      <div className="border border-primary/30 rounded-sm p-6 text-center">
+                        <div className="text-xs font-mono text-primary animate-pulse mb-2">▋ MULTI-AGENT ANALYSIS RUNNING</div>
+                        <div className="text-xs text-muted-foreground/50">Geometry Analyst • Printability Scorer • Failure Predictor • Optimization Advisor</div>
+                        <div className="flex justify-center gap-2 mt-3">
+                          {['geometry_analyst', 'printability_scorer', 'failure_predictor', 'optimization_advisor'].map(id => (
+                            <div key={id} className="w-2 h-2 bg-primary/40 rounded-full animate-pulse" />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {agentRun && !agentLoading && (
+                      <>
+                        {/* Consensus Score */}
+                        <div className="border border-border rounded-sm bg-card p-5 text-center">
+                          <div className="text-xs font-mono text-muted-foreground mb-2">CONSENSUS SCORE</div>
+                          <div className={`text-4xl font-mono font-bold ${
+                            agentRun.consensus.verdict === 'pass' ? 'text-emerald-400'
+                              : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
+                              : 'text-red-400'
+                          }`}>
+                            {agentRun.consensus.overallScore}
+                            <span className="text-lg text-muted-foreground/40">/100</span>
+                          </div>
+                          <div className={`mt-1 text-xs font-mono uppercase ${
+                            agentRun.consensus.verdict === 'pass' ? 'text-emerald-400'
+                              : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
+                              : 'text-red-400'
+                          }`}>
+                            {agentRun.consensus.verdict}
+                          </div>
+                          <div className="mt-2 text-xs text-muted-foreground/50">
+                            {agentRun.usedVision && <span className="text-primary">Vision-enhanced</span>}
+                            {agentRun.usedVision ? ' • ' : ''}
+                            {agentRun.consensus.agreementDelta < 10 ? 'Strong agreement' : 'Moderate agreement'}
+                            {' • '}{agentRun.totalDurationMs}ms
+                          </div>
+                        </div>
+
+                        {/* Per-Agent Cards */}
+                        {agentRun.results.map(result => (
+                          <div key={result.agentId} className="border border-border rounded-sm bg-card p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div>
+                                <span className="text-xs font-mono text-primary">{getAgentLabel(result.agentId)}</span>
+                                <span className="ml-2 text-xs text-muted-foreground/50">{getAgentDescription(result.agentId)}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs font-mono px-2 py-0.5 border rounded-sm ${
+                                  result.verdict === 'pass' ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/5'
+                                    : result.verdict === 'warning' ? 'text-yellow-400 border-yellow-400/30 bg-yellow-400/5'
+                                    : 'text-red-400 border-red-400/30 bg-red-400/5'
+                                }`}>{result.verdict}</span>
+                                <span className="text-xs font-mono text-muted-foreground">{Math.round(result.score)}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full transition-all ${
+                                  result.score >= 70 ? 'bg-emerald-400'
+                                    : result.score >= 40 ? 'bg-yellow-400'
+                                    : 'bg-red-400'
+                                }`} style={{ width: `${result.score}%` }} />
+                              </div>
+                              <span className="text-xs text-muted-foreground/50">{result.durationMs}ms</span>
+                            </div>
+                            <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono leading-relaxed max-h-32 overflow-y-auto">
+                              {result.explanation}
+                            </pre>
+                          </div>
+                        ))}
+
+                        {/* Voting Records */}
+                        <details className="border border-border rounded-sm bg-card/50 p-3 cursor-pointer">
+                          <summary className="text-xs font-mono text-muted-foreground">Voting & Debate Record</summary>
+                          <div className="mt-2 space-y-1">
+                            {agentRun.votingRecords.map(record => (
+                              <div key={record.agentId} className="flex justify-between text-xs font-mono text-muted-foreground/70">
+                                <span>{getAgentLabel(record.agentId)}</span>
+                                <span>weight: {(record.weight * 100).toFixed(0)}% | score: {Math.round(record.adjustedScore)} | confidence: {(record.confidence * 100).toFixed(0)}%</span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      </>
+                    )}
                   </div>
                 )}
 
