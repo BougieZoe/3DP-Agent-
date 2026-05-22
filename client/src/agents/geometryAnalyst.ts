@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import type { AgentOutput, RiskMarker } from '@shared/domain/agent';
 import { BaseAgent, type AgentContext } from './baseAgent';
 
@@ -28,35 +27,42 @@ export class GeometryAnalyst extends BaseAgent {
   }
 
   protected async analyze(ctx: AgentContext): Promise<AgentOutput> {
-    const { metrics, analysis } = ctx;
-    const size = metrics.size;
-    const triCount = metrics.triangleCount;
-    const surfaceArea = metrics.surfaceArea;
-    const volume = metrics.boundingBoxVolume;
+    const { unifiedAnalysis, vertexPositions, modelSize } = ctx;
+    const metrics = unifiedAnalysis.metrics.result;
+    const validation = unifiedAnalysis.validation.result;
+    const topology = unifiedAnalysis.topology.result;
+    const triCount = topology?.triangleCount ?? 0;
+    const surfaceArea = metrics?.surfaceAreaMm2 ?? 0;
+    const volume = metrics?.meshVolumeMm3 ?? metrics?.boundingBoxVolumeMm3 ?? 0;
 
-    const aspectRatio = this.computeAspectRatio(size);
-    const overhangRatio = analysis.overhang.areas / Math.max(1, triCount);
-    const estimatedMinWall = analysis.wallThickness.minThickness;
+    const aspectRatio = this.computeAspectRatio(modelSize);
+    const overhangFaces = metrics?.overhang.faceCount ?? 0;
+    const overhangRatio = metrics?.overhang.ratio ?? 0;
+    const overhangStatus = metrics?.overhang.severity ?? 'none';
+    const estimatedMinWall = metrics?.minWallThicknessMm ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
     const featureDetail = this.computeFeatureDetail(triCount, volume);
-    const isManifold = true;
+
+    const wtStatus = estimatedMinWall < 1 ? 'critical' : estimatedMinWall < 2 ? 'warning' : 'good';
+    const hasOverhangIssue = overhangFaces > 0;
+    const isManifold = topology?.isManifold ?? true;
 
     const markers: RiskMarker[] = [];
 
-    if (analysis.overhang.status !== 'good') {
+    if (hasOverhangIssue) {
       markers.push(...this.collectOverhangMarkers(ctx));
     }
-    if (analysis.wallThickness.status !== 'good') {
+    if (wtStatus !== 'good') {
       markers.push(...this.collectWallThicknessMarkers(ctx));
     }
 
     const issues: string[] = [];
-    if (analysis.wallThickness.status === 'critical') {
+    if (wtStatus === 'critical') {
       issues.push('Critically thin walls detected — high failure risk');
-    } else if (analysis.wallThickness.status === 'warning') {
+    } else if (wtStatus === 'warning') {
       issues.push('Walls thinner than recommended — consider thickening');
     }
-    if (analysis.overhang.status === 'warning' || analysis.overhang.status === 'critical') {
-      issues.push(`${analysis.overhang.areas} faces exceed 45° overhang — support required`);
+    if (hasOverhangIssue) {
+      issues.push(`${overhangFaces} faces exceed 45° overhang — support required`);
     }
     if (aspectRatio > 5) {
       issues.push('Extreme aspect ratio — model may be fragile');
@@ -65,23 +71,23 @@ export class GeometryAnalyst extends BaseAgent {
       issues.push('Very low triangle count — model may lack detail');
     }
 
-    const score = this.computeScore(analysis, aspectRatio, triCount);
+    const score = this.computeScore(wtStatus, hasOverhangIssue ? 'warning' : 'good', overhangFaces, aspectRatio, triCount);
     const confidence = Math.min(1, triCount / 10000 + 0.3);
 
     const details: GeometryAnalystDetails = {
       triangleCount: triCount,
       surfaceAreaMm2: surfaceArea,
       boundingBoxVolumeMm3: volume,
-      dimensions: { x: size.x, y: size.y, z: size.z },
+      dimensions: { x: modelSize.x, y: modelSize.y, z: modelSize.z },
       wallThickness: {
         minEstimated: estimatedMinWall,
-        status: analysis.wallThickness.status,
+        status: wtStatus,
       },
       overhang: {
-        faceCount: analysis.overhang.areas,
+        faceCount: overhangFaces,
         totalFaces: triCount,
         ratio: overhangRatio,
-        status: analysis.overhang.status,
+        status: overhangStatus,
       },
       aspectRatio,
       featureDetail,
@@ -95,14 +101,14 @@ export class GeometryAnalyst extends BaseAgent {
     return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details as unknown as Record<string, unknown>, markers);
   }
 
-  private computeScore(analysis: { wallThickness: { status: string }; overhang: { status: string; areas: number } }, aspectRatio: number, triCount: number): number {
+  private computeScore(wtStatus: string, ohStatus: string, overhangFaces: number, aspectRatio: number, triCount: number): number {
     let score = 100;
 
-    if (analysis.wallThickness.status === 'critical') score -= 30;
-    else if (analysis.wallThickness.status === 'warning') score -= 15;
+    if (wtStatus === 'critical') score -= 30;
+    else if (wtStatus === 'warning') score -= 15;
 
-    if (analysis.overhang.status === 'warning') score -= Math.min(20, analysis.overhang.areas * 2);
-    else if (analysis.overhang.status === 'critical') score -= 30;
+    if (ohStatus === 'warning') score -= Math.min(20, overhangFaces * 2);
+    else if (ohStatus === 'critical') score -= 30;
 
     if (aspectRatio > 10) score -= 15;
     else if (aspectRatio > 5) score -= 5;
@@ -113,7 +119,7 @@ export class GeometryAnalyst extends BaseAgent {
     return Math.max(0, score);
   }
 
-  private computeAspectRatio(size: THREE.Vector3): number {
+  private computeAspectRatio(size: { x: number; y: number; z: number }): number {
     const dims = [size.x, size.y, size.z].filter(d => d > 0);
     if (dims.length === 0) return 1;
     const max = Math.max(...dims);
@@ -130,8 +136,8 @@ export class GeometryAnalyst extends BaseAgent {
 
   private collectOverhangMarkers(ctx: AgentContext): RiskMarker[] {
     const markers: RiskMarker[] = [];
-    const normals = ctx.metrics.normals;
-    const positions = ctx.metrics.positions;
+    const normals = ctx.vertexNormals;
+    const positions = ctx.vertexPositions;
     const step = 9;
 
     for (let i = 0; i < Math.min(normals.length, 300); i += 3) {
@@ -153,16 +159,18 @@ export class GeometryAnalyst extends BaseAgent {
 
   private collectWallThicknessMarkers(ctx: AgentContext): RiskMarker[] {
     const markers: RiskMarker[] = [];
-    const positions = ctx.metrics.positions;
+    const positions = ctx.vertexPositions;
     const step = 9;
+    const minThickness = ctx.unifiedAnalysis.metrics.result?.minWallThicknessMm ?? 1;
 
     for (let i = 0; i < Math.min(positions.length, 300); i += step) {
       if (i + 2 < positions.length) {
+        const wtStatus = minThickness < 1 ? 'critical' : 'warning';
         markers.push({
           position: { x: positions[i], y: positions[i + 1], z: positions[i + 2] },
           type: 'thin_wall',
-          severity: ctx.analysis.wallThickness.status === 'critical' ? 0.9 : 0.5,
-          description: `Thin wall area (est. ${ctx.analysis.wallThickness.minThickness.toFixed(2)}mm)`,
+          severity: wtStatus === 'critical' ? 0.9 : 0.5,
+          description: `Thin wall area (est. ${minThickness.toFixed(2)}mm)`,
         });
         if (markers.length >= 15) break;
       }

@@ -33,15 +33,32 @@ export class OptimizationAdvisor extends BaseAgent {
   }
 
   protected async analyze(ctx: AgentContext): Promise<AgentOutput> {
-    const { analysis, metrics, previousOutputs } = ctx;
+    const { unifiedAnalysis, modelSize, previousOutputs } = ctx;
+    const metrics = unifiedAnalysis.metrics.result;
+    const topology = unifiedAnalysis.topology.result;
+    const triCount = topology?.triangleCount ?? 0;
+    const oh = metrics?.overhang;
+    const overhangFaces = oh?.faceCount ?? 0;
+    const minThickness = metrics?.minWallThicknessMm ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
+    const wtStatus = minThickness < 1 ? 'critical' : minThickness < 2 ? 'warning' : 'good';
+    const ohStatus = overhangFaces > 0 ? 'warning' : 'good';
+
+    const analysisInput = {
+      wallThickness: { status: wtStatus, minThickness },
+      overhang: { status: ohStatus, areas: overhangFaces },
+    };
+    const metricsInput = {
+      size: modelSize,
+      triangleCount: triCount,
+    };
 
     const geometryOutput = previousOutputs.get('geometry_analyst');
     const scorerOutput = previousOutputs.get('printability_scorer');
     const failureOutput = previousOutputs.get('failure_predictor');
 
-    const suggestions = this.generateSuggestions(analysis, metrics, geometryOutput, scorerOutput, failureOutput);
-    const recommendedMaterials = this.recommendMaterials(analysis, metrics);
-    const optimalOrientation = this.suggestOrientation(analysis, metrics);
+    const suggestions = this.generateSuggestions(analysisInput, metricsInput, geometryOutput, scorerOutput, failureOutput);
+    const recommendedMaterials = this.recommendMaterials(analysisInput, metricsInput);
+    const optimalOrientation = this.suggestOrientation(analysisInput, metricsInput);
 
     const score = Math.round(this.computeOptimizationScore(suggestions, recommendedMaterials.length));
     const confidence = 0.7;
@@ -196,7 +213,7 @@ export class OptimizationAdvisor extends BaseAgent {
       `Orientation: ${orientation}`,
       ``,
       `Recommended Process & Materials:`,
-      ...materials.map(m => `  • ${m.material} (${m.process}): ${m.reason}`),
+      ...materials.map(m => `  \u2022 ${m.material} (${m.process}): ${m.reason}`),
       ``,
     ];
 
@@ -204,8 +221,8 @@ export class OptimizationAdvisor extends BaseAgent {
       lines.push(`Suggested Improvements (${suggestions.length}):`);
       for (const s of suggestions) {
         lines.push(`  [${s.priority.toUpperCase()}] ${s.description}`);
-        lines.push(`    → ${s.implementation}`);
-        lines.push(`    → Expected: ${s.expectedImprovement}`);
+        lines.push(`    \u2192 ${s.implementation}`);
+        lines.push(`    \u2192 Expected: ${s.expectedImprovement}`);
         lines.push('');
       }
     } else {

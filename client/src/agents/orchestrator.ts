@@ -1,8 +1,9 @@
 import type * as THREE from 'three';
 import type { AgentId, AgentOutput, AgentConsensus, DebateRound } from '@shared/domain/agent';
 import { calculateAgreementDelta, computeConsensusVerdict } from '@shared/domain/agent';
-import type { GeometryMetricsResult } from '@/lib/geometryMetrics';
-import type { AnalysisResult } from '@/lib/stlAnalysis';
+import type { UnifiedAnalysis } from '@/analysis';
+import { fromThreeBufferGeometry } from '@/analysis/geometryConversion';
+import { extractVertexData } from '@/analysis/geometryData';
 import { BaseAgent, type AgentContext } from './baseAgent';
 import { GeometryAnalyst } from './geometryAnalyst';
 import { PrintabilityScorer } from './printabilityScorer';
@@ -49,27 +50,30 @@ export class AgentOrchestrator {
 
   async runFullAnalysis(
     geometry: THREE.BufferGeometry,
-    metrics: GeometryMetricsResult,
-    analysis: AnalysisResult,
+    unifiedAnalysis: UnifiedAnalysis,
     fileName: string,
     visionCanvas?: HTMLCanvasElement | null,
   ): Promise<AgentRunSummary> {
     const startTime = performance.now();
 
-    if (visionCanvas) {
-      visionProvider.setRenderCanvas(visionCanvas);
-    }
-
+    const model = fromThreeBufferGeometry(geometry);
+    const vertexData = extractVertexData(model);
     const ctx: AgentContext = {
       geometry,
-      metrics,
-      analysis,
+      unifiedAnalysis,
+      vertexPositions: vertexData.positions,
+      vertexNormals: vertexData.normals,
+      modelSize: vertexData.size,
       previousOutputs: new Map(),
       fileName,
     };
 
     if (visionCanvas) {
-      ctx.visionAnalysis = await this.captureVisionAnalysis(metrics, fileName);
+      visionProvider.setRenderCanvas(visionCanvas);
+    }
+
+    if (visionCanvas) {
+      ctx.visionAnalysis = await this.captureVisionAnalysis(vertexData, fileName);
     }
 
     const enabledAgents = Array.from(this.agents.values())
@@ -271,7 +275,7 @@ export class AgentOrchestrator {
   }
 
   private async captureVisionAnalysis(
-    metrics: { triangleCount: number; surfaceArea: number; boundingBoxVolume: number },
+    vertexData: { triangleCount: number; size: { x: number; y: number; z: number } },
     fileName: string,
   ): Promise<string | undefined> {
     const activeProvider = getActiveProvider();
@@ -281,7 +285,12 @@ export class AgentOrchestrator {
     const screenshot = await visionProvider.captureScene();
     if (!screenshot) return undefined;
 
-    const summary = `File: ${fileName}\nTriangles: ${metrics.triangleCount}\nSurface Area: ${metrics.surfaceArea.toFixed(1)}mm²\nVolume: ${metrics.boundingBoxVolume.toFixed(1)}mm³`;
+    const surfaceArea = vertexData.size.x * vertexData.size.y * 2
+      + vertexData.size.x * vertexData.size.z * 2
+      + vertexData.size.y * vertexData.size.z * 2;
+    const volume = vertexData.size.x * vertexData.size.y * vertexData.size.z;
+
+    const summary = `File: ${fileName}\nTriangles: ${vertexData.triangleCount}\nSurface Area: ${surfaceArea.toFixed(1)}mm²\nVolume: ${volume.toFixed(1)}mm³`;
 
     const result = await visionProvider.analyzeWithAI(screenshot, summary, {
       provider: activeProvider,

@@ -24,29 +24,47 @@ export class FailurePredictor extends BaseAgent {
   }
 
   protected async analyze(ctx: AgentContext): Promise<AgentOutput> {
-    const { analysis, metrics } = ctx;
+    const { unifiedAnalysis, modelSize, vertexPositions, vertexNormals } = ctx;
+    const metrics = unifiedAnalysis.metrics.result;
+    const topology = unifiedAnalysis.topology.result;
+    const triCount = topology?.triangleCount ?? 0;
+    const oh = metrics?.overhang;
+    const overhangFaces = oh?.faceCount ?? 0;
+    const minThickness = metrics?.minWallThicknessMm ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
+    const wtStatus = minThickness < 1 ? 'critical' : minThickness < 2 ? 'warning' : 'good';
+    const ohStatus = overhangFaces > Math.max(1, triCount * 0.1) ? 'warning' : 'good';
+
+    const analysisInput = {
+      wallThickness: { status: wtStatus, minThickness },
+      overhang: { status: ohStatus, areas: overhangFaces },
+    };
+    const metricsInput = {
+      triangleCount: triCount,
+      size: modelSize,
+    };
+
     const risks: PredictedRisk[] = [];
     const markers: RiskMarker[] = [];
 
-    const overhangRisk = this.predictOverhangFailure(analysis, metrics);
+    const overhangRisk = this.predictOverhangFailure(analysisInput, metricsInput);
     if (overhangRisk) {
       risks.push(overhangRisk);
       markers.push(...this.generateOverhangMarkers(ctx, overhangRisk.severity));
     }
 
-    const wallRisk = this.predictWallFailure(analysis);
+    const wallRisk = this.predictWallFailure(analysisInput);
     if (wallRisk) {
       risks.push(wallRisk);
       markers.push(...this.generateWallMarkers(ctx, wallRisk.severity));
     }
 
-    const warpingRisk = this.predictWarping(analysis, metrics);
+    const warpingRisk = this.predictWarping(analysisInput, metricsInput);
     if (warpingRisk) risks.push(warpingRisk);
 
-    const bridgingRisk = this.predictBridgingIssues(analysis);
+    const bridgingRisk = this.predictBridgingIssues(analysisInput);
     if (bridgingRisk) risks.push(bridgingRisk);
 
-    const delaminationRisk = this.predictDelamination(analysis, metrics);
+    const delaminationRisk = this.predictDelamination(analysisInput, metricsInput);
     if (delaminationRisk) risks.push(delaminationRisk);
 
     const overallRiskLevel = this.computeOverallRisk(risks);
@@ -189,8 +207,8 @@ export class FailurePredictor extends BaseAgent {
   private generateOverhangMarkers(ctx: AgentContext, severity: string): RiskMarker[] {
     if (severity === 'low') return [];
     const markers: RiskMarker[] = [];
-    const positions = ctx.metrics.positions;
-    const normals = ctx.metrics.normals;
+    const positions = ctx.vertexPositions;
+    const normals = ctx.vertexNormals;
     let count = 0;
 
     for (let i = 0; i < Math.min(normals.length, 600); i += 3) {
@@ -213,8 +231,9 @@ export class FailurePredictor extends BaseAgent {
   private generateWallMarkers(ctx: AgentContext, severity: string): RiskMarker[] {
     if (severity === 'low') return [];
     const markers: RiskMarker[] = [];
-    const positions = ctx.metrics.positions;
+    const positions = ctx.vertexPositions;
     const count = Math.min(10, Math.floor(positions.length / 30));
+    const minThickness = ctx.unifiedAnalysis.metrics.result?.minWallThicknessMm ?? 1;
 
     for (let i = 0; i < count; i++) {
       const idx = i * 30;
@@ -223,7 +242,7 @@ export class FailurePredictor extends BaseAgent {
           position: { x: positions[idx], y: positions[idx + 1], z: positions[idx + 2] },
           type: 'thin_wall',
           severity: severity === 'critical' ? 0.9 : 0.6,
-          description: `Thin wall — estimated ${ctx.analysis.wallThickness.minThickness.toFixed(2)}mm`,
+          description: `Thin wall — estimated ${minThickness.toFixed(2)}mm`,
         });
       }
     }
@@ -243,7 +262,7 @@ export class FailurePredictor extends BaseAgent {
 
     for (const risk of risks) {
       lines.push(`[${risk.severity.toUpperCase()}] ${risk.type}: ${risk.description}`);
-      lines.push(`  → ${risk.recommendation}`);
+      lines.push(`  \u2192 ${risk.recommendation}`);
       lines.push('');
     }
 

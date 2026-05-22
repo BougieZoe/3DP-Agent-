@@ -1,10 +1,8 @@
 import * as THREE from 'three';
-import { analyzeModel, type AnalysisResult } from './stlAnalysis';
 import { createMeshFromGeometry } from './meshHelpers';
 import { parseSTL } from './stlParser';
 
-export type { AnalysisResult };
-export { analyzeModel, createMeshFromGeometry };
+export { createMeshFromGeometry };
 
 export async function loadSTLFile(file: File): Promise<THREE.BufferGeometry> {
   return new Promise((resolve, reject) => {

@@ -6,11 +6,9 @@ import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
 import { ChatPanel } from '@/components/ChatPanel';
 import { APIKeyModal } from '@/components/APIKeyModal';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
-import { modelAnalysisToModelData, toModelAnalysis } from '@/lib/modelAnalysisAdapters';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
 import { Language, getTranslation } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
-import { computeGeometryMetrics } from '@/lib/geometryMetrics';
 import { AgentOrchestrator, AgentRunSummary, getAgentLabel, getAgentDescription } from '@/agents';
 import { OverhangHeatmap } from '@/components/3D/OverhangHeatmap';
 import { SupportGhosts } from '@/components/3D/SupportGhosts';
@@ -18,6 +16,76 @@ import { RiskAnimation } from '@/components/3D/RiskAnimation';
 import { VisualizationToolbar } from '@/components/3D/VisualizationToolbar';
 import { OptimizeButton } from '@/components/3D/OptimizeButton';
 import { toast } from 'sonner';
+
+function deriveWtStatus(mm: number | null | undefined): 'good' | 'warning' | 'critical' {
+  if (mm == null) return 'warning';
+  if (mm < 1) return 'critical';
+  if (mm < 2) return 'warning';
+  return 'good';
+}
+
+function deriveOhStatus(faceCount: number | undefined, totalTriangles: number | undefined): 'good' | 'warning' | 'critical' {
+  if (!faceCount || faceCount === 0) return 'good';
+  const ratio = totalTriangles && totalTriangles > 0 ? faceCount / totalTriangles : 0;
+  if (ratio > 0.3) return 'critical';
+  if (ratio > 0.1) return 'warning';
+  return 'good';
+}
+
+function unifiedToModelData(
+  unifiedAnalysis: import('@/analysis').UnifiedAnalysis,
+  fileName: string,
+): ModelData {
+  const metrics = unifiedAnalysis.metrics.result;
+  const topology = unifiedAnalysis.topology.result;
+  const triCount = topology?.triangleCount ?? 0;
+  const volume = metrics?.meshVolumeMm3 ?? metrics?.boundingBoxVolumeMm3 ?? 0;
+  const surfaceArea = metrics?.surfaceAreaMm2 ?? 0;
+  const oh = metrics?.overhang;
+  const dims = metrics?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
+  const minWall = metrics?.minWallThicknessMm;
+  const wtStatus = deriveWtStatus(minWall);
+  const wtAreas = Math.floor(triCount * 0.15);
+
+  return {
+    fileName,
+    wallThickness: {
+      minThickness: minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
+      areas: wtAreas,
+      status: wtStatus,
+    },
+    overhang: {
+      angle: 45,
+      areas: oh?.faceCount ?? 0,
+      status: deriveOhStatus(oh?.faceCount, triCount),
+    },
+    volume,
+    surfaceArea,
+    dims,
+  };
+}
+
+function unifiedToAnalysisSummary(unifiedAnalysis: import('@/analysis').UnifiedAnalysis) {
+  const metrics = unifiedAnalysis.metrics.result;
+  const topology = unifiedAnalysis.topology.result;
+  const oh = metrics?.overhang;
+  const dims = metrics?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
+  const minWall = metrics?.minWallThicknessMm;
+  const triCount = topology?.triangleCount ?? 0;
+
+  return {
+    wallThickness: {
+      minThickness: minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
+      status: deriveWtStatus(minWall),
+    },
+    overhang: {
+      areas: oh?.faceCount ?? 0,
+      status: deriveOhStatus(oh?.faceCount, triCount),
+    },
+    volume: metrics?.meshVolumeMm3 ?? metrics?.boundingBoxVolumeMm3 ?? 0,
+    surfaceArea: metrics?.surfaceAreaMm2 ?? 0,
+  };
+}
 
 // ─── 3D Helpers ────────────────────────────────────────────────────────────────
 
@@ -188,11 +256,9 @@ export default function Home() {
     if (!orchestratorRef.current) return;
     setAgentLoading(true);
     try {
-      const metrics = computeGeometryMetrics(model.geometry);
       const summary = await orchestratorRef.current.runFullAnalysis(
         model.geometry,
-        metrics,
-        model.analysis,
+        model.unifiedAnalysis,
         model.fileName,
       );
       setAgentRun(summary);
@@ -205,11 +271,7 @@ export default function Home() {
 
   const getModelData = (): ModelData | null => {
     if (!uploadedModel) return null;
-    return modelAnalysisToModelData(toModelAnalysis({
-      fileName: uploadedModel.fileName,
-      fileSizeBytes: uploadedModel.fileSizeBytes,
-      analysis: uploadedModel.analysis,
-    }));
+    return unifiedToModelData(uploadedModel.unifiedAnalysis, uploadedModel.fileName);
   };
 
   const handleGenerateReport = () => {
@@ -222,7 +284,8 @@ export default function Home() {
     }, 600);
   };
 
-  const analysis = uploadedModel?.analysis;
+  const unifiedAnalysis = uploadedModel?.unifiedAnalysis;
+  const analysis = unifiedAnalysis ? unifiedToAnalysisSummary(unifiedAnalysis) : null;
   const modelData = getModelData();
   const providerLabel = getActiveProvider() ? AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel : null;
   const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
@@ -372,7 +435,7 @@ export default function Home() {
                     {!quickReport && (
                       <button onClick={handleGenerateReport} disabled={reportLoading}
                         className="w-full py-3 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all disabled:opacity-50">
-                        {reportLoading ? '▋ ' + t('analyze') : t('generateQuickReport')}
+                        {reportLoading ? '\u258b ' + t('analyze') : t('generateQuickReport')}
                       </button>
                     )}
                     {quickReport && (
@@ -406,8 +469,8 @@ export default function Home() {
                   <div className="pt-4 space-y-4">
                     {agentLoading && (
                       <div className="border border-primary/30 rounded-sm p-6 text-center">
-                        <div className="text-xs font-mono text-primary animate-pulse mb-2">▋ MULTI-AGENT ANALYSIS RUNNING</div>
-                        <div className="text-xs text-muted-foreground/50">Geometry Analyst • Printability Scorer • Failure Predictor • Optimization Advisor</div>
+                        <div className="text-xs font-mono text-primary animate-pulse mb-2">\u258b MULTI-AGENT ANALYSIS RUNNING</div>
+                        <div className="text-xs text-muted-foreground/50">Geometry Analyst \u2022 Printability Scorer \u2022 Failure Predictor \u2022 Optimization Advisor</div>
                         <div className="flex justify-center gap-2 mt-3">
                           {['geometry_analyst', 'printability_scorer', 'failure_predictor', 'optimization_advisor'].map(id => (
                             <div key={id} className="w-2 h-2 bg-primary/40 rounded-full animate-pulse" />
@@ -438,9 +501,9 @@ export default function Home() {
                           </div>
                           <div className="mt-2 text-xs text-muted-foreground/50">
                             {agentRun.usedVision && <span className="text-primary">Vision-enhanced</span>}
-                            {agentRun.usedVision ? ' • ' : ''}
+                            {agentRun.usedVision ? ' \u2022 ' : ''}
                             {agentRun.consensus.agreementDelta < 10 ? 'Strong agreement' : 'Moderate agreement'}
-                            {' • '}{agentRun.totalDurationMs}ms
+                            {' \u2022 '}{agentRun.totalDurationMs}ms
                           </div>
                         </div>
 
@@ -545,7 +608,7 @@ export default function Home() {
             )}
 
             <div className="pt-2 border-t border-border/30 text-xs text-muted-foreground/20 font-mono text-center">
-              3DP AGENT © 2026 — Open Source
+              3DP AGENT \u00a9 2026 \u2014 Open Source
             </div>
           </div>
         </div>
