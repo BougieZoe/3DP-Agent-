@@ -8,6 +8,7 @@ export interface UploadedModel {
   mesh: THREE.Mesh;
   analysis: ReturnType<typeof analyzeModel>;
   fileName: string;
+  fileSizeBytes?: number;
 }
 
 interface STLUploadHandlerProps {
@@ -99,7 +100,7 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
       log(`> ${t.complete}`);
 
       setTimeout(() => {
-        onModelLoaded({ geometry, mesh, analysis, fileName: file.name });
+        onModelLoaded({ geometry, mesh, analysis, fileName: file.name, fileSizeBytes: file.size });
         setIsLoading(false);
       }, 400);
     } catch (error) {

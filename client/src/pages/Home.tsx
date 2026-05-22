@@ -6,8 +6,10 @@ import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
 import { ChatPanel } from '@/components/ChatPanel';
 import { APIKeyModal } from '@/components/APIKeyModal';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
+import { modelAnalysisToModelData, toModelAnalysis } from '@/lib/modelAnalysisAdapters';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
 import { Language, getTranslation } from '@/lib/i18n';
+import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
 import { toast } from 'sonner';
 
 // ─── 3D Helpers ────────────────────────────────────────────────────────────────
@@ -159,18 +161,11 @@ export default function Home() {
 
   const getModelData = (): ModelData | null => {
     if (!uploadedModel) return null;
-    return {
+    return modelAnalysisToModelData(toModelAnalysis({
       fileName: uploadedModel.fileName,
-      wallThickness: uploadedModel.analysis.wallThickness,
-      overhang: uploadedModel.analysis.overhang,
-      volume: uploadedModel.analysis.volume,
-      surfaceArea: uploadedModel.analysis.surfaceArea,
-      dims: {
-        x: uploadedModel.analysis.bounds.max.x - uploadedModel.analysis.bounds.min.x,
-        y: uploadedModel.analysis.bounds.max.y - uploadedModel.analysis.bounds.min.y,
-        z: uploadedModel.analysis.bounds.max.z - uploadedModel.analysis.bounds.min.z,
-      },
-    };
+      fileSizeBytes: uploadedModel.fileSizeBytes,
+      analysis: uploadedModel.analysis,
+    }));
   };
 
   const handleGenerateReport = () => {
@@ -185,7 +180,7 @@ export default function Home() {
 
   const analysis = uploadedModel?.analysis;
   const modelData = getModelData();
-  const providerLabel = getActiveProvider() ? { claude: 'Claude', openai: 'GPT-4o', gemini: 'Gemini' }[getActiveProvider()!] : null;
+  const providerLabel = getActiveProvider() ? AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel : null;
   const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
 
   return (

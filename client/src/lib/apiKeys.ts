@@ -1,16 +1,14 @@
+import { AI_PROVIDERS, type AIProviderId } from '@shared/domain/providers';
+
 /**
  * API Key manager — stored in localStorage, never sent to our server
  */
 
-export type AIProvider = 'claude' | 'openai' | 'gemini';
+export type AIProvider = AIProviderId;
 
 const STORAGE_KEY = '3dp_agent_api_keys';
 
-export interface APIKeys {
-  claude?: string;
-  openai?: string;
-  gemini?: string;
-}
+export type APIKeys = Partial<Record<AIProvider, string>>;
 
 export function getAPIKeys(): APIKeys {
   try {
@@ -29,14 +27,13 @@ export function getKey(provider: AIProvider): string | undefined {
 
 export function hasAnyKey(): boolean {
   const keys = getAPIKeys();
-  return !!(keys.claude || keys.openai || keys.gemini);
+  return AI_PROVIDERS.some(provider => !!keys[provider.id]);
 }
 
 export function getActiveProvider(): AIProvider | null {
   const keys = getAPIKeys();
-  if (keys.claude) return 'claude';
-  if (keys.openai) return 'openai';
-  if (keys.gemini) return 'gemini';
+  const provider = AI_PROVIDERS.find(provider => !!keys[provider.id]);
+  if (provider) return provider.id;
   return null;
 }
 
@@ -46,12 +43,13 @@ export async function callAI(
   systemPrompt: string,
   userMessage: string
 ): Promise<string> {
+
   if (provider === 'claude') {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        model: 'claude-opus-4-5',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 1024,
         system: systemPrompt,
         messages: [{ role: 'user', content: userMessage }],
@@ -67,7 +65,7 @@ export async function callAI(
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-5.5',
         max_tokens: 1024,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -94,6 +92,24 @@ export async function callAI(
     if (!res.ok) throw new Error(`Gemini API error: ${res.status}`);
     const data = await res.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response';
+  }
+
+  if (provider === 'deepseek') {
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        max_tokens: 1024,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`DeepSeek API error: ${res.status}`);
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || 'No response';
   }
 
   throw new Error('Unknown provider');

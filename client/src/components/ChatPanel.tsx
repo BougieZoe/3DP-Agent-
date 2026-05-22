@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { ModelData, classifyQuestion, answerLocally } from '@/lib/ruleEngine';
 import { getActiveProvider, getKey, callAI, AIProvider } from '@/lib/apiKeys';
 import { Language } from '@/lib/i18n';
+import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
 
 interface Message {
   id: string;
@@ -17,17 +18,10 @@ interface ChatPanelProps {
   onNeedAPIKey: () => void;
 }
 
-const PROVIDER_LABELS: Record<string, string> = {
-  claude: 'Claude',
-  openai: 'GPT-4o',
-  gemini: 'Gemini',
-  local: 'LOCAL',
-};
-
 const SUGGESTED: Record<Language, string[]> = {
   en: [
     'Where will this warp or fail first?',
-    'Is PETG or PLA the right call here?',
+    'Is PETG or PLA the right material?',
     'How do I reduce support material?',
     'What layer height gives the best tradeoff?',
     'Should I reorient this before slicing?',
@@ -48,11 +42,6 @@ const SUGGESTED: Record<Language, string[]> = {
   ],
 };
 
-// ─── CORE UPGRADE: The system prompt ─────────────────────────────────────────
-// Old prompt told AI to "answer concisely". That produces chatbot behavior.
-// This prompt gives the AI a role, a reasoning framework, and a personality.
-// It reads the real geometry data and is told to reason from it — not just
-// acknowledge it. The difference in output quality is significant.
 function buildSystemPrompt(model: ModelData, lang: Language): string {
   const wallStatus = model.wallThickness.status;
   const overhangStatus = model.overhang.status;
@@ -100,7 +89,6 @@ Overhang Analysis:
 Reply in ${lang === 'zh' ? 'Chinese (Simplified)' : lang === 'ja' ? 'Japanese' : 'English'}.`;
 }
 
-// ─── UPGRADE: First message is now a real assessment, not a greeting ──────────
 function buildInitialAssessment(model: ModelData, lang: Language): string {
   const wallStatus = model.wallThickness.status;
   const overhangStatus = model.overhang.status;
@@ -144,7 +132,6 @@ function buildInitialAssessment(model: ModelData, lang: Language): string {
     return `${model.fileName}（${dims}）をスキャンしました。\n\nジオメトリは良好です。肉厚とオーバーハングともに許容範囲内です。印刷リスクは低いと判断します。\n\n素材選択や印刷設定について質問はありますか？`;
   }
 
-  // English
   if (hasCritical) {
     return `Scanned ${model.fileName} (${dims}).\n\n⚠ Critical issues found:${
       wallStatus === 'critical' ? `\n— Min wall thickness ${model.wallThickness.minThickness.toFixed(2)}mm — below the FDM survival threshold. These walls will not hold.` : ''
@@ -169,7 +156,7 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
       role: 'assistant',
       content: buildInitialAssessment(model, language),
       source: 'local',
-    }
+    },
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -213,8 +200,8 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
         content: language === 'zh'
           ? '这个问题需要AI推理。配置API Key后我可以给你更深入的制造分析。'
           : language === 'ja'
-          ? 'この質問にはAI推論が必要です。API Keyを設定すると、より深い製造分析が可能になります。'
-          : 'This needs AI reasoning. Add an API key and I can give you a proper fabrication analysis.',
+            ? 'この質問にはAI推論が必要です。API Keyを設定すると、より深い製造分析が可能になります。'
+            : 'This needs AI reasoning. Add an API key and I can give you a proper fabrication analysis.',
         source: 'local',
       }]);
       setIsLoading(false);
@@ -245,33 +232,29 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
 
   const sourceColor = (src?: string) => {
     if (src === 'local') return 'text-muted-foreground/60';
-    if (src === 'claude') return 'text-orange-400';
-    if (src === 'openai') return 'text-emerald-400';
-    if (src === 'gemini') return 'text-blue-400';
+    if (src && src in AI_PROVIDER_METADATA) return AI_PROVIDER_METADATA[src as AIProvider].colorClass;
     return 'text-primary';
   };
 
   return (
     <div className="flex flex-col h-full border border-border rounded-sm bg-card">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
           <span className="text-xs font-mono text-primary tracking-widest">FABRICATION CONSULTANT</span>
         </div>
         <span className="text-xs font-mono text-muted-foreground/40">
-          {getActiveProvider() ? `AI: ${PROVIDER_LABELS[getActiveProvider()!]}` : 'LOCAL MODE'}
+          {getActiveProvider() ? `AI: ${AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel}` : 'LOCAL MODE'}
         </span>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
         {messages.map(msg => (
           <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[85%] ${msg.role === 'user' ? 'text-right' : ''}`}>
               {msg.role === 'assistant' && (
                 <div className={`text-xs font-mono mb-1 ${sourceColor(msg.source)}`}>
-                  {msg.source ? `[${PROVIDER_LABELS[msg.source] || msg.source}]` : '[AI]'}
+                  {msg.source && msg.source !== 'local' ? `[${AI_PROVIDER_METADATA[msg.source].shortLabel}]` : '[LOCAL]'}
                 </div>
               )}
               <div className={`text-xs font-mono leading-relaxed whitespace-pre-wrap px-3 py-2 rounded-sm ${
@@ -294,7 +277,6 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Suggestions */}
       {messages.length <= 1 && (
         <div className="px-3 pb-2 flex flex-wrap gap-1.5 shrink-0">
           {SUGGESTED[language].map((s, i) => (
@@ -309,7 +291,6 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
         </div>
       )}
 
-      {/* Input */}
       <div className="px-3 pb-3 pt-1 flex gap-2 shrink-0 border-t border-border">
         <input
           ref={inputRef}
