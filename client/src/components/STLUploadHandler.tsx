@@ -1,12 +1,13 @@
 import { useRef, useState, useCallback } from 'react';
-import { loadSTLFile, analyzeModel, createMeshFromGeometry } from '@/lib/stlLoader';
+import { loadSTLFile, createMeshFromGeometry } from '@/lib/stlLoader';
 import { Language } from '@/lib/i18n';
+import { runAnalysisPipeline, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
 import * as THREE from 'three';
 
 export interface UploadedModel {
   geometry: THREE.BufferGeometry;
   mesh: THREE.Mesh;
-  analysis: ReturnType<typeof analyzeModel>;
+  unifiedAnalysis: UnifiedAnalysis;
   fileName: string;
   fileSizeBytes?: number;
 }
@@ -94,13 +95,14 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
       log(`> ${t.parsing}`);
       const geometry = await loadSTLFile(file);
       log(`> ${t.computing}`);
-      const analysis = analyzeModel(geometry);
+      const model = fromThreeBufferGeometry(geometry);
+      const unifiedAnalysis = runAnalysisPipeline(model, { fileName: file.name });
       log(`> ${t.analyzing}`);
       const mesh = createMeshFromGeometry(geometry);
       log(`> ${t.complete}`);
 
       setTimeout(() => {
-        onModelLoaded({ geometry, mesh, analysis, fileName: file.name, fileSizeBytes: file.size });
+        onModelLoaded({ geometry, mesh, unifiedAnalysis, fileName: file.name, fileSizeBytes: file.size });
         setIsLoading(false);
       }, 400);
     } catch (error) {

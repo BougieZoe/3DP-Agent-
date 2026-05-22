@@ -30,16 +30,32 @@ export class PrintabilityScorer extends BaseAgent {
   }
 
   protected async analyze(ctx: AgentContext): Promise<AgentOutput> {
-    const { analysis, metrics, previousOutputs } = ctx;
+    const { unifiedAnalysis, modelSize, previousOutputs } = ctx;
+    const metrics = unifiedAnalysis.metrics.result;
+    const topology = unifiedAnalysis.topology.result;
+    const triCount = topology?.triangleCount ?? 0;
+    const oh = metrics?.overhang;
+    const overhangFaces = oh?.faceCount ?? 0;
+    const minThickness = metrics?.minWallThicknessMm ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
+    const wtStatus = minThickness < 1 ? 'critical' : minThickness < 2 ? 'warning' : 'good';
+    const ohStatus = overhangFaces > Math.max(1, triCount * 0.1) ? 'warning' : 'good';
 
     const gaOutput = previousOutputs.get('geometry_analyst');
     const gaDetails = gaOutput?.details as Record<string, unknown> | undefined;
-    const gaAspectRatio = (gaDetails?.aspectRatio as number) ?? this.computeAspectRatio(metrics.size);
+    const gaAspectRatio = (gaDetails?.aspectRatio as number) ?? this.computeAspectRatio(modelSize);
     const gaFeatureDetail = (gaDetails?.featureDetail as string) ?? 'medium';
 
-    const breakdown = this.computeBreakdown(analysis, gaAspectRatio, gaFeatureDetail);
+    const analysisInput = {
+      wallThickness: { status: wtStatus },
+      overhang: { status: ohStatus, areas: overhangFaces },
+    };
 
-    const explanation = this.buildExplanation(breakdown, analysis);
+    const breakdown = this.computeBreakdown(analysisInput, gaAspectRatio, gaFeatureDetail);
+
+    const explanation = this.buildExplanation(breakdown, {
+      wallThickness: { status: wtStatus, minThickness },
+      overhang: { status: ohStatus, areas: overhangFaces },
+    });
 
     const markers = [
       ...this.scoreToMarkers(breakdown.wallThicknessScore, 'thin_wall', 'Wall thickness score'),
@@ -146,10 +162,10 @@ export class PrintabilityScorer extends BaseAgent {
     ];
 
     if (breakdown.wallThicknessScore < 50) {
-      lines.push(``, `⚠ Primary concern: wall thickness (${analysis.wallThickness.minThickness.toFixed(2)}mm). Consider thickening to 2mm+ for reliable printing.`);
+      lines.push(``, `\u26a0 Primary concern: wall thickness (${analysis.wallThickness.minThickness.toFixed(2)}mm). Consider thickening to 2mm+ for reliable printing.`);
     }
     if (breakdown.overhangScore < 50) {
-      lines.push(`⚠ Secondary concern: ${analysis.overhang.areas} overhang faces need support.`);
+      lines.push(`\u26a0 Secondary concern: ${analysis.overhang.areas} overhang faces need support.`);
     }
 
     return lines.join('\n');

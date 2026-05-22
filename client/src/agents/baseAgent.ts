@@ -1,14 +1,15 @@
 import type * as THREE from 'three';
 import type { AgentId, AgentOutput, AgentVerdict, RiskMarker } from '@shared/domain/agent';
-import type { GeometryMetricsResult } from '@/lib/geometryMetrics';
-import type { AnalysisResult } from '@/lib/stlAnalysis';
 import type { AgentResultWithExplanation } from './types';
+import type { UnifiedAnalysis } from '@/analysis';
 import { getAgentLabel } from './types';
 
 export interface AgentContext {
   geometry: THREE.BufferGeometry;
-  metrics: GeometryMetricsResult;
-  analysis: AnalysisResult;
+  unifiedAnalysis: UnifiedAnalysis;
+  vertexPositions: Float32Array;
+  vertexNormals: Float32Array;
+  modelSize: { x: number; y: number; z: number };
   visionAnalysis?: string;
   previousOutputs: Map<AgentId, AgentOutput>;
   fileName: string;

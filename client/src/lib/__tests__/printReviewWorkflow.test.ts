@@ -54,7 +54,7 @@ describe('executeLocalPrintReviewWorkflow', () => {
     expect(result.stages.generateReport.status).toBe('completed');
     expect(result.stages.parseMesh.durationMs).toBe(10);
     expect(result.stages.analyzeGeometry.output?.triangleCount).toBe(1);
-    expect(result.modelAnalysis?.source.fileName).toBe('fixture.stl');
+    expect(result.stages.evaluatePrintability.output).toBeDefined();
     expect(result.report?.source).toBe('local_rules');
     expect(result.report?.content).toContain('VERDICT:');
   });

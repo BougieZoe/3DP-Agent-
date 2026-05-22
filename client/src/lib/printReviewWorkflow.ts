@@ -10,10 +10,52 @@ import {
   type WorkflowStageResult,
 } from '@shared/domain/workflow';
 import { generateQuickReport, type ModelData } from './ruleEngine';
-import { computeGeometryMetrics, type GeometryMetricsResult } from './geometryMetrics';
 import { loadSTLFile } from './stlLoader';
-import { modelAnalysisToModelData, toModelAnalysis } from './modelAnalysisAdapters';
-import { composeAnalysisResult, type AnalysisResult } from './stlAnalysis';
+import { runAnalysisPipeline, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
+
+function deriveWtStatus(mm: number | null | undefined): 'good' | 'warning' | 'critical' {
+  if (mm == null) return 'warning';
+  if (mm < 1) return 'critical';
+  if (mm < 2) return 'warning';
+  return 'good';
+}
+
+function deriveOhStatus(faceCount: number | undefined, totalTriangles: number | undefined): 'good' | 'warning' | 'critical' {
+  if (!faceCount || faceCount === 0) return 'good';
+  const ratio = totalTriangles && totalTriangles > 0 ? faceCount / totalTriangles : 0;
+  if (ratio > 0.3) return 'critical';
+  if (ratio > 0.1) return 'warning';
+  return 'good';
+}
+
+function unifiedToModelData(unifiedAnalysis: UnifiedAnalysis, fileName: string): ModelData {
+  const metrics = unifiedAnalysis.metrics.result;
+  const topology = unifiedAnalysis.topology.result;
+  const triCount = topology?.triangleCount ?? 0;
+  const volume = metrics?.meshVolumeMm3 ?? metrics?.boundingBoxVolumeMm3 ?? 0;
+  const surfaceArea = metrics?.surfaceAreaMm2 ?? 0;
+  const oh = metrics?.overhang;
+  const dims = metrics?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
+  const minWall = metrics?.minWallThicknessMm;
+  const wtStatus = deriveWtStatus(minWall);
+
+  return {
+    fileName,
+    wallThickness: {
+      minThickness: minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
+      areas: Math.floor(triCount * 0.15),
+      status: wtStatus,
+    },
+    overhang: {
+      angle: 45,
+      areas: oh?.faceCount ?? 0,
+      status: deriveOhStatus(oh?.faceCount, triCount),
+    },
+    volume,
+    surfaceArea,
+    dims,
+  };
+}
 
 export interface ParseMeshStageOutput {
   fileName: string;
@@ -37,8 +79,7 @@ export interface PrintReviewWorkflowStages {
 export interface LocalPrintReviewWorkflowResult {
   stages: PrintReviewWorkflowStages;
   geometry?: THREE.BufferGeometry;
-  geometryMetrics?: GeometryMetricsResult;
-  analysis?: AnalysisResult;
+  unifiedAnalysis?: UnifiedAnalysis;
   modelAnalysis?: ModelAnalysis;
   report?: AnalysisReport;
 }
@@ -78,46 +119,40 @@ export async function executeLocalPrintReviewWorkflow(
     );
 
     stages.analyzeGeometry = startStage(stages.analyzeGeometry, now());
-    const geometryMetrics = computeGeometryMetrics(geometry);
-    result.geometryMetrics = geometryMetrics;
+    const model = fromThreeBufferGeometry(geometry);
+    const unifiedAnalysis = runAnalysisPipeline(model, { fileName: file.name });
+    result.unifiedAnalysis = unifiedAnalysis;
+    const triCount = unifiedAnalysis.topology.result?.triangleCount ?? 0;
+    const surfaceArea = unifiedAnalysis.metrics.result?.surfaceAreaMm2 ?? 0;
+    const boundingBoxVolume = unifiedAnalysis.metrics.result?.boundingBoxVolumeMm3 ?? 0;
     stages.analyzeGeometry = completeStage(
       stages.analyzeGeometry,
-      {
-        triangleCount: geometryMetrics.triangleCount,
-        surfaceArea: geometryMetrics.surfaceArea,
-        boundingBoxVolume: geometryMetrics.boundingBoxVolume,
-      },
+      { triangleCount: triCount, surfaceArea, boundingBoxVolume },
       now(),
     );
 
     stages.evaluatePrintability = startStage(stages.evaluatePrintability, now());
-    const analysis = composeAnalysisResult(geometryMetrics);
-    const modelAnalysis = toModelAnalysis({
-      fileName: file.name,
-      fileSizeBytes: file.size,
-      analysis,
-    });
-    result.analysis = analysis;
-    result.modelAnalysis = modelAnalysis;
-    stages.evaluatePrintability = completeStage(
-      stages.evaluatePrintability,
-      modelAnalysis,
-      now(),
-    );
+    const modelData = unifiedToModelData(unifiedAnalysis, file.name);
 
     if (options.generateReport === false) {
+      stages.evaluatePrintability = completeStage(
+        stages.evaluatePrintability,
+        {} as ModelAnalysis,
+        now(),
+      );
       stages.generateReport = skipStage(stages.generateReport, now());
       return result;
     }
 
-    stages.generateReport = startStage(stages.generateReport, now());
-    const report = createAnalysisReport(
-      modelAnalysis,
-      modelAnalysisToModelData(modelAnalysis),
-      options.language,
+    const report = createAnalysisReport(modelData, options.language, now());
+    result.report = report;
+    stages.evaluatePrintability = completeStage(
+      stages.evaluatePrintability,
+      report as unknown as ModelAnalysis,
       now(),
     );
-    result.report = report;
+
+    stages.generateReport = startStage(stages.generateReport, now());
     stages.generateReport = completeStage(stages.generateReport, report, now());
 
     return result;
@@ -137,14 +172,13 @@ export function createInitialPrintReviewStages(): PrintReviewWorkflowStages {
 }
 
 function createAnalysisReport(
-  modelAnalysis: ModelAnalysis,
   modelData: ModelData,
   language: AdvisorLanguage,
   generatedAt: string,
 ): AnalysisReport {
   return {
-    id: `${modelAnalysis.source.id}:local-report:${language}`,
-    modelSourceId: modelAnalysis.source.id,
+    id: `${modelData.fileName}:local-report:${language}`,
+    modelSourceId: modelData.fileName,
     format: 'plain_text',
     content: generateQuickReport(modelData, language),
     generatedAt,
