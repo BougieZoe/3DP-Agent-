@@ -176,6 +176,10 @@ export default function Home() {
     setTab('geometry');
     setQuickReport('');
     setAgentRun(null);
+    setShowHeatmap(false);
+    setShowGhosts(false);
+    setShowRisks(false);
+    setOverlayOpacity(0.7);
     toast.success(t('stlParsed') + model.fileName);
     runAgentAnalysis(model);
   };
