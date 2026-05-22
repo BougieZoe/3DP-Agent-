@@ -12,6 +12,11 @@ import { Language, getTranslation } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
 import { computeGeometryMetrics } from '@/lib/geometryMetrics';
 import { AgentOrchestrator, AgentRunSummary, getAgentLabel, getAgentDescription } from '@/agents';
+import { OverhangHeatmap } from '@/components/3D/OverhangHeatmap';
+import { SupportGhosts } from '@/components/3D/SupportGhosts';
+import { RiskAnimation } from '@/components/3D/RiskAnimation';
+import { VisualizationToolbar } from '@/components/3D/VisualizationToolbar';
+import { OptimizeButton } from '@/components/3D/OptimizeButton';
 import { toast } from 'sonner';
 
 // ─── 3D Helpers ────────────────────────────────────────────────────────────────
@@ -155,6 +160,10 @@ export default function Home() {
   const [reportLoading, setReportLoading] = useState(false);
   const [agentRun, setAgentRun] = useState<AgentRunSummary | null>(null);
   const [agentLoading, setAgentLoading] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showGhosts, setShowGhosts] = useState(false);
+  const [showRisks, setShowRisks] = useState(false);
+  const [overlayOpacity, setOverlayOpacity] = useState(0.7);
   const orchestratorRef = useRef<AgentOrchestrator | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -213,6 +222,10 @@ export default function Home() {
   const modelData = getModelData();
   const providerLabel = getActiveProvider() ? AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel : null;
   const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
+  const agentMarkers = agentRun?.results.flatMap(r => r.markers ?? []) ?? [];
+  const optSuggestions = agentRun?.results
+    .filter(r => r.agentId === 'optimization_advisor')
+    .flatMap(r => (r.details?.suggestions ?? []) as Array<{ type: string; priority: string }>) ?? [];
 
   return (
     <div className="relative w-full min-h-screen bg-background grid-bg overflow-x-hidden">
@@ -261,12 +274,33 @@ export default function Home() {
           <Canvas gl={{ antialias: true, alpha: true }} style={{ background: 'transparent' }}>
             <PerspectiveCamera makeDefault position={[0, 3, 10]} fov={60} />
             <SceneContent model={uploadedModel} />
+            {uploadedModel?.geometry && showHeatmap && (
+              <OverhangHeatmap geometry={uploadedModel.geometry} visible opacity={overlayOpacity} />
+            )}
+            {uploadedModel?.geometry && (
+              <SupportGhosts markers={agentMarkers} visible={showGhosts} opacity={overlayOpacity} />
+            )}
+            {uploadedModel?.geometry && (
+              <RiskAnimation markers={agentMarkers} visible={showRisks} />
+            )}
             <OrbitControls enablePan={false} autoRotate={!uploadedModel} autoRotateSpeed={0.4} />
           </Canvas>
           {uploadedModel && (
             <div className="absolute bottom-3 left-4 text-xs font-mono text-muted-foreground/30">
               {uploadedModel.fileName}
             </div>
+          )}
+          {uploadedModel && (
+            <VisualizationToolbar
+              showHeatmap={showHeatmap}
+              showGhosts={showGhosts}
+              showRisks={showRisks}
+              overlayOpacity={overlayOpacity}
+              onToggleHeatmap={() => setShowHeatmap(v => !v)}
+              onToggleGhosts={() => setShowGhosts(v => !v)}
+              onToggleRisks={() => setShowRisks(v => !v)}
+              onOpacityChange={setOverlayOpacity}
+            />
           )}
         </div>
 
@@ -451,6 +485,16 @@ export default function Home() {
                             ))}
                           </div>
                         </details>
+
+                        {/* Optimize Button */}
+                        {uploadedModel && agentRun.results.some(r => r.agentId === 'optimization_advisor') && (
+                          <OptimizeButton
+                            geometry={uploadedModel.geometry}
+                            suggestions={optSuggestions}
+                            markers={agentMarkers}
+                            originalFileName={uploadedModel.fileName}
+                          />
+                        )}
                       </>
                     )}
                   </div>
