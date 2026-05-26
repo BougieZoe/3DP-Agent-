@@ -48,7 +48,9 @@ function SaggingBridge({ position, severity, bounds }: {
   const maxSag = severity * ANIMATION.sag.maxFactor;
 
   useEffect(() => {
-    if (!groupRef.current) return;
+    const group = groupRef.current;
+    if (!group) return;
+
     const pts = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -SIZES.sagLineInit, 0)];
     const geo = new THREE.BufferGeometry().setFromPoints(pts);
     const mat = new THREE.LineBasicMaterial({
@@ -57,9 +59,14 @@ function SaggingBridge({ position, severity, bounds }: {
       opacity: 0,
     });
     const line = new THREE.Line(geo, mat);
-    groupRef.current.add(line);
+    group.add(line);
     lineRef.current = line;
-    return () => { groupRef.current?.clear(); geo.dispose(); mat.dispose(); };
+
+    return () => {
+      group.clear();
+      geo.dispose();
+      mat.dispose();
+    };
   }, []);
 
   useFrame(() => {
