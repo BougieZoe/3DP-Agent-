@@ -37,12 +37,22 @@ export function getActiveProvider(): AIProvider | null {
   return null;
 }
 
+function langInstruction(language?: string): string {
+  if (!language) return '';
+  const name = language === 'zh' ? 'Simplified Chinese'
+    : language === 'ja' ? 'Japanese'
+    : 'English';
+  return `\n\nPlease respond in ${name}. Use natural and professional ${name} terms. Current interface language is ${language}.`;
+}
+
 export async function callAI(
   provider: AIProvider,
   apiKey: string,
   systemPrompt: string,
-  userMessage: string
+  userMessage: string,
+  language?: string,
 ): Promise<string> {
+  systemPrompt += langInstruction(language);
 
   if (provider === 'claude') {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
