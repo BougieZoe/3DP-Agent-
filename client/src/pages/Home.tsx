@@ -448,7 +448,9 @@ export default function Home() {
             <OrbitControls enablePan={false} autoRotate={!uploadedModel} autoRotateSpeed={0.4} />
           </Canvas>
           {uploadedModel && (
-            <ManufacturingTimeline graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} />
+            <div className="hidden lg:block">
+              <ManufacturingTimeline graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} />
+            </div>
           )}
           {uploadedModel && (
             <div className="absolute bottom-3 left-4 text-xs font-mono text-muted-foreground/30">
