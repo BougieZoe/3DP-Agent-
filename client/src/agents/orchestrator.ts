@@ -53,6 +53,7 @@ export class AgentOrchestrator {
     unifiedAnalysis: UnifiedAnalysis,
     fileName: string,
     visionCanvas?: HTMLCanvasElement | null,
+    language?: string,
   ): Promise<AgentRunSummary> {
     const startTime = performance.now();
 
@@ -73,7 +74,7 @@ export class AgentOrchestrator {
     }
 
     if (visionCanvas) {
-      ctx.visionAnalysis = await this.captureVisionAnalysis(vertexData, fileName);
+      ctx.visionAnalysis = await this.captureVisionAnalysis(vertexData, fileName, language);
     }
 
     const enabledAgents = Array.from(this.agents.values())
@@ -277,6 +278,7 @@ export class AgentOrchestrator {
   private async captureVisionAnalysis(
     vertexData: { triangleCount: number; size: { x: number; y: number; z: number } },
     fileName: string,
+    language?: string,
   ): Promise<string | undefined> {
     const activeProvider = getActiveProvider();
     if (!activeProvider) return undefined;
@@ -295,7 +297,7 @@ export class AgentOrchestrator {
     const result = await visionProvider.analyzeWithAI(screenshot, summary, {
       provider: activeProvider,
       apiKey: 'configured',
-    });
+    }, language);
 
     return result.rawResponse;
   }

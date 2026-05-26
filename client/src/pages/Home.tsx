@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
@@ -15,6 +15,21 @@ import { SupportGhosts } from '@/components/3D/SupportGhosts';
 import { RiskAnimation } from '@/components/3D/RiskAnimation';
 import { VisualizationToolbar } from '@/components/3D/VisualizationToolbar';
 import { OptimizeButton } from '@/components/3D/OptimizeButton';
+import { PrintPathPreview } from '@/components/3D/PrintPathPreview';
+import { LayerReveal } from '@/components/3D/LayerReveal';
+import { FailureEmergence } from '@/components/3D/FailureEmergence';
+import { ThermalField } from '@/components/3D/ThermalField';
+import { CausalityHighlight } from '@/components/3D/CausalityHighlight';
+import { buildCausalityGraph, CausalityGraph } from '@/components/causality/causalityEngine';
+import { ManufacturingTimeline } from '@/components/causality/ManufacturingTimeline';
+import { CausalityPanel } from '@/components/causality/CausalityPanel';
+import { detectPatterns, PatternMatch } from '@/components/causality/topologyPatternEngine';
+import { PatternMemoryPanel } from '@/components/causality/PatternMemoryPanel';
+import { evaluateCounterfactuals, GeometrySuggestion } from '@/components/causality/counterfactualEngine';
+import { GeometrySuggestionPanel } from '@/components/causality/GeometrySuggestionPanel';
+import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
+import { CognitiveScan } from '@/components/3D/CognitiveScan';
+import { AttentionPulse } from '@/components/3D/AttentionPulse';
 import { toast } from 'sonner';
 
 function deriveWtStatus(mm: number | null | undefined): 'good' | 'warning' | 'critical' {
@@ -222,7 +237,7 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
 export default function Home() {
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
-  const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents'>('geometry');
+  const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality'>('geometry');
   const [showAPIModal, setShowAPIModal] = useState(false);
   const [quickReport, setQuickReport] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
@@ -231,6 +246,13 @@ export default function Home() {
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showGhosts, setShowGhosts] = useState(false);
   const [showRisks, setShowRisks] = useState(false);
+  const [showPrintPath, setShowPrintPath] = useState(false);
+  const [showLayerReveal, setShowLayerReveal] = useState(false);
+  const [showFailure, setShowFailure] = useState(false);
+  const [showThermal, setShowThermal] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
+  const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
   const [overlayOpacity, setOverlayOpacity] = useState(0.7);
   const orchestratorRef = useRef<AgentOrchestrator | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -247,6 +269,13 @@ export default function Home() {
     setShowHeatmap(false);
     setShowGhosts(false);
     setShowRisks(false);
+    setShowPrintPath(false);
+    setShowLayerReveal(false);
+    setShowFailure(false);
+    setShowThermal(false);
+    setSelectedEventId(null);
+    setSelectedPatternId(null);
+    setSelectedSuggestionId(null);
     setOverlayOpacity(0.7);
     toast.success(t('stlParsed') + model.fileName);
     runAgentAnalysis(model);
@@ -260,6 +289,8 @@ export default function Home() {
         model.geometry,
         model.unifiedAnalysis,
         model.fileName,
+        undefined,
+        language,
       );
       setAgentRun(summary);
     } catch (err) {
@@ -290,11 +321,48 @@ export default function Home() {
   const providerLabel = getActiveProvider() ? AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel : null;
   const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
   const agentMarkers = agentRun?.results.flatMap(r => r.markers ?? []) ?? [];
+  const causalityGraph = useMemo(() => agentMarkers.length > 0 ? buildCausalityGraph(agentMarkers) : null, [agentMarkers]);
+  const patternMatches: PatternMatch[] = useMemo(() =>
+    agentMarkers.length > 0 ? detectPatterns(agentMarkers) : [],
+    [agentMarkers],
+  );
+
+  const counterfactualSuggestions: GeometrySuggestion[] = useMemo(() =>
+    agentMarkers.length > 0 ? evaluateCounterfactuals(agentMarkers, patternMatches) : [],
+    [agentMarkers, patternMatches],
+  );
+
+  const selectedSuggestionPositions = useMemo(() => {
+    if (!selectedSuggestionId) return [];
+    const sug = counterfactualSuggestions.find(s => s.id === selectedSuggestionId);
+    return sug ? sug.affectedPositions : [];
+  }, [selectedSuggestionId, counterfactualSuggestions]);
+
+  const selectedPatternPositions = useMemo(() => {
+    if (!selectedPatternId) return [];
+    const match = patternMatches.find((_, i) => `${patternMatches[i].pattern.id}-${i}` === selectedPatternId);
+    return match ? match.clusterPositions : [];
+  }, [selectedPatternId, patternMatches]);
+
+  const selectedEventPositions = useMemo(() => {
+    if (!causalityGraph || !selectedEventId) return [];
+    const ev = causalityGraph.events.find((e: { id: string }) => e.id === selectedEventId);
+    return ev ? ev.positions : [];
+  }, [selectedEventId, causalityGraph]);
   const optSuggestions = agentRun?.results
     .filter(r => r.agentId === 'optimization_advisor')
     .flatMap(r => (r.details?.suggestions ?? []) as Array<{ type: string; priority: string }>) ?? [];
 
+  const totalLayers = useMemo(() => {
+    if (!uploadedModel?.geometry) return 50;
+    const geo = uploadedModel.geometry;
+    geo.computeBoundingBox();
+    const height = (geo.boundingBox?.max.y ?? 5) - (geo.boundingBox?.min.y ?? 0);
+    return Math.max(10, Math.min(200, Math.round(height / 0.2)));
+  }, [uploadedModel?.geometry]);
+
   return (
+    <PrintPlaybackProvider totalLayers={totalLayers}>
     <div className="relative w-full min-h-screen bg-background grid-bg overflow-x-hidden">
       {showAPIModal && <APIKeyModal onClose={() => setShowAPIModal(false)} language={language} />}
 
@@ -341,6 +409,11 @@ export default function Home() {
           <Canvas gl={{ antialias: true, alpha: true }} style={{ background: 'transparent' }}>
             <PerspectiveCamera makeDefault position={[0, 3, 10]} fov={60} />
             <SceneContent model={uploadedModel} />
+            <PlaybackUpdater />
+            {uploadedModel?.geometry && <CognitiveScan geometry={uploadedModel.geometry} visible />}
+            {uploadedModel?.geometry && agentMarkers.length > 0 && (
+              <AttentionPulse markers={agentMarkers} geometry={uploadedModel.geometry} visible />
+            )}
             {uploadedModel?.geometry && showHeatmap && (
               <OverhangHeatmap geometry={uploadedModel.geometry} visible opacity={overlayOpacity} />
             )}
@@ -350,8 +423,33 @@ export default function Home() {
             {uploadedModel?.geometry && (
               <RiskAnimation markers={agentMarkers} visible={showRisks} />
             )}
+            {uploadedModel?.geometry && showPrintPath && (
+              <PrintPathPreview geometry={uploadedModel.geometry} visible opacity={overlayOpacity} />
+            )}
+            {uploadedModel?.geometry && showLayerReveal && (
+              <LayerReveal geometry={uploadedModel.geometry} visible opacity={overlayOpacity} />
+            )}
+            {uploadedModel?.geometry && showFailure && (
+              <FailureEmergence markers={agentMarkers} geometry={uploadedModel.geometry} visible />
+            )}
+            {uploadedModel?.geometry && showThermal && (
+              <ThermalField markers={agentMarkers} geometry={uploadedModel.geometry} visible />
+            )}
+            {(selectedEventPositions.length > 0 || selectedPatternPositions.length > 0 || selectedSuggestionPositions.length > 0) && (
+              <CausalityHighlight
+                positions={
+                  selectedEventPositions.length > 0 ? selectedEventPositions
+                  : selectedPatternPositions.length > 0 ? selectedPatternPositions
+                  : selectedSuggestionPositions
+                }
+                visible
+              />
+            )}
             <OrbitControls enablePan={false} autoRotate={!uploadedModel} autoRotateSpeed={0.4} />
           </Canvas>
+          {uploadedModel && (
+            <ManufacturingTimeline graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} />
+          )}
           {uploadedModel && (
             <div className="absolute bottom-3 left-4 text-xs font-mono text-muted-foreground/30">
               {uploadedModel.fileName}
@@ -362,10 +460,18 @@ export default function Home() {
               showHeatmap={showHeatmap}
               showGhosts={showGhosts}
               showRisks={showRisks}
+              showPrintPath={showPrintPath}
+              showLayerReveal={showLayerReveal}
+              showFailure={showFailure}
+              showThermal={showThermal}
               overlayOpacity={overlayOpacity}
               onToggleHeatmap={() => setShowHeatmap(v => !v)}
               onToggleGhosts={() => setShowGhosts(v => !v)}
               onToggleRisks={() => setShowRisks(v => !v)}
+              onTogglePrintPath={() => setShowPrintPath(v => !v)}
+              onToggleLayerReveal={() => setShowLayerReveal(v => !v)}
+              onToggleFailure={() => setShowFailure(v => !v)}
+              onToggleThermal={() => setShowThermal(v => !v)}
               onOpacityChange={setOverlayOpacity}
             />
           )}
@@ -386,7 +492,7 @@ export default function Home() {
               <div className="space-y-0 fade-up">
                 {/* Tabs */}
                 <div className="flex border-b border-border">
-                  {(['geometry', 'report', 'agents', 'chat'] as const).map(tabKey => (
+                  {(['geometry', 'report', 'agents', 'chat', 'causality'] as const).map(tabKey => (
                     <button key={tabKey} onClick={() => setTab(tabKey)}
                       className={`text-xs font-mono px-4 py-2.5 border-b-2 transition-all ${
                         tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -394,6 +500,7 @@ export default function Home() {
                       {tabKey === 'geometry' ? t('geometry').toUpperCase()
                         : tabKey === 'report' ? t('report').toUpperCase()
                         : tabKey === 'agents' ? 'AGENTS'
+                        : tabKey === 'causality' ? 'CAUSALITY'
                         : t('chatAI').toUpperCase()}
                     </button>
                   ))}
@@ -567,6 +674,27 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* CAUSALITY TAB */}
+                {tab === 'causality' && (
+                  <div className="pt-4 space-y-4">
+                    <CausalityPanel graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} />
+                    <div className="border-t border-border/20 my-2" />
+                    {patternMatches.length > 0 && (
+                      <PatternMemoryPanel
+                        matches={patternMatches}
+                        selectedPatternId={selectedPatternId}
+                        onSelectPattern={setSelectedPatternId}
+                      />
+                    )}
+                    <div className="border-t border-border/20 my-2" />
+                    <GeometrySuggestionPanel
+                      suggestions={counterfactualSuggestions}
+                      selectedSuggestionId={selectedSuggestionId}
+                      onSelectSuggestion={setSelectedSuggestionId}
+                    />
+                  </div>
+                )}
+
                 {/* CHAT TAB */}
                 {tab === 'chat' && (
                   <div className="pt-4 h-[520px]">
@@ -614,5 +742,6 @@ export default function Home() {
         </div>
       </div>
     </div>
+    </PrintPlaybackProvider>
   );
 }

@@ -1,6 +1,8 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { SEMANTIC, ANIMATION, SIZES, OPACITIES, MATERIALS } from '@/lib/visualLanguage';
+import { useThemeTokens } from '@/lib/ThemeContext';
 
 interface RiskMarkerData {
   position: { x: number; y: number; z: number };
@@ -15,33 +17,69 @@ interface RiskAnimationProps {
 
 function PulsingSphere({ position, severity, type }: { position: [number, number, number]; severity: number; type: string }) {
   const ref = useRef<THREE.Mesh>(null);
-  const color = type === 'thin_wall' ? '#ff4444' : type === 'delamination' ? '#ff8800' : '#ff44ff';
-  const baseScale = 0.2 + severity * 0.6;
+  const ghostRef = useRef<THREE.Mesh>(null);
+  const seed = useMemo(() => Math.random() * 100, []);
+
+  const risk = type === 'thin_wall' ? SEMANTIC.risk.critical
+    : type === 'delamination' ? SEMANTIC.risk.warning
+    : SEMANTIC.risk.attention;
+
+  const baseScale = ANIMATION.markerScale.base + severity * ANIMATION.markerScale.sevF;
+  const showGhost = severity > 0.7;
 
   useFrame(({ clock }) => {
+    const t = clock.getElapsedTime() + seed;
     if (!ref.current) return;
-    const pulse = 1 + Math.sin(clock.getElapsedTime() * 2 + severity * 3) * 0.3;
+
+    const { breath, drift, orbit, ghostDrift, markerDrift, markerScale } = ANIMATION;
+    const b = breath;
+
+    const breathVal = Math.sin(t * b.speed) * b.normRange + b.normCenter;
+    const flutter = Math.sin(t * b.flutterFreq + drift.yPhase) * b.flutterAmp;
+    const rhythm = Math.max(b.minRhythm, breathVal + flutter);
+
+    const pulse = 1 + Math.sin(t * orbit.speed + severity * 4) * orbit.factor;
     ref.current.scale.setScalar(baseScale * pulse);
-    const mat = ref.current.material as THREE.MeshPhongMaterial;
-    mat.opacity = 0.3 + severity * 0.4 + Math.sin(clock.getElapsedTime() * 2.5 + severity * 2) * 0.15;
+
+    const instability = severity * markerDrift.amp;
+    ref.current.position.x = position[0] + Math.sin(t * drift.speed) * instability;
+    ref.current.position.y = position[1] + Math.sin(t * drift.speed * 0.5 + drift.yPhase) * instability * drift.vertRat;
+    ref.current.position.z = position[2] + Math.cos(t * drift.speed * 0.5) * instability;
+
+    const mat = ref.current.material as THREE.MeshBasicMaterial;
+    mat.opacity = Math.min(risk.opacity * (1 + rhythm), OPACITIES.overlayMax);
+
+    if (ghostRef.current && showGhost) {
+      const { ghostDrift: gd } = ANIMATION;
+      const ghostT = t * gd.speed;
+      const driftAmp = gd.baseAmp + severity * gd.sevAmp;
+      ghostRef.current.position.x = position[0] + Math.sin(ghostT * gd.xFreq + gd.xPhase) * driftAmp;
+      ghostRef.current.position.y = position[1] + Math.sin(ghostT * gd.yFreq + gd.yPhase) * driftAmp * 0.5 * drift.vertRat;
+      ghostRef.current.position.z = position[2] + Math.cos(ghostT * gd.zFreq + gd.zPhase) * driftAmp;
+      const gMat = ghostRef.current.material as THREE.MeshBasicMaterial;
+      const ghostPulse = Math.sin(t * b.ghostPulseF) * b.normRange + b.normCenter;
+      gMat.opacity = ghostPulse * SEMANTIC.risk.ghost.opacity * severity;
+    }
   });
 
   return (
-    <mesh ref={ref} position={position}>
-      <sphereGeometry args={[0.3, 12, 12]} />
-      <meshPhongMaterial
-        color={color}
-        emissive={color}
-        emissiveIntensity={0.5}
-        transparent
-        opacity={0.5}
-        depthWrite={false}
-      />
-    </mesh>
+    <>
+      <mesh ref={ref} position={position}>
+        <sphereGeometry args={[SIZES.markerSphere, SIZES.sphereSeg, SIZES.sphereSeg]} />
+        <meshBasicMaterial {...MATERIALS.additive} color={risk.three} opacity={risk.opacity} />
+      </mesh>
+      {showGhost && (
+        <mesh ref={ghostRef} position={position}>
+          <sphereGeometry args={[SIZES.ghostSphere, SIZES.sphereSeg, SIZES.sphereSeg]} />
+          <meshBasicMaterial {...MATERIALS.additive} color={risk.three} opacity={0} />
+        </mesh>
+      )}
+    </>
   );
 }
 
 export function RiskAnimation({ markers, visible }: RiskAnimationProps) {
+  const SEMANTIC = useThemeTokens();
   const riskPoints = useMemo(() => {
     return markers
       .filter(m => m.position && ['thin_wall', 'delamination', 'stress_concentration'].includes(m.type))

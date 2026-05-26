@@ -27,13 +27,14 @@ export class VisionProvider {
     screenshotBase64: string,
     geometrySummary: string,
     apiConfig?: { provider: string; apiKey: string },
+    language?: string,
   ): Promise<VisionAnalysisResult> {
     if (!apiConfig?.apiKey) {
       return this.fallbackLocalAnalysis(geometrySummary);
     }
 
     try {
-      const prompt = this.buildVisionPrompt(geometrySummary);
+      const prompt = this.buildVisionPrompt(geometrySummary, language);
 
       if (apiConfig.provider === 'claude' || apiConfig.provider === 'openai') {
         return await this.callVisionAPI(apiConfig, screenshotBase64, prompt);
@@ -45,7 +46,10 @@ export class VisionProvider {
     }
   }
 
-  private buildVisionPrompt(geometrySummary: string): string {
+  private buildVisionPrompt(geometrySummary: string, language?: string): string {
+    const langInstr = language
+      ? `\n\nPlease respond in ${language === 'zh' ? 'Simplified Chinese' : language === 'ja' ? 'Japanese' : 'English'}. Use natural and professional ${language === 'zh' ? 'Chinese' : language === 'ja' ? 'Japanese' : 'English'} terms. Current interface language is ${language}.`
+      : '';
     return `You are a 3D printing geometry analyst. Analyze this STL model render and geometry data.
 
 Geometry Data:
@@ -58,7 +62,7 @@ Examine the rendered image and geometry data. Respond in JSON format:
   "confidence": 0.0-1.0
 }
 
-Focus on: visible thin walls, sharp overhangs, potential support needs, surface defects, and orientation issues.`;
+Focus on: visible thin walls, sharp overhangs, potential support needs, surface defects, and orientation issues.${langInstr}`;
   }
 
   private async callVisionAPI(
