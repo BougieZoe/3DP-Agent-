@@ -18,7 +18,9 @@ interface RiskAnimationProps {
 function PulsingSphere({ position, severity, type }: { position: [number, number, number]; severity: number; type: string }) {
   const ref = useRef<THREE.Mesh>(null);
   const ghostRef = useRef<THREE.Mesh>(null);
-  const seed = useMemo(() => Math.random() * 100, []);
+  const seed = useMemo(() => {
+    return (position[0] * 127.1 + position[1] * 311.7 + position[2] * 74.3) % 100;
+  }, [position]);
 
   const risk = type === 'thin_wall' ? SEMANTIC.risk.critical
     : type === 'delamination' ? SEMANTIC.risk.warning
