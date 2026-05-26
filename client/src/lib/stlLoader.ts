@@ -1,29 +1,42 @@
 import * as THREE from 'three';
 import { createMeshFromGeometry } from './meshHelpers';
-import { parseSTL } from './stlParser';
 
 export { createMeshFromGeometry };
 
 export async function loadSTLFile(file: File): Promise<THREE.BufferGeometry> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+  const arrayBuffer = await file.arrayBuffer();
 
-    reader.onload = (event) => {
-      try {
-        const arrayBuffer = event.target?.result as ArrayBuffer;
-        const geometry = parseSTL(arrayBuffer);
-        geometry.computeVertexNormals();
-        geometry.computeBoundingBox();
-        resolve(geometry);
-      } catch (error) {
-        reject(error);
+  const worker = new Worker(
+    new URL('./stlWorker.ts', import.meta.url),
+    { type: 'module' },
+  );
+
+  return new Promise<THREE.BufferGeometry>((resolve, reject) => {
+    worker.onmessage = (e: MessageEvent) => {
+      if (e.data.error) {
+        reject(new Error(e.data.error));
+        worker.terminate();
+        return;
       }
+
+      const { position, normal, index } = e.data;
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+      geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
+      geometry.setIndex(new THREE.BufferAttribute(index, 1));
+      geometry.computeVertexNormals();
+      geometry.computeBoundingBox();
+
+      worker.terminate();
+      resolve(geometry);
     };
 
-    reader.onerror = () => {
-      reject(new Error('Failed to read file'));
+    worker.onerror = (err) => {
+      reject(new Error(`Worker error: ${err.message}`));
+      worker.terminate();
     };
 
-    reader.readAsArrayBuffer(file);
+    worker.postMessage(arrayBuffer, [arrayBuffer]);
   });
 }
