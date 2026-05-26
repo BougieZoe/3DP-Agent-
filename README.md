@@ -1,3 +1,4 @@
+
 # 3DP AGENT
 
 ### a place to see, feel, and question a 3D print before it exists
@@ -10,7 +11,7 @@
 
 ---
 
-Upload an STL. See it move. Ask it questions.
+Upload an STL. Watch it think. Ask it anything.
 
 No account. No cloud. No waiting. Everything runs in your browser.
 
@@ -18,7 +19,9 @@ No account. No cloud. No waiting. Everything runs in your browser.
 
 ## what it does
 
-**free — no key needed**
+**instant — no key needed**
+
+Drop a file. In seconds you get:
 
 | | |
 |:--|:--|
@@ -26,18 +29,48 @@ No account. No cloud. No waiting. Everything runs in your browser.
 | overhang | flags faces beyond 45° — support territory |
 | volume & mass | material usage, weight estimate |
 | dimensions | exact XYZ in mm |
-| watertight | open mesh detection |
+| watertight check | open mesh detection |
 | quick report | settings, material, time — instant |
 
-**AI chat — your key, your choice**
+**multi-agent AI — your key, your choice**
 
-Point it at Claude, OpenAI, or Gemini. Ask what you actually want to know:
+Four specialized agents analyze your model in parallel, then debate their findings:
 
-> *"Where will this warp?"*
-> *"Is PETG the right call here?"*
-> *"How do I get rid of most of the support?"*
+| agent | what it sees |
+|:--|:--|
+| Geometry Analyst | mesh topology, wall thickness, overhangs, features |
+| Printability Scorer | weighted score across all risk dimensions |
+| Failure Predictor | where and why it will fail |
+| Optimization Advisor | what to change and how |
 
-The AI sees the real geometry — not just the filename. Your key stays in your browser. Nothing leaves your machine.
+They produce a **CONSENSUS SCORE** — not just one AI's opinion, but a structured disagreement resolved into a verdict.
+
+Point it at Claude, OpenAI, or Gemini. Your key stays in your browser. Nothing leaves your machine.
+
+---
+
+## causality
+
+Most tools tell you *what* is wrong. This one tries to tell you *why*.
+
+The **CAUSALITY** tab traces failure chains — from geometry decision to print outcome. It shows manufacturing timelines, counterfactual reasoning ("if you thickened this wall, here's what changes"), and pattern memory across your session.
+
+---
+
+## the visual layer
+
+The 3D viewport isn't just a model viewer. It's an argument made visible.
+
+Overlays animate in real time as analysis runs:
+
+- **Cognitive Scan** — a plane sweeps the model as the AI reads it
+- **Risk Animation** — risk markers breathe with severity
+- **Thermal Field** — heat distribution across the surface
+- **Failure Emergence** — sagging, oscillation, stress pulses appear where failure is predicted
+- **Layer Reveal** — watch the print build layer by layer
+- **Print Path Preview** — the head traces its actual path
+
+Switch between **dark and light** themes. The entire visual system — Three.js scene, UI tokens, animation constants — reacts.
 
 ---
 
@@ -49,20 +82,23 @@ flowchart LR
     User[User] -->|drag STL| Browser[Browser App]
     Browser --> STL[STL Loader]
     Browser --> Rules[Rule Engine]
-    Rules -->|fast path| Result[Local Analysis<br/>thickness · overhang · volume]
-    Rules -->|needs AI| AI[AI API]
-    AI --> Models[Claude · OpenAI · Gemini]
-    Result --> Report[Quick Report]
-    Models --> Chat[AI Chat Answer]
+    Rules -->|fast path| Result[Local Analysis]
+    Rules -->|needs AI| Orch[Orchestrator]
+    Orch --> A1[Geometry Analyst]
+    Orch --> A2[Printability Scorer]
+    Orch --> A3[Failure Predictor]
+    Orch --> A4[Optimization Advisor]
+    A1 & A2 & A3 & A4 --> Debate[Agent Debate]
+    Debate --> Score[Consensus Score]
+    Score --> Causality[Causality Engine]
 ```
 
 ---
 
 ## stack
 
-```
-React 19 · TypeScript · Three.js · React Three Fiber · Tailwind v4 · Vite 7
-```
+React 19 · TypeScript · Three.js · React Three Fiber
+Tailwind v4 · Vite 7 · multi-agent orchestration
 
 ---
 
