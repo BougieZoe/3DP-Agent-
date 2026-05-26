@@ -1,7 +1,6 @@
+import { useState } from 'react';
 import { PANEL, SEMANTIC } from '@/lib/visualLanguage';
 import { useTheme } from '@/lib/ThemeContext';
-
-
 
 interface VisualizationToolbarProps {
   showHeatmap: boolean;
@@ -41,65 +40,64 @@ export function VisualizationToolbar({
   onOpacityChange,
 }: VisualizationToolbarProps) {
   const { themeKey, SEMANTIC, toggleTheme } = useTheme();
+  const [isOpen, setIsOpen] = useState(false);
 
-  return (
-    <div className={`absolute bottom-3 right-3 z-20 flex flex-col gap-1.5 
-      ${PANEL.bg} ${PANEL.glass} ${PANEL.border} ${PANEL.rounded} p-2.5 min-w-[172px]`}>
-      
+  const panelContent = (
+    <>
       <div className={`${PANEL.fontLabel} mb-1`}>OVERLAYS</div>
 
-      <ToggleChip 
-        label="Heatmap" 
-        active={showHeatmap} 
-        color={SEMANTIC.overlay.heatmap} 
-        onClick={onToggleHeatmap} 
+      <ToggleChip
+        label="Heatmap"
+        active={showHeatmap}
+        color={SEMANTIC.overlay.heatmap}
+        onClick={onToggleHeatmap}
       />
-      <ToggleChip 
-        label="Supports" 
-        active={showGhosts} 
-        color={SEMANTIC.overlay.supports} 
-        onClick={onToggleGhosts} 
+      <ToggleChip
+        label="Supports"
+        active={showGhosts}
+        color={SEMANTIC.overlay.supports}
+        onClick={onToggleGhosts}
       />
-      <ToggleChip 
-        label="Risks" 
-        active={showRisks} 
-        color={SEMANTIC.overlay.risks} 
-        onClick={onToggleRisks} 
-      />
-
-      <div className={`${SEMANTIC.overlay.separator}`} />
-
-      <ToggleChip 
-        label="Print Path" 
-        active={showPrintPath} 
-        color={SEMANTIC.overlay.printPath} 
-        onClick={onTogglePrintPath} 
-      />
-      <ToggleChip 
-        label="Layer Reveal" 
-        active={showLayerReveal} 
-        color={SEMANTIC.overlay.layerReveal} 
-        onClick={onToggleLayerReveal} 
+      <ToggleChip
+        label="Risks"
+        active={showRisks}
+        color={SEMANTIC.overlay.risks}
+        onClick={onToggleRisks}
       />
 
       <div className={`${SEMANTIC.overlay.separator}`} />
 
-      <ToggleChip 
-        label="Failure" 
-        active={showFailure} 
-        color={SEMANTIC.overlay.failure} 
-        onClick={onToggleFailure} 
+      <ToggleChip
+        label="Print Path"
+        active={showPrintPath}
+        color={SEMANTIC.overlay.printPath}
+        onClick={onTogglePrintPath}
       />
-      <ToggleChip 
-        label="Thermal" 
-        active={showThermal} 
-        color={SEMANTIC.overlay.thermal} 
-        onClick={onToggleThermal} 
+      <ToggleChip
+        label="Layer Reveal"
+        active={showLayerReveal}
+        color={SEMANTIC.overlay.layerReveal}
+        onClick={onToggleLayerReveal}
+      />
+
+      <div className={`${SEMANTIC.overlay.separator}`} />
+
+      <ToggleChip
+        label="Failure"
+        active={showFailure}
+        color={SEMANTIC.overlay.failure}
+        onClick={onToggleFailure}
+      />
+      <ToggleChip
+        label="Thermal"
+        active={showThermal}
+        color={SEMANTIC.overlay.thermal}
+        onClick={onToggleThermal}
       />
 
       <button
         onClick={toggleTheme}
-        className={`${PANEL.fontButton} px-3 py-1.5 ${PANEL.roundedInner} ${PANEL.borderSubtle} 
+        className={`${PANEL.fontButton} px-3 py-1.5 ${PANEL.roundedInner} ${PANEL.borderSubtle}
           flex items-center gap-2 hover:bg-foreground/5 active:bg-foreground/10 transition-all mt-1`}
       >
         <span className="text-base leading-none">
@@ -120,15 +118,47 @@ export function VisualizationToolbar({
           className="w-full h-1 appearance-none bg-border/50 rounded-full cursor-pointer accent-primary"
         />
       </div>
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop — always visible */}
+      <div className={`hidden lg:flex absolute bottom-3 right-3 z-20 flex-col gap-1.5
+        ${PANEL.bg} ${PANEL.glass} ${PANEL.border} ${PANEL.rounded} p-2.5 min-w-[172px]`}>
+        {panelContent}
+      </div>
+
+      {/* Mobile handle button — always visible below lg */}
+      <button
+        onClick={() => setIsOpen(o => !o)}
+        className={`lg:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-30
+          ${PANEL.bg} ${PANEL.glass} ${PANEL.border} rounded-full
+          px-3 py-1.5 shadow-lg flex items-center gap-2 ${PANEL.fontButton}`}
+      >
+        OVERLAYS <span className="text-sm leading-none">{isOpen ? '\u2193' : '\u2191'}</span>
+      </button>
+
+      {/* Mobile drawer — slides up from bottom */}
+      <div className={`
+        lg:hidden fixed bottom-0 left-0 right-0 z-20
+        transition-transform duration-300 ease-in-out
+        ${isOpen ? 'translate-y-0' : 'translate-y-full'}
+        ${PANEL.bg} ${PANEL.glass} ${PANEL.border}
+        rounded-t-xl p-3 flex flex-col gap-1.5
+        max-h-[70vh] overflow-y-auto
+      `}>
+        {panelContent}
+      </div>
+    </>
   );
 }
 
-function ToggleChip({ 
-  label, 
-  active, 
-  color, 
-  onClick 
+function ToggleChip({
+  label,
+  active,
+  color,
+  onClick
 }: {
   label: string;
   active: boolean;
