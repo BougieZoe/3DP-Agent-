@@ -1,3 +1,4 @@
+import { ReportGenerator } from "@/components/ReportGenerator";
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
@@ -560,6 +561,13 @@ export default function Home() {
                           className="mt-4 text-xs font-mono text-muted-foreground hover:text-primary transition-colors">
                           {t('regenerate')}
                         </button>
+{unifiedAnalysis && (
+  <ReportGenerator
+    analysis={unifiedAnalysis}
+
+    fileName={uploadedModel?.fileName ?? "model.stl"}
+  />
+)}
                       </div>
                     )}
                     <div className="border border-dashed border-border/40 rounded-sm p-4 text-center space-y-2">
