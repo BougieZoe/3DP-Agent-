@@ -14,7 +14,7 @@
  */
 
 import { useCallback } from "react";
-import type { UnifiedAnalysis } from "./analysis/types";
+import type { UnifiedAnalysis } from "../analysis/types";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -234,43 +234,83 @@ const COPY = {
   },
 };
 
-// ─── Issue Builder ─────────────────────────────────────────────────────────────
+// ─── Issue Builder (with measured values) ─────────────────────────────────────
 
 function buildIssues(
   analysis: UnifiedAnalysis,
-  tone: ToneMode,
+  _tone: ToneMode,
   lang: Language
 ): string[] {
   const issues: string[] = [];
-  const t = COPY[lang].tone[tone];
   const v = analysis.validation?.result;
   const m = analysis.metrics?.result;
 
-  if (v) {
-    if (!v.isWatertight) issues.push(t.not_watertight);
-    if (v.holeCount > 0) issues.push(t.holes(v.holeCount));
-    if (v.flippedNormalRatio > 0.05) issues.push(t.flipped);
+  if (m && m.minWallThicknessMm !== null && m.minWallThicknessMm < 1.2) {
+    const val = m.minWallThicknessMm.toFixed(2);
+    issues.push(
+      lang === "ja"
+        ? `壁厚 ${val} mm — 推奨最小値は 1.2 mm です。印刷中に破損する可能性があります。`
+        : `Wall thickness ${val} mm — minimum safe is 1.2 mm. This part will likely break during printing.`
+    );
+  }
+
+  if (v && !v.isWatertight) {
+    issues.push(
+      lang === "ja"
+        ? "メッシュが密閉されていません。スライサーでエラーが発生する可能性があります。"
+        : "Mesh is not watertight. Open boundaries will cause slicing errors in most slicer applications."
+    );
+    if (v.holeCount > 0) {
+      issues.push(
+        lang === "ja"
+          ? `メッシュに${v.holeCount}個の穴があります。印刷前に修正してください。`
+          : `${v.holeCount} hole${v.holeCount > 1 ? "s" : ""} detected in the mesh. These should be repaired before printing.`
+      );
+    }
+  } else if (v && v.holeCount > 0) {
+    issues.push(
+      lang === "ja"
+        ? `メッシュに${v.holeCount}個の穴があります。印刷前に修正してください。`
+        : `${v.holeCount} hole${v.holeCount > 1 ? "s" : ""} detected in the mesh. These should be repaired before printing.`
+    );
+  }
+
+  if (v && v.flippedNormalRatio > 0.05) {
+    const pct = (v.flippedNormalRatio * 100).toFixed(0);
+    issues.push(
+      lang === "ja"
+        ? `面の${pct}%で法線が反転しています。スライスアーティファクトの原因になる可能性があります。`
+        : `Inverted normals detected on ${pct}% of faces, which may cause slicing artifacts.`
+    );
   }
 
   if (m) {
-    if (m.minWallThicknessMm !== null && m.minWallThicknessMm < 1.2)
-      issues.push(t.wall_thin);
-    if (m.overhang.severity === "severe") issues.push(t.overhang_severe);
-    else if (m.overhang.severity === "moderate") issues.push(t.overhang_moderate);
+    if (m.overhang.severity === "severe") {
+      issues.push(
+        lang === "ja"
+          ? "深刻なオーバーハング角度です。印刷を成功させるためにサポート構造が必要です。"
+          : "Severe overhang detected. Support structures are required to achieve a successful print."
+      );
+    } else if (m.overhang.severity === "moderate") {
+      issues.push(
+        lang === "ja"
+          ? "中程度のオーバーハングが検出されました。サポート構造を推奨します。"
+          : "Moderate overhang detected. Support structures are advisable for optimal surface quality."
+      );
+    }
   }
 
   return issues;
 }
 
-// ─── PDF Generation ────────────────────────────────────────────────────────────
+// ─── PDF Generation (Japanese-style single-page layout) ──────────────────────
 
 async function generatePDF(
   analysis: UnifiedAnalysis,
-  tone: ToneMode,
+  _tone: ToneMode,
   lang: Language,
   fileName: string
 ): Promise<void> {
-  // Dynamic import — only loads jspdf when user clicks export
   const { jsPDF } = await import("jspdf" as never) as { jsPDF: new (o?: object) => jsPDFInstance };
 
   interface jsPDFInstance {
@@ -288,234 +328,271 @@ async function generatePDF(
     addPage(): void;
     save(filename: string): void;
     getTextWidth(text: string): number;
+    circle(x: number, y: number, r: number, style?: string): void;
+    getNumberOfPages(): number;
+    setPage(n: number): void;
   }
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const copy = COPY[lang];
+  const W = doc.internal.pageSize.getWidth();  // 210
+  const H = doc.internal.pageSize.getHeight();  // 297
+  const M = 20;
+  const CW = W - 2 * M;
+
   const { light, score } = getTrafficLight(analysis);
-  const issues = buildIssues(analysis, tone, lang);
+  const issues = buildIssues(analysis, _tone, lang);
   const metrics = analysis.metrics?.result;
   const dims = metrics?.boundingBoxDimensionsMm;
   const printTime = analysis.printTime?.result;
-  const support = analysis.support?.result;
-  const W = doc.internal.pageSize.getWidth();
 
   // ── Palette ──
-  const COLORS = {
-    ink: [20, 20, 20] as [number, number, number],
-    muted: [120, 120, 110] as [number, number, number],
-    rule: [220, 218, 210] as [number, number, number],
-    pageBg: [252, 251, 249] as [number, number, number],
-    green: [15, 110, 86] as [number, number, number],
-    greenBg: [234, 243, 222] as [number, number, number],
-    yellow: [133, 79, 11] as [number, number, number],
-    yellowBg: [250, 238, 218] as [number, number, number],
-    red: [163, 45, 45] as [number, number, number],
-    redBg: [252, 235, 235] as [number, number, number],
+  const C = {
+    red:       [226,  75,  74] as [number, number, number],
+    yellow:    [239, 159,  39] as [number, number, number],
+    green:     [ 99, 153,  34] as [number, number, number],
+    lightRed:  [253, 237, 237] as [number, number, number],
+    lightYellow: [254, 246, 223] as [number, number, number],
+    lightGreen: [238, 245, 225] as [number, number, number],
+    headerBg:  [241, 239, 232] as [number, number, number],
+    footerBg:  [245, 244, 239] as [number, number, number],
+    ink:       [ 30,  30,  30] as [number, number, number],
+    muted:     [110, 110, 110] as [number, number, number],
+    white:     [255, 255, 255] as [number, number, number],
   };
 
-  const lightColor = {
-    green: { fg: COLORS.green, bg: COLORS.greenBg },
-    yellow: { fg: COLORS.yellow, bg: COLORS.yellowBg },
-    red: { fg: COLORS.red, bg: COLORS.redBg },
+  const accent: [number, number, number] = { red: C.red, yellow: C.yellow, green: C.green }[light];
+  const lightBg: [number, number, number] = { red: C.lightRed, yellow: C.lightYellow, green: C.lightGreen }[light];
+  const RED: [number, number, number] = C.red;
+
+  // ── Verdict text ──
+  const count = issues.length;
+  const verdictLabel = {
+    red:    lang === "ja" ? "問題が検出されました — 印刷しないでください" : "Issues found — do not print yet",
+    yellow: lang === "ja" ? "確認を推奨" : "Review recommended",
+    green:  lang === "ja" ? "印刷可能" : "Ready to print",
   }[light];
 
-  // ── Page Background ──
-  doc.setFillColor(...COLORS.pageBg);
-  doc.rect(0, 0, W, 297, "F");
+  const verdictDesc = {
+    red:    lang === "ja" ? `${count}件の問題が印刷前に確認が必要です` : `${count} issue${count !== 1 ? "s" : ""} require attention before printing`,
+    yellow: lang === "ja" ? "軽微な問題が印刷品質に影響する可能性があります" : "Minor issues may affect print quality",
+    green:  lang === "ja" ? "重大な問題は検出されませんでした" : "No critical issues detected",
+  }[light];
 
-  // ── Header Bar ──
-  doc.setFillColor(...lightColor.bg);
-  doc.rect(0, 0, W, 52, "F");
-
-  // ── Title ──
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...COLORS.muted);
-  doc.text(copy.subtitle.toUpperCase(), 20, 16);
-
-  doc.setFontSize(22);
-  doc.setTextColor(...lightColor.fg);
-  doc.setFont("helvetica", "bold");
-  doc.text(copy.title, 20, 30);
-
-  // ── File Name ──
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...COLORS.muted);
-  doc.text(`${copy.file}: ${fileName}`, 20, 40);
-
-  // ── Timestamp ──
-  const ts = new Date().toLocaleString(lang === "ja" ? "ja-JP" : "en-US", {
-    dateStyle: "medium", timeStyle: "short",
+  // ── Date ──
+  const now = new Date();
+  const dateStr = now.toLocaleDateString(lang === "ja" ? "ja-JP" : "en-US", {
+    year: "numeric", month: "long", day: "numeric",
   });
-  doc.text(`${copy.generated}: ${ts}`, 20, 47);
 
-  let y = 68;
+  // ════════════════════════════════ PAGE 1 ═════════════════════════════════
 
-  // ─── Verdict Card ───
-  doc.setFillColor(...lightColor.fg);
-  doc.rect(20, y, W - 40, 22, "F");
+  // ── Header bg (#F1EFE8) ──
+  doc.setFillColor(...C.headerBg);
+  doc.rect(0, 0, W, 55, "F");
 
-  // Traffic light indicator
-  const dotColors = { green: [15, 160, 110], yellow: [234, 159, 39], red: [220, 70, 70] };
-  doc.setFillColor(...(dotColors[light] as [number, number, number]));
-  doc.rect(20, y, 6, 22, "F"); // left accent stripe
+  // Overline
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(...C.muted);
+  doc.text(lang === "ja" ? "3DP AGENT · 印刷可能性評価" : "3DP AGENT · PRINTABILITY ASSESSMENT", M, 13);
+
+  // Title
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(...C.ink);
+  doc.text(lang === "ja" ? "プリント分析レポート" : "Print Analysis Report", M, 28);
+
+  // File name + date
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...C.muted);
+  doc.text(`${fileName} · ${dateStr}`, M, 40);
+
+  // Traffic light line
+  doc.setFillColor(...accent);
+  doc.rect(0, 55, W, 3, "F");
+
+  // ── Verdict Card ──
+  const cardY = 64;
+  const cardH = 44;
+
+  doc.setFillColor(...lightBg);
+  doc.rect(M, cardY, CW, cardH, "F");
+
+  // Left circle badge
+  const cx = 38;
+  const cy = cardY + cardH / 2;
+  const cr = 16;
+
+  doc.setFillColor(...accent);
+  doc.circle(cx, cy, cr, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(255, 255, 255);
-  doc.text(copy.verdict[light].label, 32, y + 10);
+  doc.setFontSize(18);
+  doc.setTextColor(...C.white);
+  doc.text(`${score}`, cx, cy + 1, { align: "center" });
+
+  // Middle verdict text (large + small)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(...C.ink);
+  doc.text(verdictLabel, 62, cardY + 16);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.setTextColor(255, 255, 255);
-  doc.text(copy.verdict[light].desc, 32, y + 17);
+  doc.setTextColor(...C.muted);
+  doc.text(verdictDesc, 62, cardY + 28);
 
-  // Score (right-aligned)
+  // Right score (large)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text(`${score}`, W - 28, y + 13, { align: "right" });
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.text("/ 100", W - 22, y + 13);
+  doc.setFontSize(26);
+  doc.setTextColor(...accent);
+  doc.text(`${score}`, W - M, cardY + cardH / 2 + 1, { align: "right" });
 
-  y += 32;
+  // ── Dimensions (3 rows) ──
+  let y = cardY + cardH + 12;
 
-  // ─── Helper: Section Header ───
-  const sectionHeader = (title: string) => {
-    doc.setDrawColor(...COLORS.rule);
-    doc.setLineWidth(0.3);
-    doc.line(20, y, W - 20, y);
-    y += 5;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.setTextColor(...COLORS.muted);
-    doc.text(title.toUpperCase(), 20, y);
-    y += 6;
-    doc.setTextColor(...COLORS.ink);
-  };
-
-  // ─── Helper: Data Row ───
-  const dataRow = (label: string, value: string, indent = 20) => {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(...COLORS.muted);
-    doc.text(label, indent, y);
-    doc.setTextColor(...COLORS.ink);
-    doc.setFont("helvetica", "bold");
-    doc.text(value, W - 20, y, { align: "right" });
-    y += 6;
-  };
-
-  // ─── Dimensions ───
   if (dims) {
-    sectionHeader(copy.sections.dimensions);
-    dataRow(`${copy.fields.x} (X)`, `${dims.x.toFixed(1)} mm`);
-    dataRow(`${copy.fields.y} (Y)`, `${dims.y.toFixed(1)} mm`);
-    dataRow(`${copy.fields.z} (Z)`, `${dims.z.toFixed(1)} mm`);
-    y += 4;
-  }
-
-  // ─── Geometry ───
-  if (metrics) {
-    sectionHeader(copy.sections.geometry);
-    dataRow(copy.fields.volume, `${(metrics.meshVolumeMm3 / 1000).toFixed(2)} cm³`);
-    dataRow(copy.fields.surface, `${(metrics.surfaceAreaMm2 / 100).toFixed(2)} cm²`);
-    if (analysis.validation?.result) {
-      const v = analysis.validation.result;
-      dataRow(copy.fields.watertight, v.isWatertight ? copy.fields.yes : copy.fields.no);
-      dataRow(copy.fields.holes, v.holeCount > 0 ? `${v.holeCount}` : copy.fields.none);
-    }
-    y += 4;
-  }
-
-  // ─── Printability ───
-  if (metrics) {
-    sectionHeader(copy.sections.printability);
-    if (metrics.minWallThicknessMm !== null)
-      dataRow(copy.fields.minWall, `${metrics.minWallThicknessMm.toFixed(2)} mm`);
-    if (metrics.avgWallThicknessMm !== null)
-      dataRow(copy.fields.avgWall, `${metrics.avgWallThicknessMm.toFixed(2)} mm`);
-    dataRow(copy.fields.overhang, ({none:"None",moderate:"Moderate — support advised",severe:"Severe — support required"})[metrics.overhang.severity] ?? metrics.overhang.severity);
-    if (support)
-      dataRow(copy.fields.support, ({none:"None",easy:"Easy",moderate:"Moderate",difficult:"Difficult",very_difficult:"Requires heavy support"})[support.difficulty] ?? support.difficulty);
-    y += 4;
-  }
-
-  // ─── Material & Time ───
-  if (printTime) {
-    sectionHeader(copy.sections.material);
-    dataRow(copy.fields.weight, `${printTime.materialWeightGrams.toFixed(1)} g`);
-    dataRow(copy.fields.cost, `$${printTime.totalCostUsd.toFixed(2)}`);
-    const h = Math.floor(printTime.estimatedPrintTimeMinutes / 60);
-    const m = Math.round(printTime.estimatedPrintTimeMinutes % 60);
-    dataRow(copy.fields.time, h > 0 ? `${h}h ${m}m` : `${m}m`);
-    y += 4;
-  }
-
-  // ─── Issues ───
-  sectionHeader(copy.sections.issues);
-
-  if (!issues.length) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.setTextColor(...COLORS.muted);
-    doc.text(copy.sections.noIssues, 20, y);
-    y += 8;
-  } else {
-    issues.forEach((issue, i) => {
-      // Issue number badge
-      doc.setFillColor(...lightColor.fg);
-      doc.rect(20, y - 3.5, 5, 5, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(7);
-      doc.setTextColor(255, 255, 255);
-      doc.text(`${i + 1}`, 22.5, y, { align: "center" });
+    doc.setTextColor(...C.muted);
+    doc.text(lang === "ja" ? "幅 × 奥行き × 高さ" : "Width × Depth × Height", M, y);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.ink);
+    doc.text(`${dims.x.toFixed(1)} × ${dims.y.toFixed(1)} × ${dims.z.toFixed(1)} mm`, W - M, y, { align: "right" });
+    y += 10;
 
-      // Issue text
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...C.muted);
+    doc.text(lang === "ja" ? "体積" : "Volume", M, y);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.ink);
+    const vol = metrics?.meshVolumeMm3 != null ? (metrics.meshVolumeMm3 / 1000).toFixed(2) : "—";
+    doc.text(`${vol} cm³`, W - M, y, { align: "right" });
+    y += 10;
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...C.muted);
+    doc.text(lang === "ja" ? "推定重量" : "Est. weight", M, y);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.ink);
+    const wt = printTime?.materialWeightGrams != null ? printTime.materialWeightGrams.toFixed(1) : "—";
+    doc.text(`${wt} g`, W - M, y, { align: "right" });
+    y += 10;
+  }
+
+  // ── Issues Section ──
+  y += 4;
+
+  // Pre-calculate total issues height
+  const HEADER_H = 12;
+  let issuesTotalH = issues.length > 0 ? HEADER_H : HEADER_H + 8;
+  const prepLines: string[][] = [];
+
+  for (const issue of issues) {
+    const lines = doc.splitTextToSize(issue, CW - 22);
+    prepLines.push(lines);
+    issuesTotalH += 6 + lines.length * 5 + 3;
+  }
+
+  const PAGE_BOTTOM = 273;
+
+  /**
+   * Draw all issues + disclaimer on the current page starting at `startY`.
+   * Returns the y-coordinate after the disclaimer.
+   */
+  const drawIssuesAndDisclaimer = (startY: number): number => {
+    let py = startY;
+
+    // Section header
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...C.ink);
+    doc.text(lang === "ja" ? "問題点" : "Issues Found", M, py);
+    py += 10;
+
+    if (issues.length === 0) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      doc.setTextColor(...COLORS.ink);
-      const lines = doc.splitTextToSize(issue, W - 52);
-      doc.text(lines, 28, y);
-      y += lines.length * 5.5 + 3;
+      doc.setTextColor(...C.muted);
+      doc.text(lang === "ja" ? "問題は検出されませんでした" : "No issues detected.", M, py);
+      py += 8;
+    } else {
+      for (let i = 0; i < issues.length; i++) {
+        const lines = prepLines[i];
 
-      if (y > 265) {
-        doc.addPage();
-        doc.setFillColor(...COLORS.pageBg);
-        doc.rect(0, 0, W, 297, "F");
-        y = 20;
+        // Red square badge
+        doc.setFillColor(...RED);
+        doc.rect(M, py - 2, 7, 7, "F");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        doc.setTextColor(...C.white);
+        doc.text(`${i + 1}`, M + 3.5, py + 1.5, { align: "center" });
+
+        // Issue text
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(...C.ink);
+        doc.text(lines, M + 14, py + 0.5);
+
+        py += 6 + lines.length * 5 + 3;
       }
-    });
+    }
+
+    // ── Disclaimer ──
+    py += 4;
+    const reportId = `3DP-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 9000 + 1000))}`;
+    const disclaimer = lang === "ja"
+      ? `このレポートは自動推定です。実際の印刷結果は素材・スライサー設定・プリンター校正により異なる場合があります。レポート ID: ${reportId}`
+      : `This report is an automated estimate. Actual print results may vary based on material, slicer settings, and printer calibration. Report ID: ${reportId}`;
+    const dLines = doc.splitTextToSize(disclaimer, CW);
+
+    if (py + dLines.length * 4 + 4 > PAGE_BOTTOM) {
+      doc.addPage();
+      py = 25;
+    }
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...C.muted);
+    doc.text(dLines, M, py);
+    py += dLines.length * 4 + 4;
+
+    return py;
+  };
+
+  if (issues.length === 0) {
+    // No issues → everything always fits on page 1
+    drawIssuesAndDisclaimer(y);
+  } else if (y + issuesTotalH <= PAGE_BOTTOM) {
+    // All issues fit on page 1
+    drawIssuesAndDisclaimer(y);
+  } else {
+    // Issues overflow → draw nothing issues-related on page 1,
+    // add page 2 for all issues + disclaimer
+    doc.addPage();
+    drawIssuesAndDisclaimer(25);
   }
 
-  // ─── Footer ───
-  y = 280;
-  doc.setDrawColor(...COLORS.rule);
-  doc.setLineWidth(0.3);
-  doc.line(20, y, W - 20, y);
-  y += 5;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(...COLORS.muted);
-  doc.text("3DP AGENT · 3dp-agent.vercel.app", 20, y);
-  doc.text(`${score}/100`, W - 20, y, { align: "right" });
-  
-  const reportId = `3DP-${new Date().toISOString().slice(0,10).replace(/-/g,"")}-${Math.floor(Math.random()*9000+1000)}`;
-  doc.text(`Report ID: ${reportId}`, W/2, y, { align: "center" });
+  // ── Footer on every page ──
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
 
-  // ─── Save ───
-  doc.setFontSize(7);
-  doc.setTextColor(...COLORS.muted);
-  const disclaimer = lang === "ja"
-    ? "このレポートは自動推定です。実際の印刷結果は素材・スライサー設定・プリンター校正により異なる場合があります。"
-    : "This report is an automated estimate. Actual print results may vary based on material, slicer settings, and printer calibration.";
-  const dLines = doc.splitTextToSize(disclaimer, W - 40);
-  if (y + dLines.length * 4 > 270) { doc.addPage(); doc.setFillColor(...COLORS.pageBg); doc.rect(0, 0, W, 297, "F"); y = 20; }
-  doc.text(dLines, 20, y + 6);
-  y += dLines.length * 4 + 10;
+    doc.setFillColor(...C.footerBg);
+    doc.rect(0, H - 15, W, 15, "F");
 
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...C.muted);
+    doc.text("3DP AGENT · 3dp-agent.vercel.app", M, H - 5);
+
+    doc.setFont("helvetica", "bold");
+    doc.text(`${score} / 100`, W - M, H - 5, { align: "right" });
+  }
+
+  // ── Save ──
   const baseName = fileName.replace(/\.stl$/i, "");
   doc.save(`${baseName}_report.pdf`);
 }
