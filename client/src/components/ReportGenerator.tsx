@@ -499,10 +499,23 @@ async function generatePDF(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(...COLORS.muted);
-  doc.text("3DP Agent · printability analysis tool", 20, y);
+  doc.text("3DP AGENT · 3dp-agent.vercel.app", 20, y);
   doc.text(`${score}/100`, W - 20, y, { align: "right" });
+  
+  const reportId = `3DP-${new Date().toISOString().slice(0,10).replace(/-/g,"")}-${Math.floor(Math.random()*9000+1000)}`;
+  doc.text(`Report ID: ${reportId}`, W/2, y, { align: "center" });
 
   // ─── Save ───
+  doc.setFontSize(7);
+  doc.setTextColor(...COLORS.muted);
+  const disclaimer = lang === "ja"
+    ? "このレポートは自動推定です。実際の印刷結果は素材・スライサー設定・プリンター校正により異なる場合があります。"
+    : "This report is an automated estimate. Actual print results may vary based on material, slicer settings, and printer calibration.";
+  const dLines = doc.splitTextToSize(disclaimer, W - 40);
+  if (y + dLines.length * 4 > 270) { doc.addPage(); doc.setFillColor(...COLORS.pageBg); doc.rect(0, 0, W, 297, "F"); y = 20; }
+  doc.text(dLines, 20, y + 6);
+  y += dLines.length * 4 + 10;
+
   const baseName = fileName.replace(/\.stl$/i, "");
   doc.save(`${baseName}_report.pdf`);
 }
