@@ -31,6 +31,7 @@ interface ReportGeneratorProps {
   analysis: UnifiedAnalysis;
   chatHistory?: ChatMessage[];
   fileName?: string;
+  infillPercent?: number;
 }
 
 // ─── Language Detection ─────────────────────────────────────────────────────────
@@ -309,7 +310,8 @@ async function generatePDF(
   analysis: UnifiedAnalysis,
   _tone: ToneMode,
   lang: Language,
-  fileName: string
+  fileName: string,
+  infillPercent: number
 ): Promise<void> {
   const { jsPDF } = await import("jspdf" as never) as { jsPDF: new (o?: object) => jsPDFInstance };
 
@@ -476,8 +478,21 @@ async function generatePDF(
     doc.text(lang === "ja" ? "推定重量" : "Est. weight", M, y);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...C.ink);
-    const wt = printTime?.materialWeightGrams != null ? printTime.materialWeightGrams.toFixed(1) : "—";
-    doc.text(`${wt} g`, W - M, y, { align: "right" });
+    const rawWeight = printTime?.materialWeightGrams;
+    const adjWeight = rawWeight != null ? (rawWeight * (infillPercent / 100) * 1.2).toFixed(1) : "—";
+    doc.text(`${adjWeight} g`, W - M, y, { align: "right" });
+    y += 10;
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...C.muted);
+    doc.text(lang === "ja" ? "印刷時間" : "Print Time", M, y);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.ink);
+    const rawMinutes = printTime?.estimatedPrintTimeMinutes ?? 0;
+    const ph = Math.floor(rawMinutes / 60);
+    const pm = Math.round(rawMinutes % 60);
+    const timeStr = `${ph}h ${pm}m (±30%, excl. supports)`;
+    doc.text(timeStr, W - M, y, { align: "right" });
     y += 10;
   }
 
@@ -603,14 +618,15 @@ export function ReportGenerator({
   analysis,
   chatHistory = [],
   fileName = "model.stl",
+  infillPercent = 20,
 }: ReportGeneratorProps) {
   const tone = detectTone(chatHistory);
   const lang = detectLanguage(chatHistory);
   const { light, score } = getTrafficLight(analysis);
 
   const handleExport = useCallback(async () => {
-    await generatePDF(analysis, tone, lang, fileName);
-  }, [analysis, tone, lang, fileName]);
+    await generatePDF(analysis, tone, lang, fileName, infillPercent);
+  }, [analysis, tone, lang, fileName, infillPercent]);
 
   const lightStyles: Record<TrafficLight, string> = {
     green: "bg-emerald-50 text-emerald-700 border-emerald-200",
