@@ -113,9 +113,70 @@ function computeTimeRange(minutes: number): string {
   return `${f(lo)} – ${f(hi)} (excl. supports)`;
 }
 
-// ─── Issue Builder ─────────────────────────────────────────────────────────────
+// ─── Issue Builders ────────────────────────────────────────────────────────────
 
-function buildIssues(
+function buildClientIssues(analysis: UnifiedAnalysis, lang: Language): string[] {
+  const issues: string[] = [];
+  const v = analysis.validation?.result;
+  const m = analysis.metrics?.result;
+
+  if (m && m.minWallThicknessMm !== null && m.minWallThicknessMm < 1.2) {
+    issues.push(
+      lang === "ja"
+        ? "壁が薄すぎる部分があります。印刷中に壊れる可能性があります。"
+        : "Some walls are very thin and might break during printing."
+    );
+  }
+
+  if (v && !v.isWatertight) {
+    issues.push(
+      lang === "ja"
+        ? "モデルに隙間があり、完全に閉じていません。"
+        : "The model has gaps — it's not fully closed."
+    );
+    if (v.holeCount > 0) {
+      issues.push(
+        lang === "ja"
+          ? `${v.holeCount}ヶ所に穴があります。`
+          : `${v.holeCount} hole${v.holeCount > 1 ? "s" : ""} found in the model.`
+      );
+    }
+  } else if (v && v.holeCount > 0) {
+    issues.push(
+      lang === "ja"
+        ? `${v.holeCount}ヶ所に穴があります。`
+        : `${v.holeCount} hole${v.holeCount > 1 ? "s" : ""} found in the model.`
+    );
+  }
+
+  if (v && v.flippedNormalRatio > 0.05) {
+    issues.push(
+      lang === "ja"
+        ? "一部の面が裏返しになっています。見た目に影響するかもしれません。"
+        : "Some surfaces are facing the wrong way — this may affect appearance."
+    );
+  }
+
+  if (m) {
+    if (m.overhang.severity === "severe") {
+      issues.push(
+        lang === "ja"
+          ? "大きく張り出した部分があります。サポート材が必要です。"
+          : "Large overhanging areas will need support material."
+      );
+    } else if (m.overhang.severity === "moderate") {
+      issues.push(
+        lang === "ja"
+          ? "やや張り出した部分があります。サポート材を検討してください。"
+          : "Some areas stick out — consider using supports."
+      );
+    }
+  }
+
+  return issues;
+}
+
+function buildDesignerIssues(
   analysis: UnifiedAnalysis,
   _tone: ToneMode,
   lang: Language
@@ -127,50 +188,60 @@ function buildIssues(
   if (m && m.minWallThicknessMm !== null && m.minWallThicknessMm < 1.2) {
     issues.push(
       lang === "ja"
-        ? `壁厚 ${m.minWallThicknessMm.toFixed(2)} mm — 推奨最小値 1.2 mm`
-        : `Wall ${m.minWallThicknessMm.toFixed(2)} mm — minimum safe is 1.2 mm`
+        ? `壁厚 ${m.minWallThicknessMm.toFixed(2)} mm — 推奨最小値 1.2 mm。印刷中に破損の可能性。`
+        : `Wall thickness ${m.minWallThicknessMm.toFixed(2)} mm — minimum safe is 1.2 mm. Risk of failure during print.`
     );
   }
 
   if (v && !v.isWatertight) {
     issues.push(
-      lang === "ja" ? "メッシュ未密閉" : "Mesh not watertight"
+      lang === "ja"
+        ? "メッシュが密閉されていません。スライサーエラーの原因になります。"
+        : "Mesh is not watertight. May cause slicing errors."
     );
     if (v.holeCount > 0) {
       issues.push(
         lang === "ja"
-          ? `${v.holeCount}個の穴`
-          : `${v.holeCount} hole${v.holeCount > 1 ? "s" : ""}`
+          ? `メッシュに${v.holeCount}個の穴があります。印刷前に修正してください。`
+          : `${v.holeCount} hole${v.holeCount > 1 ? "s" : ""} found. Repair before slicing.`
       );
     }
   } else if (v && v.holeCount > 0) {
     issues.push(
       lang === "ja"
-        ? `${v.holeCount}個の穴`
-        : `${v.holeCount} hole${v.holeCount > 1 ? "s" : ""}`
+        ? `メッシュに${v.holeCount}個の穴があります。印刷前に修正してください。`
+        : `${v.holeCount} hole${v.holeCount > 1 ? "s" : ""} found. Repair before slicing.`
     );
   }
 
   if (v && v.flippedNormalRatio > 0.05) {
     issues.push(
       lang === "ja"
-        ? `面の${(v.flippedNormalRatio * 100).toFixed(0)}% で法線反転`
-        : `${(v.flippedNormalRatio * 100).toFixed(0)}% faces inverted`
+        ? `面の${(v.flippedNormalRatio * 100).toFixed(0)}% で法線が反転しています。スライスアーティファクトの原因に。`
+        : `${(v.flippedNormalRatio * 100).toFixed(0)}% of faces have inverted normals. May cause slicing artifacts.`
     );
   }
 
   if (m) {
     if (m.overhang.severity === "severe") {
-      issues.push(lang === "ja" ? "深刻なオーバーハング" : "Severe overhang");
+      issues.push(
+        lang === "ja"
+          ? "深刻なオーバーハング。サポート構造が必須です。"
+          : "Severe overhang. Support structures are required."
+      );
     } else if (m.overhang.severity === "moderate") {
-      issues.push(lang === "ja" ? "中程度のオーバーハング" : "Moderate overhang");
+      issues.push(
+        lang === "ja"
+          ? "中程度のオーバーハング。サポート構造を推奨します。"
+          : "Moderate overhang. Support structures are advisable."
+      );
     }
   }
 
   return issues;
 }
 
-// ─── Shared PDF helpers ────────────────────────────────────────────────────────
+// ─── JsPDF interface ───────────────────────────────────────────────────────────
 
 interface JsPDF {
   internal: { pageSize: { getWidth(): number; getHeight(): number } };
@@ -192,97 +263,202 @@ interface JsPDF {
   setPage(n: number): void;
 }
 
+// ─── Color Palette ─────────────────────────────────────────────────────────────
+
 const C = {
-  red:       [226,  75,  74] as [number, number, number],
-  yellow:    [239, 159,  39] as [number, number, number],
-  green:     [ 99, 153,  34] as [number, number, number],
-  lightRed:  [253, 237, 237] as [number, number, number],
-  lightYellow: [254, 246, 223] as [number, number, number],
-  lightGreen: [238, 245, 225] as [number, number, number],
-  headerBg:  [241, 239, 232] as [number, number, number],
-  footerBg:  [245, 244, 239] as [number, number, number],
-  ink:       [ 30,  30,  30] as [number, number, number],
-  muted:     [110, 110, 110] as [number, number, number],
+  red:       [139,  46,  46] as [number, number, number],
+  amber:     [166, 124,  61] as [number, number, number],
+  green:     [ 45, 106,  79] as [number, number, number],
+  lightRed:  [249, 240, 239] as [number, number, number],
+  lightAmber:[251, 246, 238] as [number, number, number],
+  lightGreen:[239, 245, 241] as [number, number, number],
+  pageBg:    [250, 250, 248] as [number, number, number],
+  headerBg:  [242, 240, 235] as [number, number, number],
+  footerBg:  [242, 240, 235] as [number, number, number],
+  sectionLn: [232, 230, 224] as [number, number, number],
+  ink:       [ 26,  26,  24] as [number, number, number],
+  muted:     [107, 107, 101] as [number, number, number],
+  faint:     [155, 155, 148] as [number, number, number],
   white:     [255, 255, 255] as [number, number, number],
-};
+} as const;
 
-function drawHeader(doc: JsPDF, W: number, lang: Language, fileName: string, dateStr: string, tierLabel: string) {
+// ─── Kern helper for letter-spacing approximation ──────────────────────────────
+
+const kern = (s: string): string => s.split("").join(" ");
+
+// ─── Shared PDF Helpers ────────────────────────────────────────────────────────
+
+const PAGE_W = 210;
+const PAGE_H = 297;
+const PAGE_M = 20;
+const PAGE_CW = PAGE_W - 2 * PAGE_M;
+const PAGE_BOT = PAGE_H - 18;
+
+function drawHeader(
+  doc: JsPDF,
+  lang: Language,
+  fileName: string,
+  dateStr: string,
+  versionLabel: string
+) {
+  // Header background
   doc.setFillColor(...C.headerBg);
-  doc.rect(0, 0, W, 55, "F");
+  doc.rect(0, 0, PAGE_W, 60, "F");
 
+  // Overline — left
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(...C.muted);
-  doc.text(lang === "ja" ? "3DP AGENT · 印刷可能性評価" : "3DP AGENT · PRINTABILITY ASSESSMENT", 20, 13);
+  doc.text(
+    kern("3DP AGENT · PRINTABILITY ASSESSMENT"),
+    PAGE_M,
+    28
+  );
 
+  // Version label — right
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.setTextColor(...C.ink);
-  doc.text(lang === "ja" ? "プリント分析レポート" : "Print Analysis Report", 20, 28);
+  doc.setTextColor(...C.faint);
+  doc.text(kern(versionLabel.toUpperCase()), PAGE_W - PAGE_M, 28, { align: "right" });
 
+  // Title
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(20);
+  doc.setTextColor(...C.ink);
+  doc.text(lang === "ja" ? "プリント分析レポート" : "Print Analysis Report", PAGE_M, 36);
+
+  // File name + date
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...C.muted);
-  doc.text(`${fileName} · ${dateStr}`, 20, 40);
+  doc.text(`${fileName} · ${dateStr}`, PAGE_M, 45);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(...C.muted);
-  doc.text(tierLabel.toUpperCase(), W - 20, 13, { align: "right" });
+  // Traffic light color bar on header bottom
+  // (caller must set the color before calling)
 }
 
-function drawFooter(doc: JsPDF, H: number, W: number, M: number, score: number) {
+function drawFooter(
+  doc: JsPDF,
+  score: number,
+  extraRight = ""
+) {
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFillColor(...C.footerBg);
-    doc.rect(0, H - 15, W, 15, "F");
+    doc.rect(0, PAGE_H - 15, PAGE_W, 15, "F");
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(...C.muted);
-    doc.text("3DP AGENT · 3dp-agent.vercel.app", M, H - 5);
-    doc.setFont("helvetica", "bold");
-    doc.text(`${score} / 100`, W - M, H - 5, { align: "right" });
+    doc.text("3DP AGENT · 3dp-agent.vercel.app", PAGE_M, PAGE_H - 5);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...C.faint);
+    if (extraRight) {
+      doc.text(`${extraRight} · ${score} / 100`, PAGE_W - PAGE_M, PAGE_H - 5, { align: "right" });
+    } else {
+      doc.text(`${score} / 100`, PAGE_W - PAGE_M, PAGE_H - 5, { align: "right" });
+    }
   }
 }
 
-function drawVerdictCard(doc: JsPDF, M: number, CW: number, cardY: number, cardH: number, light: TrafficLight, score: number, verdictLabel: string, verdictDesc: string, W: number) {
-  const accent: [number, number, number] = { red: C.red, yellow: C.yellow, green: C.green }[light];
-  const lightBg: [number, number, number] = { red: C.lightRed, yellow: C.lightYellow, green: C.lightGreen }[light];
+function drawVerdictCard(
+  doc: JsPDF,
+  cardY: number,
+  cardH: number,
+  light: TrafficLight,
+  score: number,
+  label: string,
+  desc: string
+) {
+  const accent: [number, number, number] = light === "red" ? C.red : light === "yellow" ? C.amber : C.green;
+  const lightBg: [number, number, number] = light === "red" ? C.lightRed : light === "yellow" ? C.lightAmber : C.lightGreen;
 
+  // Background
   doc.setFillColor(...lightBg);
-  doc.rect(M, cardY, CW, cardH, "F");
+  doc.rect(PAGE_M, cardY, PAGE_CW, cardH, "F");
 
-  const cx = 38;
-  const cy = cardY + cardH / 2;
-  const cr = 16;
-
+  // Left 4mm color bar
   doc.setFillColor(...accent);
-  doc.circle(cx, cy, cr, "F");
+  doc.rect(PAGE_M, cardY, 4, cardH, "F");
 
+  // Label (12pt)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(...C.white);
-  doc.text(`${score}`, cx, cy + 1, { align: "center" });
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
+  doc.setFontSize(12);
   doc.setTextColor(...C.ink);
-  doc.text(verdictLabel, 62, cardY + 16);
+  doc.text(label, PAGE_M + 12, cardY + 16);
 
+  // Description (8pt)
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...C.muted);
+  doc.text(desc, PAGE_M + 12, cardY + 26);
+
+  // Score right (28pt)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(28);
+  doc.setTextColor(...accent);
+  doc.text(`${score}`, PAGE_W - PAGE_M, cardY + cardH / 2 + 1, { align: "right" });
+
+  // Color bar under header (caller must set color)
+  // This is done at the call site so the color matches
+}
+
+function drawSectionLine(doc: JsPDF, y: number): number {
+  doc.setDrawColor(...C.sectionLn);
+  doc.setLineWidth(0.3);
+  doc.line(PAGE_M, y, PAGE_W - PAGE_M, y);
+  return y + 6;
+}
+
+function drawSectionHeader(doc: JsPDF, label: string, y: number): number {
+  y = drawSectionLine(doc, y);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(...C.faint);
+  doc.text(kern(label), PAGE_M, y);
+  return y + 7;
+}
+
+function drawDataRow(
+  doc: JsPDF,
+  label: string,
+  value: string,
+  y: number,
+  warn = false
+): number {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...C.muted);
-  doc.text(verdictDesc, 62, cardY + 28);
+  doc.text(label, PAGE_M, y);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...(warn ? C.red : C.ink));
+  doc.text(value, PAGE_W - PAGE_M, y, { align: "right" });
+  return y + 7;
+}
+
+function drawIssueBadge(
+  doc: JsPDF,
+  num: number,
+  text: string,
+  y: number,
+  color: [number, number, number]
+): number {
+  const cx = PAGE_M + 3;
+  const cy = y + 2;
+  doc.setFillColor(...color);
+  doc.circle(cx, cy, 2.5, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(26);
-  doc.setTextColor(...accent);
-  doc.text(`${score}`, W - M, cardY + cardH / 2 + 1, { align: "right" });
+  doc.setFontSize(7);
+  doc.setTextColor(...C.white);
+  doc.text(`${num}`, cx, cy + 0.5, { align: "center" });
 
-  // Traffic light line under header
-  doc.setFillColor(...accent);
-  doc.rect(0, 55, W, 3, "F");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...C.ink);
+  const lines = doc.splitTextToSize(text, PAGE_CW - 14);
+  doc.text(lines, PAGE_M + 10, y + 0.5);
+
+  return y + 6 + lines.length * 5;
 }
 
 // ─── CLIENT PDF ────────────────────────────────────────────────────────────────
@@ -294,10 +470,6 @@ async function generateClientPDF(
 ): Promise<void> {
   const { jsPDF } = await import("jspdf" as never) as { jsPDF: new (o?: object) => JsPDF };
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const W = doc.internal.pageSize.getWidth();
-  const H = doc.internal.pageSize.getHeight();
-  const M = 20;
-  const CW = W - 2 * M;
 
   const { light, score } = getTrafficLight(analysis);
   const metrics = analysis.metrics?.result;
@@ -308,119 +480,101 @@ async function generateClientPDF(
     year: "numeric", month: "long", day: "numeric",
   });
 
-  const issues = buildIssues(analysis, "friendly", lang);
+  const accent: [number, number, number] = light === "red" ? C.red : light === "yellow" ? C.amber : C.green;
+
+  // ── Page background ──
+  doc.setFillColor(...C.pageBg);
+  doc.rect(0, 0, PAGE_W, PAGE_H, "F");
+
+  // ── Header ──
+  drawHeader(doc, lang, fileName, dateStr, "client summary");
+  doc.setFillColor(...accent);
+  doc.rect(0, 60, PAGE_W, 3, "F");
+
+  // ── Verdict card ──
+  const issues = buildClientIssues(analysis, lang);
   const count = issues.length;
 
-  const verdictLabel = {
-    red:    lang === "ja" ? "印刷には不向きです" : "Not ready to print",
-    yellow: lang === "ja" ? "要確認" : "Review recommended",
-    green:  lang === "ja" ? "印刷可能です" : "Ready to print",
-  }[light];
+  function vl(r: string, a: string, g: string): string {
+    return light === "red" ? r : light === "yellow" ? a : g;
+  }
+  const verdictLabel = vl(
+    lang === "ja" ? "印刷には不向きです" : "Not ready to print",
+    lang === "ja" ? "要確認" : "Review recommended",
+    lang === "ja" ? "印刷可能です" : "Ready to print"
+  );
+  const verdictDesc = vl(
+    lang === "ja" ? `${count}件の問題があります` : `${count} issue${count !== 1 ? "s" : ""} found`,
+    lang === "ja" ? "軽微な問題があります" : "Minor issues found",
+    lang === "ja" ? "特に問題はありません" : "No issues detected"
+  );
 
-  const verdictDesc = {
-    red:    lang === "ja" ? `${count}件の問題があります` : `${count} issue${count !== 1 ? "s" : ""} found`,
-    yellow: lang === "ja" ? "軽微な問題があります" : "Minor issues found",
-    green:  lang === "ja" ? "特に問題はありません" : "No issues detected",
-  }[light];
+  drawVerdictCard(doc, 68, 38, light, score, verdictLabel, verdictDesc);
 
-  drawHeader(doc, W, lang, fileName, dateStr, "client summary");
-  drawVerdictCard(doc, M, CW, 64, 44, light, score, verdictLabel, verdictDesc, W);
+  let y = 68 + 38 + 10;
 
-  let y = 64 + 44 + 12;
+  // ── Section: DIMENSIONS & ESTIMATES ──
+  y = drawSectionHeader(doc, "DIMENSIONS & ESTIMATES", y);
 
   if (dims) {
-    // Size in plain language
+    y = drawDataRow(doc,
+      lang === "ja" ? "サイズ" : "Size",
+      `${dims.x.toFixed(0)} × ${dims.y.toFixed(0)} × ${dims.z.toFixed(0)} mm`,
+      y
+    );
+  }
+  y = drawDataRow(doc,
+    lang === "ja" ? "推定重量" : "Est. weight",
+    pt?.materialWeightGrams != null ? computeWeightRange(pt.materialWeightGrams) : "—",
+    y
+  );
+  y = drawDataRow(doc,
+    lang === "ja" ? "推定印刷時間" : "Est. print time",
+    pt?.estimatedPrintTimeMinutes != null ? computeTimeRange(pt.estimatedPrintTimeMinutes) : "—",
+    y
+  );
+
+  // ── Section: ISSUES FOUND ──
+  y += 4;
+  y = drawSectionHeader(doc, "ISSUES FOUND", y);
+
+  if (issues.length > 0) {
+    const badgeColor: [number, number, number] = light === "red" ? C.red : light === "yellow" ? C.amber : C.green;
+    for (let i = 0; i < issues.length; i++) {
+      y = drawIssueBadge(doc, i + 1, issues[i], y, badgeColor);
+      if (y > PAGE_BOT - 20) {
+        doc.addPage();
+        y = PAGE_M + 6;
+      }
+    }
+  } else {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...C.muted);
-    doc.text(lang === "ja" ? "サイズ" : "Size", M, y);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.ink);
-    doc.text(`${dims.x.toFixed(0)} × ${dims.y.toFixed(0)} × ${dims.z.toFixed(0)} mm`, W - M, y, { align: "right" });
-    y += 10;
-
-    // Weight range
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.muted);
-    doc.text(lang === "ja" ? "重さ" : "Weight", M, y);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.ink);
-    doc.text(pt?.materialWeightGrams != null ? computeWeightRange(pt.materialWeightGrams) : "—", W - M, y, { align: "right" });
-    y += 10;
-
-    // Time range
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.muted);
-    doc.text(lang === "ja" ? "印刷時間" : "Print time", M, y);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.ink);
-    doc.text(pt?.estimatedPrintTimeMinutes != null ? computeTimeRange(pt.estimatedPrintTimeMinutes) : "—", W - M, y, { align: "right" });
-    y += 10;
+    doc.text(
+      lang === "ja" ? "問題は見つかりませんでした。" : "No issues found.",
+      PAGE_M, y
+    );
+    y += 7;
   }
 
+  // ── Next step ──
   y += 6;
-
-  // Plain language assessment
-  const wallOk = metrics?.minWallThicknessMm == null || metrics.minWallThicknessMm >= 1.2;
-  const ohSevere = metrics?.overhang.severity === "severe";
-  const ohModerate = metrics?.overhang.severity === "moderate";
-  const watertight = analysis.validation?.result?.isWatertight ?? true;
-
-  let assessment: string;
-  if (light === "green") {
-    assessment = lang === "ja"
-      ? "このパーツは問題なく印刷できます。特別な調整は必要ありません。"
-      : "This part looks good to print. No special adjustments needed.";
-  } else if (light === "red") {
-    assessment = lang === "ja"
-      ? "いくつかの問題があります。印刷前に修正することをおすすめします。"
-      : "There are some issues to address before printing.";
-  } else {
-    assessment = lang === "ja"
-      ? "おおむね良好ですが、いくつか気をつける点があります。"
-      : "Mostly fine, but a few things to watch out for.";
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.faint);
+  const nextStep = lang === "ja"
+    ? "次のステップ: このレポートをデザイナーと共有するか、3dp-agent.vercel.app にアクセスして支援を受けてください。"
+    : "Next step: share this report with your designer, or visit 3dp-agent.vercel.app for assistance.";
+  const nsLines = doc.splitTextToSize(nextStep, PAGE_CW);
+  if (y + nsLines.length * 4 > PAGE_BOT) {
+    doc.addPage();
+    y = PAGE_M + 6;
   }
+  doc.text(nsLines, PAGE_M, y);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(...C.ink);
-  const assessLines = doc.splitTextToSize(assessment, CW);
-  doc.text(assessLines, M, y);
-  y += assessLines.length * 5 + 6;
-
-  // Recommendation
-  let rec: string;
-  if (light === "green") {
-    rec = lang === "ja" ? "この設定で問題なく印刷を始められます。" : "You're good to go with your current settings.";
-  } else if (!wallOk && (ohSevere || ohModerate)) {
-    rec = lang === "ja"
-      ? "壁を少し厚くし、サポート材を使うことをおすすめします。"
-      : "Consider thickening thin walls and using supports for overhangs.";
-  } else if (!wallOk) {
-    rec = lang === "ja"
-      ? "壁の厚さを確認し、必要に応じて補強してください。"
-      : "Check the wall thickness and reinforce if needed.";
-  } else if (ohSevere || ohModerate) {
-    rec = lang === "ja"
-      ? "サポート材を有効にして印刷してください。"
-      : "Enable support structures for the overhanging areas.";
-  } else if (!watertight) {
-    rec = lang === "ja"
-      ? "モデルの隙間を埋めてから印刷してください。"
-      : "Fill any gaps in the model before printing.";
-  } else {
-    rec = lang === "ja"
-      ? "問題点を確認し、必要に応じて修正してください。"
-      : "Review the issues and make adjustments as needed.";
-  }
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(...C.muted);
-  const recLines = doc.splitTextToSize(rec, CW);
-  doc.text(recLines, M, y);
-
-  drawFooter(doc, H, W, M, score);
+  // ── Footer ──
+  drawFooter(doc, score);
 
   const baseName = fileName.replace(/\.stl$/i, "");
   doc.save(`${baseName}_client.pdf`);
@@ -436,10 +590,6 @@ async function generateDesignerPDF(
 ): Promise<void> {
   const { jsPDF } = await import("jspdf" as never) as { jsPDF: new (o?: object) => JsPDF };
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const W = doc.internal.pageSize.getWidth();
-  const H = doc.internal.pageSize.getHeight();
-  const M = 20;
-  const CW = W - 2 * M;
 
   const { light, score } = getTrafficLight(analysis);
   const metrics = analysis.metrics?.result;
@@ -447,166 +597,138 @@ async function generateDesignerPDF(
   const pt = analysis.printTime?.result;
   const v = analysis.validation?.result;
   const s = analysis.support?.result;
-  const issues = buildIssues(analysis, tone, lang);
+  const issues = buildDesignerIssues(analysis, tone, lang);
   const now = new Date();
   const dateStr = now.toLocaleDateString(lang === "ja" ? "ja-JP" : "en-US", {
     year: "numeric", month: "long", day: "numeric",
   });
 
+  const accent: [number, number, number] = light === "red" ? C.red : light === "yellow" ? C.amber : C.green;
   const count = issues.length;
-  const verdictLabel = {
-    red:    lang === "ja" ? "問題が検出されました" : "Issues found",
-    yellow: lang === "ja" ? "確認を推奨" : "Review recommended",
-    green:  lang === "ja" ? "印刷可能" : "Ready to print",
-  }[light];
-  const verdictDesc = {
-    red:    lang === "ja" ? `${count}件の問題` : `${count} issue${count !== 1 ? "s" : ""}`,
-    yellow: lang === "ja" ? "軽微な問題" : "Minor issues",
-    green:  lang === "ja" ? "問題なし" : "No issues",
-  }[light];
 
-  drawHeader(doc, W, lang, fileName, dateStr, "designer review");
-  drawVerdictCard(doc, M, CW, 64, 44, light, score, verdictLabel, verdictDesc, W);
+  // ── Page background ──
+  doc.setFillColor(...C.pageBg);
+  doc.rect(0, 0, PAGE_W, PAGE_H, "F");
 
-  let y = 64 + 44 + 12;
+  // ── Header ──
+  drawHeader(doc, lang, fileName, dateStr, "designer review");
+  doc.setFillColor(...accent);
+  doc.rect(0, 60, PAGE_W, 3, "F");
 
-  // Dimensions + Volume
+  // ── Verdict card ──
+  function vl(r: string, a: string, g: string): string {
+    return light === "red" ? r : light === "yellow" ? a : g;
+  }
+  const verdictLabel = vl(
+    lang === "ja" ? "問題が検出されました" : "Issues found",
+    lang === "ja" ? "確認を推奨" : "Review recommended",
+    lang === "ja" ? "印刷可能" : "Ready to print"
+  );
+  const verdictDesc = vl(
+    lang === "ja" ? `${count}件の問題` : `${count} issue${count !== 1 ? "s" : ""}`,
+    lang === "ja" ? "軽微な問題" : "Minor issues",
+    lang === "ja" ? "問題なし" : "No issues"
+  );
+
+  drawVerdictCard(doc, 68, 38, light, score, verdictLabel, verdictDesc);
+
+  let y = 68 + 38 + 10;
+
+  // ── Section: DIMENSIONS ──
+  y = drawSectionHeader(doc, "DIMENSIONS", y);
+
   if (dims) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(...C.muted);
-    doc.text(lang === "ja" ? "サイズ" : "Dimensions", M, y);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.ink);
-    doc.text(`${dims.x.toFixed(1)} × ${dims.y.toFixed(1)} × ${dims.z.toFixed(1)} mm`, W - M, y, { align: "right" });
-    y += 10;
-
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.muted);
-    doc.text(lang === "ja" ? "体積" : "Volume", M, y);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.ink);
-    const vol = metrics?.meshVolumeMm3 != null ? (metrics.meshVolumeMm3 / 1000).toFixed(2) : "—";
-    doc.text(`${vol} cm³`, W - M, y, { align: "right" });
-    y += 10;
-
-    // Weight range
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.muted);
-    doc.text(lang === "ja" ? "重量" : "Weight", M, y);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.ink);
-    doc.text(pt?.materialWeightGrams != null ? computeWeightRange(pt.materialWeightGrams) : "—", W - M, y, { align: "right" });
-    y += 10;
-
-    // Time range
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.muted);
-    doc.text(lang === "ja" ? "印刷時間" : "Print time", M, y);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.ink);
-    doc.text(pt?.estimatedPrintTimeMinutes != null ? computeTimeRange(pt.estimatedPrintTimeMinutes) : "—", W - M, y, { align: "right" });
-    y += 10;
+    y = drawDataRow(doc,
+      lang === "ja" ? "サイズ" : "Size",
+      `${dims.x.toFixed(1)} × ${dims.y.toFixed(1)} × ${dims.z.toFixed(1)} mm`,
+      y
+    );
   }
+  y = drawDataRow(doc,
+    lang === "ja" ? "体積" : "Volume",
+    metrics?.meshVolumeMm3 != null ? `${(metrics.meshVolumeMm3 / 1000).toFixed(2)} cm³` : "—",
+    y
+  );
+  y = drawDataRow(doc,
+    lang === "ja" ? "推定重量" : "Est. weight",
+    pt?.materialWeightGrams != null ? computeWeightRange(pt.materialWeightGrams) : "—",
+    y
+  );
+  y = drawDataRow(doc,
+    lang === "ja" ? "推定印刷時間" : "Est. print time",
+    pt?.estimatedPrintTimeMinutes != null ? computeTimeRange(pt.estimatedPrintTimeMinutes) : "—",
+    y
+  );
 
-  // Key metrics section
+  // ── Section: KEY METRICS ──
   y += 4;
+  y = drawSectionHeader(doc, "KEY METRICS", y);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...C.ink);
-  doc.text(lang === "ja" ? "主要指標" : "Key Metrics", M, y);
-  y += 10;
-
-  // Wall thickness
   if (metrics?.minWallThicknessMm != null) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(...C.muted);
-    doc.text(lang === "ja" ? "最小壁厚" : "Min wall thickness", M, y);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.ink);
-    const wallStatus = metrics.minWallThicknessMm < 1.2 ? " (!)" : "";
-    doc.text(`${metrics.minWallThicknessMm.toFixed(2)} mm${wallStatus}`, W - M, y, { align: "right" });
-    y += 9;
+    y = drawDataRow(doc,
+      lang === "ja" ? "最小壁厚" : "Min wall thickness",
+      `${metrics.minWallThicknessMm.toFixed(2)} mm`,
+      y,
+      metrics.minWallThicknessMm < 1.2
+    );
   }
-
-  // Overhang
   if (metrics) {
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.muted);
-    doc.text(lang === "ja" ? "オーバーハング" : "Overhang", M, y);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.ink);
-    doc.text(`${metrics.overhang.faceCount} faces · ${metrics.overhang.severity}`, W - M, y, { align: "right" });
-    y += 9;
+    y = drawDataRow(doc,
+      lang === "ja" ? "オーバーハング" : "Overhang",
+      `${metrics.overhang.faceCount} faces · ${metrics.overhang.severity}`,
+      y
+    );
   }
-
-  // Support
   if (s) {
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.muted);
-    doc.text(lang === "ja" ? "サポート" : "Support", M, y);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.ink);
     const diffLabel = s.difficulty === "easy" ? "Easy" : s.difficulty === "moderate" ? "Moderate" : s.difficulty === "difficult" ? "Difficult" : "Very difficult";
-    doc.text(diffLabel, W - M, y, { align: "right" });
-    y += 9;
+    y = drawDataRow(doc,
+      lang === "ja" ? "サポート" : "Support",
+      diffLabel,
+      y
+    );
   }
-
-  // Watertight
   if (v) {
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.muted);
-    doc.text(lang === "ja" ? "密閉性" : "Watertight", M, y);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.ink);
-    doc.text(v.isWatertight ? (lang === "ja" ? "〇" : "Yes") : (lang === "ja" ? "×" : "No"), W - M, y, { align: "right" });
-    y += 9;
+    y = drawDataRow(doc,
+      lang === "ja" ? "密閉性" : "Watertight",
+      v.isWatertight ? (lang === "ja" ? "〇" : "Yes") : (lang === "ja" ? "×" : "No"),
+      y,
+      !v.isWatertight
+    );
   }
 
-  // Issues section
-  y += 6;
+  // ── Section: ISSUES ──
+  y += 4;
+  const issuesY = y;
+  y = drawSectionHeader(doc, "ISSUES", y);
 
   if (issues.length > 0) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(...C.ink);
-    doc.text(lang === "ja" ? "問題点" : "Issues", M, y);
-    y += 10;
-
+    const badgeColor: [number, number, number] = light === "red" ? C.red : light === "yellow" ? C.amber : C.green;
+    let issueY = y;
     for (let i = 0; i < issues.length; i++) {
-      const lines = doc.splitTextToSize(issues[i], CW - 22);
-
-      doc.setFillColor(...C.red);
-      doc.rect(M, y - 2, 7, 7, "F");
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(7);
-      doc.setTextColor(...C.white);
-      doc.text(`${i + 1}`, M + 3.5, y + 1.5, { align: "center" });
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(...C.ink);
-      doc.text(lines, M + 14, y + 0.5);
-
-      y += 6 + lines.length * 5 + 3;
+      const nextY = drawIssueBadge(doc, i + 1, issues[i], issueY, badgeColor);
+      if (nextY > PAGE_BOT - 16) {
+        doc.addPage();
+        issueY = PAGE_M + 6;
+        // Re-draw section header on new page
+        issueY = drawSectionHeader(doc, "ISSUES (continued)", issueY);
+        issueY = drawIssueBadge(doc, i + 1, issues[i], issueY, badgeColor);
+      } else {
+        issueY = nextY;
+      }
     }
+    y = issueY;
   } else {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(...C.ink);
-    doc.text(lang === "ja" ? "問題点" : "Issues", M, y);
-    y += 10;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...C.muted);
-    doc.text(lang === "ja" ? "問題は検出されませんでした" : "No issues detected.", M, y);
-    y += 8;
+    doc.text(
+      lang === "ja" ? "問題は検出されませんでした。" : "No issues detected.",
+      PAGE_M, y
+    );
+    y += 7;
   }
 
-  // Suggestions
+  // ── Modification suggestion ──
   y += 4;
   let suggestion: string;
   if (issues.length === 0) {
@@ -629,13 +751,18 @@ async function generateDesignerPDF(
       : (lang === "ja" ? "問題点を確認して調整してください" : "Review issues and adjust");
   }
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(8);
   doc.setTextColor(...C.muted);
-  const sugLines = doc.splitTextToSize(suggestion, CW);
-  doc.text(sugLines, M, y);
+  const sugLines = doc.splitTextToSize(suggestion, PAGE_CW);
+  if (y + sugLines.length * 4 > PAGE_BOT) {
+    doc.addPage();
+    y = PAGE_M + 6;
+  }
+  doc.text(sugLines, PAGE_M, y);
 
-  drawFooter(doc, H, W, M, score);
+  // ── Footer ──
+  drawFooter(doc, score);
 
   const baseName = fileName.replace(/\.stl$/i, "");
   doc.save(`${baseName}_designer.pdf`);
@@ -650,10 +777,6 @@ async function generateFactoryPDF(
 ): Promise<void> {
   const { jsPDF } = await import("jspdf" as never) as { jsPDF: new (o?: object) => JsPDF };
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const W = doc.internal.pageSize.getWidth();
-  const H = doc.internal.pageSize.getHeight();
-  const M = 20;
-  const CW = W - 2 * M;
 
   const { light, score } = getTrafficLight(analysis);
   const metrics = analysis.metrics?.result;
@@ -668,234 +791,152 @@ async function generateFactoryPDF(
   });
 
   const reportId = `3DP-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 9000 + 1000))}`;
+  const accent: [number, number, number] = light === "red" ? C.red : light === "yellow" ? C.amber : C.green;
 
-  drawHeader(doc, W, lang, fileName, dateStr, "factory data");
+  // ── Page background ──
+  doc.setFillColor(...C.pageBg);
+  doc.rect(0, 0, PAGE_W, PAGE_H, "F");
 
-  // --- PAGE 1: verdict + topology + validation ---
+  // ── Header ──
+  drawHeader(doc, lang, fileName, dateStr, "factory data");
+  doc.setFillColor(...accent);
+  doc.rect(0, 60, PAGE_W, 3, "F");
 
-  const { light: _, ...verdict } = getTrafficLight(analysis);
+  // ── Verdict card ──
   const count = (() => {
-    const issues = buildIssues(analysis, "expert", lang);
-    return issues.length;
+    const iss = buildDesignerIssues(analysis, "expert", lang);
+    return iss.length;
   })();
-  const verdictLabel = {
-    red:    lang === "ja" ? `問題 ${count}件` : `${count} issue(s)`,
-    yellow: lang === "ja" ? "要確認" : "Review recommended",
-    green:  lang === "ja" ? "印刷可能" : "Ready to print",
-  }[light];
-  const verdictDesc = {
-    red:    lang === "ja" ? "印刷前に修正推奨" : "Fix before print",
-    yellow: lang === "ja" ? "軽微な注意点あり" : "Minor cautions",
-    green:  lang === "ja" ? "問題なし" : "No issues",
-  }[light];
 
-  drawVerdictCard(doc, M, CW, 64, 44, light, score, verdictLabel, verdictDesc, W);
+  function vl(r: string, a: string, g: string): string {
+    return light === "red" ? r : light === "yellow" ? a : g;
+  }
+  const verdictLabel = vl(
+    lang === "ja" ? `問題 ${count}件` : `${count} issue(s)`,
+    lang === "ja" ? "要確認" : "Review recommended",
+    lang === "ja" ? "印刷可能" : "Ready to print"
+  );
+  const verdictDesc = vl(
+    lang === "ja" ? "印刷前に修正推奨" : "Fix before print",
+    lang === "ja" ? "軽微な注意点あり" : "Minor cautions",
+    lang === "ja" ? "問題なし" : "No issues"
+  );
 
-  let y = 64 + 44 + 12;
+  drawVerdictCard(doc, 68, 38, light, score, verdictLabel, verdictDesc);
 
-  // ── Topology ──
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...C.ink);
-  doc.text("TOPOLOGY", M, y);
-  y += 9;
+  let y = 68 + 38 + 10;
+
+  // ── Section: TOPOLOGY ──
+  y = drawSectionHeader(doc, "TOPOLOGY", y);
 
   if (t) {
-    const rows: [string, string][] = [
-      ["Triangles", `${t.triangleCount}`],
-      ["Vertices",  `${t.vertexCount}`],
-      ["Manifold edges", `${t.manifoldEdgeCount}`],
-      ["Non-manifold edges", `${t.nonManifoldEdgeCount}`],
-    ];
-    for (const [k, val] of rows) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(...C.muted);
-      doc.text(k, M, y);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...C.ink);
-      doc.text(val, W - M, y, { align: "right" });
-      y += 7;
-    }
-    y += 4;
+    y = drawDataRow(doc, "Triangles", `${t.triangleCount}`, y);
+    y = drawDataRow(doc, "Vertices", `${t.vertexCount}`, y);
+    y = drawDataRow(doc, "Manifold edges", `${t.manifoldEdgeCount}`, y);
+    y = drawDataRow(doc, "Non-manifold edges", `${t.nonManifoldEdgeCount}`, y);
   }
 
-  // ── Validation ──
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...C.ink);
-  doc.text("VALIDATION", M, y);
-  y += 9;
+  // ── Section: VALIDATION ──
+  y += 4;
+  y = drawSectionHeader(doc, "VALIDATION", y);
 
   if (v) {
-    const rows: [string, string][] = [
-      ["Watertight", v.isWatertight ? "true" : "false"],
-      ["Holes", `${v.holeCount}`],
-      ["Flipped normal ratio", `${(v.flippedNormalRatio * 100).toFixed(2)}%`],
-      ["Degenerate faces", `${v.degenerateFaceCount}`],
-    ];
-    for (const [k, val] of rows) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(...C.muted);
-      doc.text(k, M, y);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...C.ink);
-      doc.text(val, W - M, y, { align: "right" });
-      y += 7;
-    }
-    y += 4;
+    y = drawDataRow(doc, "Watertight", v.isWatertight ? "true" : "false", y, !v.isWatertight);
+    y = drawDataRow(doc, "Holes", `${v.holeCount}`, y, v.holeCount > 0);
+    y = drawDataRow(doc, "Flipped normal ratio", `${(v.flippedNormalRatio * 100).toFixed(2)}%`, y, v.flippedNormalRatio > 0.05);
+    y = drawDataRow(doc, "Degenerate faces", `${v.degenerateFaceCount}`, y, v.degenerateFaceCount > 10);
   }
 
-  // Check if we need page 2 for metrics + support + print time
-  const needsPage2 = y > 200;
-
-  if (needsPage2) {
+  // ── Section: METRICS ──
+  y += 4;
+  if (y > PAGE_BOT - 60) {
     doc.addPage();
-    y = 25;
-  } else {
-    y += 2;
+    y = PAGE_M + 6;
   }
-
-  // ── Metrics ──
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...C.ink);
-  doc.text("METRICS", M, y);
-  y += 9;
+  y = drawSectionHeader(doc, "METRICS", y);
 
   if (metrics) {
-    const vol = metrics.meshVolumeMm3 != null ? `${(metrics.meshVolumeMm3 / 1000).toFixed(2)} cm³` : "—";
-    const sa = metrics.surfaceAreaMm2 != null ? `${(metrics.surfaceAreaMm2 / 100).toFixed(2)} cm²` : "—";
-    const rows: [string, string][] = [
-      ["Volume", vol],
-      ["Surface area", sa],
-      ["Min wall thickness", metrics.minWallThicknessMm != null ? `${metrics.minWallThicknessMm.toFixed(3)} mm` : "—"],
-      ["Overhang faces", `${metrics.overhang.faceCount}`],
-      ["Overhang ratio", `${(metrics.overhang.ratio * 100).toFixed(1)}%`],
-      ["Overhang severity", metrics.overhang.severity],
-    ];
     if (dims) {
-      rows.unshift(["Dimensions", `${dims.x.toFixed(1)} × ${dims.y.toFixed(1)} × ${dims.z.toFixed(1)} mm`]);
+      y = drawDataRow(doc, "Dimensions", `${dims.x.toFixed(1)} × ${dims.y.toFixed(1)} × ${dims.z.toFixed(1)} mm`, y);
     }
-    for (const [k, val] of rows) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(...C.muted);
-      doc.text(k, M, y);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...C.ink);
-      doc.text(val, W - M, y, { align: "right" });
-      y += 7;
-    }
-    y += 4;
+    y = drawDataRow(doc, "Volume", metrics.meshVolumeMm3 != null ? `${(metrics.meshVolumeMm3 / 1000).toFixed(2)} cm³` : "—", y);
+    y = drawDataRow(doc, "Surface area", metrics.surfaceAreaMm2 != null ? `${(metrics.surfaceAreaMm2 / 100).toFixed(2)} cm²` : "—", y);
+    y = drawDataRow(doc, "Min wall thickness", metrics.minWallThicknessMm != null ? `${metrics.minWallThicknessMm.toFixed(3)} mm` : "—", y, metrics.minWallThicknessMm != null && metrics.minWallThicknessMm < 1.2);
+    y = drawDataRow(doc, "Overhang faces", `${metrics.overhang.faceCount}`, y);
+    y = drawDataRow(doc, "Overhang ratio", `${(metrics.overhang.ratio * 100).toFixed(1)}%`, y);
+    y = drawDataRow(doc, "Overhang severity", metrics.overhang.severity, y);
   }
 
-  // ── Support ──
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...C.ink);
-  doc.text("SUPPORT", M, y);
-  y += 9;
+  // ── Section: SUPPORT ──
+  y += 4;
+  if (y > PAGE_BOT - 30) {
+    doc.addPage();
+    y = PAGE_M + 6;
+  }
+  y = drawSectionHeader(doc, "SUPPORT", y);
 
   if (s) {
-    const rows: [string, string][] = [
-      ["Difficulty", `${s.difficulty}`],
-      ["Support volume", s.totalSupportVolumeMm3 != null ? `${(s.totalSupportVolumeMm3 / 1000).toFixed(2)} cm³` : "—"],
-    ];
-    for (const [k, val] of rows) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(...C.muted);
-      doc.text(k, M, y);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...C.ink);
-      doc.text(val, W - M, y, { align: "right" });
-      y += 7;
-    }
-    y += 4;
+    y = drawDataRow(doc, "Difficulty", `${s.difficulty}`, y);
+    y = drawDataRow(doc, "Support volume", s.totalSupportVolumeMm3 != null ? `${(s.totalSupportVolumeMm3 / 1000).toFixed(2)} cm³` : "—", y);
   }
 
-  // ── Print Time ──
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...C.ink);
-  doc.text("PRINT TIME & MATERIAL", M, y);
-  y += 9;
+  // ── Section: PRINT TIME & MATERIAL ──
+  y += 4;
+  if (y > PAGE_BOT - 60) {
+    doc.addPage();
+    y = PAGE_M + 6;
+  }
+  y = drawSectionHeader(doc, "PRINT TIME & MATERIAL", y);
 
   if (pt) {
     const rawMinutes = pt.estimatedPrintTimeMinutes;
     const ph = Math.floor(rawMinutes / 60);
     const pm = Math.round(rawMinutes % 60);
-    const rows: [string, string][] = [
-      ["Print time", `${ph}h ${pm}m`],
-      ["Material weight", `${pt.materialWeightGrams} g`],
-      ["Material cost", `$${pt.materialCostUsd.toFixed(2)}`],
-      ["Total cost", `$${pt.totalCostUsd.toFixed(2)}`],
-      ["Layer count", `${pt.layerCount}`],
-      ["Printer", `${pt.printerProfile.name}`],
-    ];
-    for (const [k, val] of rows) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(...C.muted);
-      doc.text(k, M, y);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...C.ink);
-      doc.text(val, W - M, y, { align: "right" });
-      y += 7;
-    }
-    y += 4;
+    y = drawDataRow(doc, "Print time", `${ph}h ${pm}m`, y);
+    y = drawDataRow(doc, "Material weight", `${pt.materialWeightGrams} g`, y);
+    y = drawDataRow(doc, "Material cost", `$${pt.materialCostUsd.toFixed(2)}`, y);
+    y = drawDataRow(doc, "Total cost", `$${pt.totalCostUsd.toFixed(2)}`, y);
+    y = drawDataRow(doc, "Layer count", `${pt.layerCount}`, y);
   }
 
-  // Overhang angle breakdown
+  // ── Section: OVERHANG BREAKDOWN ──
   const ohByAngle = metrics?.overhang.breakdownByAngleDeg;
   if (ohByAngle && ohByAngle.length > 0) {
-    // Check page space
-    const needed = 12 + ohByAngle.length * 7 + 8;
-    if (y + needed > 260) {
+    y += 4;
+    if (y > PAGE_BOT - ohByAngle.length * 7 - 20) {
       doc.addPage();
-      y = 25;
+      y = PAGE_M + 6;
     }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(...C.ink);
-    doc.text("OVERHANG BREAKDOWN", M, y);
-    y += 9;
+    y = drawSectionHeader(doc, "OVERHANG BREAKDOWN", y);
 
     for (const row of ohByAngle) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(...C.muted);
-      doc.text(`${row.minAngle}°–${row.maxAngle}°`, M, y);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...C.ink);
-      doc.text(`${row.faceCount} faces`, W - M, y, { align: "right" });
-      y += 7;
+      y = drawDataRow(doc,
+        `${row.minAngle}°–${row.maxAngle}°`,
+        `${row.faceCount} faces`,
+        y
+      );
     }
-    y += 6;
   }
 
-  // ── Disclaimer on page 2+ ──
-  // Ensure we're on the last page for disclaimer
+  // ── Disclaimer ──
+  y += 6;
   const disclaimer = lang === "ja"
     ? `このレポートは自動推定です。実際の印刷結果は素材・スライサー設定・プリンター校正により異なる場合があります。レポート ID: ${reportId}`
     : `This report is an automated estimate. Actual print results may vary based on material, slicer settings, and printer calibration. Report ID: ${reportId}`;
-  const dLines = doc.splitTextToSize(disclaimer, CW);
+  const dLines = doc.splitTextToSize(disclaimer, PAGE_CW);
 
-  if (y + dLines.length * 4 + 8 > H - 20) {
+  if (y + dLines.length * 4 + 4 > PAGE_BOT) {
     doc.addPage();
-    y = 25;
+    y = PAGE_M + 6;
   }
 
-  y += 4;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.setTextColor(...C.muted);
-  doc.text(dLines, M, y);
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.faint);
+  doc.text(dLines, PAGE_M, y);
 
-  drawFooter(doc, H, W, M, score);
+  // ── Footer ──
+  drawFooter(doc, score, reportId);
 
   const baseName = fileName.replace(/\.stl$/i, "");
   doc.save(`${baseName}_factory.pdf`);
@@ -939,7 +980,6 @@ export function ReportGenerator({
 
   return (
     <div className="space-y-2">
-      {/* Score pill */}
       <div className="flex items-center gap-3">
         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium ${lightStyles[light]}`}>
           <span className={`w-2 h-2 rounded-full ${dotStyles[light]}`} />
@@ -947,7 +987,6 @@ export function ReportGenerator({
         </div>
       </div>
 
-      {/* Three-tier export */}
       <div>
         <div className="text-[10px] font-mono text-muted-foreground/30 tracking-widest mb-2">EXPORT REPORT</div>
         <div className="flex gap-2">
