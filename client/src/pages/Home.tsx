@@ -1,107 +1,15 @@
-import { ReportGenerator } from "@/components/ReportGenerator";
-import { useRef, useState, useEffect, useMemo } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
 import { ChatPanel } from '@/components/ChatPanel';
+import { CADWorkspace } from '@/components/CADWorkspace';
 import { APIKeyModal } from '@/components/APIKeyModal';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
-import { Language, getTranslation } from '@/lib/i18n';
-import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
-import { AgentOrchestrator, AgentRunSummary, getAgentLabel, getAgentDescription } from '@/agents';
-import { OverhangHeatmap } from '@/components/3D/OverhangHeatmap';
-import { SupportGhosts } from '@/components/3D/SupportGhosts';
-import { RiskAnimation } from '@/components/3D/RiskAnimation';
-import { VisualizationToolbar } from '@/components/3D/VisualizationToolbar';
-import { OptimizeButton } from '@/components/3D/OptimizeButton';
-import { PrintPathPreview } from '@/components/3D/PrintPathPreview';
-import { LayerReveal } from '@/components/3D/LayerReveal';
-import { FailureEmergence } from '@/components/3D/FailureEmergence';
-import { ThermalField } from '@/components/3D/ThermalField';
-import { CausalityHighlight } from '@/components/3D/CausalityHighlight';
-import { buildCausalityGraph, CausalityGraph } from '@/components/causality/causalityEngine';
-import { ManufacturingTimeline } from '@/components/causality/ManufacturingTimeline';
-import { CausalityPanel } from '@/components/causality/CausalityPanel';
-import { detectPatterns, PatternMatch } from '@/components/causality/topologyPatternEngine';
-import { PatternMemoryPanel } from '@/components/causality/PatternMemoryPanel';
-import { evaluateCounterfactuals, GeometrySuggestion } from '@/components/causality/counterfactualEngine';
-import { GeometrySuggestionPanel } from '@/components/causality/GeometrySuggestionPanel';
-import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
-import { CognitiveScan } from '@/components/3D/CognitiveScan';
-import { AttentionPulse } from '@/components/3D/AttentionPulse';
+import { Language } from '@/lib/i18n';
 import { toast } from 'sonner';
-
-function deriveWtStatus(mm: number | null | undefined): 'good' | 'warning' | 'critical' {
-  if (mm == null) return 'warning';
-  if (mm < 1) return 'critical';
-  if (mm < 2) return 'warning';
-  return 'good';
-}
-
-function deriveOhStatus(faceCount: number | undefined, totalTriangles: number | undefined): 'good' | 'warning' | 'critical' {
-  if (!faceCount || faceCount === 0) return 'good';
-  const ratio = totalTriangles && totalTriangles > 0 ? faceCount / totalTriangles : 0;
-  if (ratio > 0.3) return 'critical';
-  if (ratio > 0.1) return 'warning';
-  return 'good';
-}
-
-function unifiedToModelData(
-  unifiedAnalysis: import('@/analysis').UnifiedAnalysis,
-  fileName: string,
-): ModelData {
-  const metrics = unifiedAnalysis.metrics.result;
-  const topology = unifiedAnalysis.topology.result;
-  const triCount = topology?.triangleCount ?? 0;
-  const volume = metrics?.meshVolumeMm3 ?? metrics?.boundingBoxVolumeMm3 ?? 0;
-  const surfaceArea = metrics?.surfaceAreaMm2 ?? 0;
-  const oh = metrics?.overhang;
-  const dims = metrics?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
-  const minWall = metrics?.minWallThicknessMm;
-  const wtStatus = deriveWtStatus(minWall);
-  const wtAreas = Math.floor(triCount * 0.15);
-
-  return {
-    fileName,
-    wallThickness: {
-      minThickness: minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
-      areas: wtAreas,
-      status: wtStatus,
-    },
-    overhang: {
-      angle: 45,
-      areas: oh?.faceCount ?? 0,
-      status: deriveOhStatus(oh?.faceCount, triCount),
-    },
-    volume,
-    surfaceArea,
-    dims,
-  };
-}
-
-function unifiedToAnalysisSummary(unifiedAnalysis: import('@/analysis').UnifiedAnalysis) {
-  const metrics = unifiedAnalysis.metrics.result;
-  const topology = unifiedAnalysis.topology.result;
-  const oh = metrics?.overhang;
-  const dims = metrics?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
-  const minWall = metrics?.minWallThicknessMm;
-  const triCount = topology?.triangleCount ?? 0;
-
-  return {
-    wallThickness: {
-      minThickness: minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
-      status: deriveWtStatus(minWall),
-    },
-    overhang: {
-      areas: oh?.faceCount ?? 0,
-      status: deriveOhStatus(oh?.faceCount, triCount),
-    },
-    volume: metrics?.meshVolumeMm3 ?? metrics?.boundingBoxVolumeMm3 ?? 0,
-    surfaceArea: metrics?.surfaceAreaMm2 ?? 0,
-  };
-}
 
 // ─── 3D Helpers ────────────────────────────────────────────────────────────────
 
@@ -224,13 +132,13 @@ function MetricRow({ label, value, unit = '', highlight = false }: {
   );
 }
 
-function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'; label: string }) {
+function StatusChip({ status }: { status: 'good' | 'warning' | 'critical' }) {
   const cfg = {
-    good:     { cls: 'text-emerald-400 border-emerald-400/30 bg-emerald-400/5' },
-    warning:  { cls: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/5' },
-    critical: { cls: 'text-red-400 border-red-400/30 bg-red-400/5' },
+    good:     { label: 'NOMINAL',  cls: 'text-emerald-400 border-emerald-400/30 bg-emerald-400/5' },
+    warning:  { label: 'CAUTION', cls: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/5' },
+    critical: { label: 'CRITICAL', cls: 'text-red-400 border-red-400/30 bg-red-400/5' },
   }[status];
-  return <span className={`text-xs font-mono px-2 py-0.5 border rounded-sm ${cfg.cls}`}>{label}</span>;
+  return <span className={`text-xs font-mono px-2 py-0.5 border rounded-sm ${cfg.cls}`}>{cfg.label}</span>;
 }
 
 // ─── Home ──────────────────────────────────────────────────────────────────────
@@ -238,74 +146,33 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
 export default function Home() {
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
-  const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality'>('geometry');
+  const [tab, setTab] = useState<'geometry' | 'report' | 'chat'>('geometry');
+  const [workspace, setWorkspace] = useState<'analyze' | 'cad'>('analyze');
   const [showAPIModal, setShowAPIModal] = useState(false);
   const [quickReport, setQuickReport] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
-  const [agentRun, setAgentRun] = useState<AgentRunSummary | null>(null);
-  const [agentLoading, setAgentLoading] = useState(false);
-  const [showHeatmap, setShowHeatmap] = useState(false);
-  const [showGhosts, setShowGhosts] = useState(false);
-  const [showRisks, setShowRisks] = useState(false);
-  const [showPrintPath, setShowPrintPath] = useState(false);
-  const [showLayerReveal, setShowLayerReveal] = useState(false);
-  const [showFailure, setShowFailure] = useState(false);
-  const [showThermal, setShowThermal] = useState(false);
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
-  const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
-  const [overlayOpacity, setOverlayOpacity] = useState(0.7);
-  const [infillPercent, setInfillPercent] = useState(20);
-  const orchestratorRef = useRef<AgentOrchestrator | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  if (!orchestratorRef.current) {
-    orchestratorRef.current = new AgentOrchestrator();
-  }
 
   const handleModelLoaded = (model: UploadedModel) => {
     setUploadedModel(model);
     setTab('geometry');
     setQuickReport('');
-    setAgentRun(null);
-    setShowHeatmap(false);
-    setShowGhosts(false);
-    setShowRisks(false);
-    setShowPrintPath(false);
-    setShowLayerReveal(false);
-    setShowFailure(false);
-    setShowThermal(false);
-    setSelectedEventId(null);
-    setSelectedPatternId(null);
-    setSelectedSuggestionId(null);
-    setOverlayOpacity(0.7);
-    setInfillPercent(20);
-    toast.success(t('stlParsed') + model.fileName);
-    runAgentAnalysis(model);
-  };
-
-  const runAgentAnalysis = async (model: UploadedModel) => {
-    if (!orchestratorRef.current) return;
-    setAgentLoading(true);
-    try {
-      const summary = await orchestratorRef.current.runFullAnalysis(
-        model.geometry,
-        model.unifiedAnalysis,
-        model.fileName,
-        undefined,
-        language,
-      );
-      setAgentRun(summary);
-    } catch (err) {
-      console.error('Agent analysis failed:', err);
-    } finally {
-      setAgentLoading(false);
-    }
+    toast.success('STL parsed — ' + model.fileName);
   };
 
   const getModelData = (): ModelData | null => {
     if (!uploadedModel) return null;
-    return unifiedToModelData(uploadedModel.unifiedAnalysis, uploadedModel.fileName);
+    return {
+      fileName: uploadedModel.fileName,
+      wallThickness: uploadedModel.analysis.wallThickness,
+      overhang: uploadedModel.analysis.overhang,
+      volume: uploadedModel.analysis.volume,
+      surfaceArea: uploadedModel.analysis.surfaceArea,
+      dims: {
+        x: uploadedModel.analysis.bounds.max.x - uploadedModel.analysis.bounds.min.x,
+        y: uploadedModel.analysis.bounds.max.y - uploadedModel.analysis.bounds.min.y,
+        z: uploadedModel.analysis.bounds.max.z - uploadedModel.analysis.bounds.min.z,
+      },
+    };
   };
 
   const handleGenerateReport = () => {
@@ -318,56 +185,13 @@ export default function Home() {
     }, 600);
   };
 
-  const unifiedAnalysis = uploadedModel?.unifiedAnalysis;
-  const analysis = unifiedAnalysis ? unifiedToAnalysisSummary(unifiedAnalysis) : null;
+  const analysis = uploadedModel?.analysis;
   const modelData = getModelData();
-  const providerLabel = getActiveProvider() ? AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel : null;
-  const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
-  const agentMarkers = agentRun?.results.flatMap(r => r.markers ?? []) ?? [];
-  const causalityGraph = useMemo(() => agentMarkers.length > 0 ? buildCausalityGraph(agentMarkers) : null, [agentMarkers]);
-  const patternMatches: PatternMatch[] = useMemo(() =>
-    agentMarkers.length > 0 ? detectPatterns(agentMarkers) : [],
-    [agentMarkers],
-  );
-
-  const counterfactualSuggestions: GeometrySuggestion[] = useMemo(() =>
-    agentMarkers.length > 0 ? evaluateCounterfactuals(agentMarkers, patternMatches) : [],
-    [agentMarkers, patternMatches],
-  );
-
-  const selectedSuggestionPositions = useMemo(() => {
-    if (!selectedSuggestionId) return [];
-    const sug = counterfactualSuggestions.find(s => s.id === selectedSuggestionId);
-    return sug ? sug.affectedPositions : [];
-  }, [selectedSuggestionId, counterfactualSuggestions]);
-
-  const selectedPatternPositions = useMemo(() => {
-    if (!selectedPatternId) return [];
-    const match = patternMatches.find((_, i) => `${patternMatches[i].pattern.id}-${i}` === selectedPatternId);
-    return match ? match.clusterPositions : [];
-  }, [selectedPatternId, patternMatches]);
-
-  const selectedEventPositions = useMemo(() => {
-    if (!causalityGraph || !selectedEventId) return [];
-    const ev = causalityGraph.events.find((e: { id: string }) => e.id === selectedEventId);
-    return ev ? ev.positions : [];
-  }, [selectedEventId, causalityGraph]);
-  const optSuggestions = agentRun?.results
-    .filter(r => r.agentId === 'optimization_advisor')
-    .flatMap(r => (r.details?.suggestions ?? []) as Array<{ type: string; priority: string }>) ?? [];
-
-  const totalLayers = useMemo(() => {
-    if (!uploadedModel?.geometry) return 50;
-    const geo = uploadedModel.geometry;
-    geo.computeBoundingBox();
-    const height = (geo.boundingBox?.max.y ?? 5) - (geo.boundingBox?.min.y ?? 0);
-    return Math.max(10, Math.min(200, Math.round(height / 0.2)));
-  }, [uploadedModel?.geometry]);
+  const providerLabel = getActiveProvider() ? { claude: 'Claude', openai: 'GPT-4o', gemini: 'Gemini', deepseek: 'DeepSeek' }[getActiveProvider()!] : null;
 
   return (
-    <PrintPlaybackProvider totalLayers={totalLayers}>
     <div className="relative w-full min-h-screen bg-background grid-bg overflow-x-hidden">
-      {showAPIModal && <APIKeyModal onClose={() => setShowAPIModal(false)} language={language} />}
+      {showAPIModal && <APIKeyModal onClose={() => setShowAPIModal(false)} />}
 
       {/* ── Header ── */}
       <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-5 py-3 border-b border-border bg-background/95 backdrop-blur-sm">
@@ -377,6 +201,21 @@ export default function Home() {
           <span className="text-xs text-muted-foreground/50 hidden sm:block">v2.0 // STL Analysis</span>
         </div>
         <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center border border-border rounded-sm overflow-hidden">
+            {(['analyze', 'cad'] as const).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setWorkspace(mode)}
+                className={`text-xs font-mono px-3 py-1 transition-all ${
+                  workspace === mode
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-primary'
+                }`}
+              >
+                {mode === 'analyze' ? 'ANALYZE' : 'CAD STUDIO'}
+              </button>
+            ))}
+          </div>
           {/* Language */}
           <div className="flex items-center gap-0.5">
             {(['en', 'ja', 'zh'] as Language[]).map(lang => (
@@ -395,90 +234,49 @@ export default function Home() {
                 ? 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10'
                 : 'border-border text-muted-foreground hover:border-primary/40 hover:text-primary'
             }`}>
-            {providerLabel ? `${t('api')}: ${providerLabel}` : t('apiKeys')}
+            {providerLabel ? `AI: ${providerLabel}` : 'API KEYS'}
           </button>
         </div>
       </header>
 
       {/* ── Main ── */}
+      {workspace === 'cad' ? (
+        <main className="pt-20 px-4 pb-4 min-h-screen">
+          <div className="sm:hidden mb-3 grid grid-cols-2 border border-border rounded-sm overflow-hidden">
+            {(['analyze', 'cad'] as const).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setWorkspace(mode)}
+                className={`text-xs font-mono px-3 py-2 transition-all ${
+                  workspace === mode
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-primary'
+                }`}
+              >
+                {mode === 'analyze' ? 'ANALYZE' : 'CAD STUDIO'}
+              </button>
+            ))}
+          </div>
+          <CADWorkspace language={language} />
+        </main>
+      ) : (
       <div className="pt-14 flex flex-col lg:flex-row min-h-screen">
 
         {/* Left: 3D Viewport */}
         <div className="lg:w-1/2 h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
           <div className="absolute top-3 left-4 z-10 font-mono text-xs text-muted-foreground/40 space-y-0.5 hidden lg:block">
-            <div>// {t('viewport')}</div>
-            <div>// {t('viewportHint')}</div>
+            <div>// VIEWPORT</div>
+            <div>// drag: rotate · scroll: zoom</div>
           </div>
           <Canvas gl={{ antialias: true, alpha: true }} style={{ background: 'transparent' }}>
             <PerspectiveCamera makeDefault position={[0, 3, 10]} fov={60} />
             <SceneContent model={uploadedModel} />
-            <PlaybackUpdater />
-            {uploadedModel?.geometry && <CognitiveScan geometry={uploadedModel.geometry} visible />}
-            {uploadedModel?.geometry && agentMarkers.length > 0 && (
-              <AttentionPulse markers={agentMarkers} geometry={uploadedModel.geometry} visible />
-            )}
-            {uploadedModel?.geometry && showHeatmap && (
-              <OverhangHeatmap geometry={uploadedModel.geometry} visible opacity={overlayOpacity} />
-            )}
-            {uploadedModel?.geometry && (
-              <SupportGhosts markers={agentMarkers} visible={showGhosts} opacity={overlayOpacity} />
-            )}
-            {uploadedModel?.geometry && (
-              <RiskAnimation markers={agentMarkers} visible={showRisks} />
-            )}
-            {uploadedModel?.geometry && showPrintPath && (
-              <PrintPathPreview geometry={uploadedModel.geometry} visible opacity={overlayOpacity} />
-            )}
-            {uploadedModel?.geometry && showLayerReveal && (
-              <LayerReveal geometry={uploadedModel.geometry} visible opacity={overlayOpacity} />
-            )}
-            {uploadedModel?.geometry && showFailure && (
-              <FailureEmergence markers={agentMarkers} geometry={uploadedModel.geometry} visible />
-            )}
-            {uploadedModel?.geometry && showThermal && (
-              <ThermalField markers={agentMarkers} geometry={uploadedModel.geometry} visible />
-            )}
-            {(selectedEventPositions.length > 0 || selectedPatternPositions.length > 0 || selectedSuggestionPositions.length > 0) && (
-              <CausalityHighlight
-                positions={
-                  selectedEventPositions.length > 0 ? selectedEventPositions
-                  : selectedPatternPositions.length > 0 ? selectedPatternPositions
-                  : selectedSuggestionPositions
-                }
-                visible
-              />
-            )}
             <OrbitControls enablePan={false} autoRotate={!uploadedModel} autoRotateSpeed={0.4} />
           </Canvas>
-          {uploadedModel && (
-            <div className="hidden lg:block">
-              <ManufacturingTimeline graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} />
-            </div>
-          )}
           {uploadedModel && (
             <div className="absolute bottom-3 left-4 text-xs font-mono text-muted-foreground/30">
               {uploadedModel.fileName}
             </div>
-          )}
-          {uploadedModel && (
-            <VisualizationToolbar
-              showHeatmap={showHeatmap}
-              showGhosts={showGhosts}
-              showRisks={showRisks}
-              showPrintPath={showPrintPath}
-              showLayerReveal={showLayerReveal}
-              showFailure={showFailure}
-              showThermal={showThermal}
-              overlayOpacity={overlayOpacity}
-              onToggleHeatmap={() => setShowHeatmap(v => !v)}
-              onToggleGhosts={() => setShowGhosts(v => !v)}
-              onToggleRisks={() => setShowRisks(v => !v)}
-              onTogglePrintPath={() => setShowPrintPath(v => !v)}
-              onToggleLayerReveal={() => setShowLayerReveal(v => !v)}
-              onToggleFailure={() => setShowFailure(v => !v)}
-              onToggleThermal={() => setShowThermal(v => !v)}
-              onOpacityChange={setOverlayOpacity}
-            />
           )}
         </div>
 
@@ -488,8 +286,8 @@ export default function Home() {
 
             {/* Upload */}
             <div>
-              <div className="text-xs text-muted-foreground/50 mb-2 font-mono tracking-widest">// {t('input')}</div>
-              <STLUploadHandler onModelLoaded={handleModelLoaded} onError={e => toast.error(e)} language={language} />
+              <div className="text-xs text-muted-foreground/50 mb-2 font-mono tracking-widest">// INPUT</div>
+              <STLUploadHandler onModelLoaded={handleModelLoaded} onError={e => toast.error(e)} />
             </div>
 
             {/* Analysis tabs */}
@@ -497,16 +295,12 @@ export default function Home() {
               <div className="space-y-0 fade-up">
                 {/* Tabs */}
                 <div className="flex border-b border-border">
-                  {(['geometry', 'report', 'agents', 'chat', 'causality'] as const).map(tabKey => (
-                    <button key={tabKey} onClick={() => setTab(tabKey)}
+                  {(['geometry', 'report', 'chat'] as const).map(t => (
+                    <button key={t} onClick={() => setTab(t)}
                       className={`text-xs font-mono px-4 py-2.5 border-b-2 transition-all ${
-                        tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                        tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
                       }`}>
-                      {tabKey === 'geometry' ? t('geometry').toUpperCase()
-                        : tabKey === 'report' ? t('report').toUpperCase()
-                        : tabKey === 'agents' ? 'AGENTS'
-                        : tabKey === 'causality' ? 'CAUSALITY'
-                        : t('chatAI').toUpperCase()}
+                      {t === 'geometry' ? 'GEOMETRY' : t === 'report' ? 'REPORT' : 'CHAT AI'}
                     </button>
                   ))}
                 </div>
@@ -516,47 +310,27 @@ export default function Home() {
                   <div className="space-y-4 pt-4">
                     <div className="grid grid-cols-2 gap-3">
                       <div className="p-3 border border-border rounded-sm bg-card">
-                        <div className="text-xs text-muted-foreground mb-2 font-mono">{t('wallThicknessLabel')}</div>
-                        <StatusChip status={analysis.wallThickness.status} label={t(analysis.wallThickness.status)} />
+                        <div className="text-xs text-muted-foreground mb-2 font-mono">WALL THICKNESS</div>
+                        <StatusChip status={analysis.wallThickness.status} />
                       </div>
                       <div className="p-3 border border-border rounded-sm bg-card">
-                        <div className="text-xs text-muted-foreground mb-2 font-mono">{t('overhangLabel')}</div>
-                        <StatusChip status={analysis.overhang.status} label={t(analysis.overhang.status)} />
+                        <div className="text-xs text-muted-foreground mb-2 font-mono">OVERHANG</div>
+                        <StatusChip status={analysis.overhang.status} />
                       </div>
                     </div>
                     <div className="border border-border rounded-sm bg-card p-4">
                       <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">GEOMETRY DATA</div>
-                      <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness.toFixed(3)} unit="mm" highlight />
-                      <MetricRow label={t('volume')} value={analysis.volume.toFixed(1)} unit="mm³" />
-                      <MetricRow label={t('surfaceArea')} value={analysis.surfaceArea.toFixed(1)} unit="mm²" />
-                      <MetricRow label={t('dimX')} value={modelData.dims.x.toFixed(2)} unit="mm" />
-                      <MetricRow label={t('dimY')} value={modelData.dims.y.toFixed(2)} unit="mm" />
-                      <MetricRow label={t('dimZ')} value={modelData.dims.z.toFixed(2)} unit="mm" />
-                      <MetricRow label={t('overhangFaces')} value={analysis.overhang.areas} />
-                    </div>
-                    {/* Infill slider */}
-                    <div className="border border-border rounded-sm bg-card p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-mono text-muted-foreground tracking-widest">INFILL</span>
-                        <span className="text-xs font-mono text-primary">{infillPercent}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={5}
-                        max={100}
-                        step={5}
-                        value={infillPercent}
-                        onChange={e => setInfillPercent(Number(e.target.value))}
-                        className="w-full h-1.5 bg-border rounded-sm appearance-none cursor-pointer accent-primary"
-                      />
-                      <div className="flex justify-between text-[9px] font-mono text-muted-foreground/40 mt-1">
-                        <span>5%</span>
-                        <span>100%</span>
-                      </div>
+                      <MetricRow label="MIN THICKNESS" value={analysis.wallThickness.minThickness.toFixed(3)} unit="mm" highlight />
+                      <MetricRow label="VOLUME" value={analysis.volume.toFixed(1)} unit="mm³" />
+                      <MetricRow label="SURFACE AREA" value={analysis.surfaceArea.toFixed(1)} unit="mm²" />
+                      <MetricRow label="DIM X" value={modelData.dims.x.toFixed(2)} unit="mm" />
+                      <MetricRow label="DIM Y" value={modelData.dims.y.toFixed(2)} unit="mm" />
+                      <MetricRow label="DIM Z" value={modelData.dims.z.toFixed(2)} unit="mm" />
+                      <MetricRow label="OVERHANG FACES" value={analysis.overhang.areas} />
                     </div>
                     <button onClick={() => setTab('report')}
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
-                      {t('generateReport')}
+                      GENERATE REPORT →
                     </button>
                   </div>
                 )}
@@ -567,163 +341,32 @@ export default function Home() {
                     {!quickReport && (
                       <button onClick={handleGenerateReport} disabled={reportLoading}
                         className="w-full py-3 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all disabled:opacity-50">
-                        {reportLoading ? '\u258b ' + t('analyze') : t('generateQuickReport')}
+                        {reportLoading ? '▋ ANALYZING...' : '⚡ GENERATE QUICK REPORT (FREE)'}
                       </button>
                     )}
                     {quickReport && (
                       <div className="border border-border rounded-sm bg-card p-4 fade-up">
                         <div className="flex items-center justify-between mb-3">
-                          <span className="text-xs font-mono text-primary tracking-widest">{t('analysisReport')}</span>
-                          <span className="text-xs font-mono text-muted-foreground/40">{t('localEngine')}</span>
+                          <span className="text-xs font-mono text-primary tracking-widest">ANALYSIS REPORT</span>
+                          <span className="text-xs font-mono text-muted-foreground/40">[LOCAL ENGINE]</span>
                         </div>
                         <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap leading-relaxed">
                           {quickReport}
                         </pre>
                         <button onClick={() => setQuickReport('')}
                           className="mt-4 text-xs font-mono text-muted-foreground hover:text-primary transition-colors">
-                          {t('regenerate')}
+                          ↺ REGENERATE
                         </button>
-{unifiedAnalysis && (
-  <ReportGenerator
-    analysis={unifiedAnalysis}
-    infillPercent={infillPercent}
-    fileName={uploadedModel?.fileName ?? "model.stl"}
-  />
-)}
                       </div>
                     )}
                     <div className="border border-dashed border-border/40 rounded-sm p-4 text-center space-y-2">
-                      <div className="text-xs font-mono text-muted-foreground">{t('deepAnalysis')}</div>
-                      <div className="text-xs text-muted-foreground/50">{t('deepAnalysisDesc')}</div>
+                      <div className="text-xs font-mono text-muted-foreground">DEEP AI ANALYSIS</div>
+                      <div className="text-xs text-muted-foreground/50">Full AI report with Claude / GPT-4o / Gemini</div>
                       <button onClick={() => { setShowAPIModal(true); }}
                         className="text-xs font-mono px-4 py-2 border border-primary/30 text-primary hover:bg-primary/10 rounded-sm transition-all">
-                        {hasAnyKey() ? t('switchToChat') : t('configureApiKey')}
+                        {hasAnyKey() ? 'SWITCH TO CHAT →' : 'CONFIGURE API KEY →'}
                       </button>
                     </div>
-                  </div>
-                )}
-
-                {/* AGENTS TAB */}
-                {tab === 'agents' && (
-                  <div className="pt-4 space-y-4">
-                    {agentLoading && (
-                      <div className="border border-primary/30 rounded-sm p-6 text-center">
-                        <div className="text-xs font-mono text-primary animate-pulse mb-2">\u258b MULTI-AGENT ANALYSIS RUNNING</div>
-                        <div className="text-xs text-muted-foreground/50">Geometry Analyst \u2022 Printability Scorer \u2022 Failure Predictor \u2022 Optimization Advisor</div>
-                        <div className="flex justify-center gap-2 mt-3">
-                          {['geometry_analyst', 'printability_scorer', 'failure_predictor', 'optimization_advisor'].map(id => (
-                            <div key={id} className="w-2 h-2 bg-primary/40 rounded-full animate-pulse" />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {agentRun && !agentLoading && (
-                      <>
-                        {/* Consensus Score */}
-                        <div className="border border-border rounded-sm bg-card p-5 text-center">
-                          <div className="text-xs font-mono text-muted-foreground mb-2">CONSENSUS SCORE</div>
-                          <div className={`text-4xl font-mono font-bold ${
-                            agentRun.consensus.verdict === 'pass' ? 'text-emerald-400'
-                              : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
-                              : 'text-red-400'
-                          }`}>
-                            {agentRun.consensus.overallScore}
-                            <span className="text-lg text-muted-foreground/40">/100</span>
-                          </div>
-                          <div className={`mt-1 text-xs font-mono uppercase ${
-                            agentRun.consensus.verdict === 'pass' ? 'text-emerald-400'
-                              : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
-                              : 'text-red-400'
-                          }`}>
-                            {agentRun.consensus.verdict}
-                          </div>
-                          <div className="mt-2 text-xs text-muted-foreground/50">
-                            {agentRun.usedVision && <span className="text-primary">Vision-enhanced</span>}
-                            {agentRun.usedVision ? ' \u2022 ' : ''}
-                            {agentRun.consensus.agreementDelta < 10 ? 'Strong agreement' : 'Moderate agreement'}
-                            {' \u2022 '}{agentRun.totalDurationMs}ms
-                          </div>
-                        </div>
-
-                        {/* Per-Agent Cards */}
-                        {agentRun.results.map(result => (
-                          <div key={result.agentId} className="border border-border rounded-sm bg-card p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <div>
-                                <span className="text-xs font-mono text-primary">{getAgentLabel(result.agentId)}</span>
-                                <span className="ml-2 text-xs text-muted-foreground/50">{getAgentDescription(result.agentId)}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className={`text-xs font-mono px-2 py-0.5 border rounded-sm ${
-                                  result.verdict === 'pass' ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/5'
-                                    : result.verdict === 'warning' ? 'text-yellow-400 border-yellow-400/30 bg-yellow-400/5'
-                                    : 'text-red-400 border-red-400/30 bg-red-400/5'
-                                }`}>{result.verdict}</span>
-                                <span className="text-xs font-mono text-muted-foreground">{Math.round(result.score)}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all ${
-                                  result.score >= 70 ? 'bg-emerald-400'
-                                    : result.score >= 40 ? 'bg-yellow-400'
-                                    : 'bg-red-400'
-                                }`} style={{ width: `${result.score}%` }} />
-                              </div>
-                              <span className="text-xs text-muted-foreground/50">{result.durationMs}ms</span>
-                            </div>
-                            <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono leading-relaxed max-h-32 overflow-y-auto">
-                              {result.explanation}
-                            </pre>
-                          </div>
-                        ))}
-
-                        {/* Voting Records */}
-                        <details className="border border-border rounded-sm bg-card/50 p-3 cursor-pointer">
-                          <summary className="text-xs font-mono text-muted-foreground">Voting & Debate Record</summary>
-                          <div className="mt-2 space-y-1">
-                            {agentRun.votingRecords.map(record => (
-                              <div key={record.agentId} className="flex justify-between text-xs font-mono text-muted-foreground/70">
-                                <span>{getAgentLabel(record.agentId)}</span>
-                                <span>weight: {(record.weight * 100).toFixed(0)}% | score: {Math.round(record.adjustedScore)} | confidence: {(record.confidence * 100).toFixed(0)}%</span>
-                              </div>
-                            ))}
-                          </div>
-                        </details>
-
-                        {/* Optimize Button */}
-                        {uploadedModel && agentRun.results.some(r => r.agentId === 'optimization_advisor') && (
-                          <OptimizeButton
-                            geometry={uploadedModel.geometry}
-                            suggestions={optSuggestions}
-                            markers={agentMarkers}
-                            originalFileName={uploadedModel.fileName}
-                          />
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* CAUSALITY TAB */}
-                {tab === 'causality' && (
-                  <div className="pt-4 space-y-4">
-                    <CausalityPanel graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} />
-                    <div className="border-t border-border/20 my-2" />
-                    {patternMatches.length > 0 && (
-                      <PatternMemoryPanel
-                        matches={patternMatches}
-                        selectedPatternId={selectedPatternId}
-                        onSelectPattern={setSelectedPatternId}
-                      />
-                    )}
-                    <div className="border-t border-border/20 my-2" />
-                    <GeometrySuggestionPanel
-                      suggestions={counterfactualSuggestions}
-                      selectedSuggestionId={selectedSuggestionId}
-                      onSelectSuggestion={setSelectedSuggestionId}
-                    />
                   </div>
                 )}
 
@@ -745,20 +388,20 @@ export default function Home() {
               <div className="space-y-4">
                 <div className="border border-dashed border-border/30 rounded-sm p-8 text-center space-y-2">
                   <div className="text-muted-foreground/20 text-3xl font-mono">[ ]</div>
-                  <div className="text-xs text-muted-foreground/50 font-mono">{t('uploadStlBegin')}</div>
+                  <div className="text-xs text-muted-foreground/50 font-mono">Upload STL to begin</div>
                 </div>
                 <div className="space-y-2">
                   <div className="text-xs text-muted-foreground/40 font-mono tracking-widest">// FEATURES</div>
                   {[
-                    [t('featureFree'), t('feature1')],
-                    [t('featureFree'), t('feature2')],
-                    [t('featureFree'), t('feature3')],
-                    [t('featureAiKey'), t('feature4')],
-                    [t('featureAiKey'), t('feature5')],
+                    ['FREE', 'Geometry analysis — wall, overhang, dims'],
+                    ['FREE', 'Quick report — material, settings, time estimate'],
+                    ['FREE', 'Common Q&A — instant local answers'],
+                    ['AI KEY', 'Deep chat — Claude / GPT-4o / Gemini'],
+                    ['AI KEY', 'Complex design optimization advice'],
                   ].map(([badge, desc]) => (
                     <div key={desc} className="flex items-center gap-3 p-2.5 border border-border/20 rounded-sm hover:border-border/50 transition-all">
                       <span className={`text-xs font-mono px-1.5 py-0.5 rounded-sm border shrink-0 ${
-                        badge === t('featureFree') ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/5' : 'text-primary border-primary/30 bg-primary/5'
+                        badge === 'FREE' ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/5' : 'text-primary border-primary/30 bg-primary/5'
                       }`}>{badge}</span>
                       <span className="text-xs text-muted-foreground">{desc}</span>
                     </div>
@@ -768,12 +411,12 @@ export default function Home() {
             )}
 
             <div className="pt-2 border-t border-border/30 text-xs text-muted-foreground/20 font-mono text-center">
-              3DP AGENT \u00a9 2026 \u2014 Open Source
+              3DP AGENT © 2026 — Open Source
             </div>
           </div>
         </div>
       </div>
+      )}
     </div>
-    </PrintPlaybackProvider>
   );
 }
