@@ -6,6 +6,7 @@ export interface CADParams {
   holeCount: number; boltCircleDiameter: number;
   drawerCount: number; legHeight: number;
   wallThickness: number; clearance: number;
+  cornerRadius: number; tubeDiameter: number;
 }
 
 export type CADTemplate = 'flange' | 'plate' | 'cabinet' | 'router_shell' | 'pipe_rack' | 'custom';
@@ -23,7 +24,7 @@ const DEFAULT_PARAMS: CADParams = {
   outerDiameter: 100, innerDiameter: 50, holeDiameter: 8,
   holeCount: 6, boltCircleDiameter: 80,
   drawerCount: 2, legHeight: 40,
-  wallThickness: 2, clearance: 0.2,
+  wallThickness: 2, clearance: 0.2, cornerRadius: 5, tubeDiameter: 20,
 };
 
 export function generateOpenSCAD(design: CADDesign): string {
