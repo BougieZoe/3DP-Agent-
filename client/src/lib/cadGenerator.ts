@@ -15,7 +15,7 @@ export interface CADDesign {
   params: CADParams;
   scadCode: string;
   summary: string;
-  checks: Array<{message: string; type: 'ok' | 'warn' | 'error'}>;
+  checks: string[];
 }
 
 const DEFAULT_PARAMS: CADParams = {
@@ -56,7 +56,7 @@ Output ONLY the JSON, no markdown, no explanation.`;
       summary: parsed.summary ?? prompt,
       params: { ...DEFAULT_PARAMS, ...parsed.params },
       scadCode: parsed.scadCode ?? '',
-      checks: parsed.checks ?? [{message: 'AI-generated model', type: 'ok'}],
+      checks: parsed.checks ?? ['AI-generated model.'],
     };
   } catch {
     return createCADDesignLocal(prompt);
@@ -67,14 +67,14 @@ function createCADDesignLocal(prompt: string): CADDesign {
   const t = prompt.toLowerCase();
   if (t.includes('flange') || t.includes('法兰')) {
     const params = { ...DEFAULT_PARAMS, outerDiameter: 100, innerDiameter: 50, holeCount: 8, holeDiameter: 8, boltCircleDiameter: 80, thickness: 12 };
-    return { template: 'flange', params, summary: 'Flange 100mm OD, 50mm ID, 8 holes', scadCode: buildFlangeScad(params), checks: [{message: 'Wall thickness OK', type: 'ok'}, {message: 'Fits standard print bed', type: 'ok'}] };
+    return { template: 'flange', params, summary: 'Flange 100mm OD, 50mm ID, 8 holes', scadCode: buildFlangeScad(params), checks: ['Wall thickness OK for 0.4mm nozzle.', 'Fits standard print bed.'] };
   }
   if (t.includes('cabinet') || t.includes('柜')) {
     const params = { ...DEFAULT_PARAMS, width: 500, depth: 400, height: 600, thickness: 15, drawerCount: 2, legHeight: 60 };
-    return { template: 'cabinet', params, summary: 'Cabinet 500x400x600mm, 2 drawers', scadCode: buildCabinetScad(params), checks: [{message: 'May exceed print bed — split panels', type: 'warn'}] };
+    return { template: 'cabinet', params, summary: 'Cabinet 500x400x600mm, 2 drawers', scadCode: buildCabinetScad(params), checks: ['May exceed print bed — split panels before printing.'] };
   }
   const params = { ...DEFAULT_PARAMS, width: 80, depth: 60, thickness: 4, holeCount: 4, holeDiameter: 5 };
-  return { template: 'plate', params, summary: 'Mounting plate 80x60mm, 4 holes', scadCode: buildPlateScad(params), checks: [{message: 'Wall thickness OK for 0.4mm nozzle', type: 'ok'}, {message: 'Hole diameter FDM-compatible', type: 'ok'}] };
+  return { template: 'plate', params, summary: 'Mounting plate 80x60mm, 4 holes', scadCode: buildPlateScad(params), checks: ['Wall thickness OK for 0.4mm nozzle.', 'Hole diameter FDM-compatible.'] };
 }
 
 function buildFlangeScad(p: CADParams): string {
