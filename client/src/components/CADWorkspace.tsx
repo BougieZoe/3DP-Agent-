@@ -10,6 +10,7 @@ import {
   CADTemplate,
   buildCADGroup,
   createCADDesignAI,
+  createCADDesign,
   downloadTextFile,
   generateOpenSCAD,
 } from '@/lib/cadGenerator';
@@ -219,7 +220,7 @@ function ParameterPanel({
 
 export function CADWorkspace({ language }: CADWorkspaceProps) {
   const [input, setInput] = useState(STARTER_PROMPTS[language][0]);
-  const [design, setDesign] = useState<CADDesign | null>(null);
+  const [design, setDesign] = useState<CADDesign | null>(() => createCADDesign(STARTER_PROMPTS[language][0]));
   const groupRef = useRef<THREE.Group>(null);
 
   const scad = useMemo(() => (design ? generateOpenSCAD(design) : ''), [design]);
