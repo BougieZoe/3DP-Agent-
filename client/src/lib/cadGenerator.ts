@@ -41,7 +41,7 @@ export async function createCADDesignAI(prompt: string): Promise<CADDesign> {
 
   const system = `You are an OpenSCAD expert. Given a natural language description, output ONLY a JSON object with this exact shape:
 {
-  "template": "custom",
+  "template": "flange" | "plate" | "cabinet" | "router_shell" | "pipe_rack" | "custom",
   "summary": "one sentence description",
   "params": { "width": number, "depth": number, "height": number, "thickness": number, "outerDiameter": number, "innerDiameter": number, "holeDiameter": number, "holeCount": number, "boltCircleDiameter": number, "drawerCount": number, "legHeight": number, "wallThickness": number, "clearance": number },
   "scadCode": "complete valid OpenSCAD code as a single string"
@@ -136,9 +136,22 @@ export function buildCADGroup(design: CADDesign): THREE.Group {
     group.add(box);
   } else {
     const p = design.params;
+    const isRound = p.outerDiameter > 0 && p.outerDiameter !== 100;
+    const isTall = p.height > p.width * 1.5;
     const mat = new THREE.MeshStandardMaterial({ color: 0x4488ff, metalness: 0.2, roughness: 0.6 });
-    const plate = new THREE.Mesh(new THREE.BoxGeometry(p.width*scale, p.thickness*scale, p.depth*scale), mat);
-    group.add(plate);
+    if (isRound) {
+      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(p.outerDiameter/2*scale, p.outerDiameter/2*scale, p.height*scale || p.thickness*scale, 64), mat);
+      group.add(cyl);
+    } else if (isTall) {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(p.width*scale, p.height*scale, p.depth*scale), mat);
+      group.add(box);
+    } else {
+      const w = (p.width || 80) * scale;
+      const h = (p.height || p.thickness || 10) * scale;
+      const d = (p.depth || 60) * scale;
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      group.add(plate);
+    }
   }
   return group;
 }
