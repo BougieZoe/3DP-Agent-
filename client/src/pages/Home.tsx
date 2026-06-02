@@ -376,9 +376,20 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
           <span className="text-sm font-mono text-primary tracking-widest">3DP AGENT</span>
-          <span className="text-xs text-muted-foreground/50 hidden sm:block">v2.0</span><div className="flex items-center gap-1 ml-3"><button onClick={() => setMode('analyze')} className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${mode === 'analyze' ? 'border-primary text-primary' : 'border-border text-muted-foreground'}`}>ANALYZE</button><button onClick={() => setMode('cad')} className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${mode === 'cad' ? 'border-primary text-primary' : 'border-border text-muted-foreground'}`}>CAD STUDIO</button></div>
+          <span className="text-xs text-muted-foreground/50 hidden sm:block">v2.0 // {mode === 'analyze' ? 'STL Analysis' : 'CAD Studio'}</span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Mode toggle */}
+          <div className="flex items-center gap-1">
+            {(['analyze', 'cad'] as const).map(m => (
+              <button key={m} onClick={() => setMode(m)}
+                className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${
+                  mode === m ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-primary'
+                }`}>
+                {m === 'analyze' ? 'ANALYZE' : 'CAD STUDIO'}
+              </button>
+            ))}
+          </div>
           {/* Language */}
           <div className="flex items-center gap-0.5">
             {(['en', 'ja', 'zh'] as Language[]).map(lang => (
@@ -403,7 +414,7 @@ export default function Home() {
       </header>
 
       {/* ── Main ── */}
-      {mode === 'cad' ? <CADWorkspace language={language} /> : <div className="pt-14 flex flex-col lg:flex-row min-h-screen">}
+      {mode === 'cad' ? <CADWorkspace language={language} /> : <div className="pt-14 flex flex-col lg:flex-row min-h-screen">
 
         {/* Left: 3D Viewport */}
         <div className="lg:w-1/2 h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
