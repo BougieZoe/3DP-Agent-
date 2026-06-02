@@ -75,7 +75,7 @@ export async function callAI(
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'gpt-5.5',
+        model: 'gpt-4o',
         max_tokens: 1024,
         messages: [
           { role: 'system', content: systemPrompt },
