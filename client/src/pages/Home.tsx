@@ -34,6 +34,8 @@ import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/Pr
 import { CognitiveScan } from '@/components/3D/CognitiveScan';
 import { AttentionPulse } from '@/components/3D/AttentionPulse';
 import { toast } from 'sonner';
+import { useAuth, saveAnalysis } from '@/hooks/useAuth';
+import { AuthModal } from '@/components/AuthModal';
 
 function deriveWtStatus(mm: number | null | undefined): 'good' | 'warning' | 'critical' {
   if (mm == null) return 'warning';
@@ -243,6 +245,7 @@ export default function Home() {
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
   const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality'>('geometry');
   const [showAPIModal, setShowAPIModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [quickReport, setQuickReport] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
   const [agentRun, setAgentRun] = useState<AgentRunSummary | null>(null);
@@ -259,6 +262,7 @@ export default function Home() {
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
   const [overlayOpacity, setOverlayOpacity] = useState(0.7);
   const [infillPercent, setInfillPercent] = useState(20);
+  const { user, signOut, loading: authLoading } = useAuth();
   const orchestratorRef = useRef<AgentOrchestrator | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -284,6 +288,7 @@ export default function Home() {
     setOverlayOpacity(0.7);
     setInfillPercent(20);
     toast.success(t('stlParsed') + model.fileName);
+    saveAnalysis(model.unifiedAnalysis, model.fileName);
     runAgentAnalysis(model);
   };
 
@@ -371,6 +376,7 @@ export default function Home() {
     <PrintPlaybackProvider totalLayers={totalLayers}>
     <div className="relative w-full min-h-screen bg-background grid-bg overflow-x-hidden">
       {showAPIModal && <APIKeyModal onClose={() => setShowAPIModal(false)} language={language} />}
+      {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
 
       {/* ── Header ── */}
       <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-5 py-3 border-b border-border bg-background/95 backdrop-blur-sm">
@@ -402,15 +408,23 @@ export default function Home() {
               </button>
             ))}
           </div>
-          {/* API config */}
-          <button onClick={() => setShowAPIModal(true)}
-            className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${
-              hasAnyKey()
-                ? 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10'
-                : 'border-border text-muted-foreground hover:border-primary/40 hover:text-primary'
-            }`}>
-            {providerLabel ? `${t('api')}: ${providerLabel}` : t('apiKeys')}
-          </button>
+          {/* Auth */}
+          {authLoading ? null : user ? (
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-[10px] font-mono text-primary">
+                {user.email.charAt(0).toUpperCase()}
+              </div>
+              <button onClick={signOut}
+                className="text-[10px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                SIGN OUT
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setShowAuthModal(true)}
+              className="text-xs font-mono px-3 py-1 border border-primary/40 text-primary hover:bg-primary/10 rounded-sm transition-all">
+              SIGN IN
+            </button>
+          )}
         </div>
       </header>
 
