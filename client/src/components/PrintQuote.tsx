@@ -27,9 +27,14 @@ interface QuoteEstimate {
 
 // ── Constants ─────────────────────────────────────────────
 const MATERIALS: Material[] = [
-  { id: 'pla',   label: 'PLA',   density: 0.00124, pricePerG: 0.08 },
-  { id: 'resin', label: 'Resin', density: 0.00112, pricePerG: 0.18 },
-  { id: 'abs',   label: 'ABS',   density: 0.00105, pricePerG: 0.10 },
+  { id: 'pla',    label: 'PLA',    density: 0.00124, pricePerG: 0.08 },
+  { id: 'petg',   label: 'PETG',   density: 0.00127, pricePerG: 0.09 },
+  { id: 'abs',    label: 'ABS',    density: 0.00105, pricePerG: 0.10 },
+  { id: 'tpu',    label: 'TPU',    density: 0.00120, pricePerG: 0.14 },
+  { id: 'asa',    label: 'ASA',    density: 0.00105, pricePerG: 0.12 },
+  { id: 'pa',     label: 'Nylon',  density: 0.00113, pricePerG: 0.16 },
+  { id: 'resin',  label: 'Resin',  density: 0.00112, pricePerG: 0.18 },
+  { id: 'sla',    label: 'SLA',    density: 0.00112, pricePerG: 0.22 },
 ];
 
 // ── Pure calculation ──────────────────────────────────────
