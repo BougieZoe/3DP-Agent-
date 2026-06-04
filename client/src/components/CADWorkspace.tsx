@@ -15,6 +15,7 @@ import {
   generateOpenSCAD,
 } from '@/lib/cadGenerator';
 import { Language } from '@/lib/i18n';
+import { COLORS, PANEL } from '@/lib/visualLanguage';
 
 interface CADWorkspaceProps {
   language: Language;
@@ -46,6 +47,22 @@ const TEMPLATE_BADGE: Record<CADTemplate, string> = {
   pipe_rack: 'PARAMETRIC',
 };
 
+// ── Local style constants ──
+const panelContainer = `${PANEL.border} ${PANEL.bg} ${PANEL.rounded} flex flex-col min-h-[520px]`;
+const headerRow = `${PANEL.paddingCard} border-b ${PANEL.border} flex items-center justify-between gap-3`;
+const headerRowLeft = `${PANEL.paddingCard} border-b ${PANEL.border} flex items-center gap-2`;
+const sectionLabel = PANEL.fontLabel;
+const exampleBtn = `block w-full text-left ${PANEL.borderSubtle} ${PANEL.rounded} ${PANEL.paddingCard} text-[10px] font-mono leading-relaxed text-foreground/60 hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition-all`;
+const primaryBtn = `h-10 inline-flex items-center justify-center gap-2 bg-primary text-primary-foreground ${PANEL.rounded} text-[10px] font-mono hover:bg-primary/90 transition-all`;
+const outlineBtn = `h-10 w-10 inline-flex items-center justify-center ${PANEL.border} ${PANEL.rounded} text-foreground/60 hover:text-foreground hover:border-primary/40 transition-all`;
+const downloadBtnBase = `w-full h-10 inline-flex items-center justify-center gap-2 ${PANEL.rounded} text-[10px] font-mono disabled:opacity-30 transition-all`;
+const infoCard = `${PANEL.border} ${PANEL.bg} ${PANEL.glass} ${PANEL.rounded} ${PANEL.paddingCard}`;
+const checkItem = `text-[10px] font-mono leading-relaxed ${PANEL.borderSubtle} ${PANEL.rounded} ${PANEL.paddingCard} text-foreground/60 ${PANEL.selectedBg}`;
+const textAreaStyle = `w-full h-36 resize-none bg-background/60 ${PANEL.border} ${PANEL.rounded} ${PANEL.paddingCard} text-[10px] font-mono leading-relaxed text-foreground placeholder:text-foreground/20 focus:outline-none focus:border-foreground/30`;
+const fontTinyMono = 'text-[10px] font-mono';
+const subtitleText = `${fontTinyMono} text-foreground/40`;
+const titleText = `${fontTinyMono} text-foreground tracking-widest`;
+
 function ParamSlider({
   label,
   value,
@@ -66,8 +83,8 @@ function ParamSlider({
   return (
     <label className="block space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-muted-foreground font-mono">{label}</span>
-        <span className="text-xs text-primary font-mono tabular-nums">
+        <span className={`${fontTinyMono} text-foreground/60`}>{label}</span>
+        <span className={`${fontTinyMono} tabular-nums text-foreground`}>
           {value.toFixed(step < 1 ? 1 : 0)}{unit}
         </span>
       </div>
@@ -89,11 +106,11 @@ function EmptyPreview() {
     <group>
       <mesh>
         <boxGeometry args={[4, 2.5, 0.3]} />
-        <meshBasicMaterial color={0x00ffcc} wireframe transparent opacity={0.22} />
+        <meshBasicMaterial color={COLORS.accent.cyan} wireframe transparent opacity={0.22} />
       </mesh>
       <mesh position={[0, 0.2, 1]}>
         <torusGeometry args={[1, 0.12, 18, 64]} />
-        <meshBasicMaterial color={0x2ea3ff} wireframe transparent opacity={0.16} />
+        <meshBasicMaterial color={COLORS.accent.cyan} wireframe transparent opacity={0.16} />
       </mesh>
     </group>
   );
@@ -259,34 +276,34 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
   return (
     <div className="grid lg:grid-cols-[340px_minmax(0,1fr)_300px] gap-4 min-h-[calc(100vh-7rem)]">
-      <section className="border border-border bg-card rounded-sm flex flex-col min-h-[520px]">
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
+      <section className={panelContainer}>
+        <div className={headerRow}>
           <div>
-            <div className="text-xs font-mono text-primary tracking-widest">AI CAD STUDIO</div>
-            <div className="text-xs text-muted-foreground/50 mt-1">Natural language to parametric part</div>
+            <div className={titleText}>AI CAD STUDIO</div>
+            <div className={`${subtitleText} mt-1`}>Natural language to parametric part</div>
           </div>
-          <WandSparkles className="w-4 h-4 text-primary" />
+          <WandSparkles className="w-4 h-4 text-foreground" />
         </div>
 
-        <div className="p-4 space-y-4 flex-1">
+        <div className={`${PANEL.paddingCard} ${PANEL.gapSection} flex-1`}>
           <textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            className="w-full h-36 resize-none bg-background border border-border rounded-sm px-3 py-3 text-xs font-mono leading-relaxed text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/50"
+            className={textAreaStyle}
             placeholder={language === 'zh' ? '描述你想生成的可打印零件...' : language === 'ja' ? '生成したい部品を説明...' : 'Describe the printable part you want...'}
           />
 
           <div className="grid grid-cols-[1fr_auto] gap-2">
             <button
               onClick={() => generate()}
-              className="h-10 inline-flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-sm text-xs font-mono hover:bg-primary/90 transition-all"
+              className={primaryBtn}
             >
               <Sparkles className="w-4 h-4" />
               GENERATE
             </button>
             <button
               onClick={() => setDesign(null)}
-              className="h-10 w-10 inline-flex items-center justify-center border border-border rounded-sm text-muted-foreground hover:text-primary hover:border-primary/40 transition-all"
+              className={outlineBtn}
               title="Reset preview"
             >
               <RotateCcw className="w-4 h-4" />
@@ -294,12 +311,12 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
           </div>
 
           <div className="space-y-2">
-            <div className="text-xs text-muted-foreground/40 font-mono tracking-widest">// EXAMPLES</div>
+            <div className={sectionLabel}>// EXAMPLES</div>
             {STARTER_PROMPTS[language].map((prompt) => (
               <button
                 key={prompt}
                 onClick={() => generate(prompt)}
-                className="block w-full text-left border border-border/50 rounded-sm px-3 py-2 text-xs leading-relaxed text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition-all"
+                className={exampleBtn}
               >
                 {prompt}
               </button>
@@ -307,11 +324,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
           </div>
         </div>
 
-        <div className="p-4 border-t border-border/60 space-y-2">
+        <div className={`p-4 border-t border-foreground/10 ${PANEL.gapSection}`}>
           <button
             onClick={downloadSCAD}
             disabled={!design}
-            className="w-full h-10 inline-flex items-center justify-center gap-2 border border-primary/40 text-primary rounded-sm text-xs font-mono disabled:opacity-30 hover:bg-primary/10 transition-all"
+            className={`${downloadBtnBase} border border-foreground/30 text-foreground hover:bg-foreground/10`}
           >
             <FileCode2 className="w-4 h-4" />
             DOWNLOAD SCAD
@@ -319,7 +336,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
           <button
             onClick={downloadSTL}
             disabled={!design}
-            className="w-full h-10 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm text-xs font-mono disabled:opacity-30 hover:bg-foreground/90 transition-all"
+            className={`${downloadBtnBase} bg-foreground text-background hover:bg-foreground/90`}
           >
             <Download className="w-4 h-4" />
             DOWNLOAD STL
@@ -327,11 +344,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         </div>
       </section>
 
-      <section className="border border-border bg-card rounded-sm min-h-[520px] relative overflow-hidden">
+      <section className={`${PANEL.border} ${PANEL.bg} ${PANEL.rounded} min-h-[520px] relative overflow-hidden`}>
         <div className="absolute top-3 left-4 z-10 flex items-center gap-2">
-          <span className="text-xs font-mono text-muted-foreground/40">// PARAMETRIC PREVIEW</span>
+          <span className={sectionLabel}>// PARAMETRIC PREVIEW</span>
           {design && (
-            <span className="text-xs font-mono border border-primary/25 text-primary bg-primary/5 px-2 py-0.5 rounded-sm">
+            <span className={`text-[10px] font-mono border border-foreground/25 text-foreground ${PANEL.selectedBg} px-2 py-0.5 ${PANEL.rounded}`}>
               {TEMPLATE_BADGE[design.template]}
             </span>
           )}
@@ -342,42 +359,42 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         </Canvas>
         {design && (
           <div className="absolute left-4 right-4 bottom-4 grid sm:grid-cols-3 gap-2">
-            <div className="border border-border/70 bg-background/85 backdrop-blur rounded-sm p-3">
-              <div className="text-xs text-muted-foreground/40 font-mono">TEMPLATE</div>
-              <div className="text-sm text-foreground mt-1">{design.title}</div>
+            <div className={infoCard}>
+              <div className={sectionLabel}>TEMPLATE</div>
+              <div className={`${fontTinyMono} text-foreground mt-1`}>{design.title}</div>
             </div>
-            <div className="border border-border/70 bg-background/85 backdrop-blur rounded-sm p-3 sm:col-span-2">
-              <div className="text-xs text-muted-foreground/40 font-mono">SUMMARY</div>
-              <div className="text-sm text-foreground/80 mt-1 leading-relaxed">{design.summary}</div>
+            <div className={`${infoCard} sm:col-span-2`}>
+              <div className={sectionLabel}>SUMMARY</div>
+              <div className={`${fontTinyMono} text-foreground/80 mt-1 leading-relaxed`}>{design.summary}</div>
             </div>
           </div>
         )}
       </section>
 
-      <aside className="border border-border bg-card rounded-sm min-h-[520px] flex flex-col">
-        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-          <SlidersHorizontal className="w-4 h-4 text-primary" />
-          <div className="text-xs font-mono text-primary tracking-widest">PARAMETERS</div>
+      <aside className={panelContainer}>
+        <div className={headerRowLeft}>
+          <SlidersHorizontal className="w-4 h-4 text-foreground" />
+          <div className={titleText}>PARAMETERS</div>
         </div>
         {design ? (
           <>
-            <div className="p-4 space-y-5 flex-1 overflow-y-auto">
+            <div className={`${PANEL.paddingCard} space-y-5 flex-1 overflow-y-auto`}>
               <ParameterPanel design={design} onChange={updateParams} />
               <div className="pt-2 space-y-2">
-                <div className="text-xs text-muted-foreground/40 font-mono tracking-widest">// PRINT CHECK</div>
+                <div className={sectionLabel}>// PRINT CHECK</div>
                 {design.checks.map((check) => (
-                  <div key={check} className="text-xs leading-relaxed border border-border/40 rounded-sm px-3 py-2 text-muted-foreground bg-background/40">
+                  <div key={check} className={checkItem}>
                     {check}
                   </div>
                 ))}
               </div>
             </div>
-            <div className="border-t border-border/60 p-4">
+            <div className="border-t border-foreground/10 p-4">
               <details className="group">
-                <summary className="cursor-pointer text-xs font-mono text-primary hover:text-foreground transition-colors">
+                <summary className="cursor-pointer text-[10px] font-mono text-foreground hover:text-foreground/80 transition-colors">
                   OpenSCAD SNAPSHOT
                 </summary>
-                <pre className="mt-3 max-h-64 overflow-auto rounded-sm bg-background border border-border/50 p-3 text-xs leading-relaxed text-muted-foreground">
+                <pre className={`mt-3 max-h-64 overflow-auto ${PANEL.rounded} bg-background/60 ${PANEL.border} ${PANEL.paddingCard} text-[10px] font-mono leading-relaxed text-foreground/60`}>
                   {scad}
                 </pre>
               </details>
@@ -386,8 +403,8 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         ) : (
           <div className="flex-1 grid place-items-center p-6 text-center">
             <div>
-              <div className="text-3xl font-mono text-primary/20">[ CAD ]</div>
-              <div className="text-xs text-muted-foreground/50 mt-3">Generate a part to reveal editable parameters.</div>
+              <div className="text-3xl font-mono text-foreground/20">[ CAD ]</div>
+              <div className={`${subtitleText} mt-3`}>Generate a part to reveal editable parameters.</div>
             </div>
           </div>
         )}
