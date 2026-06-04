@@ -5,6 +5,7 @@ import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
 import { CADWorkspace } from '@/components/CADWorkspace';
+import { PrintQuote } from '@/components/PrintQuote';
 import { ChatPanel } from '@/components/ChatPanel';
 import { APIKeyModal } from '@/components/APIKeyModal';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
@@ -571,6 +572,11 @@ export default function Home() {
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
                       {t('generateReport')}
                     </button>
+                    <PrintQuote
+                      volumeMm3={analysis.volume}
+                      infillPercent={infillPercent}
+                      hasOverhang={analysis.overhang.status !== 'good'}
+                    />
                   </div>
                 )}
 

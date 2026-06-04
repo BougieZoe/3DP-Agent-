@@ -42,7 +42,7 @@ export function PrintQuote({ volumeMm3, infillPercent, hasOverhang }: PrintQuote
         {MATERIALS.map(m => (
           <button key={m.id} onClick={() => setMaterial(m.id)}
             className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${
-              material === m.id ? 'border-primary text-primary bg-primary/10' : 'border-border text-muted-foreground hover:text-primary'
+              material === m.id ? "border-primary text-primary bg-primary/10" : "border-border text-muted-foreground hover:text-primary"
             }`}>
             {m.label}
           </button>
@@ -66,6 +66,9 @@ export function PrintQuote({ volumeMm3, infillPercent, hasOverhang }: PrintQuote
           <span className="text-primary font-bold">${estimate.totalLow} – ${estimate.totalHigh}</span>
         </div>
       </div>
+      <button className="w-full py-2 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
+        GET QUOTES FROM FACTORIES →
+      </button>
       <div className="text-[10px] text-muted-foreground/40 font-mono">
         * Estimate only. Actual price depends on complexity, finishing, and supplier.
       </div>
