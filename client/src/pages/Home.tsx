@@ -4,6 +4,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
+import { CADWorkspace } from '@/components/CADWorkspace';
 import { ChatPanel } from '@/components/ChatPanel';
 import { APIKeyModal } from '@/components/APIKeyModal';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
@@ -236,6 +237,7 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
 // ─── Home ──────────────────────────────────────────────────────────────────────
 
 export default function Home() {
+  const [mode, setMode] = useState<'analyze' | 'cad'>('analyze');
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
   const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality'>('geometry');
@@ -372,9 +374,20 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
           <span className="text-sm font-mono text-primary tracking-widest">3DP AGENT</span>
-          <span className="text-xs text-muted-foreground/50 hidden sm:block">v2.0 // STL Analysis</span>
+          <span className="text-xs text-muted-foreground/50 hidden sm:block">v2.0 // {mode === 'analyze' ? 'STL Analysis' : 'CAD Studio'}</span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Mode toggle */}
+          <div className="flex items-center gap-1">
+            {(['analyze', 'cad'] as const).map(m => (
+              <button key={m} onClick={() => setMode(m)}
+                className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${
+                  mode === m ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-primary'
+                }`}>
+                {m === 'analyze' ? 'ANALYZE' : 'CAD STUDIO'}
+              </button>
+            ))}
+          </div>
           {/* Language */}
           <div className="flex items-center gap-0.5">
             {(['en', 'ja', 'zh'] as Language[]).map(lang => (
@@ -399,7 +412,7 @@ export default function Home() {
       </header>
 
       {/* ── Main ── */}
-      <div className="pt-14 flex flex-col lg:flex-row min-h-screen">
+      {mode === 'cad' ? <CADWorkspace language={language} /> : <div className="pt-14 flex flex-col lg:flex-row min-h-screen">
 
         {/* Left: 3D Viewport */}
         <div className="lg:w-1/2 h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
@@ -749,7 +762,7 @@ export default function Home() {
             </div>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
     </PrintPlaybackProvider>
   );
