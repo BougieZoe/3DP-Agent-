@@ -257,7 +257,6 @@ export default function Home() {
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
   const [overlayOpacity, setOverlayOpacity] = useState(0.7);
-  const [infillPercent, setInfillPercent] = useState(20);
   const orchestratorRef = useRef<AgentOrchestrator | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -281,7 +280,6 @@ export default function Home() {
     setSelectedPatternId(null);
     setSelectedSuggestionId(null);
     setOverlayOpacity(0.7);
-    setInfillPercent(20);
     toast.success(t('stlParsed') + model.fileName);
     runAgentAnalysis(model);
   };
@@ -547,26 +545,6 @@ export default function Home() {
                       <MetricRow label={t('dimZ')} value={modelData.dims.z.toFixed(2)} unit="mm" />
                       <MetricRow label={t('overhangFaces')} value={analysis.overhang.areas} />
                     </div>
-                    {/* Infill slider */}
-                    <div className="border border-border rounded-sm bg-card p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-mono text-muted-foreground tracking-widest">INFILL</span>
-                        <span className="text-xs font-mono text-primary">{infillPercent}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={5}
-                        max={100}
-                        step={5}
-                        value={infillPercent}
-                        onChange={e => setInfillPercent(Number(e.target.value))}
-                        className="w-full h-1.5 bg-border rounded-sm appearance-none cursor-pointer accent-primary"
-                      />
-                      <div className="flex justify-between text-[9px] font-mono text-muted-foreground/40 mt-1">
-                        <span>5%</span>
-                        <span>100%</span>
-                      </div>
-                    </div>
                     <button onClick={() => setTab('report')}
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
                       {t('generateReport')}
@@ -599,7 +577,6 @@ export default function Home() {
 {unifiedAnalysis && (
   <ReportGenerator
     analysis={unifiedAnalysis}
-    infillPercent={infillPercent}
     fileName={uploadedModel?.fileName ?? "model.stl"}
   />
 )}
