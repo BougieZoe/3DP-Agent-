@@ -44,6 +44,7 @@ const TEMPLATE_BADGE: Record<CADTemplate, string> = {
   plate: 'SCAD READY',
   router_shell: 'MVP SHELL',
   pipe_rack: 'PARAMETRIC',
+  custom: 'CUSTOM',
 };
 
 function ParamSlider({
@@ -247,14 +248,14 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
   const downloadSCAD = () => {
     if (!design) return;
-    downloadTextFile(`${design.template}.scad`, scad, 'text/x-openscad');
+    downloadTextFile(`${design.template}.scad`, scad);
   };
 
   const downloadSTL = () => {
     if (!design || !groupRef.current) return;
     const exporter = new STLExporter();
     const stl = exporter.parse(groupRef.current, { binary: false });
-    downloadTextFile(`${design.template}.stl`, stl, 'model/stl');
+    downloadTextFile(`${design.template}.stl`, stl);
   };
 
   return (
@@ -344,7 +345,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
           <div className="absolute left-4 right-4 bottom-4 grid sm:grid-cols-3 gap-2">
             <div className="border border-border/70 bg-background/85 backdrop-blur rounded-sm p-3">
               <div className="text-xs text-muted-foreground/40 font-mono">TEMPLATE</div>
-              <div className="text-sm text-foreground mt-1">{design.title}</div>
+              <div className="text-sm text-foreground mt-1">{design.summary}</div>
             </div>
             <div className="border border-border/70 bg-background/85 backdrop-blur rounded-sm p-3 sm:col-span-2">
               <div className="text-xs text-muted-foreground/40 font-mono">SUMMARY</div>
