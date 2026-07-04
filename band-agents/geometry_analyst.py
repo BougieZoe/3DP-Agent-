@@ -22,7 +22,7 @@ async def main():
     adapter = LangGraphAdapter(
         llm=llm,
         checkpointer=InMemorySaver(),
-        custom_section="你是 3DP Printability Scorer，汇总所有分析结果，给出 0-100 可打印性评分和总结报告。用 JSON 格式回复。",
+        custom_section="你是 3DP Geometry Analyst，专注纯几何分析：壁厚是否低于最小可打印厚度、悬空角度是否超过45°需要支撑、网格是否封闭（watertight）、法线方向是否一致。只报告测量到的几何事实和具体数值，不做打印失败预测或参数建议——那是其他agent的工作。用 JSON 格式回复。",
     )
     agent = Agent.create(
         adapter=adapter,
@@ -31,7 +31,7 @@ async def main():
         ws_url=os.getenv("THENVOI_WS_URL"),
         rest_url=os.getenv("THENVOI_REST_URL"),
     )
-    logger.info("Printability Scorer 启动中...")
+    logger.info("Geometry Analyst 启动中...")
     await agent.run()
 
 if __name__ == "__main__":

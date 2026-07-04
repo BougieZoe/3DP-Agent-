@@ -22,7 +22,7 @@ async def main():
     adapter = LangGraphAdapter(
         llm=llm,
         checkpointer=InMemorySaver(),
-        custom_section="你是 3DP Printability Scorer，汇总所有分析结果，给出 0-100 可打印性评分和总结报告。用 JSON 格式回复。",
+        custom_section="你是 3DP Orchestrator，负责协调团队工作流：接收用户上传的STL分析请求后，依次调用 Geometry Analyst、Failure Predictor、Optimization Advisor 收集各自的分析结果，最后交给 Printability Scorer 汇总。你自己不做几何分析或打分，只负责调度和上下文传递。",
     )
     agent = Agent.create(
         adapter=adapter,
