@@ -1,4 +1,9 @@
-export type AIProviderId = 'claude' | 'openai' | 'gemini' | 'deepseek';
+export type AIProviderId =
+  | 'claude'
+  | 'openai'
+  | 'gemini'
+  | 'deepseek'
+  | 'amd-cloud';
 
 export interface AIProviderMetadata {
   id: AIProviderId;
@@ -36,6 +41,13 @@ export const AI_PROVIDERS: readonly AIProviderMetadata[] = [
     shortLabel: 'DeepSeek',
     keyPlaceholder: 'sk-...',
     colorClass: 'text-purple-400',
+  },
+  {
+    id: 'amd-cloud',
+    label: 'AMD Cloud (Qwen3-30B)',
+    shortLabel: 'AMD',
+    keyPlaceholder: 'No API key required',
+    colorClass: 'text-red-400',
   },
 ] as const;
 
