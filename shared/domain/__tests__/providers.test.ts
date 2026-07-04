@@ -4,9 +4,17 @@ import { AI_PROVIDER_METADATA, AI_PROVIDERS, type AIProviderId } from '../provid
 describe('AI provider metadata', () => {
   it('defines provider metadata for every supported provider id', () => {
     const ids = AI_PROVIDERS.map(provider => provider.id);
-    const expectedIds: AIProviderId[] = ['claude', 'openai', 'gemini', 'deepseek'];
+
+    const expectedIds: AIProviderId[] = [
+      'claude',
+      'openai',
+      'gemini',
+      'deepseek',
+      'amd-cloud',
+    ];
 
     expect(ids).toEqual(expectedIds);
+
     expectedIds.forEach(id => {
       expect(AI_PROVIDER_METADATA[id].id).toBe(id);
       expect(AI_PROVIDER_METADATA[id].label.length).toBeGreaterThan(0);
