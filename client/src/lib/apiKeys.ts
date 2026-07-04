@@ -121,6 +121,28 @@ export async function callAI(
     const data = await res.json();
     return data.choices?.[0]?.message?.content || 'No response';
   }
-
+  if (provider === 'amd-cloud') {
+    const res = await fetch('http://129.212.189.131:8000/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'Qwen/Qwen3-30B-A3B',
+        max_tokens: 1024,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+      }),
+    });
+  
+    if (!res.ok) {
+      throw new Error(`AMD Cloud API error: ${res.status}`);
+    }
+  
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || 'No response';
+  }
   throw new Error('Unknown provider');
 }

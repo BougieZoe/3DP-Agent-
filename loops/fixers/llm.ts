@@ -41,11 +41,11 @@ function runCodexExec(prompt: string): Promise<string> {
       "codex",
       [
         "exec",
-        "--sandbox","read-only",
-        "--ask-for-approval",
-        "never",
+        "--sandbox",
+        "read-only",
         prompt,
       ],
+      { timeout: 60000 },
       (error, stdout, stderr) => {
         if (error) {
           reject(error);

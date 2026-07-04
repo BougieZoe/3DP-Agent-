@@ -1,13 +1,14 @@
 import {
   analyzeFeedback,
-  attemptAutoFix,
   createPlan,
   logSection,
   runLoop,
   summarizeTypeScriptErrors,
+  summarizeTestErrors,
   verifyTests,
   verifyTypecheck,
 } from "./index.js";
+
 
 async function main() {
   logSection("Goal Loop Started: Verify project health");
@@ -21,23 +22,22 @@ async function main() {
   console.log("Final Round:", result.round);
 
   if (!result.success && result.lastFeedback) {
-    logSection("Analysis & Auto Fix Attempt");
+    logSection("Final Failure Analysis");
 
     const analysis = analyzeFeedback(result.lastFeedback);
-    const summary = summarizeTypeScriptErrors(result.lastFeedback);
-    const plan = createPlan(result.lastFeedback);
+    console.log("Issue Classification:", analysis);
 
-    console.log("Issue:", analysis);
-    if (summary) console.log("TS Errors:\n", summary);
-    console.log("Suggested action:", plan.action);
-    if (plan.suggestion) console.log("Suggestion:", plan.suggestion);
-
-    const fixed = await attemptAutoFix(result.lastFeedback);
-
-    if (fixed) {
-      console.log("\n🔄 Re-running verification after fix...");
-      result = await runLoop("Verify after auto fix", verifiers, 2);
+    if (result.lastFeedback.includes("TS")) {
+      const tsSummary = summarizeTypeScriptErrors(result.lastFeedback);
+      if (tsSummary) console.log("Parsed TypeScript Errors:\n", tsSummary);
+    } else {
+      const testSummary = summarizeTestErrors(result.lastFeedback);
+      if (testSummary) console.log("Parsed Test Failures:\n", testSummary);
     }
+
+    const plan = createPlan(result.lastFeedback);
+    console.log("Suggested plan action:", plan.action);
+    if (plan.suggestion) console.log("Plan suggestion:", plan.suggestion);
   } else if (result.success) {
     console.log("🎉 All checks passed successfully!");
   }
@@ -46,3 +46,4 @@ async function main() {
 }
 
 main().catch(console.error);
+

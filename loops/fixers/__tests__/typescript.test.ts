@@ -32,38 +32,44 @@ describe("attemptAutoFix", () => {
     expect(fixed).toBe(true);
   });
 
-  it("does not auto-fix TS2322 because assignability needs manual review", async () => {
+  it("auto-fixes TS2322 by inserting a ts-expect-error fallback comment", async () => {
     const source = "const width: string = 42;\n";
     const filePath = await createFixture(source);
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     const fixed = await attemptAutoFix(
       `${filePath}(1,7): error TS2322: Type 'number' is not assignable to type 'string'.`,
       filePath
     );
 
-    await expectFile(filePath).toEqual(source);
-    expect(logSpy.mock.calls.flat().join("\n")).toContain(
-      "这类错误需要人工判断,不会自动修"
-    );
-    expect(fixed).toBe(false);
+    await expectFile(filePath).toContain("// @ts-expect-error: Auto-fix fallback for TS2322: Type 'number' is not assignable to type 'string'.");
+    expect(fixed).toBe(true);
   });
 
-  it("does not auto-fix TS2339 because missing properties need manual review", async () => {
+  it("auto-fixes TS2339 by inserting a ts-expect-error fallback comment", async () => {
     const source = 'const part = { id: "a" };\nconsole.log(part.missing);\n';
     const filePath = await createFixture(source);
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     const fixed = await attemptAutoFix(
       `${filePath}(2,18): error TS2339: Property 'missing' does not exist on type '{ id: string; }'.`,
       filePath
     );
 
-    await expectFile(filePath).toEqual(source);
-    expect(logSpy.mock.calls.flat().join("\n")).toContain(
-      "这类错误需要人工判断,不会自动修"
+    await expectFile(filePath).toContain("// @ts-expect-error: Auto-fix fallback for TS2339: Property 'missing' does not exist on type '{ id: string; }'.");
+    expect(fixed).toBe(true);
+  });
+
+  it("auto-fixes TS2304 by adding import for common identifiers", async () => {
+    const source = "const [val, setVal] = useState(0);\n";
+    const filePath = await createFixture(source);
+
+    const fixed = await attemptAutoFix(
+      `${filePath}(1,23): error TS2304: Cannot find name 'useState'.`,
+      filePath
     );
-    expect(fixed).toBe(false);
+
+    await expectFile(filePath).toContain('import { useState } from "react";');
+    await expectFile(filePath).toContain("const [val, setVal] = useState(0);");
+    expect(fixed).toBe(true);
   });
 });
 

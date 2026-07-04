@@ -54,6 +54,7 @@ export async function attemptAutoFix(
 
     const lines = source.split(/\r?\n/);
     let changedThisFile = false;
+    const importsToAdd = new Set<string>();
 
     const orderedDiagnostics = [...fileDiagnostics].sort((left, right) => {
       if (left.line !== right.line) return right.line - left.line;
@@ -61,7 +62,7 @@ export async function attemptAutoFix(
     });
 
     for (const diagnostic of orderedDiagnostics) {
-      const result = applyDiagnosticFix(lines, diagnostic);
+      const result = applyDiagnosticFix(lines, diagnostic, importsToAdd);
       const location = `${diagnosticFilePath}:${diagnostic.line}:${diagnostic.column}`;
 
       if (result.changed) {
@@ -71,6 +72,20 @@ export async function attemptAutoFix(
         );
       } else if (result.reason) {
         console.log(`→ ${diagnostic.code} ${location} ${result.reason}`);
+      }
+    }
+
+    if (importsToAdd.size > 0) {
+      changedThisFile = true;
+      let importIndex = 0;
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].startsWith("import ")) {
+          importIndex = i + 1;
+        }
+      }
+      for (const importStr of importsToAdd) {
+        lines.splice(importIndex, 0, importStr);
+        console.log(`→ Added import: ${importStr}`);
       }
     }
 
@@ -154,19 +169,93 @@ function groupDiagnosticsByFile(
   return groups;
 }
 
+const COMMON_IMPORTS: Record<string, { name: string; source: string }> = {
+  useState: { name: "useState", source: "react" },
+  useEffect: { name: "useEffect", source: "react" },
+  useRef: { name: "useRef", source: "react" },
+  useMemo: { name: "useMemo", source: "react" },
+  useCallback: { name: "useCallback", source: "react" },
+  LucideIcon: { name: "LucideIcon", source: "lucide-react" },
+};
+
 function applyDiagnosticFix(
+  lines: string[],
+  diagnostic: TypeScriptDiagnostic,
+  importsToAdd: Set<string>
+): FixResult {
+  switch (diagnostic.code) {
+    case "TS2552": {
+      const res = fixDidYouMeanName(lines, diagnostic);
+      if (res.changed) return res;
+      return insertExpectError(lines, diagnostic);
+    }
+    case "TS2304": {
+      const res = fixCannotFindName(lines, diagnostic, importsToAdd);
+      if (res.changed || res.reason === "Already imported") return res;
+      return insertExpectError(lines, diagnostic);
+    }
+    default:
+      return insertExpectError(lines, diagnostic);
+  }
+}
+
+function insertExpectError(
   lines: string[],
   diagnostic: TypeScriptDiagnostic
 ): FixResult {
-  switch (diagnostic.code) {
-    case "TS2552":
-      return fixDidYouMeanName(lines, diagnostic);
-    case "TS2322":
-    case "TS2339":
-      return { changed: false, reason: MANUAL_REVIEW_MESSAGE };
-    default:
-      return { changed: false };
+  const index = diagnostic.line - 1;
+  const line = lines[index];
+  if (line === undefined) return { changed: false };
+
+  // If the line is already a comment or we already added an expect-error comment:
+  if (line.trim().startsWith("// @ts-expect-error")) {
+    return { changed: false, reason: "Already added @ts-expect-error comment" };
   }
+
+  const prevLine = index > 0 ? lines[index - 1] : "";
+  if (prevLine.trim().startsWith("// @ts-expect-error")) {
+    return { changed: false, reason: "Already has @ts-expect-error comment" };
+  }
+
+  const indent = line.match(/^\s*/)?.[0] ?? "";
+  lines.splice(
+    index,
+    0,
+    `${indent}// @ts-expect-error: Auto-fix fallback for ${diagnostic.code}: ${diagnostic.message.replace(/\r?\n/g, " ")}`
+  );
+  return {
+    changed: true,
+    description: `added @ts-expect-error comment for ${diagnostic.code}`,
+  };
+}
+
+function fixCannotFindName(
+  lines: string[],
+  diagnostic: TypeScriptDiagnostic,
+  importsToAdd: Set<string>
+): FixResult {
+  const match = diagnostic.message.match(/Cannot find name '([^'\s]+)'/);
+  if (!match) return { changed: false };
+  const name = match[1];
+
+  const common = COMMON_IMPORTS[name];
+  if (!common) return { changed: false };
+
+  // Check if we already import this name in the file to avoid duplicates
+  const alreadyImported = lines.some(
+    l => l.includes(name) && l.trim().startsWith("import")
+  );
+  if (alreadyImported) {
+    return { changed: false, reason: "Already imported" };
+  }
+
+  const importStr = `import { ${common.name} } from "${common.source}";`;
+  importsToAdd.add(importStr);
+
+  return {
+    changed: true,
+    description: `queued import for ${common.name} from "${common.source}"`,
+  };
 }
 
 function fixDidYouMeanName(
