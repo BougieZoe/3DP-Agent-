@@ -9,4 +9,4 @@
 // are permanent addresses maintained by those companies, not infrastructure
 // you personally spin up and tear down.
 
-export const AMD_CLOUD_ENDPOINT = 'http://129.212.185.243:8000/v1/chat/completions';
+export const AMD_CLOUD_ENDPOINT = '/api/amd-proxy';
