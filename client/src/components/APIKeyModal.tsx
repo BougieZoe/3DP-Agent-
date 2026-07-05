@@ -28,7 +28,14 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
 
   const handleSave = () => {
-    saveAPIKeys(keys);
+    // AMD Cloud不需要key,但getActiveProvider()是靠"这个provider有没有值"
+    // 来判断是否选中——空字符串等于没选。这里给它塞一个占位值,
+    // 让它能被正常识别成"已启用",不需要用户手动打字。
+    const keysToSave = { ...keys };
+    if (!keysToSave['amd-cloud']) {
+      keysToSave['amd-cloud'] = 'no-key-required';
+    }
+    saveAPIKeys(keysToSave);
     onClose();
   };
 
