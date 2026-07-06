@@ -1,4 +1,5 @@
 import { AI_PROVIDERS, type AIProviderId } from '@shared/domain/providers';
+import { AMD_CLOUD_ENDPOINT } from './config';
 
 /**
  * API Key manager — stored in localStorage, never sent to our server
@@ -121,8 +122,9 @@ export async function callAI(
     const data = await res.json();
     return data.choices?.[0]?.message?.content || 'No response';
   }
+
   if (provider === 'amd-cloud') {
-    const res = await fetch('http://129.212.189.131:8000/v1/chat/completions', {
+    const res = await fetch(AMD_CLOUD_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -136,13 +138,14 @@ export async function callAI(
         ],
       }),
     });
-  
+
     if (!res.ok) {
       throw new Error(`AMD Cloud API error: ${res.status}`);
     }
-  
+
     const data = await res.json();
     return data.choices?.[0]?.message?.content || 'No response';
   }
+
   throw new Error('Unknown provider');
 }
