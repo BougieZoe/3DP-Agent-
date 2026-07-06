@@ -6,15 +6,23 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// The real address of the AMD machine, read from an environment variable
+// instead of hardcoded. Every time you spin up a new Droplet, you only
+// need to change this one env var in Vercel's dashboard — no code edits,
+// no commit, no push.
+const AMD_MACHINE_URL =
+  process.env.AMD_MACHINE_URL || "http://localhost:8000/v1/chat/completions";
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
 
-  // AMD Cloud代理:浏览器是HTTPS,AMD那台机器是HTTP,浏览器规则不让直连。
-  // 这里让服务器代替浏览器去发请求,浏览器只跟自己的HTTPS域名说话。
+  // AMD Cloud proxy: your site is HTTPS, the AMD machine is HTTP, and
+  // browsers block that combination. The server makes the request instead —
+  // the browser only ever talks to your own HTTPS domain.
   app.post("/api/amd-proxy", express.json(), async (req, res) => {
     try {
-      const amdRes = await fetch("http://129.212.185.243:8000/v1/chat/completions", {
+      const amdRes = await fetch(AMD_MACHINE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(req.body),
