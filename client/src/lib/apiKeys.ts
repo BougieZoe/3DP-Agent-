@@ -130,7 +130,7 @@ export async function callAI(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'Qwen/Qwen3-30B-A3B',
+        model: 'Qwen/Qwen3-8B', // Notebook only has 48GB VRAM — 30B OOMs, 8B is what's actually served
         max_tokens: 1024,
         messages: [
           { role: 'system', content: systemPrompt },

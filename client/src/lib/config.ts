@@ -9,4 +9,4 @@
 // are permanent addresses maintained by those companies, not infrastructure
 // you personally spin up and tear down.
 
-export const AMD_CLOUD_ENDPOINT = '/api/amd-proxy';
+export const AMD_CLOUD_ENDPOINT = 'https://radeon-global.anruicloud.com/instances/hf-238-b30b691c/proxy/8000/v1/chat/completions';
