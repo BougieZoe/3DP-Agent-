@@ -75,7 +75,7 @@ export class GeometryAnalyst extends BaseAgent {
       issues.push('Very low triangle count — model may lack detail');
     }
 
-    const score = this.computeScore(wtStatus, hasOverhangIssue ? 'warning' : 'good', overhangFaces, aspectRatio, triCount);
+    const score = this.computeScore(wtStatus, hasOverhangIssue ? 'warning' : 'good', overhangRatio, aspectRatio, triCount);
     const confidence = Math.min(1, triCount / 10000 + 0.3);
 
     const details: GeometryAnalystDetails = {
@@ -105,13 +105,13 @@ export class GeometryAnalyst extends BaseAgent {
     return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details as unknown as Record<string, unknown>, markers);
   }
 
-  private computeScore(wtStatus: string, ohStatus: string, overhangFaces: number, aspectRatio: number, triCount: number): number {
+  private computeScore(wtStatus: string, ohStatus: string, overhangRatio: number, aspectRatio: number, triCount: number): number {
     let score = 100;
 
     if (wtStatus === 'critical') score -= 30;
     else if (wtStatus === 'warning') score -= 15;
 
-    if (ohStatus === 'warning') score -= Math.min(20, overhangFaces * 2);
+    if (ohStatus === 'warning') score -= Math.min(20, overhangRatio * 100);
     else if (ohStatus === 'critical') score -= 30;
 
     if (aspectRatio > 10) score -= 15;

@@ -8,6 +8,7 @@ import { CADWorkspace } from '@/components/CADWorkspace';
 import { ChatPanel } from '@/components/ChatPanel';
 import { APIKeyModal } from '@/components/APIKeyModal';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
+import { deriveOhStatus } from '@/analysis/metrics';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
 import { Language, getTranslation } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
@@ -42,14 +43,6 @@ function deriveWtStatus(
   if (twr > 0.15) return 'critical';
   if (twr > 0.05) return 'warning';
   if (p5Thickness != null && p5Thickness < 0.4) return 'warning';
-  return 'good';
-}
-
-function deriveOhStatus(faceCount: number | undefined, totalTriangles: number | undefined): 'good' | 'warning' | 'critical' {
-  if (!faceCount || faceCount === 0) return 'good';
-  const ratio = totalTriangles && totalTriangles > 0 ? faceCount / totalTriangles : 0;
-  if (ratio > 0.3) return 'critical';
-  if (ratio > 0.1) return 'warning';
   return 'good';
 }
 
@@ -90,7 +83,7 @@ function unifiedToModelData(
     overhang: {
       angle: 45,
       areas: oh?.faceCount ?? 0,
-      status: deriveOhStatus(oh?.faceCount, triCount),
+      status: deriveOhStatus(oh?.ratio ?? 0),
     },
     volume,
     surfaceArea,
@@ -125,7 +118,7 @@ function unifiedToAnalysisSummary(unifiedAnalysis: import('@/analysis').UnifiedA
     },
     overhang: {
       areas: oh?.faceCount ?? 0,
-      status: deriveOhStatus(oh?.faceCount, triCount),
+      status: deriveOhStatus(oh?.ratio ?? 0),
     },
     volume: metrics?.meshVolumeMm3 ?? metrics?.boundingBoxVolumeMm3 ?? 0,
     surfaceArea: metrics?.surfaceAreaMm2 ?? 0,

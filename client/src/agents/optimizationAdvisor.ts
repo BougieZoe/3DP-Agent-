@@ -1,5 +1,6 @@
 import type { AgentOutput } from '@shared/domain/agent';
 import { BaseAgent, type AgentContext } from './baseAgent';
+import { deriveOhStatus } from '@/analysis/metrics';
 
 interface OptimizedGeometrySuggestion {
   type: 'wall_thickening' | 'orientation_change' | 'support_addition' | 'fillet_add' | 'hole_fill' | 'bridging_redesign';
@@ -39,11 +40,12 @@ export class OptimizationAdvisor extends BaseAgent {
     const triCount = topology?.triangleCount ?? 0;
     const oh = metrics?.overhang;
     const overhangFaces = oh?.faceCount ?? 0;
+    const overhangRatio = oh?.ratio ?? 0;
     const p5Thickness = metrics?.p5WallThicknessMm;
     const thinWallRatio = (metrics?.thinWallRatio ?? 0);
     const minThickness = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
     const wtStatus = thinWallRatio > 0.15 ? 'critical' : thinWallRatio > 0.05 ? 'warning' : 'good';
-    const ohStatus = overhangFaces > 0 ? 'warning' : 'good';
+    const ohStatus = deriveOhStatus(overhangRatio);
 
     const analysisInput = {
       wallThickness: { status: wtStatus, minThickness, thinWallRatio },
