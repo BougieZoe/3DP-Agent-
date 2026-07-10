@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getAPIKeys, saveAPIKeys } from '@/lib/apiKeys';
+import { getAPIKeys, saveAPIKeys, getSelectedProvider, setSelectedProvider } from '@/lib/apiKeys';
 import { Language } from '@/lib/i18n';
 import { AI_PROVIDERS } from '@shared/domain/providers';
 
@@ -26,6 +26,9 @@ const labels = {
 export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
   const [keys, setKeys] = useState(getAPIKeys());
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [activeProvider, setActiveProvider] = useState(
+    getSelectedProvider() || AI_PROVIDERS.find(p => !!getAPIKeys()[p.id])?.id || AI_PROVIDERS[0].id
+  );
 
   const handleSave = () => {
     // AMD Cloud不需要key,但getActiveProvider()是靠"这个provider有没有值"
@@ -36,6 +39,7 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
       keysToSave['amd-cloud'] = 'no-key-required';
     }
     saveAPIKeys(keysToSave);
+    setSelectedProvider(activeProvider);
     onClose();
   };
 
@@ -46,7 +50,19 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
         
         {AI_PROVIDERS.map(provider => (
           <div key={provider.id} className="mb-4">
-            <label className={`block text-sm mb-1.5 ${provider.colorClass}`}>{provider.label}</label>
+            <label className={`flex items-center gap-2 text-sm mb-1.5 ${provider.colorClass}`}>
+              <input
+                type="radio"
+                name="active-provider"
+                checked={activeProvider === provider.id}
+                onChange={() => setActiveProvider(provider.id)}
+                className="accent-current"
+              />
+              {provider.label}
+              {activeProvider === provider.id && (
+                <span className="text-[10px] opacity-70 font-normal">ACTIVE</span>
+              )}
+            </label>
             <div className="flex gap-2">
               <input
                 type={showKeys[provider.id] ? 'text' : 'password'}
