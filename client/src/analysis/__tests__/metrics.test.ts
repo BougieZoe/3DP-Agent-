@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createWatertightCubeModel, createOpenCubeModel, createSingleTriangleModel, createNonIndexedModel } from './testMeshes';
 import { createGeometryModel } from '../geometryModel';
-import { computeMetrics, computeMeshVolume, computeSurfaceArea, analyzeOverhang, deriveOhStatus } from '../metrics';
+import { computeMetrics, computeMeshVolume, computeSurfaceArea, analyzeOverhang, deriveOhStatus, deriveWtStatus } from '../metrics';
 
 describe('computeMeshVolume', () => {
   it('returns positive volume for watertight cube', () => {
@@ -124,5 +124,73 @@ describe('computeMetrics', () => {
     // minWallThicknessMm alone should NOT determine confidence
     // Confidence should incorporate averageConfidence and thinWallRatio
     expect(result.confidence).toBeGreaterThanOrEqual(0.1);
+  });
+});
+
+describe('deriveOhStatus contract', () => {
+  // ── Table-driven cases ─────────────────────────────────────────────────
+  const CASES: Array<{ ratio: number; expected: 'good' | 'warning' | 'critical'; label: string }> = [
+    { ratio: 0,     expected: 'good',     label: 'ratio 0 → good' },
+    { ratio: 0.01,  expected: 'good',     label: 'ratio 0.01 → good' },
+    { ratio: 0.04,  expected: 'good',     label: 'ratio 0.04 → good' },
+    { ratio: 0.05,  expected: 'good',     label: 'ratio 0.05 → good (threshold is >0.05)' },
+    { ratio: 0.051, expected: 'warning',  label: 'ratio 0.051 → warning' },
+    { ratio: 0.10,  expected: 'warning',  label: 'ratio 0.10 → warning' },
+    { ratio: 0.14,  expected: 'warning',  label: 'ratio 0.14 → warning' },
+    { ratio: 0.15,  expected: 'warning',  label: 'ratio 0.15 → warning (threshold is >0.15)' },
+    { ratio: 0.151, expected: 'critical', label: 'ratio 0.151 → critical' },
+    { ratio: 0.30,  expected: 'critical', label: 'ratio 0.30 → critical' },
+    { ratio: 1.0,   expected: 'critical', label: 'ratio 1.0 → critical' },
+  ];
+
+  for (const { ratio, expected, label } of CASES) {
+    it(label, () => expect(deriveOhStatus(ratio)).toBe(expected));
+  }
+
+  // ── Invariant: determinism ──────────────────────────────────────────────
+  it('same input always returns same status', () => {
+    for (const { ratio } of CASES) {
+      const a = deriveOhStatus(ratio);
+      const b = deriveOhStatus(ratio);
+      expect(a).toBe(b);
+    }
+  });
+});
+
+describe('deriveWtStatus contract', () => {
+  // ── Table-driven cases ─────────────────────────────────────────────────
+  const CASES: Array<{ twr: number; p5: number | null; expected: 'good' | 'warning' | 'critical'; label: string }> = [
+    { twr: 0,     p5: 2,    expected: 'good',     label: 'twr 0, p5 2mm → good' },
+    { twr: 0.02,  p5: 1.5,  expected: 'good',     label: 'twr 0.02 → good' },
+    { twr: 0.04,  p5: 0.5,  expected: 'good',     label: 'twr 0.04 → good' },
+    { twr: 0.05,  p5: 0.5,  expected: 'good',     label: 'twr 0.05 → good (threshold is >0.05)' },
+    { twr: 0.051, p5: 0.5,  expected: 'warning',  label: 'twr 0.051 → warning' },
+    { twr: 0.10,  p5: 2,    expected: 'warning',  label: 'twr 0.10 → warning' },
+    { twr: 0.14,  p5: 2,    expected: 'warning',  label: 'twr 0.14 → warning' },
+    { twr: 0.15,  p5: 2,    expected: 'warning',  label: 'twr 0.15 → warning (threshold is >0.15)' },
+    { twr: 0.151, p5: 2,    expected: 'critical', label: 'twr 0.151 → critical' },
+    { twr: 0.30,  p5: 2,    expected: 'critical', label: 'twr 0.30 → critical' },
+    // p5 fallback: low thinWallRatio but critical p5
+    { twr: 0,     p5: 0.3,  expected: 'warning',  label: 'twr 0, p5 0.3mm → warning (p5<0.4 fallback)' },
+    { twr: 0.03,  p5: 0.35, expected: 'warning',  label: 'twr 0.03, p5 0.35mm → warning (p5<0.4)' },
+    { twr: 0.03,  p5: 0.5,  expected: 'good',     label: 'twr 0.03, p5 0.5mm → good (p5≥0.4)' },
+    // null p5
+    { twr: 0,     p5: null, expected: 'good',     label: 'twr 0, p5 null → good' },
+    { twr: 0.03,  p5: null, expected: 'good',     label: 'twr 0.03, p5 null → good' },
+    // edge: p5 exactly at boundary (0.4 is NOT < 0.4)
+    { twr: 0,     p5: 0.4,  expected: 'good',     label: 'twr 0, p5 0.4mm → good (≥0.4 is not warning)' },
+  ];
+
+  for (const { twr, p5, expected, label } of CASES) {
+    it(label, () => expect(deriveWtStatus(twr, p5)).toBe(expected));
+  }
+
+  // ── Invariant: determinism ──────────────────────────────────────────────
+  it('same input always returns same status', () => {
+    for (const { twr, p5 } of CASES) {
+      const a = deriveWtStatus(twr, p5);
+      const b = deriveWtStatus(twr, p5);
+      expect(a).toBe(b);
+    }
   });
 });

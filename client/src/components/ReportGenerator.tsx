@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { UnifiedAnalysis } from "../analysis/types";
-import { deriveOhStatus } from "@/analysis/metrics";
+import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -80,18 +80,19 @@ function getTrafficLight(analysis: UnifiedAnalysis): {
   }
 
   if (m) {
-    const twr = (m.thinWallRatio ?? 0);
-    if (twr > 0.15) score -= 30;
-    else if (twr > 0.05) score -= 15;
-    if ((m.averageConfidence ?? 0) < 0.3 && twr < 0.02) score -= 3;
+    const wtStatus = deriveWtStatus(m.thinWallRatio ?? 0, m.p5WallThicknessMm);
+    if (wtStatus === 'critical') score -= 30;
+    else if (wtStatus === 'warning') score -= 15;
+    if ((m.averageConfidence ?? 0) < 0.3 && (m.thinWallRatio ?? 0) < 0.02) score -= 3;
     const ohStatus = deriveOhStatus(m.overhang.ratio);
     if (ohStatus === 'critical') score -= 20;
     else if (ohStatus === 'warning') score -= 10;
   }
 
   if (s) {
-    if (s.difficulty === "very_difficult") score -= 15;
-    if (s.difficulty === "difficult") score -= 8;
+    const supportStatus = deriveSupportStatus(s);
+    if (supportStatus.status === 'critical') score -= 20;
+    else if (supportStatus.status === 'warning') score -= 10;
   }
 
   score = Math.max(0, Math.min(100, score));
@@ -123,17 +124,19 @@ function buildClientIssues(analysis: UnifiedAnalysis, lang: Language): string[] 
   const issues: string[] = [];
   const v = analysis.validation?.result;
   const m = analysis.metrics?.result;
+  const s = analysis.support?.result;
 
   if (m) {
     const twr = (m.thinWallRatio ?? 0);
     const p5 = m.p5WallThicknessMm;
-    if (twr > 0.15) {
+    const wtStatus = deriveWtStatus(twr, p5);
+    if (wtStatus === 'critical') {
       issues.push(
         lang === "ja"
           ? `壁が薄すぎる領域が広範囲にあります (サンプルの${(twr * 100).toFixed(0)}%)。印刷中に破損の可能性。`
           : `${(twr * 100).toFixed(0)}% of sampled walls are below safe thickness — risk of print failure.`
       );
-    } else if (twr > 0.02) {
+    } else if (wtStatus === 'warning') {
       issues.push(
         lang === "ja"
           ? `${(twr * 100).toFixed(0)}%の領域で壁が薄いです。印刷前に確認を推奨。`
@@ -194,6 +197,23 @@ function buildClientIssues(analysis: UnifiedAnalysis, lang: Language): string[] 
     }
   }
 
+  if (s) {
+    const supportStatus = deriveSupportStatus(s);
+    if (supportStatus.status === 'critical') {
+      issues.push(
+        lang === "ja"
+          ? "サポート構造が複雑で、除去が難しい可能性があります。"
+          : "Complex support structure — removal may be difficult."
+      );
+    } else if (supportStatus.status === 'warning' && supportStatus.reasons.length > 0) {
+      issues.push(
+        lang === "ja"
+          ? `サポートに関する注意: ${supportStatus.reasons[0]}`
+          : `Support caution: ${supportStatus.reasons[0]}`
+      );
+    }
+  }
+
   return issues;
 }
 
@@ -212,13 +232,14 @@ function buildDesignerIssues(
     const p10 = m.p10WallThicknessMm;
     const avg = m.avgWallThicknessMm;
     const conf = m.averageConfidence ?? 0;
-    if (twr > 0.15) {
+    const wtStatus = deriveWtStatus(twr, p5);
+    if (wtStatus === 'critical') {
       issues.push(
         lang === "ja"
           ? `壁厚: サンプルの${(twr * 100).toFixed(0)}%がFDM閾値未満 (p5=${(p5 ?? avg ?? 0).toFixed(2)} mm) — 広範囲に薄い壁`
           : `Walls: ${(twr * 100).toFixed(0)}% of samples below FDM threshold (p5=${(p5 ?? avg ?? 0).toFixed(2)} mm) — widespread thin walls`
       );
-    } else if (twr > 0.02) {
+    } else if (wtStatus === 'warning') {
       const display = p10 ?? p5 ?? avg;
       issues.push(
         lang === "ja"
@@ -277,6 +298,26 @@ function buildDesignerIssues(
           ? "中程度のオーバーハング。サポート構造を推奨します。"
           : "Moderate overhang. Support structures are advisable."
       );
+    }
+  }
+
+  const s = analysis.support?.result;
+  if (s) {
+    const supportStatus = deriveSupportStatus(s);
+    if (supportStatus.status === 'critical') {
+      issues.push(
+        lang === "ja"
+          ? `${supportStatus.reasons[0] ?? 'サポート構造に問題があります'}`
+          : `${supportStatus.reasons[0] ?? 'Support structure issue detected'}`
+      );
+    } else if (supportStatus.status === 'warning') {
+      for (const reason of supportStatus.reasons.slice(0, 2)) {
+        issues.push(
+          lang === "ja"
+            ? `サポート: ${reason}`
+            : `Support: ${reason}`
+        );
+      }
     }
   }
 
@@ -704,6 +745,7 @@ async function generateDesignerPDF(
 
   // ── Section: KEY METRICS ──
   y += 4;
+  const wtStatus = metrics != null ? deriveWtStatus(metrics.thinWallRatio ?? 0, metrics.p5WallThicknessMm) : 'good';
   y = drawSectionHeader(doc, "KEY METRICS", y);
 
   if (metrics?.minWallThicknessMm != null) {
@@ -711,7 +753,7 @@ async function generateDesignerPDF(
       lang === "ja" ? "最小壁厚" : "Min wall thickness",
       `${metrics.minWallThicknessMm.toFixed(3)} mm`,
       y,
-      (metrics.thinWallRatio ?? 0) > 0.05
+      wtStatus !== 'good'
     );
   }
   if (metrics?.p5WallThicknessMm != null) {
@@ -719,7 +761,7 @@ async function generateDesignerPDF(
       lang === "ja" ? "5パーセンタイル壁厚" : "p5 wall thickness",
       `${metrics.p5WallThicknessMm.toFixed(3)} mm`,
       y,
-      (metrics.thinWallRatio ?? 0) > 0.05
+      wtStatus !== 'good'
     );
   }
   if (metrics) {
@@ -730,11 +772,24 @@ async function generateDesignerPDF(
     );
   }
   if (s) {
-    const diffLabel = s.difficulty === "easy" ? "Easy" : s.difficulty === "moderate" ? "Moderate" : s.difficulty === "difficult" ? "Difficult" : "Very difficult";
+    const supportStatus = deriveSupportStatus(s);
+    const statusLabel = supportStatus.status === 'critical' ? 'Critical' : supportStatus.status === 'warning' ? 'Warning' : 'Good';
     y = drawDataRow(doc,
       lang === "ja" ? "サポート" : "Support",
-      diffLabel,
+      statusLabel,
+      y,
+      supportStatus.status !== 'good'
+    );
+    y = drawDataRow(doc,
+      lang === "ja" ? "サポート領域" : "Support regions",
+      `${s.supportRegions.length}`,
       y
+    );
+    y = drawDataRow(doc,
+      lang === "ja" ? "最大島比率" : "Largest island",
+      `${(s.largestRegionRatio * 100).toFixed(1)}%`,
+      y,
+      supportStatus.status === 'critical'
     );
   }
   if (v) {
@@ -787,11 +842,9 @@ async function generateDesignerPDF(
       : "This model looks good. Proceed with printing.";
   } else {
     const parts: string[] = [];
-    const twr = metrics?.thinWallRatio ?? 0;
-    if (twr > 0.05) {
+    const wtStatus = deriveWtStatus(metrics?.thinWallRatio ?? 0, metrics?.p5WallThicknessMm);
+    if (wtStatus !== 'good') {
       parts.push(lang === "ja" ? "壁厚を増やしてください" : "Increase wall thickness");
-    } else if (metrics?.p5WallThicknessMm != null && metrics.p5WallThicknessMm < 0.8) {
-      parts.push(lang === "ja" ? "薄い箇所を補強してください" : "Reinforce thin sections");
     }
     if (metrics?.overhang.ratio != null && deriveOhStatus(metrics.overhang.ratio) !== 'good') {
       parts.push(lang === "ja" ? "サポート材を有効にしてください" : "Enable support structures");
@@ -929,8 +982,13 @@ async function generateFactoryPDF(
   y = drawSectionHeader(doc, "SUPPORT", y);
 
   if (s) {
-    y = drawDataRow(doc, "Difficulty", `${s.difficulty}`, y);
+    const pdfSupportStatus = deriveSupportStatus(s);
+    y = drawDataRow(doc, "Status", pdfSupportStatus.status, y, pdfSupportStatus.status !== 'good');
     y = drawDataRow(doc, "Support volume", s.totalSupportVolumeMm3 != null ? `${(s.totalSupportVolumeMm3 / 1000).toFixed(2)} cm³` : "—", y);
+    y = drawDataRow(doc, "Support regions", `${s.supportRegions.length}`, y);
+    y = drawDataRow(doc, "Largest island %", `${(s.largestRegionRatio * 100).toFixed(1)}%`, y, pdfSupportStatus.status === 'critical');
+    y = drawDataRow(doc, "Tall support ratio", `${(s.tallSupportRatio * 100).toFixed(1)}%`, y, pdfSupportStatus.status !== 'good');
+    y = drawDataRow(doc, "Directionality", `${(s.directionality * 100).toFixed(1)}%`, y, pdfSupportStatus.status !== 'good');
   }
 
   // ── Section: PRINT TIME & MATERIAL ──

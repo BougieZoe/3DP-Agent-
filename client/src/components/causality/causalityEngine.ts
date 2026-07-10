@@ -50,7 +50,7 @@ function centroid(markers: MarkerInput[]): { x: number; y: number; z: number } {
   };
 }
 
-export function buildCausalityGraph(markers: MarkerInput[]): CausalityGraph {
+export function buildCausalityGraph(markers: MarkerInput[], supportStatus?: string): CausalityGraph {
   const events: CausalityEvent[] = [];
   const edges: CausalEdge[] = [];
 
@@ -61,14 +61,28 @@ export function buildCausalityGraph(markers: MarkerInput[]): CausalityGraph {
 
   if (supports.length > 0) {
     const sev = avgSeverity(supports);
+    let severity = sev;
+    let duration = 0.35;
+    let description = `${supports.length} support regions with potential instability`;
+
+    if (supportStatus === 'critical') {
+      severity = Math.min(sev + 0.2, 1);
+      duration = 0.45;
+      description = 'Critical support instability — high risk of support failure or difficult removal';
+    } else if (supportStatus === 'warning') {
+      severity = Math.min(sev + 0.1, 1);
+      duration = 0.4;
+      description = 'Moderate support concerns — review support strategy before printing';
+    }
+
     events.push({
       id: 'support_instability',
       type: 'support_instability',
       label: 'Support Instability',
-      description: `${supports.length} support regions with potential instability`,
-      severity: sev,
+      description,
+      severity,
       timestamp: 0.05,
-      duration: 0.35,
+      duration,
       positions: supports.map(m => m.position),
     });
   }

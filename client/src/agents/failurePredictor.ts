@@ -1,6 +1,6 @@
 import type { AgentOutput, AgentVerdict, RiskMarker } from '@shared/domain/agent';
 import { BaseAgent, type AgentContext } from './baseAgent';
-import { deriveOhStatus } from '@/analysis/metrics';
+import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from '@/analysis/metrics';
 
 interface PredictedRisk {
   type: string;
@@ -36,6 +36,7 @@ export class FailurePredictor extends BaseAgent {
     const { unifiedAnalysis, modelSize, vertexPositions, vertexNormals } = ctx;
     const metrics = unifiedAnalysis.metrics.result;
     const topology = unifiedAnalysis.topology.result;
+    const support = unifiedAnalysis.support?.result;
     const triCount = topology?.triangleCount ?? 0;
     const oh = metrics?.overhang;
     const overhangFaces = oh?.faceCount ?? 0;
@@ -44,7 +45,8 @@ export class FailurePredictor extends BaseAgent {
     const thinWallRatio = (metrics?.thinWallRatio ?? 0);
     const avgConfidence = (metrics?.averageConfidence ?? 0);
     const minThickness = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
-    const wtStatus = thinWallRatio > 0.15 ? 'critical' : thinWallRatio > 0.05 ? 'warning' : 'good';
+    const wtStatus = deriveWtStatus(thinWallRatio, p5Thickness);
+    const thinWallRatioRaw = thinWallRatio;
     const ohStatus = deriveOhStatus(overhangRatio);
 
     const analysisInput = {
@@ -80,6 +82,11 @@ export class FailurePredictor extends BaseAgent {
     const delaminationRisk = this.predictDelamination(analysisInput, metricsInput);
     if (delaminationRisk) risks.push(delaminationRisk);
 
+    const supportDecision = support ? deriveSupportStatus(support) : null;
+    if (supportDecision) {
+      risks.push(...this.deriveSupportRisks(supportDecision));
+    }
+
     const overallRiskLevel = this.computeOverallRisk(risks);
     this._overallRiskLevel = overallRiskLevel;
     const score = this.computeScore(risks);
@@ -98,14 +105,11 @@ export class FailurePredictor extends BaseAgent {
     return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details as unknown as Record<string, unknown>, markers);
   }
 
-  private predictOverhangFailure(analysis: { overhang: { status: string; areas: number } }, metrics: { triangleCount: number }): PredictedRisk | null {
+  private predictOverhangFailure(analysis: { overhang: { status: string; areas: number } }, _metrics: { triangleCount: number }): PredictedRisk | null {
     if (analysis.overhang.status === 'good') return null;
 
-    const ratio = metrics.triangleCount > 0 ? analysis.overhang.areas / metrics.triangleCount : 0;
     const severity: PredictedRisk['severity'] =
-      ratio > 0.3 ? 'critical' :
-      ratio > 0.15 ? 'high' :
-      ratio > 0.05 ? 'medium' : 'low';
+      analysis.overhang.status === 'critical' ? 'critical' : 'high';
 
     return {
       type: 'overhang_failure',
@@ -125,28 +129,20 @@ export class FailurePredictor extends BaseAgent {
     const twr = analysis.wallThickness.thinWallRatio ?? 0;
     const p5 = analysis.wallThickness.p5Thickness ?? analysis.wallThickness.minThickness;
     const confidence = analysis.wallThickness.confidence ?? 0.7;
+    const status = analysis.wallThickness.status;
 
-    // Use p5 + thinWallRatio instead of raw min alone
     let severity: PredictedRisk['severity'];
     let description: string;
     let recommendation: string;
 
-    if (twr > 0.15) {
+    if (status === 'critical') {
       severity = 'critical';
       description = `${(twr * 100).toFixed(1)}% of sampled walls below FDM threshold — widespread thin wall failure risk`;
       recommendation = 'Increase wall thickness model-wide to at least 2mm. Use 3+ perimeters in slicer.';
-    } else if (twr > 0.05 && p5 < 1) {
-      severity = 'high';
-      description = `${(twr * 100).toFixed(1)}% of sampled walls thin (p5=${p5.toFixed(2)}mm) — moderate failure risk`;
-      recommendation = 'Thin areas detected. Increase wall thickness or use 3 perimeters.';
-    } else if (p5 < 0.8) {
-      severity = 'medium';
-      description = `5th percentile wall thickness ${p5.toFixed(2)}mm — isolated thin spots may cause defects`;
-      recommendation = 'Consider thickening thinnest regions or using 3 perimeters.';
     } else {
-      severity = 'low';
-      description = `Minor thin wall concerns (${(twr * 100).toFixed(1)}% of samples) — low risk`;
-      recommendation = 'Standard wall settings should suffice.';
+      severity = 'high';
+      description = `Thin walls detected (p5=${p5.toFixed(2)}mm, ${(twr * 100).toFixed(1)}% of samples) — moderate failure risk`;
+      recommendation = 'Thin areas detected. Increase wall thickness or use 3 perimeters.';
     }
 
     const riskConfidence = confidence > 0 ? Math.min(0.85, confidence + 0.1) : 0.7;
@@ -179,11 +175,11 @@ export class FailurePredictor extends BaseAgent {
   }
 
   private predictBridgingIssues(analysis: { overhang: { areas: number; status: string; ratio: number } }): PredictedRisk | null {
-    if (analysis.overhang.ratio < 0.02) return null;
+    if (analysis.overhang.status === 'good') return null;
 
     const severity: PredictedRisk['severity'] =
-      analysis.overhang.ratio > 0.15 ? 'high' :
-      analysis.overhang.ratio > 0.08 ? 'medium' : 'low';
+      analysis.overhang.status === 'critical' ? 'high' :
+      analysis.overhang.status === 'warning' ? 'medium' : 'low';
 
     return {
       type: 'bridging',
@@ -193,6 +189,44 @@ export class FailurePredictor extends BaseAgent {
       affectedFaces: analysis.overhang.areas,
       recommendation: 'Enable bridging calibration in slicer, increase part cooling fan speed',
     };
+  }
+
+  private deriveSupportRisks(decision: { status: string; reasons: string[]; confidence: number }): PredictedRisk[] {
+    const risks: PredictedRisk[] = [];
+    const conf = decision.confidence;
+
+    for (const reason of decision.reasons) {
+      if (reason.includes('removal risk') || reason.includes('tall supports')) {
+        risks.push({
+          type: 'support_removal',
+          severity: decision.status === 'critical' ? 'high' : 'medium',
+          confidence: conf * 0.9,
+          description: reason,
+          affectedFaces: 0,
+          recommendation: 'Use tree/organic supports for easier breakaway. Consider splitting model or adjusting orientation.',
+        });
+      } else if (reason.includes('Large continuous') || reason.includes('Very difficult')) {
+        risks.push({
+          type: 'support_collapse',
+          severity: 'high',
+          confidence: conf * 0.9,
+          description: reason,
+          affectedFaces: 0,
+          recommendation: 'Add support interface brims in slicer. Consider splitting large overhang regions with support blockers.',
+        });
+      } else if (reason.includes('Difficult support') || reason.includes('Moderate support')) {
+        risks.push({
+          type: 'support_collapse',
+          severity: decision.status === 'critical' ? 'high' : 'medium',
+          confidence: conf * 0.85,
+          description: reason,
+          affectedFaces: 0,
+          recommendation: 'Ensure adequate support density and interface layers in slicer. Consider tree supports.',
+        });
+      }
+    }
+
+    return risks;
   }
 
   private predictDelamination(analysis: { wallThickness: { status: string } }, metrics: { size: { z: number } }): PredictedRisk | null {

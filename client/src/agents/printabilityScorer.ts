@@ -1,6 +1,6 @@
 import type { AgentOutput } from '@shared/domain/agent';
 import { BaseAgent, type AgentContext } from './baseAgent';
-import { deriveOhStatus } from '@/analysis/metrics';
+import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 
 interface ScoringBreakdown {
   wallThicknessScore: number;
@@ -41,7 +41,7 @@ export class PrintabilityScorer extends BaseAgent {
     const p5Thickness = metrics?.p5WallThicknessMm;
     const thinWallRatio = (metrics?.thinWallRatio ?? 0);
     const minThickness = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
-    const wtStatus = thinWallRatio > 0.15 ? 'critical' : thinWallRatio > 0.05 ? 'warning' : 'good';
+    const wtStatus = deriveWtStatus(thinWallRatio, p5Thickness);
     const ohStatus = deriveOhStatus(overhangRatio);
 
     const gaOutput = previousOutputs.get('geometry_analyst');

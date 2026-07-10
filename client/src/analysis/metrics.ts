@@ -4,6 +4,7 @@ import {
   type Confidence,
   type MetricsResult,
   type OverhangMetrics,
+  type SupportResult,
   type WallThicknessSample,
 } from './types';
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
@@ -143,6 +144,95 @@ export function deriveOhStatus(ratio: number): 'good' | 'warning' | 'critical' {
   if (ratio > 0.15) return 'critical';
   if (ratio > 0.05) return 'warning';
   return 'good';
+}
+
+/**
+ * Derive wall thickness status from thin-wall ratio and p5 thickness.
+ *
+ * Thresholds (FDM empirical):
+ * - thinWallRatio > 0.15 → critical (widespread thin walls)
+ * - thinWallRatio > 0.05 → warning  (moderate thin wall presence)
+ * - p5WallThickness < 0.4 → warning (critical thin spots even if few)
+ * - else               → good
+ */
+export function deriveWtStatus(thinWallRatio: number, p5WallThickness?: number | null): 'good' | 'warning' | 'critical' {
+  if (thinWallRatio > 0.15) return 'critical';
+  if (thinWallRatio > 0.05) return 'warning';
+  if (p5WallThickness != null && p5WallThickness < 0.4) return 'warning';
+  return 'good';
+}
+
+export interface SupportStatusResult {
+  status: 'good' | 'warning' | 'critical';
+  reasons: string[];
+  confidence: number;
+}
+
+/**
+ * Evaluate the full SupportResult and derive a 3-level manufacturing-risk status.
+ *
+ * Critical triggers:
+ *   difficulty === 'very_difficult'
+ *   OR largestRegionRatio > 0.5 AND tallSupportRatio > 0.3
+ *
+ * Warning triggers:
+ *   difficulty === 'difficult' or 'moderate'
+ *   OR supportRegions.length > 3  (multiple islands)
+ *   OR tallSupportRatio > 0.3
+ *   OR directionality > 0.7  (directional concentration)
+ *
+ * Good:
+ *   Everything else.
+ */
+export function deriveSupportStatus(result: SupportResult): SupportStatusResult {
+  const reasons: string[] = [];
+
+  if (result.difficulty === 'none' || result.supportRegions.length === 0) {
+    return { status: 'good', reasons: ['No support structures needed'], confidence: 1 };
+  }
+
+  // ── Critical evaluation ───────────────────────────────────────────────────
+  let isCritical = false;
+
+  if (result.difficulty === 'very_difficult') {
+    reasons.push('Very difficult support structure');
+    isCritical = true;
+  }
+
+  if (result.largestRegionRatio > 0.5 && result.tallSupportRatio > 0.3) {
+    reasons.push('Large continuous support island with tall supports — removal risk');
+    isCritical = true;
+  }
+
+  if (isCritical) {
+    return { status: 'critical', reasons, confidence: 0.85 };
+  }
+
+  // ── Warning evaluation ────────────────────────────────────────────────────
+  if (result.difficulty === 'difficult') {
+    reasons.push('Difficult support structure');
+  }
+  if (result.difficulty === 'moderate') {
+    reasons.push('Moderate support complexity');
+  }
+  if (result.supportRegions.length > 3) {
+    reasons.push(`${result.supportRegions.length} separate support islands`);
+  }
+  if (result.tallSupportRatio > 0.3) {
+    reasons.push(`${(result.tallSupportRatio * 100).toFixed(0)}% of support faces in top half — tall supports`);
+  }
+  if (result.directionality > 0.7) {
+    reasons.push('Directionally concentrated supports — consider rotation');
+  }
+
+  if (reasons.length > 0) {
+    const confidence = Math.min(0.55 + reasons.length * 0.08, 0.85);
+    return { status: 'warning', reasons, confidence };
+  }
+
+  // ── Good ──────────────────────────────────────────────────────────────────
+  reasons.push('Isolated manageable supports');
+  return { status: 'good', reasons, confidence: 0.9 };
 }
 
 function percentile(sorted: number[], p: number): number {
