@@ -118,14 +118,27 @@ export interface OverhangMetrics {
 export interface MetricsResult {
   /** Exact: sum of signed tetrahedron volumes */
   meshVolumeMm3: number;
+
   /** Exact: half sum of cross product magnitudes */
   surfaceAreaMm2: number;
+
   boundingBoxVolumeMm3: number;
-  boundingBoxDimensionsMm: { x: number; y: number; z: number };
+
+  boundingBoxDimensionsMm: {
+    x: number;
+    y: number;
+    z: number;
+  };
+
   /** Sampled: raycast-based wall thickness estimates. null if too few rays hit. */
   minWallThicknessMm: number | null;
+
   avgWallThicknessMm: number | null;
+
   wallThicknessSamples: WallThicknessSample[];
+
+  thinnestWallSample?: WallThicknessSample | null;
+
   overhang: OverhangMetrics;
 }
 
