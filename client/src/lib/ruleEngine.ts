@@ -5,7 +5,21 @@
 
 export interface ModelData {
   fileName: string;
-  wallThickness: { minThickness: number; areas: number; status: 'good' | 'warning' | 'critical' };
+  wallThickness: {
+    minThickness: number;
+    p1Thickness: number | null;
+    p5Thickness: number | null;
+    p10Thickness: number | null;
+    medianThickness: number | null;
+    avgThickness: number | null;
+    thinWallCount: number;
+    thinWallPercentage: number;
+    thinWallRatio: number;
+    averageConfidence: number;
+    lowConfidenceSampleCount: number;
+    areas: number;
+    status: 'good' | 'warning' | 'critical';
+  };
   overhang: { angle: number; areas: number; status: 'good' | 'warning' | 'critical' };
   volume: number;
   surfaceArea: number;
@@ -24,14 +38,27 @@ export function generateQuickReport(model: ModelData, lang: 'en' | 'ja' | 'zh'):
   const issues: string[] = [];
   const tips: string[] = [];
 
+  const twr = model.wallThickness.thinWallPercentage != null
+    ? model.wallThickness.thinWallPercentage / 100
+    : model.wallThickness.thinWallPercentage;
+  const pct = ((twr ?? 0) * 100).toFixed(1);
+  const conf = model.wallThickness.averageConfidence;
+  const confLabel = conf < 0.4 ? 'Low' : conf < 0.7 ? 'Moderate' : 'High';
+
   if (model.wallThickness.status === 'critical') {
-    issues.push(lang === 'zh' ? `壁厚过薄 (${model.wallThickness.minThickness.toFixed(2)}mm) — 打印风险高` :
-      lang === 'ja' ? `壁厚が薄すぎます (${model.wallThickness.minThickness.toFixed(2)}mm) — 印刷リスク高` :
-      `Wall too thin (${model.wallThickness.minThickness.toFixed(2)}mm) — high failure risk`);
+    if ((twr ?? 0) > 0.15) {
+      issues.push(lang === 'zh' ? `壁厚过薄: ${pct}% 采样区域低于FDM阈值。最小测量值: ${model.wallThickness.minThickness.toFixed(2)}mm。置信度: ${confLabel}` :
+        lang === 'ja' ? `壁厚過小: サンプルの${pct}%がFDM閾値未満。最小測定: ${model.wallThickness.minThickness.toFixed(2)}mm。信頼度: ${confLabel}` :
+        `Widespread thin walls: ${pct}% of sampled regions below FDM threshold. Minimum measured: ${model.wallThickness.minThickness.toFixed(2)}mm. Confidence: ${confLabel}`);
+    } else {
+      issues.push(lang === 'zh' ? `检测到孤立薄壁异常。最小测量值: ${model.wallThickness.minThickness.toFixed(2)}mm，但仅${pct}%采样区域低于阈值。置信度: ${confLabel}` :
+        lang === 'ja' ? `孤立した薄壁異常を検出。最小測定: ${model.wallThickness.minThickness.toFixed(2)}mm、ただしサンプルの${pct}%のみが閾値未満。信頼度: ${confLabel}` :
+        `Isolated thin wall anomaly. Minimum measured: ${model.wallThickness.minThickness.toFixed(2)}mm, but only ${pct}% of sampled regions below threshold. Confidence: ${confLabel}`);
+    }
   } else if (model.wallThickness.status === 'warning') {
-    tips.push(lang === 'zh' ? `壁厚偏薄，建议加厚至2mm以上` :
-      lang === 'ja' ? `壁厚がやや薄い。2mm以上を推奨` :
-      `Walls thin — recommend increasing to 2mm+`);
+    issues.push(lang === 'zh' ? `${pct}% 采样区域壁厚偏薄 (p5=${model.wallThickness.minThickness.toFixed(2)}mm)。建议加厚至2mm以上` :
+      lang === 'ja' ? `サンプルの${pct}%が薄い壁 (p5=${model.wallThickness.minThickness.toFixed(2)}mm)。2mm以上を推奨` :
+      `${pct}% of sampled walls are thin (p5=${model.wallThickness.minThickness.toFixed(2)}mm). Consider thickening to 2mm+`);
   }
 
   if (model.overhang.status === 'warning' || model.overhang.status === 'critical') {

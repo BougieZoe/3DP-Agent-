@@ -39,10 +39,13 @@ export class GeometryAnalyst extends BaseAgent {
     const overhangFaces = metrics?.overhang.faceCount ?? 0;
     const overhangRatio = metrics?.overhang.ratio ?? 0;
     const overhangStatus = metrics?.overhang.severity ?? 'none';
-    const estimatedMinWall = metrics?.minWallThicknessMm ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
+    const p5Thickness = metrics?.p5WallThicknessMm;
+    const thinWallRatio = (metrics?.thinWallRatio ?? 0);
+    const avgConfidence = (metrics?.averageConfidence ?? 0);
+    const estimatedMinWall = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
     const featureDetail = this.computeFeatureDetail(triCount, volume);
 
-    const wtStatus = estimatedMinWall < 1 ? 'critical' : estimatedMinWall < 2 ? 'warning' : 'good';
+    const wtStatus = thinWallRatio > 0.15 ? 'critical' : thinWallRatio > 0.05 ? 'warning' : 'good';
     const hasOverhangIssue = overhangFaces > 0;
     const isManifold = topology?.isManifold ?? true;
 
@@ -57,9 +60,10 @@ export class GeometryAnalyst extends BaseAgent {
 
     const issues: string[] = [];
     if (wtStatus === 'critical') {
-      issues.push('Critically thin walls detected — high failure risk');
+      const pct = (thinWallRatio * 100).toFixed(1);
+      issues.push(`Widespread thin walls detected — ${pct}% of sampled regions below FDM threshold`);
     } else if (wtStatus === 'warning') {
-      issues.push('Walls thinner than recommended — consider thickening');
+      issues.push('Some walls thinner than recommended — consider thickening');
     }
     if (hasOverhangIssue) {
       issues.push(`${overhangFaces} faces exceed 45° overhang — support required`);
@@ -161,11 +165,12 @@ export class GeometryAnalyst extends BaseAgent {
     const markers: RiskMarker[] = [];
     const positions = ctx.vertexPositions;
     const step = 9;
-    const minThickness = ctx.unifiedAnalysis.metrics.result?.minWallThicknessMm ?? 1;
+    const p5Thickness = ctx.unifiedAnalysis.metrics.result?.p5WallThicknessMm;
+    const minThickness = p5Thickness ?? ctx.unifiedAnalysis.metrics.result?.minWallThicknessMm ?? 1;
 
     for (let i = 0; i < Math.min(positions.length, 300); i += step) {
       if (i + 2 < positions.length) {
-        const wtStatus = minThickness < 1 ? 'critical' : 'warning';
+        const wtStatus = p5Thickness != null && p5Thickness < 1 ? 'critical' : 'warning';
         markers.push({
           position: { x: positions[i], y: positions[i + 1], z: positions[i + 2] },
           type: 'thin_wall',

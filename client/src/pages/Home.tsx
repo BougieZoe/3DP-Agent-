@@ -34,10 +34,14 @@ import { CognitiveScan } from '@/components/3D/CognitiveScan';
 import { AttentionPulse } from '@/components/3D/AttentionPulse';
 import { toast } from 'sonner';
 
-function deriveWtStatus(mm: number | null | undefined): 'good' | 'warning' | 'critical' {
-  if (mm == null) return 'warning';
-  if (mm < 1) return 'critical';
-  if (mm < 2) return 'warning';
+function deriveWtStatus(
+  thinWallRatio: number | undefined,
+  p5Thickness?: number | null,
+): 'good' | 'warning' | 'critical' {
+  const twr = thinWallRatio ?? 0;
+  if (twr > 0.15) return 'critical';
+  if (twr > 0.05) return 'warning';
+  if (p5Thickness != null && p5Thickness < 0.4) return 'warning';
   return 'good';
 }
 
@@ -60,14 +64,26 @@ function unifiedToModelData(
   const surfaceArea = metrics?.surfaceAreaMm2 ?? 0;
   const oh = metrics?.overhang;
   const dims = metrics?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
+  const thinWallRatio = metrics?.thinWallRatio ?? 0;
+  const p5Thickness = metrics?.p5WallThicknessMm;
   const minWall = metrics?.minWallThicknessMm;
-  const wtStatus = deriveWtStatus(minWall);
+  const wtStatus = deriveWtStatus(thinWallRatio, p5Thickness);
   const wtAreas = Math.floor(triCount * 0.15);
 
   return {
     fileName,
     wallThickness: {
-      minThickness: minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
+      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
+      p1Thickness: metrics?.p1WallThicknessMm ?? null,
+      p5Thickness: metrics?.p5WallThicknessMm ?? null,
+      p10Thickness: metrics?.p10WallThicknessMm ?? null,
+      medianThickness: metrics?.medianWallThicknessMm ?? null,
+      avgThickness: metrics?.avgWallThicknessMm ?? null,
+      thinWallCount: metrics?.thinWallCount ?? 0,
+      thinWallPercentage: metrics?.thinWallPercentage ?? 0,
+      thinWallRatio: metrics?.thinWallRatio ?? 0,
+      averageConfidence: metrics?.averageConfidence ?? 0,
+      lowConfidenceSampleCount: metrics?.lowConfidenceSampleCount ?? 0,
       areas: wtAreas,
       status: wtStatus,
     },
@@ -87,13 +103,25 @@ function unifiedToAnalysisSummary(unifiedAnalysis: import('@/analysis').UnifiedA
   const topology = unifiedAnalysis.topology.result;
   const oh = metrics?.overhang;
   const dims = metrics?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
+  const thinWallRatio = metrics?.thinWallRatio ?? 0;
+  const p5Thickness = metrics?.p5WallThicknessMm;
   const minWall = metrics?.minWallThicknessMm;
   const triCount = topology?.triangleCount ?? 0;
 
   return {
     wallThickness: {
-      minThickness: minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
-      status: deriveWtStatus(minWall),
+      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
+      p1Thickness: metrics?.p1WallThicknessMm ?? null,
+      p5Thickness: metrics?.p5WallThicknessMm ?? null,
+      p10Thickness: metrics?.p10WallThicknessMm ?? null,
+      medianThickness: metrics?.medianWallThicknessMm ?? null,
+      avgThickness: metrics?.avgWallThicknessMm ?? null,
+      thinWallCount: metrics?.thinWallCount ?? 0,
+      thinWallPercentage: metrics?.thinWallPercentage ?? 0,
+      thinWallRatio: metrics?.thinWallRatio ?? 0,
+      averageConfidence: metrics?.averageConfidence ?? 0,
+      lowConfidenceSampleCount: metrics?.lowConfidenceSampleCount ?? 0,
+      status: deriveWtStatus(thinWallRatio, p5Thickness),
     },
     overhang: {
       areas: oh?.faceCount ?? 0,
@@ -538,6 +566,9 @@ export default function Home() {
                     <div className="border border-border rounded-sm bg-card p-4">
                       <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">GEOMETRY DATA</div>
                       <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness.toFixed(3)} unit="mm" highlight />
+                      {unifiedAnalysis?.metrics.result?.minWallThicknessMm != null && (
+                        <MetricRow label="Min (abs)" value={unifiedAnalysis.metrics.result.minWallThicknessMm.toFixed(3)} unit="mm" />
+                      )}
                       <MetricRow label={t('volume')} value={analysis.volume.toFixed(1)} unit="mm³" />
                       <MetricRow label={t('surfaceArea')} value={analysis.surfaceArea.toFixed(1)} unit="mm²" />
                       <MetricRow label={t('dimX')} value={modelData.dims.x.toFixed(2)} unit="mm" />

@@ -26,7 +26,7 @@ export function runAnalysisPipeline(
 
   const emptyTopology: TopologyResult = { triangleCount: 0, vertexCount: 0, edgeCount: 0, manifoldEdgeCount: 0, boundaryEdgeCount: 0, nonManifoldEdgeCount: 0, shellCount: 0, isManifold: false, problemEdges: [] };
   const emptyValidation: ValidationResult = { isWatertight: false, holeCount: 0, boundaryEdgeCount: 0, flippedNormalFaceCount: 0, totalFaceCount: 0, flippedNormalRatio: 0, normalOrientation: 'unknown', degenerateFaceCount: 0 };
-  const emptyMetrics: MetricsResult = { meshVolumeMm3: 0, surfaceAreaMm2: 0, boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 }, minWallThicknessMm: null, avgWallThicknessMm: null, wallThicknessSamples: [], overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [] } };
+  const emptyMetrics: MetricsResult = { meshVolumeMm3: 0, surfaceAreaMm2: 0, boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 }, minWallThicknessMm: null, avgWallThicknessMm: null, p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null, thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, lowConfidenceSampleCount: 0, wallThicknessSamples: [], overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [] } };
 
   const failResult = <T>(moduleName: string, error: unknown, defaultValue: T): AnalysisModuleResult<T> => {
     const message = error instanceof Error ? error.message : 'Unknown error';

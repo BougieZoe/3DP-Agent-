@@ -1,4 +1,4 @@
-import type { AgentOutput, RiskMarker } from '@shared/domain/agent';
+import type { AgentOutput, AgentVerdict, RiskMarker } from '@shared/domain/agent';
 import { BaseAgent, type AgentContext } from './baseAgent';
 
 interface PredictedRisk {
@@ -19,8 +19,16 @@ interface FailurePredictorDetails {
 }
 
 export class FailurePredictor extends BaseAgent {
+  private _overallRiskLevel: string = 'low';
+
   constructor() {
     super('failure_predictor', { supportsVision: true, requiresVision: false, timeoutMs: 15000 });
+  }
+
+  public override computeVerdict(score: number): AgentVerdict {
+    if (this._overallRiskLevel === 'critical') return 'fail';
+    if (this._overallRiskLevel === 'high') return 'warning';
+    return super.computeVerdict(score);
   }
 
   protected async analyze(ctx: AgentContext): Promise<AgentOutput> {
@@ -30,12 +38,15 @@ export class FailurePredictor extends BaseAgent {
     const triCount = topology?.triangleCount ?? 0;
     const oh = metrics?.overhang;
     const overhangFaces = oh?.faceCount ?? 0;
-    const minThickness = metrics?.minWallThicknessMm ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
-    const wtStatus = minThickness < 1 ? 'critical' : minThickness < 2 ? 'warning' : 'good';
+    const p5Thickness = metrics?.p5WallThicknessMm;
+    const thinWallRatio = (metrics?.thinWallRatio ?? 0);
+    const avgConfidence = (metrics?.averageConfidence ?? 0);
+    const minThickness = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
+    const wtStatus = thinWallRatio > 0.15 ? 'critical' : thinWallRatio > 0.05 ? 'warning' : 'good';
     const ohStatus = overhangFaces > Math.max(1, triCount * 0.1) ? 'warning' : 'good';
 
     const analysisInput = {
-      wallThickness: { status: wtStatus, minThickness },
+      wallThickness: { status: wtStatus, minThickness, thinWallRatio, confidence: avgConfidence, p5Thickness },
       overhang: { status: ohStatus, areas: overhangFaces },
     };
     const metricsInput = {
@@ -68,6 +79,7 @@ export class FailurePredictor extends BaseAgent {
     if (delaminationRisk) risks.push(delaminationRisk);
 
     const overallRiskLevel = this.computeOverallRisk(risks);
+    this._overallRiskLevel = overallRiskLevel;
     const score = this.computeScore(risks);
     const confidence = 0.75;
 
@@ -105,24 +117,45 @@ export class FailurePredictor extends BaseAgent {
     };
   }
 
-  private predictWallFailure(analysis: { wallThickness: { status: string; minThickness: number } }): PredictedRisk | null {
+  private predictWallFailure(analysis: { wallThickness: { status: string; minThickness: number; thinWallRatio?: number; confidence?: number; p5Thickness?: number | null } }): PredictedRisk | null {
     if (analysis.wallThickness.status === 'good') return null;
 
-    const mt = analysis.wallThickness.minThickness;
-    const severity: PredictedRisk['severity'] =
-      mt < 0.5 ? 'critical' :
-      mt < 1 ? 'high' :
-      mt < 2 ? 'medium' : 'low';
+    const twr = analysis.wallThickness.thinWallRatio ?? 0;
+    const p5 = analysis.wallThickness.p5Thickness ?? analysis.wallThickness.minThickness;
+    const confidence = analysis.wallThickness.confidence ?? 0.7;
+
+    // Use p5 + thinWallRatio instead of raw min alone
+    let severity: PredictedRisk['severity'];
+    let description: string;
+    let recommendation: string;
+
+    if (twr > 0.15) {
+      severity = 'critical';
+      description = `${(twr * 100).toFixed(1)}% of sampled walls below FDM threshold — widespread thin wall failure risk`;
+      recommendation = 'Increase wall thickness model-wide to at least 2mm. Use 3+ perimeters in slicer.';
+    } else if (twr > 0.05 && p5 < 1) {
+      severity = 'high';
+      description = `${(twr * 100).toFixed(1)}% of sampled walls thin (p5=${p5.toFixed(2)}mm) — moderate failure risk`;
+      recommendation = 'Thin areas detected. Increase wall thickness or use 3 perimeters.';
+    } else if (p5 < 0.8) {
+      severity = 'medium';
+      description = `5th percentile wall thickness ${p5.toFixed(2)}mm — isolated thin spots may cause defects`;
+      recommendation = 'Consider thickening thinnest regions or using 3 perimeters.';
+    } else {
+      severity = 'low';
+      description = `Minor thin wall concerns (${(twr * 100).toFixed(1)}% of samples) — low risk`;
+      recommendation = 'Standard wall settings should suffice.';
+    }
+
+    const riskConfidence = confidence > 0 ? Math.min(0.85, confidence + 0.1) : 0.7;
 
     return {
       type: 'wall_failure',
       severity,
-      confidence: 0.85,
-      description: `Estimated min wall thickness ${mt.toFixed(2)}mm — risk of collapse or gaps during printing`,
+      confidence: riskConfidence,
+      description,
       affectedFaces: 0,
-      recommendation: severity === 'critical' || severity === 'high'
-        ? 'Increase wall thickness to at least 2mm. Consider 3+ perimeters in slicer.'
-        : 'Use 3 perimeters and consider thickening if structural integrity is needed',
+      recommendation,
     };
   }
 
@@ -233,7 +266,9 @@ export class FailurePredictor extends BaseAgent {
     const markers: RiskMarker[] = [];
     const positions = ctx.vertexPositions;
     const count = Math.min(10, Math.floor(positions.length / 30));
-    const minThickness = ctx.unifiedAnalysis.metrics.result?.minWallThicknessMm ?? 1;
+    const p5Thickness = ctx.unifiedAnalysis.metrics.result?.p5WallThicknessMm;
+    const avgThickness = ctx.unifiedAnalysis.metrics.result?.avgWallThicknessMm;
+    const displayThickness = p5Thickness ?? avgThickness ?? ctx.unifiedAnalysis.metrics.result?.minWallThicknessMm ?? 1;
 
     for (let i = 0; i < count; i++) {
       const idx = i * 30;
@@ -242,7 +277,7 @@ export class FailurePredictor extends BaseAgent {
           position: { x: positions[idx], y: positions[idx + 1], z: positions[idx + 2] },
           type: 'thin_wall',
           severity: severity === 'critical' ? 0.9 : 0.6,
-          description: `Thin wall — estimated ${minThickness.toFixed(2)}mm`,
+          description: `Thin wall — p5 thickness ${displayThickness.toFixed(2)}mm`,
         });
       }
     }

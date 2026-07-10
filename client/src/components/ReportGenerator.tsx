@@ -79,8 +79,10 @@ function getTrafficLight(analysis: UnifiedAnalysis): {
   }
 
   if (m) {
-    if (m.minWallThicknessMm !== null && m.minWallThicknessMm < 1.2)
-      score -= 20;
+    const twr = (m.thinWallRatio ?? 0);
+    if (twr > 0.15) score -= 30;
+    else if (twr > 0.05) score -= 15;
+    if ((m.averageConfidence ?? 0) < 0.3 && twr < 0.02) score -= 3;
     if (m.overhang.severity === "severe") score -= 20;
     if (m.overhang.severity === "moderate") score -= 10;
   }
@@ -120,12 +122,28 @@ function buildClientIssues(analysis: UnifiedAnalysis, lang: Language): string[] 
   const v = analysis.validation?.result;
   const m = analysis.metrics?.result;
 
-  if (m && m.minWallThicknessMm !== null && m.minWallThicknessMm < 1.2) {
-    issues.push(
-      lang === "ja"
-        ? "壁が薄すぎる部分があります。印刷中に壊れる可能性があります。"
-        : "Some walls are very thin and might break during printing."
-    );
+  if (m) {
+    const twr = (m.thinWallRatio ?? 0);
+    const p5 = m.p5WallThicknessMm;
+    if (twr > 0.15) {
+      issues.push(
+        lang === "ja"
+          ? `壁が薄すぎる領域が広範囲にあります (サンプルの${(twr * 100).toFixed(0)}%)。印刷中に破損の可能性。`
+          : `${(twr * 100).toFixed(0)}% of sampled walls are below safe thickness — risk of print failure.`
+      );
+    } else if (twr > 0.02) {
+      issues.push(
+        lang === "ja"
+          ? `${(twr * 100).toFixed(0)}%の領域で壁が薄いです。印刷前に確認を推奨。`
+          : `${(twr * 100).toFixed(0)}% of areas have thin walls — review recommended.`
+      );
+    } else if ((m.averageConfidence ?? 0) < 0.5) {
+      issues.push(
+        lang === "ja"
+          ? `${m.minWallThicknessMm != null ? `最小壁厚 ${m.minWallThicknessMm.toFixed(2)}mm — ` : ''}信頼度が低いため、壁厚測定は参考値です。`
+          : `${m.minWallThicknessMm != null ? `Min measured ${m.minWallThicknessMm.toFixed(2)}mm — ` : ''}Low confidence measurement, results are approximate.`
+      );
+    }
   }
 
   if (v && !v.isWatertight) {
@@ -185,12 +203,32 @@ function buildDesignerIssues(
   const v = analysis.validation?.result;
   const m = analysis.metrics?.result;
 
-  if (m && m.minWallThicknessMm !== null && m.minWallThicknessMm < 1.2) {
-    issues.push(
-      lang === "ja"
-        ? `壁厚 ${m.minWallThicknessMm.toFixed(2)} mm — 推奨最小値 1.2 mm。印刷中に破損の可能性。`
-        : `Wall thickness ${m.minWallThicknessMm.toFixed(2)} mm — minimum safe is 1.2 mm. Risk of failure during print.`
-    );
+  if (m) {
+    const twr = (m.thinWallRatio ?? 0);
+    const p5 = m.p5WallThicknessMm;
+    const p10 = m.p10WallThicknessMm;
+    const avg = m.avgWallThicknessMm;
+    const conf = m.averageConfidence ?? 0;
+    if (twr > 0.15) {
+      issues.push(
+        lang === "ja"
+          ? `壁厚: サンプルの${(twr * 100).toFixed(0)}%がFDM閾値未満 (p5=${(p5 ?? avg ?? 0).toFixed(2)} mm) — 広範囲に薄い壁`
+          : `Walls: ${(twr * 100).toFixed(0)}% of samples below FDM threshold (p5=${(p5 ?? avg ?? 0).toFixed(2)} mm) — widespread thin walls`
+      );
+    } else if (twr > 0.02) {
+      const display = p10 ?? p5 ?? avg;
+      issues.push(
+        lang === "ja"
+          ? `壁厚: ${(twr * 100).toFixed(0)}%の領域で薄い (p10=${(display ?? 0).toFixed(2)} mm)`
+          : `Walls: ${(twr * 100).toFixed(0)}% of areas thin (p10=${(display ?? 0).toFixed(2)} mm)`
+      );
+    } else if (conf < 0.5) {
+      issues.push(
+        lang === "ja"
+          ? `壁厚測定の信頼度が低い (${(conf * 100).toFixed(0)}%)。${m.minWallThicknessMm != null ? `最小測定値 ${m.minWallThicknessMm.toFixed(2)} mm は参考値として表示。` : ''}`
+          : `Wall thickness confidence low (${(conf * 100).toFixed(0)}%). ${m.minWallThicknessMm != null ? `Min measured ${m.minWallThicknessMm.toFixed(2)} mm shown for reference.` : ''}`
+      );
+    }
   }
 
   if (v && !v.isWatertight) {
@@ -667,9 +705,17 @@ async function generateDesignerPDF(
   if (metrics?.minWallThicknessMm != null) {
     y = drawDataRow(doc,
       lang === "ja" ? "最小壁厚" : "Min wall thickness",
-      `${metrics.minWallThicknessMm.toFixed(2)} mm`,
+      `${metrics.minWallThicknessMm.toFixed(3)} mm`,
       y,
-      metrics.minWallThicknessMm < 1.2
+      (metrics.thinWallRatio ?? 0) > 0.05
+    );
+  }
+  if (metrics?.p5WallThicknessMm != null) {
+    y = drawDataRow(doc,
+      lang === "ja" ? "5パーセンタイル壁厚" : "p5 wall thickness",
+      `${metrics.p5WallThicknessMm.toFixed(3)} mm`,
+      y,
+      (metrics.thinWallRatio ?? 0) > 0.05
     );
   }
   if (metrics) {
@@ -737,8 +783,11 @@ async function generateDesignerPDF(
       : "This model looks good. Proceed with printing.";
   } else {
     const parts: string[] = [];
-    if (metrics?.minWallThicknessMm != null && metrics.minWallThicknessMm < 1.2) {
-      parts.push(lang === "ja" ? "壁厚を1.2mm以上に増やしてください" : "Increase wall thickness to ≥1.2 mm");
+    const twr = metrics?.thinWallRatio ?? 0;
+    if (twr > 0.05) {
+      parts.push(lang === "ja" ? "壁厚を増やしてください" : "Increase wall thickness");
+    } else if (metrics?.p5WallThicknessMm != null && metrics.p5WallThicknessMm < 0.8) {
+      parts.push(lang === "ja" ? "薄い箇所を補強してください" : "Reinforce thin sections");
     }
     if (metrics?.overhang.severity === "severe" || metrics?.overhang.severity === "moderate") {
       parts.push(lang === "ja" ? "サポート材を有効にしてください" : "Enable support structures");
@@ -861,7 +910,7 @@ async function generateFactoryPDF(
     }
     y = drawDataRow(doc, "Volume", metrics.meshVolumeMm3 != null ? `${(metrics.meshVolumeMm3 / 1000).toFixed(2)} cm³` : "—", y);
     y = drawDataRow(doc, "Surface area", metrics.surfaceAreaMm2 != null ? `${(metrics.surfaceAreaMm2 / 100).toFixed(2)} cm²` : "—", y);
-    y = drawDataRow(doc, "Min wall thickness", metrics.minWallThicknessMm != null ? `${metrics.minWallThicknessMm.toFixed(3)} mm` : "—", y, metrics.minWallThicknessMm != null && metrics.minWallThicknessMm < 1.2);
+    y = drawDataRow(doc, "Min wall thickness", metrics.minWallThicknessMm != null ? `${metrics.minWallThicknessMm.toFixed(3)} mm` : "—", y, false);
     y = drawDataRow(doc, "Overhang faces", `${metrics.overhang.faceCount}`, y);
     y = drawDataRow(doc, "Overhang ratio", `${(metrics.overhang.ratio * 100).toFixed(1)}%`, y);
     y = drawDataRow(doc, "Overhang severity", metrics.overhang.severity, y);
@@ -985,6 +1034,10 @@ export function ReportGenerator({
           <span className={`w-2 h-2 rounded-full ${dotStyles[light]}`} />
           {score}/100
         </div>
+        <span className="text-[10px] font-mono text-muted-foreground/50 tracking-wider">QUICK CHECK</span>
+      </div>
+      <div className="text-[10px] font-mono text-muted-foreground/30 leading-relaxed">
+        Penalty-based go/no-go filter. Different from the weighted rubric in the Agents tab.
       </div>
 
       <div>

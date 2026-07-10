@@ -94,7 +94,7 @@ export abstract class BaseAgent {
     };
   }
 
-  protected computeVerdict(score: number): AgentVerdict {
+  public computeVerdict(score: number): AgentVerdict {
     if (score >= 70) return 'pass';
     if (score >= 40) return 'warning';
     return 'fail';

@@ -39,12 +39,14 @@ export class OptimizationAdvisor extends BaseAgent {
     const triCount = topology?.triangleCount ?? 0;
     const oh = metrics?.overhang;
     const overhangFaces = oh?.faceCount ?? 0;
-    const minThickness = metrics?.minWallThicknessMm ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
-    const wtStatus = minThickness < 1 ? 'critical' : minThickness < 2 ? 'warning' : 'good';
+    const p5Thickness = metrics?.p5WallThicknessMm;
+    const thinWallRatio = (metrics?.thinWallRatio ?? 0);
+    const minThickness = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
+    const wtStatus = thinWallRatio > 0.15 ? 'critical' : thinWallRatio > 0.05 ? 'warning' : 'good';
     const ohStatus = overhangFaces > 0 ? 'warning' : 'good';
 
     const analysisInput = {
-      wallThickness: { status: wtStatus, minThickness },
+      wallThickness: { status: wtStatus, minThickness, thinWallRatio },
       overhang: { status: ohStatus, areas: overhangFaces },
     };
     const metricsInput = {
@@ -76,23 +78,31 @@ export class OptimizationAdvisor extends BaseAgent {
   }
 
   private generateSuggestions(
-    analysis: { wallThickness: { status: string; minThickness: number }; overhang: { status: string; areas: number } },
+    analysis: { wallThickness: { status: string; minThickness: number; thinWallRatio?: number }; overhang: { status: string; areas: number } },
     metrics: { size: { x: number; y: number; z: number }; triangleCount: number },
     geometryOutput?: AgentOutput,
     scorerOutput?: AgentOutput,
     failureOutput?: AgentOutput,
   ): OptimizedGeometrySuggestion[] {
     const suggestions: OptimizedGeometrySuggestion[] = [];
+    const twr = analysis.wallThickness.thinWallRatio ?? 0;
 
-    if (analysis.wallThickness.status === 'critical' || analysis.wallThickness.status === 'warning') {
+    if (twr > 0.15) {
       suggestions.push({
         type: 'wall_thickening',
-        priority: analysis.wallThickness.status === 'critical' ? 'critical' : 'high',
-        description: `Thin walls detected (est. ${analysis.wallThickness.minThickness.toFixed(2)}mm)`,
-        implementation: analysis.wallThickness.status === 'critical'
-          ? 'Increase wall thickness to at least 2mm. Use 3-4 perimeters in slicer. Consider shell offset in CAD.'
-          : 'Increase to 3 perimeters. If structural, thicken to 2.5mm+ in CAD.',
+        priority: 'critical',
+        description: `Widespread thin walls — ${(twr * 100).toFixed(1)}% of sampled regions below FDM threshold (p5=${analysis.wallThickness.minThickness.toFixed(2)}mm)`,
+        implementation: 'Increase wall thickness to at least 2mm model-wide. Use 3-4 perimeters in slicer. Consider shell offset in CAD.',
         expectedImprovement: 'Reduces collapse risk by 60-80%',
+        difficulty: 'moderate',
+      });
+    } else if (twr > 0.05) {
+      suggestions.push({
+        type: 'wall_thickening',
+        priority: 'high',
+        description: `Some thin regions — ${(twr * 100).toFixed(1)}% of samples thin (p5=${analysis.wallThickness.minThickness.toFixed(2)}mm)`,
+        implementation: 'Increase to 3 perimeters. If structural, thicken to 2.5mm+ in CAD.',
+        expectedImprovement: 'Eliminates isolated thin spots',
         difficulty: 'moderate',
       });
     }

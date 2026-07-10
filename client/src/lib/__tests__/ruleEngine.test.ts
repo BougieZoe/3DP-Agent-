@@ -7,9 +7,16 @@ import {
 } from '../ruleEngine';
 
 describe('ruleEngine', () => {
+  const baseWall = {
+    p1Thickness: null, p5Thickness: null, p10Thickness: null,
+    medianThickness: null, avgThickness: null,
+    thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0,
+    averageConfidence: 0, lowConfidenceSampleCount: 0,
+  };
+
   const validModel: ModelData = {
     fileName: 'test.stl',
-    wallThickness: { minThickness: 2.5, areas: 3, status: 'good' },
+    wallThickness: { ...baseWall, minThickness: 2.5, areas: 3, status: 'good' },
     overhang: { angle: 45, areas: 0, status: 'good' },
     volume: 50000,
     surfaceArea: 1200,
@@ -18,7 +25,7 @@ describe('ruleEngine', () => {
 
   const criticalWallModel: ModelData = {
     fileName: 'thin_wall.stl',
-    wallThickness: { minThickness: 0.5, areas: 10, status: 'critical' },
+    wallThickness: { ...baseWall, minThickness: 0.5, thinWallCount: 10, thinWallPercentage: 20, thinWallRatio: 0.2, areas: 10, status: 'critical' },
     overhang: { angle: 45, areas: 0, status: 'good' },
     volume: 10000,
     surfaceArea: 500,
@@ -27,7 +34,7 @@ describe('ruleEngine', () => {
 
   const warningOverhangModel: ModelData = {
     fileName: 'overhang.stl',
-    wallThickness: { minThickness: 2.0, areas: 2, status: 'warning' },
+    wallThickness: { ...baseWall, minThickness: 2.0, thinWallCount: 4, thinWallPercentage: 8, thinWallRatio: 0.08, areas: 2, status: 'warning' },
     overhang: { angle: 45, areas: 15, status: 'warning' },
     volume: 80000,
     surfaceArea: 2000,
@@ -36,7 +43,7 @@ describe('ruleEngine', () => {
 
   const largeModel: ModelData = {
     fileName: 'large.stl',
-    wallThickness: { minThickness: 3.0, areas: 0, status: 'good' },
+    wallThickness: { ...baseWall, minThickness: 3.0, areas: 0, status: 'good' },
     overhang: { angle: 45, areas: 0, status: 'good' },
     volume: 600000,
     surfaceArea: 8000,
@@ -45,7 +52,7 @@ describe('ruleEngine', () => {
 
   const smallModel: ModelData = {
     fileName: 'small.stl',
-    wallThickness: { minThickness: 1.5, areas: 1, status: 'warning' },
+    wallThickness: { ...baseWall, minThickness: 1.5, areas: 1, status: 'warning' },
     overhang: { angle: 45, areas: 0, status: 'good' },
     volume: 10000,
     surfaceArea: 400,
@@ -74,7 +81,7 @@ describe('ruleEngine', () => {
     it('should include issues for critical wall thickness', () => {
       const report = generateQuickReport(criticalWallModel, 'en');
       expect(report).toContain('ISSUES:');
-      expect(report).toContain('Wall too thin');
+      expect(report).toContain('Widespread thin walls');
     });
 
     it('should include issues for warning overhang', () => {
@@ -83,14 +90,14 @@ describe('ruleEngine', () => {
       expect(report).toContain('support structures required');
     });
 
-    it('should include tips for warning wall thickness', () => {
+    it('should include issues for warning wall thickness', () => {
       const modelWithWarningWall: ModelData = {
         ...validModel,
-        wallThickness: { minThickness: 1.5, areas: 5, status: 'warning' },
+        wallThickness: { ...validModel.wallThickness, minThickness: 1.5, thinWallCount: 3, thinWallPercentage: 6, thinWallRatio: 0.06, areas: 5, status: 'warning' },
       };
       const report = generateQuickReport(modelWithWarningWall, 'en');
-      expect(report).toContain('TIPS:');
-      expect(report).toContain('recommend increasing to 2mm+');
+      expect(report).toContain('ISSUES:');
+      expect(report).toContain('thin');
     });
 
     it('should use Chinese translations', () => {
@@ -229,6 +236,7 @@ describe('ruleEngine', () => {
       const answer = answerLocally('geometry', validModel, 'en');
       expect(answer).toContain('Dims:');
       expect(answer).toContain('Min wall');
+      expect(answer).toContain('2.50');
     });
 
     it('should return Chinese translations', () => {

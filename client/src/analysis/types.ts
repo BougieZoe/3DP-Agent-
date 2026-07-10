@@ -135,6 +135,32 @@ export interface MetricsResult {
 
   avgWallThicknessMm: number | null;
 
+  /** 1st percentile wall thickness — thinnest 1% of samples */
+  p1WallThicknessMm: number | null;
+
+  /** 5th percentile wall thickness */
+  p5WallThicknessMm: number | null;
+
+  /** 10th percentile wall thickness */
+  p10WallThicknessMm: number | null;
+
+  /** Median (50th percentile) wall thickness */
+  medianWallThicknessMm: number | null;
+
+  /** Number of samples below 0.8mm thin-wall threshold */
+  thinWallCount: number;
+
+  /** Fraction (0.0–1.0) of valid samples below 0.8mm thin-wall threshold (thinWallCount / totalSamples) */
+  thinWallPercentage: number;
+  /** Ratio 0.0–1.0 of sampled regions below thin-wall threshold (thinWallCount / totalSamples) */
+  thinWallRatio: number;
+
+  /** Average confidence across all valid samples (0.0–1.0) */
+  averageConfidence: number;
+
+  /** Number of valid samples with confidence < 0.3 */
+  lowConfidenceSampleCount: number;
+
   wallThicknessSamples: WallThicknessSample[];
 
   thinnestWallSample?: WallThicknessSample | null;

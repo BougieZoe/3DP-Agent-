@@ -4,6 +4,15 @@ import { createGeometryBounds } from './geometry';
 
 export interface LegacyWallThicknessSummary {
   minThicknessMm: number;
+  p1ThicknessMm: number | null;
+  p5ThicknessMm: number | null;
+  p10ThicknessMm: number | null;
+  medianThicknessMm: number | null;
+  avgThicknessMm: number | null;
+  thinWallCount: number;
+  thinWallPercentage: number;
+  averageConfidence: number;
+  lowConfidenceSampleCount: number;
   affectedAreas: number;
   status: LegacyPrintabilityStatus;
 }
@@ -67,6 +76,15 @@ export function normalizeModelAnalysis(modelAnalysis: ModelAnalysis): ModelAnaly
     legacy: {
       wallThickness: {
         minThicknessMm: modelAnalysis.legacy.wallThickness.minThicknessMm,
+        p1ThicknessMm: modelAnalysis.legacy.wallThickness.p1ThicknessMm,
+        p5ThicknessMm: modelAnalysis.legacy.wallThickness.p5ThicknessMm,
+        p10ThicknessMm: modelAnalysis.legacy.wallThickness.p10ThicknessMm,
+        medianThicknessMm: modelAnalysis.legacy.wallThickness.medianThicknessMm,
+        avgThicknessMm: modelAnalysis.legacy.wallThickness.avgThicknessMm,
+        thinWallCount: modelAnalysis.legacy.wallThickness.thinWallCount,
+        thinWallPercentage: modelAnalysis.legacy.wallThickness.thinWallPercentage,
+        averageConfidence: modelAnalysis.legacy.wallThickness.averageConfidence,
+        lowConfidenceSampleCount: modelAnalysis.legacy.wallThickness.lowConfidenceSampleCount,
         affectedAreas: modelAnalysis.legacy.wallThickness.affectedAreas,
         status: modelAnalysis.legacy.wallThickness.status,
       },
