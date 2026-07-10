@@ -11,6 +11,40 @@
 
 ---
 
+## 🚀 AMD Developer Hackathon: ACT II — Track 3 (Unicorn)
+
+**🏆 Submission — 3DP Agent: Multi-Agent 3D Print Intelligence on AMD ROCm**
+
+3DP Agent brings **multi-agent AI reasoning** to desktop 3D printing — powered by **AMD Instinct MI300X** via ROCm + vLLM. Four specialized AI agents (Geometry Analyst, Printability Scorer, Failure Predictor, Optimization Advisor) analyze STL files in parallel, debate their findings, and deliver a consensus verdict — all accelerated by AMD hardware.
+
+**What makes this an AMD-native application:**
+- **AMD Cloud provider** — Qwen3-8B served on MI300X via vLLM, accessed through a dedicated server-side + Vercel proxy (`api/amd-proxy.ts`)
+- **5-agent ACT II pipeline** (`client/src/lib/agentPipeline.ts`) — purpose-built for AMD Developer Hackathon, with sequential debate rounds and critic retry logic
+- **Zero API key friction** — AMD Cloud auto-populates; no key required to use AMD GPUs
+- **Fully containerized** — Dockerfile with two-stage build, ready for AMD Developer Cloud deployment
+- **Browser-local privacy** — AI runs server-to-server via AMD proxy; user API keys never leave the client
+
+### How to Run with ROCm / AMD Developer Cloud
+
+```bash
+# 1. Set your AMD machine endpoint
+export AMD_MACHINE_URL="http://<your-mi300x>:8000/v1/chat/completions"
+
+# 2. Build and run
+docker build -t 3dp-agent .
+docker run -p 3000:3000 -e AMD_MACHINE_URL -e NODE_ENV=production 3dp-agent
+
+# 3. Open http://localhost:3000 — AMD Cloud is pre-selected, no key needed
+```
+
+Or without Docker:
+```bash
+pnpm install && pnpm build
+AMD_MACHINE_URL="http://<your-mi300x>:8000/v1/chat/completions" pnpm start
+```
+
+---
+
 Upload an STL. Watch it think. Ask it anything.
 
 No account. No cloud. No waiting. Everything runs in your browser.
@@ -102,7 +136,18 @@ Tailwind v4 · Vite 7 · multi-agent orchestration
 
 ---
 
-## run it
+## Docker (containerized submission)
+
+```bash
+docker build -t 3dp-agent .
+docker run -p 3000:3000 -e AMD_MACHINE_URL -e NODE_ENV=production 3dp-agent
+```
+
+The image uses a two-stage build (`node:20-slim`), installs only production dependencies, and exposes port 3000. Pass `AMD_MACHINE_URL` to connect your AMD MI300X instance — or omit it to run without AI (local analysis still works).
+
+---
+
+## run it (dev)
 
 ```bash
 git clone https://github.com/BougieZoe/3DP-Agent-
