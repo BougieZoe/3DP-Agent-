@@ -2,3 +2,9 @@ node_modules/
 band-agents/agent_config.yaml
 .env
 XPRIZE/
+# Logs
+.manus-logs/
+*.log
+
+# Env
+.env.*
