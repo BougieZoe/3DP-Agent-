@@ -168,9 +168,8 @@ export async function callAI(
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
-        // NOTE: verify this model id is still active on your Fireworks account
-        // before the demo — Fireworks model availability changes over time.
-        model: 'accounts/fireworks/models/llama-v3p1-8b-instruct',
+        // Confirmed live via app.fireworks.ai/models/fireworks/deepseek-v4-pro on 2026-07-10.
+        model: 'accounts/fireworks/models/deepseek-v4-pro',
         max_tokens: 1024,
         messages: [
           { role: 'system', content: systemPrompt },
