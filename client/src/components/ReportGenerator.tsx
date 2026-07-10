@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import type { UnifiedAnalysis } from "../analysis/types";
+import { deriveOhStatus } from "@/analysis/metrics";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -83,8 +84,9 @@ function getTrafficLight(analysis: UnifiedAnalysis): {
     if (twr > 0.15) score -= 30;
     else if (twr > 0.05) score -= 15;
     if ((m.averageConfidence ?? 0) < 0.3 && twr < 0.02) score -= 3;
-    if (m.overhang.severity === "severe") score -= 20;
-    if (m.overhang.severity === "moderate") score -= 10;
+    const ohStatus = deriveOhStatus(m.overhang.ratio);
+    if (ohStatus === 'critical') score -= 20;
+    else if (ohStatus === 'warning') score -= 10;
   }
 
   if (s) {
@@ -176,13 +178,14 @@ function buildClientIssues(analysis: UnifiedAnalysis, lang: Language): string[] 
   }
 
   if (m) {
-    if (m.overhang.severity === "severe") {
+    const ohStatus = deriveOhStatus(m.overhang.ratio);
+    if (ohStatus === 'critical') {
       issues.push(
         lang === "ja"
           ? "大きく張り出した部分があります。サポート材が必要です。"
           : "Large overhanging areas will need support material."
       );
-    } else if (m.overhang.severity === "moderate") {
+    } else if (ohStatus === 'warning') {
       issues.push(
         lang === "ja"
           ? "やや張り出した部分があります。サポート材を検討してください。"
@@ -261,13 +264,14 @@ function buildDesignerIssues(
   }
 
   if (m) {
-    if (m.overhang.severity === "severe") {
+    const ohStatus = deriveOhStatus(m.overhang.ratio);
+    if (ohStatus === 'critical') {
       issues.push(
         lang === "ja"
           ? "深刻なオーバーハング。サポート構造が必須です。"
           : "Severe overhang. Support structures are required."
       );
-    } else if (m.overhang.severity === "moderate") {
+    } else if (ohStatus === 'warning') {
       issues.push(
         lang === "ja"
           ? "中程度のオーバーハング。サポート構造を推奨します。"
@@ -789,7 +793,7 @@ async function generateDesignerPDF(
     } else if (metrics?.p5WallThicknessMm != null && metrics.p5WallThicknessMm < 0.8) {
       parts.push(lang === "ja" ? "薄い箇所を補強してください" : "Reinforce thin sections");
     }
-    if (metrics?.overhang.severity === "severe" || metrics?.overhang.severity === "moderate") {
+    if (metrics?.overhang.ratio != null && deriveOhStatus(metrics.overhang.ratio) !== 'good') {
       parts.push(lang === "ja" ? "サポート材を有効にしてください" : "Enable support structures");
     }
     if (v && !v.isWatertight) {

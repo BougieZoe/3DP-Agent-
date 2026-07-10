@@ -126,6 +126,19 @@ export function analyzeOverhang(
   return { faceCount: overhangCount, totalFaceCount, ratio, severity, breakdownByAngleDeg: breakdownByAngle };
 }
 
+/**
+ * Derive printability status from overhang-to-total-face ratio.
+ *
+ * Threshold rationale (FDM empirical):
+ * - 0–5%   overhang faces: negligible — standard supports or orientation handles this.
+ * - 5–15%  overhang faces: moderate — support strategy matters; evaluate orientation.
+ * - >15%   overhang faces: critical — model has significant overhang geometry;
+ *           mandatory support strategy or redesign needed.
+ *
+ * These thresholds are intentionally lower than the analysis-layer `severity`
+ * (none/moderate/severe at 0.3) because they represent manufacturing risk,
+ * not just geometric measurement.
+ */
 export function deriveOhStatus(ratio: number): 'good' | 'warning' | 'critical' {
   if (ratio > 0.15) return 'critical';
   if (ratio > 0.05) return 'warning';
