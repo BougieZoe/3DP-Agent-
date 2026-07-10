@@ -1,5 +1,6 @@
 import type { AgentOutput, AgentVerdict, RiskMarker } from '@shared/domain/agent';
 import { BaseAgent, type AgentContext } from './baseAgent';
+import { deriveOhStatus } from '@/analysis/metrics';
 
 interface PredictedRisk {
   type: string;
@@ -38,16 +39,17 @@ export class FailurePredictor extends BaseAgent {
     const triCount = topology?.triangleCount ?? 0;
     const oh = metrics?.overhang;
     const overhangFaces = oh?.faceCount ?? 0;
+    const overhangRatio = oh?.ratio ?? 0;
     const p5Thickness = metrics?.p5WallThicknessMm;
     const thinWallRatio = (metrics?.thinWallRatio ?? 0);
     const avgConfidence = (metrics?.averageConfidence ?? 0);
     const minThickness = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
     const wtStatus = thinWallRatio > 0.15 ? 'critical' : thinWallRatio > 0.05 ? 'warning' : 'good';
-    const ohStatus = overhangFaces > Math.max(1, triCount * 0.1) ? 'warning' : 'good';
+    const ohStatus = deriveOhStatus(overhangRatio);
 
     const analysisInput = {
       wallThickness: { status: wtStatus, minThickness, thinWallRatio, confidence: avgConfidence, p5Thickness },
-      overhang: { status: ohStatus, areas: overhangFaces },
+      overhang: { status: ohStatus, areas: overhangFaces, ratio: overhangRatio },
     };
     const metricsInput = {
       triangleCount: triCount,
@@ -176,12 +178,12 @@ export class FailurePredictor extends BaseAgent {
     };
   }
 
-  private predictBridgingIssues(analysis: { overhang: { areas: number; status: string } }): PredictedRisk | null {
-    if (analysis.overhang.areas < 50) return null;
+  private predictBridgingIssues(analysis: { overhang: { areas: number; status: string; ratio: number } }): PredictedRisk | null {
+    if (analysis.overhang.ratio < 0.02) return null;
 
     const severity: PredictedRisk['severity'] =
-      analysis.overhang.areas > 200 ? 'high' :
-      analysis.overhang.areas > 100 ? 'medium' : 'low';
+      analysis.overhang.ratio > 0.15 ? 'high' :
+      analysis.overhang.ratio > 0.08 ? 'medium' : 'low';
 
     return {
       type: 'bridging',

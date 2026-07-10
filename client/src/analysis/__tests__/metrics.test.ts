@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createWatertightCubeModel, createOpenCubeModel, createSingleTriangleModel, createNonIndexedModel } from './testMeshes';
 import { createGeometryModel } from '../geometryModel';
-import { computeMetrics, computeMeshVolume, computeSurfaceArea, analyzeOverhang } from '../metrics';
+import { computeMetrics, computeMeshVolume, computeSurfaceArea, analyzeOverhang, deriveOhStatus } from '../metrics';
 
 describe('computeMeshVolume', () => {
   it('returns positive volume for watertight cube', () => {
@@ -31,6 +31,34 @@ describe('analyzeOverhang', () => {
     const result = analyzeOverhang(model.positions, model.indices);
     expect(result.faceCount).toBeGreaterThan(0);
     expect(result.totalFaceCount).toBe(12);
+  });
+});
+
+describe('deriveOhStatus', () => {
+  it('returns good for zero overhang ratio', () => {
+    expect(deriveOhStatus(0)).toBe('good');
+    expect(deriveOhStatus(0.01)).toBe('good');
+    expect(deriveOhStatus(0.05)).toBe('good');
+  });
+
+  it('returns warning for moderate overhang ratio', () => {
+    expect(deriveOhStatus(0.051)).toBe('warning');
+    expect(deriveOhStatus(0.1)).toBe('warning');
+    expect(deriveOhStatus(0.15)).toBe('warning');
+  });
+
+  it('returns critical for high overhang ratio', () => {
+    expect(deriveOhStatus(0.151)).toBe('critical');
+    expect(deriveOhStatus(0.3)).toBe('critical');
+    expect(deriveOhStatus(1.0)).toBe('critical');
+  });
+
+  it('boundary at exactly 0.05 is good, not warning', () => {
+    expect(deriveOhStatus(0.05)).toBe('good');
+  });
+
+  it('boundary at exactly 0.15 is warning, not critical', () => {
+    expect(deriveOhStatus(0.15)).toBe('warning');
   });
 });
 

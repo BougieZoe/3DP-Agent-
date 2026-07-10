@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { AnalysisReport, ModelAnalysis } from '@shared/domain/analysis';
 import type { AdvisorLanguage } from '@shared/domain/advisor';
+import { deriveOhStatus } from '@/analysis/metrics';
 import {
   completeStage,
   createPendingStage,
@@ -21,14 +22,6 @@ function deriveWtStatus(
   if (twr > 0.15) return 'critical';
   if (twr > 0.05) return 'warning';
   if (p5Thickness != null && p5Thickness < 0.4) return 'warning';
-  return 'good';
-}
-
-function deriveOhStatus(faceCount: number | undefined, totalTriangles: number | undefined): 'good' | 'warning' | 'critical' {
-  if (!faceCount || faceCount === 0) return 'good';
-  const ratio = totalTriangles && totalTriangles > 0 ? faceCount / totalTriangles : 0;
-  if (ratio > 0.3) return 'critical';
-  if (ratio > 0.1) return 'warning';
   return 'good';
 }
 
@@ -65,7 +58,7 @@ function unifiedToModelData(unifiedAnalysis: UnifiedAnalysis, fileName: string):
     overhang: {
       angle: 45,
       areas: oh?.faceCount ?? 0,
-      status: deriveOhStatus(oh?.faceCount, triCount),
+      status: deriveOhStatus(oh?.ratio ?? 0),
     },
     volume,
     surfaceArea,

@@ -126,6 +126,12 @@ export function analyzeOverhang(
   return { faceCount: overhangCount, totalFaceCount, ratio, severity, breakdownByAngleDeg: breakdownByAngle };
 }
 
+export function deriveOhStatus(ratio: number): 'good' | 'warning' | 'critical' {
+  if (ratio > 0.15) return 'critical';
+  if (ratio > 0.05) return 'warning';
+  return 'good';
+}
+
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   if (sorted.length === 1) return sorted[0];
