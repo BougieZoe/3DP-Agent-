@@ -8,6 +8,7 @@ import { AMD_CLOUD_ENDPOINT } from './config';
 export type AIProvider = AIProviderId;
 
 const STORAGE_KEY = '3dp_agent_api_keys';
+const ACTIVE_PROVIDER_KEY = '3dp_agent_active_provider';
 
 export type APIKeys = Partial<Record<AIProvider, string>>;
 
@@ -31,8 +32,23 @@ export function hasAnyKey(): boolean {
   return AI_PROVIDERS.some(provider => !!keys[provider.id]);
 }
 
+export function getSelectedProvider(): AIProvider | null {
+  try {
+    return (localStorage.getItem(ACTIVE_PROVIDER_KEY) as AIProvider) || null;
+  } catch { return null; }
+}
+
+export function setSelectedProvider(provider: AIProvider) {
+  localStorage.setItem(ACTIVE_PROVIDER_KEY, provider);
+}
+
 export function getActiveProvider(): AIProvider | null {
   const keys = getAPIKeys();
+  // Prefer the user's explicit choice, but only if that provider actually
+  // has a key saved (avoids pointing at a provider whose key got cleared).
+  const selected = getSelectedProvider();
+  if (selected && !!keys[selected]) return selected;
+  // Fallback for users who saved keys before this selector existed.
   const provider = AI_PROVIDERS.find(provider => !!keys[provider.id]);
   if (provider) return provider.id;
   return null;
