@@ -147,5 +147,25 @@ export async function callAI(
     return data.choices?.[0]?.message?.content || 'No response';
   }
 
+  if (provider === 'fireworks') {
+    const res = await fetch('https://api.fireworks.ai/inference/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        // NOTE: verify this model id is still active on your Fireworks account
+        // before the demo — Fireworks model availability changes over time.
+        model: 'accounts/fireworks/models/llama-v3p1-8b-instruct',
+        max_tokens: 1024,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`Fireworks API error: ${res.status}`);
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || 'No response';
+  }
+
   throw new Error('Unknown provider');
 }

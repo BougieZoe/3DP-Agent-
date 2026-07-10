@@ -3,7 +3,8 @@ export type AIProviderId =
   | 'openai'
   | 'gemini'
   | 'deepseek'
-  | 'amd-cloud';
+  | 'amd-cloud'
+  | 'fireworks';
 
 export interface AIProviderMetadata {
   id: AIProviderId;
@@ -44,10 +45,17 @@ export const AI_PROVIDERS: readonly AIProviderMetadata[] = [
   },
   {
     id: 'amd-cloud',
-    label: 'AMD Cloud (Qwen3-30B)',
+    label: 'AMD Cloud (Qwen3-8B)',
     shortLabel: 'AMD',
     keyPlaceholder: 'No API key required',
     colorClass: 'text-red-400',
+  },
+  {
+    id: 'fireworks',
+    label: 'Fireworks AI (backup)',
+    shortLabel: 'Fireworks',
+    keyPlaceholder: 'fw_...',
+    colorClass: 'text-amber-400',
   },
 ] as const;
 
