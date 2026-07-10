@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { AnalysisReport, ModelAnalysis } from '@shared/domain/analysis';
 import type { AdvisorLanguage } from '@shared/domain/advisor';
-import { deriveOhStatus } from '@/analysis/metrics';
+import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 import {
   completeStage,
   createPendingStage,
@@ -13,17 +13,6 @@ import {
 import { generateQuickReport, type ModelData } from './ruleEngine';
 import { loadSTLFile } from './stlLoader';
 import { runAnalysisPipeline, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
-
-function deriveWtStatus(
-  thinWallRatio: number | undefined,
-  p5Thickness?: number | null,
-): 'good' | 'warning' | 'critical' {
-  const twr = thinWallRatio ?? 0;
-  if (twr > 0.15) return 'critical';
-  if (twr > 0.05) return 'warning';
-  if (p5Thickness != null && p5Thickness < 0.4) return 'warning';
-  return 'good';
-}
 
 function unifiedToModelData(unifiedAnalysis: UnifiedAnalysis, fileName: string): ModelData {
   const metrics = unifiedAnalysis.metrics.result;

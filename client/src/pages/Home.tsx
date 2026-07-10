@@ -8,7 +8,7 @@ import { CADWorkspace } from '@/components/CADWorkspace';
 import { ChatPanel } from '@/components/ChatPanel';
 import { APIKeyModal } from '@/components/APIKeyModal';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
-import { deriveOhStatus } from '@/analysis/metrics';
+import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
 import { Language, getTranslation } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
@@ -23,6 +23,7 @@ import { LayerReveal } from '@/components/3D/LayerReveal';
 import { FailureEmergence } from '@/components/3D/FailureEmergence';
 import { ThermalField } from '@/components/3D/ThermalField';
 import { CausalityHighlight } from '@/components/3D/CausalityHighlight';
+import { deriveSupportStatus } from '@/analysis/metrics';
 import { buildCausalityGraph, CausalityGraph } from '@/components/causality/causalityEngine';
 import { ManufacturingTimeline } from '@/components/causality/ManufacturingTimeline';
 import { CausalityPanel } from '@/components/causality/CausalityPanel';
@@ -34,17 +35,6 @@ import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/Pr
 import { CognitiveScan } from '@/components/3D/CognitiveScan';
 import { AttentionPulse } from '@/components/3D/AttentionPulse';
 import { toast } from 'sonner';
-
-function deriveWtStatus(
-  thinWallRatio: number | undefined,
-  p5Thickness?: number | null,
-): 'good' | 'warning' | 'critical' {
-  const twr = thinWallRatio ?? 0;
-  if (twr > 0.15) return 'critical';
-  if (twr > 0.05) return 'warning';
-  if (p5Thickness != null && p5Thickness < 0.4) return 'warning';
-  return 'good';
-}
 
 function unifiedToModelData(
   unifiedAnalysis: import('@/analysis').UnifiedAnalysis,
@@ -345,7 +335,12 @@ export default function Home() {
   const providerLabel = getActiveProvider() ? AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel : null;
   const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
   const agentMarkers = agentRun?.results.flatMap(r => r.markers ?? []) ?? [];
-  const causalityGraph = useMemo(() => agentMarkers.length > 0 ? buildCausalityGraph(agentMarkers) : null, [agentMarkers]);
+  const supportDecision = unifiedAnalysis?.support?.result
+    ? deriveSupportStatus(unifiedAnalysis.support.result)
+    : null;
+  const causalityGraph = useMemo(() => agentMarkers.length > 0
+    ? buildCausalityGraph(agentMarkers, supportDecision?.status)
+    : null, [agentMarkers, supportDecision?.status]);
   const patternMatches: PatternMatch[] = useMemo(() =>
     agentMarkers.length > 0 ? detectPatterns(agentMarkers) : [],
     [agentMarkers],

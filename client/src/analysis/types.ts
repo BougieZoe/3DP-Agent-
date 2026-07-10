@@ -206,6 +206,16 @@ export interface BedFitResult {
 
 export type SupportDifficulty = 'none' | 'easy' | 'moderate' | 'difficult' | 'very_difficult';
 
+export interface SupportRegion {
+  faceCount: number;
+  centroid: { x: number; y: number; z: number };
+  boundingBoxSize: { x: number; y: number; z: number };
+  normalizedDirection: { x: number; y: number; z: number };
+  avgAngleDeg: number;
+  estimatedVolumeMm3: number;
+  zRange: { min: number; max: number };
+}
+
 export interface SupportResult {
   /** Estimated volume of support structures in mm³ */
   totalSupportVolumeMm3: number;
@@ -218,6 +228,16 @@ export interface SupportResult {
   estimatedSupportGrams: number;
   /** Volume breakdown by angle range */
   volumeByAngleDeg: Array<{ range: string; volumeMm3: number; faceCount: number }>;
+  /** Contiguous support face regions (clusters) */
+  supportRegions: SupportRegion[];
+  /** Face count of largest region / supportFaceCount (0–1) */
+  largestRegionRatio: number;
+  /** Fraction of support faces in top half of model Z (0–1) */
+  tallSupportRatio: number;
+  /** Z-distribution trend: -1 (bottom-heavy) to +1 (top-heavy), 0 = uniform */
+  zGradient: number;
+  /** How directional overhang normals are: 0 (uniform spread) to 1 (all same direction) */
+  directionality: number;
 }
 
 // ─── Print Time ────────────────────────────────────────────────────────────────

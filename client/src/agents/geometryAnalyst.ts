@@ -1,5 +1,6 @@
 import type { AgentOutput, RiskMarker } from '@shared/domain/agent';
 import { BaseAgent, type AgentContext } from './baseAgent';
+import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 
 interface GeometryAnalystDetails {
   triangleCount: number;
@@ -45,8 +46,9 @@ export class GeometryAnalyst extends BaseAgent {
     const estimatedMinWall = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
     const featureDetail = this.computeFeatureDetail(triCount, volume);
 
-    const wtStatus = thinWallRatio > 0.15 ? 'critical' : thinWallRatio > 0.05 ? 'warning' : 'good';
-    const hasOverhangIssue = overhangFaces > 0;
+    const wtStatus = deriveWtStatus(thinWallRatio, p5Thickness);
+    const ohStatus = deriveOhStatus(overhangRatio);
+    const hasOverhangIssue = ohStatus !== 'good';
     const isManifold = topology?.isManifold ?? true;
 
     const markers: RiskMarker[] = [];
@@ -75,7 +77,7 @@ export class GeometryAnalyst extends BaseAgent {
       issues.push('Very low triangle count — model may lack detail');
     }
 
-    const score = this.computeScore(wtStatus, hasOverhangIssue ? 'warning' : 'good', overhangRatio, aspectRatio, triCount);
+    const score = this.computeScore(wtStatus, ohStatus, overhangRatio, aspectRatio, triCount);
     const confidence = Math.min(1, triCount / 10000 + 0.3);
 
     const details: GeometryAnalystDetails = {
@@ -167,14 +169,15 @@ export class GeometryAnalyst extends BaseAgent {
     const step = 9;
     const p5Thickness = ctx.unifiedAnalysis.metrics.result?.p5WallThicknessMm;
     const minThickness = p5Thickness ?? ctx.unifiedAnalysis.metrics.result?.minWallThicknessMm ?? 1;
+    const twr = ctx.unifiedAnalysis.metrics.result?.thinWallRatio ?? 0;
+    const markerWtStatus = deriveWtStatus(twr, p5Thickness);
 
     for (let i = 0; i < Math.min(positions.length, 300); i += step) {
       if (i + 2 < positions.length) {
-        const wtStatus = p5Thickness != null && p5Thickness < 1 ? 'critical' : 'warning';
         markers.push({
           position: { x: positions[i], y: positions[i + 1], z: positions[i + 2] },
           type: 'thin_wall',
-          severity: wtStatus === 'critical' ? 0.9 : 0.5,
+          severity: markerWtStatus === 'critical' ? 0.9 : 0.5,
           description: `Thin wall area (est. ${minThickness.toFixed(2)}mm)`,
         });
         if (markers.length >= 15) break;

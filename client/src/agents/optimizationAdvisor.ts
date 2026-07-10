@@ -1,6 +1,6 @@
 import type { AgentOutput } from '@shared/domain/agent';
 import { BaseAgent, type AgentContext } from './baseAgent';
-import { deriveOhStatus } from '@/analysis/metrics';
+import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from '@/analysis/metrics';
 
 interface OptimizedGeometrySuggestion {
   type: 'wall_thickening' | 'orientation_change' | 'support_addition' | 'fillet_add' | 'hole_fill' | 'bridging_redesign';
@@ -37,6 +37,7 @@ export class OptimizationAdvisor extends BaseAgent {
     const { unifiedAnalysis, modelSize, previousOutputs } = ctx;
     const metrics = unifiedAnalysis.metrics.result;
     const topology = unifiedAnalysis.topology.result;
+    const support = unifiedAnalysis.support?.result;
     const triCount = topology?.triangleCount ?? 0;
     const oh = metrics?.overhang;
     const overhangFaces = oh?.faceCount ?? 0;
@@ -44,7 +45,7 @@ export class OptimizationAdvisor extends BaseAgent {
     const p5Thickness = metrics?.p5WallThicknessMm;
     const thinWallRatio = (metrics?.thinWallRatio ?? 0);
     const minThickness = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
-    const wtStatus = thinWallRatio > 0.15 ? 'critical' : thinWallRatio > 0.05 ? 'warning' : 'good';
+    const wtStatus = deriveWtStatus(thinWallRatio, p5Thickness);
     const ohStatus = deriveOhStatus(overhangRatio);
 
     const analysisInput = {
@@ -55,12 +56,13 @@ export class OptimizationAdvisor extends BaseAgent {
       size: modelSize,
       triangleCount: triCount,
     };
+    const supportDecision = support ? deriveSupportStatus(support) : null;
 
     const geometryOutput = previousOutputs.get('geometry_analyst');
     const scorerOutput = previousOutputs.get('printability_scorer');
     const failureOutput = previousOutputs.get('failure_predictor');
 
-    const suggestions = this.generateSuggestions(analysisInput, metricsInput, geometryOutput, scorerOutput, failureOutput);
+    const suggestions = this.generateSuggestions(analysisInput, metricsInput, supportDecision, geometryOutput, scorerOutput, failureOutput);
     const recommendedMaterials = this.recommendMaterials(analysisInput, metricsInput);
     const optimalOrientation = this.suggestOrientation(analysisInput, metricsInput);
 
@@ -82,6 +84,7 @@ export class OptimizationAdvisor extends BaseAgent {
   private generateSuggestions(
     analysis: { wallThickness: { status: string; minThickness: number; thinWallRatio?: number }; overhang: { status: string; areas: number } },
     metrics: { size: { x: number; y: number; z: number }; triangleCount: number },
+    supportDecision?: { status: string; reasons: string[]; confidence: number } | null,
     geometryOutput?: AgentOutput,
     scorerOutput?: AgentOutput,
     failureOutput?: AgentOutput,
@@ -89,7 +92,7 @@ export class OptimizationAdvisor extends BaseAgent {
     const suggestions: OptimizedGeometrySuggestion[] = [];
     const twr = analysis.wallThickness.thinWallRatio ?? 0;
 
-    if (twr > 0.15) {
+    if (analysis.wallThickness.status === 'critical') {
       suggestions.push({
         type: 'wall_thickening',
         priority: 'critical',
@@ -98,7 +101,7 @@ export class OptimizationAdvisor extends BaseAgent {
         expectedImprovement: 'Reduces collapse risk by 60-80%',
         difficulty: 'moderate',
       });
-    } else if (twr > 0.05) {
+    } else if (analysis.wallThickness.status === 'warning') {
       suggestions.push({
         type: 'wall_thickening',
         priority: 'high',
@@ -127,6 +130,58 @@ export class OptimizationAdvisor extends BaseAgent {
         expectedImprovement: 'Eliminates sagging on overhangs',
         difficulty: 'easy',
       });
+    }
+
+    // ── Support reasoning from deriveSupportStatus ──
+    if (supportDecision) {
+      for (const reason of supportDecision.reasons) {
+        if (reason.startsWith('Large continuous support island')) {
+          suggestions.push({
+            type: 'support_addition',
+            priority: supportDecision.status === 'critical' ? 'critical' : 'high',
+            description: reason,
+            implementation: 'Use organic/tree supports for easier breakaway. Consider splitting model at the overhang boundary.',
+            expectedImprovement: 'Simplifies support removal and improves surface finish',
+            difficulty: 'moderate',
+          });
+        } else if (reason.includes('separate support islands')) {
+          suggestions.push({
+            type: 'support_addition',
+            priority: 'medium',
+            description: reason,
+            implementation: 'Consider consolidating overhangs into fewer continuous regions by adjusting orientation or adding bridging geometry.',
+            expectedImprovement: 'Reduces support interface area and post-processing time',
+            difficulty: 'moderate',
+          });
+        } else if (reason.includes('tall supports')) {
+          suggestions.push({
+            type: 'support_addition',
+            priority: 'high',
+            description: reason,
+            implementation: 'Consider reorienting model to reduce Z-height of supports. Use support blockers where possible.',
+            expectedImprovement: 'Reduces tall support wobble and post-processing time',
+            difficulty: 'moderate',
+          });
+        } else if (reason.includes('Directionally concentrated')) {
+          suggestions.push({
+            type: 'orientation_change',
+            priority: 'medium',
+            description: reason,
+            implementation: 'Test rotations that spread overhang faces across multiple axes. 15-30° tilt can significantly reduce peak overhang severity.',
+            expectedImprovement: 'More uniform support distribution, lower peak support height',
+            difficulty: 'easy',
+          });
+        } else if (reason.includes('Very difficult') || reason.includes('Difficult support') || reason.includes('Moderate support')) {
+          suggestions.push({
+            type: 'support_addition',
+            priority: reason.includes('Very difficult') ? 'critical' : reason.includes('Difficult') ? 'high' : 'medium',
+            description: reason,
+            implementation: 'Enable tree/organic supports in slicer (PrusaSlicer organic, Orca tree). Set overhang threshold to 50°. Use support blockers where not needed.',
+            expectedImprovement: 'Reduces sagging and support failure risk',
+            difficulty: 'easy',
+          });
+        }
+      }
     }
 
     const maxDim = Math.max(metrics.size.x, metrics.size.y, metrics.size.z);
