@@ -25,6 +25,15 @@ describe('domain contract compatibility', () => {
       legacy: {
         wallThickness: {
           minThicknessMm: 5,
+          p1ThicknessMm: null,
+          p5ThicknessMm: null,
+          p10ThicknessMm: null,
+          medianThicknessMm: null,
+          avgThicknessMm: null,
+          thinWallCount: 0,
+          thinWallPercentage: 0,
+          averageConfidence: 0,
+          lowConfidenceSampleCount: 0,
           affectedAreas: 0,
           status: 'good',
         },

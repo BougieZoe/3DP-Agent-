@@ -10,6 +10,8 @@ import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
 
 const OVERHANG_THRESHOLD_DEG = 45;
+const THIN_WALL_THRESHOLD_MM = 0.8;
+const LOW_CONFIDENCE_THRESHOLD = 0.3;
 const OVERHANG_ANGLE_BUCKETS = [
   { minAngle: 0, maxAngle: 30 },
   { minAngle: 30, maxAngle: 45 },
@@ -124,16 +126,42 @@ export function analyzeOverhang(
   return { faceCount: overhangCount, totalFaceCount, ratio, severity, breakdownByAngleDeg: breakdownByAngle };
 }
 
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  if (sorted.length === 1) return sorted[0];
+  const index = p * (sorted.length - 1);
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) return sorted[lower];
+  const frac = index - lower;
+  return sorted[lower] * (1 - frac) + sorted[upper] * frac;
+}
+
 export function sampleWallThickness(
   positions: Float32Array,
   indices: Uint16Array | Uint32Array,
   maxSamples: number = 200,
-): { samples: WallThicknessSample[]; minThickness: number | null; avgThickness: number | null } {
+): {
+  samples: WallThicknessSample[];
+  minThickness: number | null;
+  avgThickness: number | null;
+  p1Thickness: number | null;
+  p5Thickness: number | null;
+  p10Thickness: number | null;
+  medianThickness: number | null;
+  thinWallCount: number;
+  /** Ratio 0.0–1.0 of samples below thin-wall threshold */
+  thinWallRatio: number;
+  /** Percentage 0–100 (backward compat) */
+  thinWallPercentage: number;
+  averageConfidence: number;
+  lowConfidenceSampleCount: number;
+} {
   const triCount = Math.floor(indices.length / 3);
   const samples: WallThicknessSample[] = [];
 
   if (triCount < 4) {
-    return { samples, minThickness: null, avgThickness: null };
+    return { samples, minThickness: null, avgThickness: null, p1Thickness: null, p5Thickness: null, p10Thickness: null, medianThickness: null, thinWallCount: 0, thinWallRatio: 0, thinWallPercentage: 0, averageConfidence: 0, lowConfidenceSampleCount: 0 };
   }
 
   const step = Math.max(1, Math.floor(triCount / maxSamples));
@@ -201,7 +229,24 @@ export function sampleWallThickness(
     ? validSamples.reduce((sum, s) => sum + s.thickness, 0) / validSamples.length
     : null;
 
-  return { samples, minThickness, avgThickness };
+  const sorted = validSamples.map(s => s.thickness).sort((a, b) => a - b);
+  const p1Thickness = validSamples.length > 0 ? percentile(sorted, 0.01) : null;
+  const p5Thickness = validSamples.length > 0 ? percentile(sorted, 0.05) : null;
+  const p10Thickness = validSamples.length > 0 ? percentile(sorted, 0.10) : null;
+  const medianThickness = validSamples.length > 0 ? percentile(sorted, 0.50) : null;
+
+  const thinWallCount = validSamples.filter(s => s.thickness < THIN_WALL_THRESHOLD_MM).length;
+  /** thinWallRatio = fraction 0.0–1.0 of sampled regions below thin-wall threshold */
+  const thinWallRatio = validSamples.length > 0 ? (thinWallCount / validSamples.length) : 0;
+  /** thinWallPercentage = percentage 0–100 (for backward compatibility) */
+  const thinWallPercentage = thinWallRatio * 100;
+
+  const averageConfidence = validSamples.length > 0
+    ? validSamples.reduce((sum, s) => sum + s.confidence, 0) / validSamples.length
+    : 0;
+  const lowConfidenceSampleCount = validSamples.filter(s => s.confidence < LOW_CONFIDENCE_THRESHOLD).length;
+
+  return { samples, minThickness, avgThickness, p1Thickness, p5Thickness, p10Thickness, medianThickness, thinWallCount, thinWallRatio, thinWallPercentage, averageConfidence, lowConfidenceSampleCount };
 }
 
 function rayTriangleIntersection(
@@ -238,6 +283,41 @@ function rayTriangleIntersection(
   return t >= 0 ? t : null;
 }
 
+function computeWallConfidence(
+  minThickness: number | null,
+  p5Thickness: number | null,
+  thinWallCount: number,
+  thinWallRatio: number,
+  averageConfidence: number,
+  lowConfidenceSampleCount: number,
+  sampleCount: number,
+): Confidence {
+  if (minThickness === null || sampleCount === 0) return 0.1 as Confidence;
+
+  // Base = average per-sample raycast confidence
+  let confidence = averageConfidence;
+
+  // Penalize for many low-confidence individual samples
+  const lowConfRatio = sampleCount > 0 ? lowConfidenceSampleCount / sampleCount : 0;
+  confidence *= (1 - lowConfRatio * 0.4);
+
+  // Reduce confidence when thin walls are widespread (not isolated anomalies)
+  if (thinWallRatio > 0.25) {
+    confidence *= 0.5;
+  } else if (thinWallRatio > 0.1) {
+    confidence *= 0.75;
+  } else if (thinWallRatio > 0.02) {
+    confidence *= 0.9;
+  }
+
+  // Clamp and snap to nearest valid Confidence level
+  const clamped = Math.max(0.1, Math.min(0.95, confidence));
+  const levels = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+  return levels.reduce((a, b) =>
+    Math.abs(b - clamped) < Math.abs(a - clamped) ? b : a
+  ) as Confidence;
+}
+
 export function computeMetrics(
   model: GeometryModel,
   graph?: GeometryGraph | null,
@@ -250,6 +330,8 @@ export function computeMetrics(
       meshVolumeMm3: 0, surfaceAreaMm2: 0,
       boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 },
       minWallThicknessMm: null, avgWallThicknessMm: null,
+      p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null,
+      thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, lowConfidenceSampleCount: 0,
       wallThicknessSamples: [],
       overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [] },
     }, 'No position data');
@@ -260,6 +342,8 @@ export function computeMetrics(
       meshVolumeMm3: 0, surfaceAreaMm2: 0,
       boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 },
       minWallThicknessMm: null, avgWallThicknessMm: null,
+      p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null,
+      thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, lowConfidenceSampleCount: 0,
       wallThicknessSamples: [],
       overhang: { faceCount: 0, totalFaceCount: g.triangleCount, ratio: 0, severity: 'none', breakdownByAngleDeg: [] },
     }, 'Non-indexed geometry — volume and wall thickness cannot be computed accurately');
@@ -277,9 +361,12 @@ export function computeMetrics(
   const meshVolume = computeMeshVolume(positions, indices);
   const surfaceArea = computeSurfaceArea(positions, indices);
   const overhang = analyzeOverhang(positions, indices);
-  const { samples, minThickness, avgThickness } = sampleWallThickness(positions, indices);
+  const { samples, minThickness, avgThickness, p1Thickness, p5Thickness, p10Thickness, medianThickness, thinWallCount, thinWallRatio, thinWallPercentage, averageConfidence, lowConfidenceSampleCount } = sampleWallThickness(positions, indices);
 
-  const wallConfidence = minThickness !== null ? 0.5 as Confidence : 0.1 as Confidence;
+  const wallConfidence = computeWallConfidence(
+    minThickness, p5Thickness, thinWallCount, thinWallRatio,
+    averageConfidence, lowConfidenceSampleCount, samples.length,
+  );
   const overallConfidence = wallConfidence as Confidence;
 
   const result: MetricsResult = {
@@ -289,6 +376,15 @@ export function computeMetrics(
     boundingBoxDimensionsMm: { x: dimX, y: dimY, z: dimZ },
     minWallThicknessMm: minThickness,
     avgWallThicknessMm: avgThickness,
+    p1WallThicknessMm: p1Thickness,
+    p5WallThicknessMm: p5Thickness,
+    p10WallThicknessMm: p10Thickness,
+    medianWallThicknessMm: medianThickness,
+    thinWallCount,
+    thinWallPercentage,
+    thinWallRatio,
+    averageConfidence,
+    lowConfidenceSampleCount,
     wallThicknessSamples: samples,
     overhang,
   };

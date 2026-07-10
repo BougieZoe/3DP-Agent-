@@ -36,8 +36,10 @@ export class PrintabilityScorer extends BaseAgent {
     const triCount = topology?.triangleCount ?? 0;
     const oh = metrics?.overhang;
     const overhangFaces = oh?.faceCount ?? 0;
-    const minThickness = metrics?.minWallThicknessMm ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
-    const wtStatus = minThickness < 1 ? 'critical' : minThickness < 2 ? 'warning' : 'good';
+    const p5Thickness = metrics?.p5WallThicknessMm;
+    const thinWallRatio = (metrics?.thinWallRatio ?? 0);
+    const minThickness = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
+    const wtStatus = thinWallRatio > 0.15 ? 'critical' : thinWallRatio > 0.05 ? 'warning' : 'good';
     const ohStatus = overhangFaces > Math.max(1, triCount * 0.1) ? 'warning' : 'good';
 
     const gaOutput = previousOutputs.get('geometry_analyst');
@@ -53,7 +55,7 @@ export class PrintabilityScorer extends BaseAgent {
     const breakdown = this.computeBreakdown(analysisInput, gaAspectRatio, gaFeatureDetail);
 
     const explanation = this.buildExplanation(breakdown, {
-      wallThickness: { status: wtStatus, minThickness },
+      wallThickness: { status: wtStatus, minThickness, thinWallRatio },
       overhang: { status: ohStatus, areas: overhangFaces },
     });
 
@@ -149,7 +151,7 @@ export class PrintabilityScorer extends BaseAgent {
     };
   }
 
-  private buildExplanation(breakdown: ScoringBreakdown, analysis: { wallThickness: { status: string; minThickness: number }; overhang: { status: string; areas: number } }): string {
+  private buildExplanation(breakdown: ScoringBreakdown, analysis: { wallThickness: { status: string; minThickness: number; thinWallRatio?: number }; overhang: { status: string; areas: number } }): string {
     const lines = [
       `Printability Score: ${Math.round(breakdown.weightedTotal)}/100 (${breakdown.category.toUpperCase()})`,
       ``,
@@ -162,7 +164,12 @@ export class PrintabilityScorer extends BaseAgent {
     ];
 
     if (breakdown.wallThicknessScore < 50) {
-      lines.push(``, `\u26a0 Primary concern: wall thickness (${analysis.wallThickness.minThickness.toFixed(2)}mm). Consider thickening to 2mm+ for reliable printing.`);
+      const twr = analysis.wallThickness.thinWallRatio;
+      if (twr != null && twr > 0) {
+        lines.push(``, `\u26a0 Thin walls: ${(twr * 100).toFixed(1)}% of sampled regions below FDM threshold (p5=${analysis.wallThickness.minThickness.toFixed(2)}mm). Consider thickening.`);
+      } else {
+        lines.push(``, `\u26a0 Primary concern: wall thickness (${analysis.wallThickness.minThickness.toFixed(2)}mm). Consider thickening to 2mm+ for reliable printing.`);
+      }
     }
     if (breakdown.overhangScore < 50) {
       lines.push(`\u26a0 Secondary concern: ${analysis.overhang.areas} overhang faces need support.`);

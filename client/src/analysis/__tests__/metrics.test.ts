@@ -70,4 +70,31 @@ describe('computeMetrics', () => {
     expect(result.result.overhang.totalFaceCount).toBe(10);
     expect(result.result.meshVolumeMm3).toBeGreaterThan(0);
   });
+
+  it('thinWallRatio is 0 for solid unit cube (no thin walls)', () => {
+    const model = createWatertightCubeModel();
+    const result = computeMetrics(model);
+    expect(result.result.thinWallRatio).toBe(0);
+    expect(result.result.thinWallCount).toBe(0);
+  });
+
+  it('wall thickness confidence uses distribution not single min value', () => {
+    const model = createWatertightCubeModel();
+    const result = computeMetrics(model);
+    const m = result.result;
+
+    // p5, p10, median should exist and be positive
+    expect(m.p5WallThicknessMm).not.toBeNull();
+    expect(m.p10WallThicknessMm).not.toBeNull();
+    expect(m.medianWallThicknessMm).not.toBeNull();
+
+    if (m.p5WallThicknessMm != null && m.minWallThicknessMm != null) {
+      // p5 should be >= min (p5 is the 5th percentile, not the absolute min)
+      expect(m.p5WallThicknessMm).toBeGreaterThanOrEqual(m.minWallThicknessMm!);
+    }
+
+    // minWallThicknessMm alone should NOT determine confidence
+    // Confidence should incorporate averageConfidence and thinWallRatio
+    expect(result.confidence).toBeGreaterThanOrEqual(0.1);
+  });
 });

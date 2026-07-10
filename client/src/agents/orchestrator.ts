@@ -157,7 +157,7 @@ export class AgentOrchestrator {
         adjustedScores[agent.agentId] = adjustedScore;
 
         currentResult.score = adjustedScore;
-        currentResult.verdict = adjustedScore >= 70 ? 'pass' : adjustedScore >= 40 ? 'warning' : 'fail';
+        currentResult.verdict = agent.computeVerdict(adjustedScore);
         if (adjustment !== 0) {
           currentResult.explanation += `\n\n[Debate Round ${round}] ${reviewResult.notes}`;
         }

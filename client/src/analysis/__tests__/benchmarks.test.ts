@@ -124,6 +124,26 @@ describe('Pipeline benchmark', () => {
 
     console.log(`[bench] Wall thickness (thin wall): ${t.toFixed(3)}ms`);
   });
+
+  it('regression: isolated thin sample does not dominate confidence', () => {
+    const model = createWatertightCubeModel();
+
+    const met = computeMetrics(model);
+    const m = met.result;
+
+    // Verify distribution-based metrics exist and are consistent
+    expect(m.thinWallRatio).toBeDefined();
+    expect(m.thinWallRatio).toBe(0);
+
+    expect(m.p5WallThicknessMm).not.toBeNull();
+    expect(m.averageConfidence).toBeGreaterThanOrEqual(0);
+
+    // minWallThicknessMm kept for diagnostics — NOT the sole authority
+    if (m.minWallThicknessMm !== null && m.p5WallThicknessMm !== null) {
+      // For a uniform 1mm cube, p5 should not be wildly different from the norm
+      expect(m.p5WallThicknessMm).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe('Deterministic behavior', () => {

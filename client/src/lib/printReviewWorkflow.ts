@@ -13,10 +13,14 @@ import { generateQuickReport, type ModelData } from './ruleEngine';
 import { loadSTLFile } from './stlLoader';
 import { runAnalysisPipeline, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
 
-function deriveWtStatus(mm: number | null | undefined): 'good' | 'warning' | 'critical' {
-  if (mm == null) return 'warning';
-  if (mm < 1) return 'critical';
-  if (mm < 2) return 'warning';
+function deriveWtStatus(
+  thinWallRatio: number | undefined,
+  p5Thickness?: number | null,
+): 'good' | 'warning' | 'critical' {
+  const twr = thinWallRatio ?? 0;
+  if (twr > 0.15) return 'critical';
+  if (twr > 0.05) return 'warning';
+  if (p5Thickness != null && p5Thickness < 0.4) return 'warning';
   return 'good';
 }
 
@@ -36,13 +40,25 @@ function unifiedToModelData(unifiedAnalysis: UnifiedAnalysis, fileName: string):
   const surfaceArea = metrics?.surfaceAreaMm2 ?? 0;
   const oh = metrics?.overhang;
   const dims = metrics?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
+  const thinWallRatio = metrics?.thinWallRatio ?? 0;
+  const p5Thickness = metrics?.p5WallThicknessMm;
   const minWall = metrics?.minWallThicknessMm;
-  const wtStatus = deriveWtStatus(minWall);
+  const wtStatus = deriveWtStatus(thinWallRatio, p5Thickness);
 
   return {
     fileName,
     wallThickness: {
-      minThickness: minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
+      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
+      p1Thickness: metrics?.p1WallThicknessMm ?? null,
+      p5Thickness: metrics?.p5WallThicknessMm ?? null,
+      p10Thickness: metrics?.p10WallThicknessMm ?? null,
+      medianThickness: metrics?.medianWallThicknessMm ?? null,
+      avgThickness: metrics?.avgWallThicknessMm ?? null,
+      thinWallCount: metrics?.thinWallCount ?? 0,
+      thinWallPercentage: metrics?.thinWallPercentage ?? 0,
+      thinWallRatio: metrics?.thinWallRatio ?? 0,
+      averageConfidence: metrics?.averageConfidence ?? 0,
+      lowConfidenceSampleCount: metrics?.lowConfidenceSampleCount ?? 0,
       areas: Math.floor(triCount * 0.15),
       status: wtStatus,
     },
