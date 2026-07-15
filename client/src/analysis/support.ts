@@ -2,12 +2,11 @@ import { moduleResult, type AnalysisModuleResult, type Confidence, type SupportR
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
 
-const OVERHANG_THRESHOLD_DEG = 45;
-const PLA_DENSITY_G_PER_MM3 = 0.00124;
-
 export function estimateSupportVolume(
   model: GeometryModel,
   graph?: GeometryGraph | null,
+  overhangThresholdDeg: number = 50,
+  densityGPerMm3: number = 0.00124,
 ): AnalysisModuleResult<SupportResult> {
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
@@ -66,7 +65,7 @@ export function estimateSupportVolume(
     const cosAngle = Math.abs(ny) / len;
     const angleDeg = Math.acos(Math.max(-1, Math.min(1, cosAngle))) * (180 / Math.PI);
 
-    if (angleDeg <= OVERHANG_THRESHOLD_DEG) continue;
+    if (angleDeg <= overhangThresholdDeg) continue;
 
     const area = len / 2;
     const fcy = (ay + by + cy) / 3;
@@ -102,7 +101,7 @@ export function estimateSupportVolume(
   }
 
   const avgAngle = supportFaceCount > 0 ? totalOverhangAngle / supportFaceCount : 0;
-  const supportGrams = totalSupportVolume / 1000 * PLA_DENSITY_G_PER_MM3;
+  const supportGrams = totalSupportVolume / 1000 * densityGPerMm3;
 
   let difficulty: SupportDifficulty = 'none';
   if (supportFaceCount > 0) {

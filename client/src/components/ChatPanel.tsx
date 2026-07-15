@@ -3,6 +3,8 @@ import { ModelData, classifyQuestion, answerLocally } from '@/lib/ruleEngine';
 import { getActiveProvider, getKey, callAI, AIProvider } from '@/lib/apiKeys';
 import { Language } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
+import type { Material } from '@/lib/materialState';
+import { DEFAULT_MATERIAL } from '@/lib/materialState';
 
 interface Message {
   id: string;
@@ -16,6 +18,7 @@ interface ChatPanelProps {
   model: ModelData;
   language: Language;
   onNeedAPIKey: () => void;
+  material?: Material;
 }
 
 const SUGGESTED: Record<Language, string[]> = {
@@ -42,7 +45,7 @@ const SUGGESTED: Record<Language, string[]> = {
   ],
 };
 
-function buildSystemPrompt(model: ModelData, lang: Language): string {
+function buildSystemPrompt(model: ModelData, lang: Language, material: Material = DEFAULT_MATERIAL): string {
   const wallStatus = model.wallThickness.status;
   const overhangStatus = model.overhang.status;
   const hasCritical = wallStatus === 'critical' || overhangStatus === 'critical';
@@ -58,6 +61,7 @@ You are NOT a general AI assistant. You are a fabrication specialist reviewing t
 ## FILE UNDER REVIEW
 Name: ${model.fileName}
 Dimensions: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm
+Material: ${material.name} (overhang threshold: ${material.overhangThreshold}°, density: ${material.densityGPerCm3} g/cm³)
 Volume: ${model.volume.toFixed(0)} mm³
 Risk Assessment: ${riskLevel}
 
@@ -151,7 +155,7 @@ function buildInitialAssessment(model: ModelData, lang: Language): string {
   return `Scanned ${model.fileName} (${dims}).\n\nGeometry looks clean — wall thickness and overhangs are both within acceptable range. Low print risk.\n\nWhat do you want to talk through — material, settings, or something else?`;
 }
 
-export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
+export function ChatPanel({ model, language, onNeedAPIKey, material = DEFAULT_MATERIAL }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
@@ -180,7 +184,7 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
     const provider = getActiveProvider();
 
     if (!needsAI) {
-      const localAnswer = answerLocally(category, model, language);
+      const localAnswer = answerLocally(category, model, language, material);
       if (localAnswer) {
         await new Promise(r => setTimeout(r, 400));
         setMessages(prev => [...prev, {
@@ -213,7 +217,7 @@ export function ChatPanel({ model, language, onNeedAPIKey }: ChatPanelProps) {
 
     const key = getKey(provider)!;
     try {
-      const answer = await callAI(provider, key, buildSystemPrompt(model, language), text);
+      const answer = await callAI(provider, key, buildSystemPrompt(model, language, material), text);
       setMessages(prev => [...prev, {
         id: Date.now().toString() + '_a',
         role: 'assistant',
