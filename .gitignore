@@ -8,3 +8,6 @@ XPRIZE/
 
 # Env
 .env.*
+
+# Test coverage
+coverage/
