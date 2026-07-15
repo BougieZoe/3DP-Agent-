@@ -2,6 +2,8 @@ import type * as THREE from 'three';
 import type { AgentId, AgentOutput, AgentConsensus, DebateRound } from '@shared/domain/agent';
 import { calculateAgreementDelta, computeConsensusVerdict } from '@shared/domain/agent';
 import type { UnifiedAnalysis } from '@/analysis';
+import type { Material } from '@/lib/materialState';
+import { DEFAULT_MATERIAL } from '@/lib/materialState';
 import { fromThreeBufferGeometry } from '@/analysis/geometryConversion';
 import { extractVertexData } from '@/analysis/geometryData';
 import { BaseAgent, type AgentContext } from './baseAgent';
@@ -54,6 +56,7 @@ export class AgentOrchestrator {
     fileName: string,
     visionCanvas?: HTMLCanvasElement | null,
     language?: string,
+    material: Material = DEFAULT_MATERIAL,
   ): Promise<AgentRunSummary> {
     const startTime = performance.now();
 
@@ -67,6 +70,7 @@ export class AgentOrchestrator {
       modelSize: vertexData.size,
       previousOutputs: new Map(),
       fileName,
+      material,
     };
 
     if (visionCanvas) {

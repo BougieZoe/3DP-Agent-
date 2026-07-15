@@ -18,8 +18,6 @@
 import { moduleResult, PRINTER_PROFILES, type AnalysisModuleResult, type Confidence, type PrintTimeResult, type PrinterProfileId } from './types';
 import type { MetricsResult } from './types';
 
-const PLA_DENSITY_G_PER_CM3 = 1.24;
-const PLA_PRICE_PER_KG_USD = 22;
 const MACHINE_RATE_PER_HOUR_USD = 2;
 
 // Default volumetric print rates (mm³/min) for various layer heights
@@ -47,6 +45,8 @@ export function estimatePrintTime(
   metricsResult: MetricsResult,
   printerId: PrinterProfileId = 'bambu_x1c',
   layerHeightMm: number = DEFAULT_LAYER_HEIGHT,
+  densityGPerCm3: number = 1.24,
+  pricePerKgUsd: number = 22,
 ): AnalysisModuleResult<PrintTimeResult> {
   const startTime = performance.now();
 
@@ -88,10 +88,10 @@ export function estimatePrintTime(
 
   // Material weight
   const volumeCm3 = volume / 1000;
-  const weightGrams = volumeCm3 * PLA_DENSITY_G_PER_CM3;
+  const weightGrams = volumeCm3 * densityGPerCm3;
 
   // Cost
-  const materialCost = weightGrams / 1000 * PLA_PRICE_PER_KG_USD;
+  const materialCost = weightGrams / 1000 * pricePerKgUsd;
   const machineCost = totalHours * MACHINE_RATE_PER_HOUR_USD;
   const totalCost = materialCost + machineCost;
 

@@ -1,5 +1,7 @@
+import { useMaterial, type MaterialName } from "@/contexts/MaterialContext";
+import { MATERIALS, type Material } from "@/lib/materialState";
 import { ReportGenerator } from "@/components/ReportGenerator";
-import { useRef, useState, useEffect, useMemo } from 'react';
+import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
@@ -39,6 +41,7 @@ import { toast } from 'sonner';
 function unifiedToModelData(
   unifiedAnalysis: import('@/analysis').UnifiedAnalysis,
   fileName: string,
+  overhangThreshold: number = 50,
 ): ModelData {
   const metrics = unifiedAnalysis.metrics.result;
   const topology = unifiedAnalysis.topology.result;
@@ -71,7 +74,7 @@ function unifiedToModelData(
       status: wtStatus,
     },
     overhang: {
-      angle: 45,
+      angle: overhangThreshold,
       areas: oh?.faceCount ?? 0,
       status: deriveOhStatus(oh?.ratio ?? 0),
     },
@@ -248,6 +251,7 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
 // ─── Home ──────────────────────────────────────────────────────────────────────
 
 export default function Home() {
+  const { material, materialName, setMaterialName } = useMaterial();
   const [mode, setMode] = useState<'analyze' | 'cad'>('analyze');
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
@@ -292,10 +296,10 @@ export default function Home() {
     setSelectedSuggestionId(null);
     setOverlayOpacity(0.7);
     toast.success(t('stlParsed') + model.fileName);
-    runAgentAnalysis(model);
+    runAgentAnalysis(model, material);
   };
 
-  const runAgentAnalysis = async (model: UploadedModel) => {
+  const runAgentAnalysis = async (model: UploadedModel, mat: Material = material) => {
     if (!orchestratorRef.current) return;
     setAgentLoading(true);
     try {
@@ -305,6 +309,7 @@ export default function Home() {
         model.fileName,
         undefined,
         language,
+        mat,
       );
       setAgentRun(summary);
     } catch (err) {
@@ -314,9 +319,20 @@ export default function Home() {
     }
   };
 
+  const reanalyzeWithMaterial = useCallback(async (newMaterialName: MaterialName) => {
+    setMaterialName(newMaterialName);
+    if (!uploadedModel) return;
+    const newMat = MATERIALS[newMaterialName];
+    setQuickReport('');
+    setAgentRun(null);
+    await runAgentAnalysis(uploadedModel, newMat);
+    const md = unifiedToModelData(uploadedModel.unifiedAnalysis, uploadedModel.fileName, newMat.overhangThreshold);
+    setQuickReport(generateQuickReport(md, language, newMat));
+  }, [uploadedModel, language, setMaterialName]);
+
   const getModelData = (): ModelData | null => {
     if (!uploadedModel) return null;
-    return unifiedToModelData(uploadedModel.unifiedAnalysis, uploadedModel.fileName);
+    return unifiedToModelData(uploadedModel.unifiedAnalysis, uploadedModel.fileName, material.overhangThreshold);
   };
 
   const handleGenerateReport = () => {
@@ -324,7 +340,7 @@ export default function Home() {
     if (!md) return;
     setReportLoading(true);
     setTimeout(() => {
-      setQuickReport(generateQuickReport(md, language));
+      setQuickReport(generateQuickReport(md, language, material));
       setReportLoading(false);
     }, 600);
   };
@@ -404,6 +420,16 @@ export default function Home() {
               </button>
             ))}
           </div>
+          {/* Material */}
+          <select
+            value={materialName}
+            onChange={(e) => reanalyzeWithMaterial(e.target.value as MaterialName)}
+            className="text-xs font-mono px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer"
+          >
+            {(Object.keys(MATERIALS) as MaterialName[]).map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
           {/* Language */}
           <div className="flex items-center gap-0.5">
             {(['en', 'ja', 'zh'] as Language[]).map(lang => (
@@ -742,6 +768,7 @@ export default function Home() {
                     <ChatPanel
                       model={modelData}
                       language={language}
+                      material={material}
                       onNeedAPIKey={() => setShowAPIModal(true)}
                     />
                   </div>

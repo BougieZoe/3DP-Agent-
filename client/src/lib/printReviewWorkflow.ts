@@ -13,8 +13,10 @@ import {
 import { generateQuickReport, type ModelData } from './ruleEngine';
 import { loadSTLFile } from './stlLoader';
 import { runAnalysisPipeline, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
+import type { Material } from '@/lib/materialState';
+import { DEFAULT_MATERIAL } from '@/lib/materialState';
 
-function unifiedToModelData(unifiedAnalysis: UnifiedAnalysis, fileName: string): ModelData {
+function unifiedToModelData(unifiedAnalysis: UnifiedAnalysis, fileName: string, material: Material = DEFAULT_MATERIAL): ModelData {
   const metrics = unifiedAnalysis.metrics.result;
   const topology = unifiedAnalysis.topology.result;
   const triCount = topology?.triangleCount ?? 0;
@@ -45,7 +47,7 @@ function unifiedToModelData(unifiedAnalysis: UnifiedAnalysis, fileName: string):
       status: wtStatus,
     },
     overhang: {
-      angle: 45,
+      angle: material.overhangThreshold,
       areas: oh?.faceCount ?? 0,
       status: deriveOhStatus(oh?.ratio ?? 0),
     },
@@ -85,6 +87,7 @@ export interface LocalPrintReviewWorkflowResult {
 export interface LocalPrintReviewWorkflowOptions {
   language: AdvisorLanguage;
   generateReport?: boolean;
+  material?: Material;
 }
 
 export interface LocalPrintReviewWorkflowDependencies {
@@ -130,7 +133,7 @@ export async function executeLocalPrintReviewWorkflow(
     );
 
     stages.evaluatePrintability = startStage(stages.evaluatePrintability, now());
-    const modelData = unifiedToModelData(unifiedAnalysis, file.name);
+    const modelData = unifiedToModelData(unifiedAnalysis, file.name, options.material);
 
     if (options.generateReport === false) {
       stages.evaluatePrintability = completeStage(
@@ -142,7 +145,7 @@ export async function executeLocalPrintReviewWorkflow(
       return result;
     }
 
-    const report = createAnalysisReport(modelData, options.language, now());
+    const report = createAnalysisReport(modelData, options.language, now(), options.material);
     result.report = report;
     stages.evaluatePrintability = completeStage(
       stages.evaluatePrintability,
@@ -173,12 +176,13 @@ function createAnalysisReport(
   modelData: ModelData,
   language: AdvisorLanguage,
   generatedAt: string,
+  material: Material = DEFAULT_MATERIAL,
 ): AnalysisReport {
   return {
     id: `${modelData.fileName}:local-report:${language}`,
     modelSourceId: modelData.fileName,
     format: 'plain_text',
-    content: generateQuickReport(modelData, language),
+    content: generateQuickReport(modelData, language, material),
     generatedAt,
     source: 'local_rules',
   };

@@ -34,7 +34,7 @@ export class OptimizationAdvisor extends BaseAgent {
   }
 
   protected async analyze(ctx: AgentContext): Promise<AgentOutput> {
-    const { unifiedAnalysis, modelSize, previousOutputs } = ctx;
+    const { unifiedAnalysis, modelSize, previousOutputs, material } = ctx;
     const metrics = unifiedAnalysis.metrics.result;
     const topology = unifiedAnalysis.topology.result;
     const support = unifiedAnalysis.support?.result;
@@ -62,7 +62,7 @@ export class OptimizationAdvisor extends BaseAgent {
     const scorerOutput = previousOutputs.get('printability_scorer');
     const failureOutput = previousOutputs.get('failure_predictor');
 
-    const suggestions = this.generateSuggestions(analysisInput, metricsInput, supportDecision, geometryOutput, scorerOutput, failureOutput);
+    const suggestions = this.generateSuggestions(analysisInput, metricsInput, supportDecision, geometryOutput, scorerOutput, failureOutput, material.overhangThreshold);
     const recommendedMaterials = this.recommendMaterials(analysisInput, metricsInput);
     const optimalOrientation = this.suggestOrientation(analysisInput, metricsInput);
 
@@ -88,6 +88,7 @@ export class OptimizationAdvisor extends BaseAgent {
     geometryOutput?: AgentOutput,
     scorerOutput?: AgentOutput,
     failureOutput?: AgentOutput,
+    overhangThreshold: number = 50,
   ): OptimizedGeometrySuggestion[] {
     const suggestions: OptimizedGeometrySuggestion[] = [];
     const twr = analysis.wallThickness.thinWallRatio ?? 0;
@@ -116,8 +117,8 @@ export class OptimizationAdvisor extends BaseAgent {
       suggestions.push({
         type: 'orientation_change',
         priority: analysis.overhang.status === 'critical' ? 'high' : 'medium',
-        description: `${analysis.overhang.areas} overhang faces exceed 45°`,
-        implementation: 'Rotate model so most overhangs face upward. Use 45° rule — overhangs under 45° print without support. For remaining overhangs, enable auto-tree supports in slicer.',
+        description: `${analysis.overhang.areas} overhang faces exceed ${overhangThreshold}°`,
+        implementation: `Rotate model so most overhangs face upward. Use ${overhangThreshold}° rule — overhangs under ${overhangThreshold}° print without support. For remaining overhangs, enable auto-tree supports in slicer.`,
         expectedImprovement: 'Reduces support material by 40-60%',
         difficulty: 'easy',
       });

@@ -9,6 +9,8 @@
 // and feeding the previous step's JSON output as context into the next step.
 
 import { callAI, getActiveProvider, getKey } from './apiKeys';
+import type { Material } from '@/lib/materialState';
+import { DEFAULT_MATERIAL } from '@/lib/materialState';
 
 export interface AgentStepResult {
   agentName: string;
@@ -23,7 +25,9 @@ export interface PipelineResult {
 
 // ---- The 5 system prompts ----
 
-const GEOMETRY_ANALYST_PROMPT = `You are the 3DP Geometry Analyst. Your job is pure geometric measurement only: wall thickness below the minimum printable threshold, overhang angles exceeding 45° that require support, whether the mesh is watertight (closed), and whether normals are consistently oriented. Report only measured geometric facts and concrete numeric values, including how many faces/triangles your measurement is based on (field name: sample_faces). Do not predict print failures or suggest fixes — that is the job of other agents. Respond in JSON format only, no markdown fences, no extra text.`;
+function buildGeometryAnalystPrompt(threshold: number): string {
+  return `You are the 3DP Geometry Analyst. Your job is pure geometric measurement only: wall thickness below the minimum printable threshold, overhang angles exceeding ${threshold}° that require support, whether the mesh is watertight (closed), and whether normals are consistently oriented. Report only measured geometric facts and concrete numeric values, including how many faces/triangles your measurement is based on (field name: sample_faces). Do not predict print failures or suggest fixes — that is the job of other agents. Respond in JSON format only, no markdown fences, no extra text.`;
+}
 
 const FAILURE_PREDICTOR_PROMPT = `You are the 3DP Failure Predictor. Based on the geometric data provided by the Geometry Analyst, predict the specific types of print failure likely to occur (e.g. warping, layer shifting, support collapse, overhang sagging), the severity of each (low/medium/high), and roughly which stage or layer of the print it is likely to occur at. If you disagree with the Geometry Analyst's measurement (e.g. the sample size looks too small, or a number looks physically implausible), say so explicitly before giving your prediction. Do not perform geometric measurement, and do not suggest parameter fixes — prediction only. Respond in JSON format only, no markdown fences, no extra text.`;
 
@@ -122,12 +126,15 @@ async function callAgentWithCritic(
 export async function runAgentPipeline(
   modelDataSummary: string,
   language?: string,
-  onStepComplete?: (step: AgentStepResult, index: number) => void
+  onStepComplete?: (step: AgentStepResult, index: number) => void,
+  material: Material = DEFAULT_MATERIAL,
 ): Promise<PipelineResult> {
   const steps: AgentStepResult[] = [];
 
+  const geometryAnalystPrompt = buildGeometryAnalystPrompt(material.overhangThreshold);
+
   const geoResult = await callAgentWithCritic(
-    GEOMETRY_ANALYST_PROMPT,
+    geometryAnalystPrompt,
     GEOMETRY_CRITIC_PROMPT,
     `Model data: ${modelDataSummary}`,
     language,

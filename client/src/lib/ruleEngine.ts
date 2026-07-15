@@ -3,6 +3,9 @@
  * Handles common 3D printing questions with deterministic answers
  */
 
+import type { Material } from '@/lib/materialState';
+import { DEFAULT_MATERIAL } from '@/lib/materialState';
+
 export interface ModelData {
   fileName: string;
   wallThickness: {
@@ -34,7 +37,7 @@ export interface RuleResult {
 }
 
 // Quick local analysis report — no API
-export function generateQuickReport(model: ModelData, lang: 'en' | 'ja' | 'zh'): string {
+export function generateQuickReport(model: ModelData, lang: 'en' | 'ja' | 'zh', material: Material = DEFAULT_MATERIAL): string {
   const issues: string[] = [];
   const tips: string[] = [];
 
@@ -62,13 +65,20 @@ export function generateQuickReport(model: ModelData, lang: 'en' | 'ja' | 'zh'):
   }
 
   if (model.overhang.status === 'warning' || model.overhang.status === 'critical') {
-    issues.push(lang === 'zh' ? `${model.overhang.areas} 个悬垂面超过45°，需要支撑` :
-      lang === 'ja' ? `${model.overhang.areas}面が45°超 — サポート必要` :
-      `${model.overhang.areas} faces exceed 45° — support structures required`);
+    issues.push(lang === 'zh' ? `${model.overhang.areas} 个悬垂面超过${material.overhangThreshold}°，需要支撑` :
+      lang === 'ja' ? `${model.overhang.areas}面が${material.overhangThreshold}°超 — サポート必要` :
+      `${model.overhang.areas} faces exceed ${material.overhangThreshold}° — support structures required`);
+  }
+
+  const maxDim = Math.max(model.dims.x, model.dims.y, model.dims.z);
+  if (maxDim < 1 || maxDim > 1000) {
+    issues.push(lang === 'zh' ? `尺寸看起来不寻常 (最长边=${maxDim.toFixed(1)}mm) —— 这个模型是用英寸建模的吗？` :
+      lang === 'ja' ? `サイズが不自然です (最大辺=${maxDim.toFixed(1)}mm) —— インチでモデリングされていませんか？` :
+      `This size looks unusual for millimeters (longest side=${maxDim.toFixed(1)}mm) — was this modeled in inches?`);
   }
 
   const volume = model.volume;
-  const material = volume > 500000 ? (lang === 'zh' ? 'FDM (大型件)' : lang === 'ja' ? 'FDM（大型）' : 'FDM (large part)') :
+  const process = volume > 500000 ? (lang === 'zh' ? 'FDM (大型件)' : lang === 'ja' ? 'FDM（大型）' : 'FDM (large part)') :
     volume > 50000 ? (lang === 'zh' ? 'FDM / SLA' : 'FDM / SLA') :
     (lang === 'zh' ? 'SLA / SLS (精细件)' : lang === 'ja' ? 'SLA / SLS（精細）' : 'SLA / SLS (fine detail)');
 
@@ -82,7 +92,7 @@ export function generateQuickReport(model: ModelData, lang: 'en' | 'ja' | 'zh'):
     lang === 'zh' ? `尺寸: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm` :
     lang === 'ja' ? `寸法: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm` :
     `Dims: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm`,
-    lang === 'zh' ? `推荐工艺: ${material}` : lang === 'ja' ? `推奨工法: ${material}` : `Recommended: ${material}`,
+    lang === 'zh' ? `推荐工艺: ${process}` : lang === 'ja' ? `推奨工法: ${process}` : `Recommended: ${process}`,
     lang === 'zh' ? `层高建议: 0.2mm  填充率: 20%` : lang === 'ja' ? `積層ピッチ: 0.2mm  充填率: 20%` : `Layer: 0.2mm  Infill: 20%`,
   ];
 
@@ -126,7 +136,7 @@ export function classifyQuestion(question: string): { needsAI: boolean; category
 }
 
 // Local answers for common questions
-export function answerLocally(category: string, model: ModelData, lang: 'en' | 'ja' | 'zh'): string {
+export function answerLocally(category: string, model: ModelData, lang: 'en' | 'ja' | 'zh', material: Material = DEFAULT_MATERIAL): string {
   const isZh = lang === 'zh', isJa = lang === 'ja';
 
   switch (category) {
@@ -145,8 +155,8 @@ export function answerLocally(category: string, model: ModelData, lang: 'en' | '
     case 'support': {
       const needs = model.overhang.status !== 'good';
       return needs
-        ? (isZh ? `需要支撑。检测到 ${model.overhang.areas} 个面超过45°悬垂角。建议在切片软件中开启自动支撑。` : isJa ? `サポート必要。${model.overhang.areas}面が45°超。スライサーで自動サポートを有効に。` : `Support required. ${model.overhang.areas} faces exceed 45°. Enable auto-support in your slicer.`)
-        : (isZh ? '无需支撑。所有悬垂角度在45°以内，可直接打印。' : isJa ? 'サポート不要。全面が45°以内です。' : 'No support needed. All overhangs within 45° limit.');
+        ? (isZh ? `需要支撑。检测到 ${model.overhang.areas} 个面超过${material.overhangThreshold}°悬垂角。建议在切片软件中开启自动支撑。` : isJa ? `サポート必要。${model.overhang.areas}面が${material.overhangThreshold}°超。スライサーで自動サポートを有効に。` : `Support required. ${model.overhang.areas} faces exceed ${material.overhangThreshold}°. Enable auto-support in your slicer.`)
+        : (isZh ? `无需支撑。所有悬垂角度在${material.overhangThreshold}°以内，可直接打印。` : isJa ? `サポート不要。全面が${material.overhangThreshold}°以内です。` : `No support needed. All overhangs within ${material.overhangThreshold}° limit.`);
     }
     case 'settings':
       return isZh ? '推荐设置：层高 0.2mm，填充率 20%（结构件提高至40%+），打印速度 50mm/s，壁厚 3层。' :
@@ -160,11 +170,11 @@ export function answerLocally(category: string, model: ModelData, lang: 'en' | '
         `Estimated print time: ${mins}–${mins + 30} min (volume-based, FDM 0.2mm). Actual time depends on slicer settings.`;
     }
     case 'cost': {
-      const grams = model.volume * 0.00124;
-      const cost = (grams * 0.025).toFixed(2);
-      return isZh ? `材料成本估算：约 ¥${(parseFloat(cost) * 7).toFixed(1)}（PLA，基于体积）。不含机器、人工、后处理费用。` :
-        isJa ? `材料コスト概算: 約￥${(parseFloat(cost) * 150).toFixed(0)}（PLA、体積ベース）。機械・人件費は含まず。` :
-        `Material cost estimate: ~$${cost} (PLA, volume-based). Excludes machine time, labor, post-processing.`;
+      const grams = model.volume * (material.densityGPerCm3 / 1000);
+      const cost = (grams * material.pricePerKgUsd / 1000).toFixed(2);
+      return isZh ? `材料成本估算：约 ¥${(parseFloat(cost) * 7).toFixed(1)}（${material.name}，基于体积）。不含机器、人工、后处理费用。` :
+        isJa ? `材料コスト概算: 約￥${(parseFloat(cost) * 150).toFixed(0)}（${material.name}、体積ベース）。機械・人件費は含まず。` :
+        `Material cost estimate: ~$${cost} (${material.name}, volume-based). Excludes machine time, labor, post-processing.`;
     }
     case 'geometry':
       return isZh ? `模型尺寸：${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm。最小壁厚：${model.wallThickness.minThickness.toFixed(2)}mm。悬垂面：${model.overhang.areas} 个。` :

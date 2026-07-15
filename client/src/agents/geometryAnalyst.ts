@@ -28,7 +28,7 @@ export class GeometryAnalyst extends BaseAgent {
   }
 
   protected async analyze(ctx: AgentContext): Promise<AgentOutput> {
-    const { unifiedAnalysis, vertexPositions, modelSize } = ctx;
+    const { unifiedAnalysis, vertexPositions, modelSize, material } = ctx;
     const metrics = unifiedAnalysis.metrics.result;
     const validation = unifiedAnalysis.validation.result;
     const topology = unifiedAnalysis.topology.result;
@@ -68,7 +68,7 @@ export class GeometryAnalyst extends BaseAgent {
       issues.push('Some walls thinner than recommended — consider thickening');
     }
     if (hasOverhangIssue) {
-      issues.push(`${overhangFaces} faces exceed 45° overhang — support required`);
+      issues.push(`${overhangFaces} faces exceed ${material.overhangThreshold}° overhang — support required`);
     }
     if (aspectRatio > 5) {
       issues.push('Extreme aspect ratio — model may be fragile');
@@ -145,16 +145,17 @@ export class GeometryAnalyst extends BaseAgent {
     const normals = ctx.vertexNormals;
     const positions = ctx.vertexPositions;
     const step = 9;
+    const threshold = ctx.material.overhangThreshold;
 
     for (let i = 0; i < Math.min(normals.length, 300); i += 3) {
       const ny = normals[i + 1];
       const angle = Math.acos(Math.max(-1, Math.min(1, ny))) * (180 / Math.PI);
-      if (angle > 45 && i * 3 + 2 < positions.length) {
+      if (angle > threshold && i * 3 + 2 < positions.length) {
         const idx = Math.min(Math.floor(i / 3) * step, positions.length - 3);
         markers.push({
           position: { x: positions[idx], y: positions[idx + 1], z: positions[idx + 2] },
           type: 'overhang',
-          severity: Math.min(1, (angle - 45) / 45),
+          severity: Math.min(1, (angle - threshold) / (90 - threshold) * 2),
           description: `Overhang face at ${angle.toFixed(1)}°`,
         });
         if (markers.length >= 20) break;

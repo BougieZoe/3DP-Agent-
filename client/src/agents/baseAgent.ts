@@ -2,6 +2,8 @@ import type * as THREE from 'three';
 import type { AgentId, AgentOutput, AgentVerdict, RiskMarker } from '@shared/domain/agent';
 import type { AgentResultWithExplanation } from './types';
 import type { UnifiedAnalysis } from '@/analysis';
+import type { Material } from '@/lib/materialState';
+import { DEFAULT_MATERIAL } from '@/lib/materialState';
 import { getAgentLabel } from './types';
 
 export interface AgentContext {
@@ -13,6 +15,7 @@ export interface AgentContext {
   visionAnalysis?: string;
   previousOutputs: Map<AgentId, AgentOutput>;
   fileName: string;
+  material: Material;
 }
 
 export interface AgentCapabilities {

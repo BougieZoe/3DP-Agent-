@@ -10,7 +10,6 @@ import {
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
 
-const OVERHANG_THRESHOLD_DEG = 45;
 const THIN_WALL_THRESHOLD_MM = 0.8;
 const LOW_CONFIDENCE_THRESHOLD = 0.3;
 const OVERHANG_ANGLE_BUCKETS = [
@@ -74,6 +73,7 @@ export function computeSurfaceArea(
 export function analyzeOverhang(
   positions: Float32Array,
   indices: Uint16Array | Uint32Array,
+  overhangThresholdDeg: number = 50,
 ): OverhangMetrics {
   const totalFaceCount = Math.floor(indices.length / 3);
   const bucketCounts = OVERHANG_ANGLE_BUCKETS.map(() => 0);
@@ -107,7 +107,7 @@ export function analyzeOverhang(
       }
     }
 
-    if (angleDeg > OVERHANG_THRESHOLD_DEG) {
+    if (angleDeg > overhangThresholdDeg) {
       overhangCount++;
     }
   }
@@ -430,6 +430,7 @@ function computeWallConfidence(
 export function computeMetrics(
   model: GeometryModel,
   graph?: GeometryGraph | null,
+  overhangThresholdDeg: number = 50,
 ): AnalysisModuleResult<MetricsResult> {
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
@@ -469,7 +470,7 @@ export function computeMetrics(
 
   const meshVolume = computeMeshVolume(positions, indices);
   const surfaceArea = computeSurfaceArea(positions, indices);
-  const overhang = analyzeOverhang(positions, indices);
+  const overhang = analyzeOverhang(positions, indices, overhangThresholdDeg);
   const { samples, minThickness, avgThickness, p1Thickness, p5Thickness, p10Thickness, medianThickness, thinWallCount, thinWallRatio, thinWallPercentage, averageConfidence, lowConfidenceSampleCount } = sampleWallThickness(positions, indices);
 
   const wallConfidence = computeWallConfidence(

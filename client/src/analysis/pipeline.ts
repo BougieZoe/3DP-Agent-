@@ -8,11 +8,13 @@ import { estimatePrintTime } from './printTime';
 import { buildGeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
 import type { PrinterProfileId } from './types';
+import type { Material } from '@/lib/materialState';
 
 export interface PipelineOptions {
   printerId?: PrinterProfileId;
   layerHeightMm?: number;
   fileName?: string;
+  material?: Material;
 }
 
 export function runAnalysisPipeline(
@@ -21,6 +23,7 @@ export function runAnalysisPipeline(
 ): UnifiedAnalysis {
   const now = new Date().toISOString();
   const fileName = options.fileName ?? 'unknown.stl';
+  const mat = options.material;
 
   const graph = buildGeometryGraph(model);
 
@@ -44,7 +47,7 @@ export function runAnalysisPipeline(
   })();
 
   const metrics = (() => {
-    try { return computeMetrics(model, graph); }
+    try { return computeMetrics(model, graph, mat?.overhangThreshold); }
     catch (e) { return failResult('metrics', e, emptyMetrics); }
   })();
 
@@ -58,14 +61,14 @@ export function runAnalysisPipeline(
   const support = (() => {
     try {
       if (metrics.result.meshVolumeMm3 <= 0) return null;
-      return estimateSupportVolume(model, graph);
+      return estimateSupportVolume(model, graph, mat?.overhangThreshold, mat ? mat.densityGPerCm3 / 1000 : undefined);
     } catch (e) { return null; }
   })();
 
   const printTime = (() => {
     try {
       if (metrics.result.meshVolumeMm3 <= 0) return null;
-      return estimatePrintTime(metrics.result, options.printerId ?? 'bambu_x1c', options.layerHeightMm ?? 0.2);
+      return estimatePrintTime(metrics.result, options.printerId ?? 'bambu_x1c', options.layerHeightMm ?? 0.2, mat?.densityGPerCm3, mat?.pricePerKgUsd);
     } catch (e) { return null; }
   })();
 

@@ -33,7 +33,7 @@ export class FailurePredictor extends BaseAgent {
   }
 
   protected async analyze(ctx: AgentContext): Promise<AgentOutput> {
-    const { unifiedAnalysis, modelSize, vertexPositions, vertexNormals } = ctx;
+    const { unifiedAnalysis, modelSize, vertexPositions, vertexNormals, material } = ctx;
     const metrics = unifiedAnalysis.metrics.result;
     const topology = unifiedAnalysis.topology.result;
     const support = unifiedAnalysis.support?.result;
@@ -61,10 +61,10 @@ export class FailurePredictor extends BaseAgent {
     const risks: PredictedRisk[] = [];
     const markers: RiskMarker[] = [];
 
-    const overhangRisk = this.predictOverhangFailure(analysisInput, metricsInput);
+    const overhangRisk = this.predictOverhangFailure(analysisInput, metricsInput, material.overhangThreshold);
     if (overhangRisk) {
       risks.push(overhangRisk);
-      markers.push(...this.generateOverhangMarkers(ctx, overhangRisk.severity));
+      markers.push(...this.generateOverhangMarkers(ctx, overhangRisk.severity, material.overhangThreshold));
     }
 
     const wallRisk = this.predictWallFailure(analysisInput);
@@ -105,7 +105,11 @@ export class FailurePredictor extends BaseAgent {
     return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details as unknown as Record<string, unknown>, markers);
   }
 
-  private predictOverhangFailure(analysis: { overhang: { status: string; areas: number } }, _metrics: { triangleCount: number }): PredictedRisk | null {
+  private predictOverhangFailure(
+    analysis: { overhang: { status: string; areas: number } },
+    _metrics: { triangleCount: number },
+    threshold: number,
+  ): PredictedRisk | null {
     if (analysis.overhang.status === 'good') return null;
 
     const severity: PredictedRisk['severity'] =
@@ -115,10 +119,10 @@ export class FailurePredictor extends BaseAgent {
       type: 'overhang_failure',
       severity,
       confidence: 0.8,
-      description: `${analysis.overhang.areas} faces exceed 45° overhang angle — supports required to prevent sagging`,
+      description: `${analysis.overhang.areas} faces exceed ${threshold}° overhang angle — supports required to prevent sagging`,
       affectedFaces: analysis.overhang.areas,
       recommendation: severity === 'critical' || severity === 'high'
-        ? 'Add supports in slicer or redesign overhangs to be <45°'
+        ? `Add supports in slicer or redesign overhangs to be <${threshold}°`
         : 'Standard supports recommended in slicer',
     };
   }
@@ -273,7 +277,7 @@ export class FailurePredictor extends BaseAgent {
     return Math.min(1, rate + risks.length * 0.05);
   }
 
-  private generateOverhangMarkers(ctx: AgentContext, severity: string): RiskMarker[] {
+  private generateOverhangMarkers(ctx: AgentContext, severity: string, threshold: number): RiskMarker[] {
     if (severity === 'low') return [];
     const markers: RiskMarker[] = [];
     const positions = ctx.vertexPositions;
@@ -283,7 +287,7 @@ export class FailurePredictor extends BaseAgent {
     for (let i = 0; i < Math.min(normals.length, 600); i += 3) {
       const ny = normals[i + 1];
       const angle = Math.acos(Math.max(-1, Math.min(1, ny))) * (180 / Math.PI);
-      if (angle > 50 && i + 2 < positions.length) {
+      if (angle > threshold && i + 2 < positions.length) {
         markers.push({
           position: { x: positions[i * 3], y: positions[i * 3 + 1], z: positions[i * 3 + 2] },
           type: 'support_needed',
