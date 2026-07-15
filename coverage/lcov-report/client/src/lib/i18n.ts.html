@@ -1,0 +1,943 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for client/src/lib/i18n.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">client/src/lib</a> i18n.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/278</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>1/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>1/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/278</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+ * 3DP Agent - Internationalization
+ * Supports: English, Japanese, Chinese
+ */
+&nbsp;
+export type Language = 'en' | 'ja' | 'zh';
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export const translations = {</span>
+<span class="cstat-no" title="statement not covered" >  en: {</span>
+<span class="cstat-no" title="statement not covered" >    title: '3DP Agent',</span>
+<span class="cstat-no" title="statement not covered" >    subtitle: 'AI Consultant for 3D Printing',</span>
+<span class="cstat-no" title="statement not covered" >    scrollHint: 'Scroll to Initialize',</span>
+<span class="cstat-no" title="statement not covered" >    designIntelligence: 'Design Intelligence',</span>
+<span class="cstat-no" title="statement not covered" >    designDesc:</span>
+<span class="cstat-no" title="statement not covered" >      'Upload your STL model. Our AI advisor analyzes printability, identifies potential issues, and provides optimization recommendations in real-time.',</span>
+<span class="cstat-no" title="statement not covered" >    beginAnalysis: 'Begin Analysis',</span>
+<span class="cstat-no" title="statement not covered" >    uploadHint: 'Drag STL file here or click to upload',</span>
+<span class="cstat-no" title="statement not covered" >    uploadButton: 'Upload Model',</span>
+<span class="cstat-no" title="statement not covered" >    analysisFeatures: 'Analysis Features',</span>
+<span class="cstat-no" title="statement not covered" >    wallThickness: 'Wall Thickness',</span>
+<span class="cstat-no" title="statement not covered" >    wallThicknessDesc: 'Detects areas too thin for reliable printing',</span>
+<span class="cstat-no" title="statement not covered" >    overhangDetection: 'Overhang Detection',</span>
+<span class="cstat-no" title="statement not covered" >    overhangDesc: 'Identifies angles requiring support structures',</span>
+<span class="cstat-no" title="statement not covered" >    materialOptimization: 'Material Optimization',</span>
+<span class="cstat-no" title="statement not covered" >    materialDesc: 'Recommends optimal materials and settings',</span>
+<span class="cstat-no" title="statement not covered" >    supplierMatching: 'Supplier Matching',</span>
+<span class="cstat-no" title="statement not covered" >    supplierDesc: 'Connects you with ideal manufacturing partners',</span>
+<span class="cstat-no" title="statement not covered" >    footer: '3DP Agent © 2026 | Powered by Advanced AI Analysis',</span>
+<span class="cstat-no" title="statement not covered" >    viewport: 'VIEWPORT',</span>
+<span class="cstat-no" title="statement not covered" >    viewportHint: 'drag: rotate · scroll: zoom',</span>
+<span class="cstat-no" title="statement not covered" >    input: 'INPUT',</span>
+<span class="cstat-no" title="statement not covered" >    geometry: 'GEOMETRY',</span>
+<span class="cstat-no" title="statement not covered" >    report: 'REPORT',</span>
+<span class="cstat-no" title="statement not covered" >    chatAI: 'CHAT AI',</span>
+<span class="cstat-no" title="statement not covered" >    generateReport: 'GENERATE REPORT →',</span>
+<span class="cstat-no" title="statement not covered" >    analyze: 'ANALYZING...',</span>
+<span class="cstat-no" title="statement not covered" >    generateQuickReport: '⚡ GENERATE QUICK REPORT (FREE)',</span>
+<span class="cstat-no" title="statement not covered" >    analysisReport: 'ANALYSIS REPORT',</span>
+<span class="cstat-no" title="statement not covered" >    localEngine: '[LOCAL ENGINE]',</span>
+<span class="cstat-no" title="statement not covered" >    regenerate: '↺ REGENERATE',</span>
+<span class="cstat-no" title="statement not covered" >    deepAnalysis: 'DEEP AI ANALYSIS',</span>
+<span class="cstat-no" title="statement not covered" >    deepAnalysisDesc: 'Full AI report with Claude / GPT-4o / Gemini',</span>
+<span class="cstat-no" title="statement not covered" >    configureApiKey: 'CONFIGURE API KEY →',</span>
+<span class="cstat-no" title="statement not covered" >    switchToChat: 'SWITCH TO CHAT →',</span>
+<span class="cstat-no" title="statement not covered" >    uploadStlBegin: 'Upload STL to begin',</span>
+<span class="cstat-no" title="statement not covered" >    featureFree: 'FREE',</span>
+<span class="cstat-no" title="statement not covered" >    featureAiKey: 'AI KEY',</span>
+<span class="cstat-no" title="statement not covered" >    feature1: 'Geometry analysis — wall, overhang, dims',</span>
+<span class="cstat-no" title="statement not covered" >    feature2: 'Quick report — material, settings, time estimate',</span>
+<span class="cstat-no" title="statement not covered" >    feature3: 'Common Q&amp;A — instant local answers',</span>
+<span class="cstat-no" title="statement not covered" >    feature4: 'Deep chat — Claude / GPT-4o / Gemini',</span>
+<span class="cstat-no" title="statement not covered" >    feature5: 'Complex design optimization advice',</span>
+<span class="cstat-no" title="statement not covered" >    stlParsed: 'STL parsed — ',</span>
+<span class="cstat-no" title="statement not covered" >    api: 'AI',</span>
+<span class="cstat-no" title="statement not covered" >    apiKeys: 'API KEYS',</span>
+<span class="cstat-no" title="statement not covered" >    wallThicknessLabel: 'WALL THICKNESS',</span>
+<span class="cstat-no" title="statement not covered" >    overhangLabel: 'OVERHANG',</span>
+<span class="cstat-no" title="statement not covered" >    minThickness: 'MIN THICKNESS',</span>
+<span class="cstat-no" title="statement not covered" >    volume: 'VOLUME',</span>
+<span class="cstat-no" title="statement not covered" >    surfaceArea: 'SURFACE AREA',</span>
+<span class="cstat-no" title="statement not covered" >    dimX: 'DIM X',</span>
+<span class="cstat-no" title="statement not covered" >    dimY: 'DIM Y',</span>
+<span class="cstat-no" title="statement not covered" >    dimZ: 'DIM Z',</span>
+<span class="cstat-no" title="statement not covered" >    overhangFaces: 'OVERHANG FACES',</span>
+<span class="cstat-no" title="statement not covered" >    good: 'NOMINAL',</span>
+<span class="cstat-no" title="statement not covered" >    warning: 'CAUTION',</span>
+<span class="cstat-no" title="statement not covered" >    critical: 'CRITICAL',</span>
+<span class="cstat-no" title="statement not covered" >    printPath: 'Print Path',</span>
+<span class="cstat-no" title="statement not covered" >    layerReveal: 'Layer Reveal',</span>
+<span class="cstat-no" title="statement not covered" >    failure: 'Failure',</span>
+<span class="cstat-no" title="statement not covered" >    thermal: 'Thermal',</span>
+<span class="cstat-no" title="statement not covered" >    causality: 'CAUSALITY',</span>
+<span class="cstat-no" title="statement not covered" >    phaseBase: 'BASE',</span>
+<span class="cstat-no" title="statement not covered" >    phaseSupport: 'SUPPORT',</span>
+<span class="cstat-no" title="statement not covered" >    phaseBridge: 'BRIDGE',</span>
+<span class="cstat-no" title="statement not covered" >    phaseThermal: 'THERMAL',</span>
+<span class="cstat-no" title="statement not covered" >    phaseOverhang: 'OVERHANG',</span>
+<span class="cstat-no" title="statement not covered" >    phaseFailure: 'FAILURE ZONE',</span>
+<span class="cstat-no" title="statement not covered" >    causalChain: 'CAUSAL CHAIN',</span>
+<span class="cstat-no" title="statement not covered" >    clearSelection: '← Clear selection',</span>
+<span class="cstat-no" title="statement not covered" >    patternsTitle: 'RECOGNIZED PATTERNS',</span>
+<span class="cstat-no" title="statement not covered" >    noPatterns: 'No structural patterns detected.',</span>
+<span class="cstat-no" title="statement not covered" >    suggestionsTitle: 'COUNTERFACTUAL SUGGESTIONS',</span>
+<span class="cstat-no" title="statement not covered" >    noSuggestions: 'No counterfactual suggestions available for this geometry.',</span>
+<span class="cstat-no" title="statement not covered" >    metricRisk: 'Risk',</span>
+<span class="cstat-no" title="statement not covered" >    metricThermal: 'Thermal',</span>
+<span class="cstat-no" title="statement not covered" >    metricSupport: 'Support',</span>
+<span class="cstat-no" title="statement not covered" >    playbackPlay: '\u25B6',</span>
+<span class="cstat-no" title="statement not covered" >    playbackPause: '\u23F8',</span>
+<span class="cstat-no" title="statement not covered" >    layerLabel: 'Layer',</span>
+<span class="cstat-no" title="statement not covered" >    confidence: 'confidence',</span>
+<span class="cstat-no" title="statement not covered" >    severity: 'severity',</span>
+<span class="cstat-no" title="statement not covered" >    markers: 'markers',</span>
+<span class="cstat-no" title="statement not covered" >    consequenceChain: 'CONSEQUENCE CHAIN',</span>
+<span class="cstat-no" title="statement not covered" >    before: 'before',</span>
+<span class="cstat-no" title="statement not covered" >    after: 'after',</span>
+<span class="cstat-no" title="statement not covered" >    found: 'found',</span>
+<span class="cstat-no" title="statement not covered" >    suggestions: 'suggestions',</span>
+<span class="cstat-no" title="statement not covered" >  },</span>
+<span class="cstat-no" title="statement not covered" >  ja: {</span>
+<span class="cstat-no" title="statement not covered" >    title: '3DP Agent',</span>
+<span class="cstat-no" title="statement not covered" >    subtitle: '3Dプリント AI コンサルタント',</span>
+<span class="cstat-no" title="statement not covered" >    scrollHint: 'スクロールして開始',</span>
+<span class="cstat-no" title="statement not covered" >    designIntelligence: 'デザイン インテリジェンス',</span>
+<span class="cstat-no" title="statement not covered" >    designDesc:</span>
+<span class="cstat-no" title="statement not covered" >      'STL モデルをアップロードしてください。AI アドバイザーが印刷可能性を分析し、潜在的な問題を特定し、リアルタイムで最適化の推奨事項を提供します。',</span>
+<span class="cstat-no" title="statement not covered" >    beginAnalysis: '分析を開始',</span>
+<span class="cstat-no" title="statement not covered" >    uploadHint: 'STL ファイルをここにドラッグするか、クリックしてアップロード',</span>
+<span class="cstat-no" title="statement not covered" >    uploadButton: 'モデルをアップロード',</span>
+<span class="cstat-no" title="statement not covered" >    analysisFeatures: '分析機能',</span>
+<span class="cstat-no" title="statement not covered" >    wallThickness: '壁厚検出',</span>
+<span class="cstat-no" title="statement not covered" >    wallThicknessDesc: '印刷に適さない薄い領域を検出',</span>
+<span class="cstat-no" title="statement not covered" >    overhangDetection: 'オーバーハング検出',</span>
+<span class="cstat-no" title="statement not covered" >    overhangDesc: 'サポート構造が必要な角度を特定',</span>
+<span class="cstat-no" title="statement not covered" >    materialOptimization: '材料最適化',</span>
+<span class="cstat-no" title="statement not covered" >    materialDesc: '最適な材料と設定を推奨',</span>
+<span class="cstat-no" title="statement not covered" >    supplierMatching: 'サプライヤー マッチング',</span>
+<span class="cstat-no" title="statement not covered" >    supplierDesc: '理想的な製造パートナーとつなぐ',</span>
+<span class="cstat-no" title="statement not covered" >    footer: '3DP Agent © 2026 | 高度な AI 分析により提供',</span>
+<span class="cstat-no" title="statement not covered" >    viewport: 'ビューポート',</span>
+<span class="cstat-no" title="statement not covered" >    viewportHint: 'ドラッグ: 回転 · スクロール: ズーム',</span>
+<span class="cstat-no" title="statement not covered" >    input: '入力',</span>
+<span class="cstat-no" title="statement not covered" >    geometry: 'ジオメトリ',</span>
+<span class="cstat-no" title="statement not covered" >    report: 'レポート',</span>
+<span class="cstat-no" title="statement not covered" >    chatAI: 'チャットAI',</span>
+<span class="cstat-no" title="statement not covered" >    generateReport: 'レポート生成 →',</span>
+<span class="cstat-no" title="statement not covered" >    analyze: '分析中...',</span>
+<span class="cstat-no" title="statement not covered" >    generateQuickReport: '⚡ クイックレポート生成 (無料)',</span>
+<span class="cstat-no" title="statement not covered" >    analysisReport: '分析レポート',</span>
+<span class="cstat-no" title="statement not covered" >    localEngine: '[ローカルエンジン]',</span>
+<span class="cstat-no" title="statement not covered" >    regenerate: '↺ 再生成',</span>
+<span class="cstat-no" title="statement not covered" >    deepAnalysis: '深層AI分析',</span>
+<span class="cstat-no" title="statement not covered" >    deepAnalysisDesc: 'Claude / GPT-4o / Gemini による完全なAIレポート',</span>
+<span class="cstat-no" title="statement not covered" >    configureApiKey: 'API キーを設定 →',</span>
+<span class="cstat-no" title="statement not covered" >    switchToChat: 'チャットに切り替え →',</span>
+<span class="cstat-no" title="statement not covered" >    uploadStlBegin: 'STLをアップロードして開始',</span>
+<span class="cstat-no" title="statement not covered" >    featureFree: '無料',</span>
+<span class="cstat-no" title="statement not covered" >    featureAiKey: 'AIキー',</span>
+<span class="cstat-no" title="statement not covered" >    feature1: 'ジオメトリ分析 — 壁厚、オーバーハング、寸法',</span>
+<span class="cstat-no" title="statement not covered" >    feature2: 'クイックレポート — 材料、設定、時間予測',</span>
+<span class="cstat-no" title="statement not covered" >    feature3: 'よくある質問 — インスタント回答',</span>
+<span class="cstat-no" title="statement not covered" >    feature4: 'ディープチャット — Claude / GPT-4o / Gemini',</span>
+<span class="cstat-no" title="statement not covered" >    feature5: '複雑な設計最適化アドバイス',</span>
+<span class="cstat-no" title="statement not covered" >    stlParsed: 'STL解析完了 — ',</span>
+<span class="cstat-no" title="statement not covered" >    api: 'AI',</span>
+<span class="cstat-no" title="statement not covered" >    apiKeys: 'API キー',</span>
+<span class="cstat-no" title="statement not covered" >    wallThicknessLabel: '壁厚',</span>
+<span class="cstat-no" title="statement not covered" >    overhangLabel: 'オーバーハング',</span>
+<span class="cstat-no" title="statement not covered" >    minThickness: '最小厚度',</span>
+<span class="cstat-no" title="statement not covered" >    volume: '体積',</span>
+<span class="cstat-no" title="statement not covered" >    surfaceArea: '表面積',</span>
+<span class="cstat-no" title="statement not covered" >    dimX: '寸法X',</span>
+<span class="cstat-no" title="statement not covered" >    dimY: '寸法Y',</span>
+<span class="cstat-no" title="statement not covered" >    dimZ: '寸法Z',</span>
+<span class="cstat-no" title="statement not covered" >    overhangFaces: 'オーバーハング面',</span>
+<span class="cstat-no" title="statement not covered" >    good: '正常',</span>
+<span class="cstat-no" title="statement not covered" >    warning: '警告',</span>
+<span class="cstat-no" title="statement not covered" >    critical: '重大',</span>
+<span class="cstat-no" title="statement not covered" >    printPath: 'プリントパス',</span>
+<span class="cstat-no" title="statement not covered" >    layerReveal: 'レイヤー表示',</span>
+<span class="cstat-no" title="statement not covered" >    failure: '故障予測',</span>
+<span class="cstat-no" title="statement not covered" >    thermal: '熱分布',</span>
+<span class="cstat-no" title="statement not covered" >    causality: '因果関係',</span>
+<span class="cstat-no" title="statement not covered" >    phaseBase: 'ベース',</span>
+<span class="cstat-no" title="statement not covered" >    phaseSupport: 'サポート',</span>
+<span class="cstat-no" title="statement not covered" >    phaseBridge: 'ブリッジ',</span>
+<span class="cstat-no" title="statement not covered" >    phaseThermal: '熱',</span>
+<span class="cstat-no" title="statement not covered" >    phaseOverhang: 'オーバーハング',</span>
+<span class="cstat-no" title="statement not covered" >    phaseFailure: '故障ゾーン',</span>
+<span class="cstat-no" title="statement not covered" >    causalChain: '因果連鎖',</span>
+<span class="cstat-no" title="statement not covered" >    clearSelection: '← 選択を解除',</span>
+<span class="cstat-no" title="statement not covered" >    patternsTitle: '認識されたパターン',</span>
+<span class="cstat-no" title="statement not covered" >    noPatterns: '構造パターンは検出されませんでした。',</span>
+<span class="cstat-no" title="statement not covered" >    suggestionsTitle: '反事実的提案',</span>
+<span class="cstat-no" title="statement not covered" >    noSuggestions: 'このジオメトリに対する反事実的提案はありません。',</span>
+<span class="cstat-no" title="statement not covered" >    metricRisk: 'リスク',</span>
+<span class="cstat-no" title="statement not covered" >    metricThermal: '熱',</span>
+<span class="cstat-no" title="statement not covered" >    metricSupport: 'サポート',</span>
+<span class="cstat-no" title="statement not covered" >    playbackPlay: '\u25B6',</span>
+<span class="cstat-no" title="statement not covered" >    playbackPause: '\u23F8',</span>
+<span class="cstat-no" title="statement not covered" >    layerLabel: 'レイヤー',</span>
+<span class="cstat-no" title="statement not covered" >    confidence: '信頼度',</span>
+<span class="cstat-no" title="statement not covered" >    severity: '深刻度',</span>
+<span class="cstat-no" title="statement not covered" >    markers: 'マーカー',</span>
+<span class="cstat-no" title="statement not covered" >    consequenceChain: '結果連鎖',</span>
+<span class="cstat-no" title="statement not covered" >    before: '前',</span>
+<span class="cstat-no" title="statement not covered" >    after: '後',</span>
+<span class="cstat-no" title="statement not covered" >    found: '検出',</span>
+<span class="cstat-no" title="statement not covered" >    suggestions: '提案',</span>
+<span class="cstat-no" title="statement not covered" >  },</span>
+<span class="cstat-no" title="statement not covered" >  zh: {</span>
+<span class="cstat-no" title="statement not covered" >    title: '3DP Agent',</span>
+<span class="cstat-no" title="statement not covered" >    subtitle: '3D 打印 AI 顾问',</span>
+<span class="cstat-no" title="statement not covered" >    scrollHint: '向下滚动以初始化',</span>
+<span class="cstat-no" title="statement not covered" >    designIntelligence: '设计智能',</span>
+<span class="cstat-no" title="statement not covered" >    designDesc:</span>
+<span class="cstat-no" title="statement not covered" >      '上传您的 STL 模型。我们的 AI 顾问分析可打印性，识别潜在问题，并实时提供优化建议。',</span>
+<span class="cstat-no" title="statement not covered" >    beginAnalysis: '开始分析',</span>
+<span class="cstat-no" title="statement not covered" >    uploadHint: '将 STL 文件拖到此处或点击上传',</span>
+<span class="cstat-no" title="statement not covered" >    uploadButton: '上传模型',</span>
+<span class="cstat-no" title="statement not covered" >    analysisFeatures: '分析功能',</span>
+<span class="cstat-no" title="statement not covered" >    wallThickness: '壁厚检测',</span>
+<span class="cstat-no" title="statement not covered" >    wallThicknessDesc: '检测过薄而不适合打印的区域',</span>
+<span class="cstat-no" title="statement not covered" >    overhangDetection: '悬垂检测',</span>
+<span class="cstat-no" title="statement not covered" >    overhangDesc: '识别需要支撑结构的角度',</span>
+<span class="cstat-no" title="statement not covered" >    materialOptimization: '材料优化',</span>
+<span class="cstat-no" title="statement not covered" >    materialDesc: '推荐最优的材料和设置',</span>
+<span class="cstat-no" title="statement not covered" >    supplierMatching: '供应商匹配',</span>
+<span class="cstat-no" title="statement not covered" >    supplierDesc: '连接您与理想的制造合作伙伴',</span>
+<span class="cstat-no" title="statement not covered" >    footer: '3DP Agent © 2026 | 由先进 AI 分析提供支持',</span>
+<span class="cstat-no" title="statement not covered" >    viewport: '视图',</span>
+<span class="cstat-no" title="statement not covered" >    viewportHint: '拖动: 旋转 · 滚轮: 缩放',</span>
+<span class="cstat-no" title="statement not covered" >    input: '输入',</span>
+<span class="cstat-no" title="statement not covered" >    geometry: '几何',</span>
+<span class="cstat-no" title="statement not covered" >    report: '报告',</span>
+<span class="cstat-no" title="statement not covered" >    chatAI: 'AI 聊天',</span>
+<span class="cstat-no" title="statement not covered" >    generateReport: '生成报告 →',</span>
+<span class="cstat-no" title="statement not covered" >    analyze: '分析中...',</span>
+<span class="cstat-no" title="statement not covered" >    generateQuickReport: '⚡ 生成快速报告 (免费)',</span>
+<span class="cstat-no" title="statement not covered" >    analysisReport: '分析报告',</span>
+<span class="cstat-no" title="statement not covered" >    localEngine: '[本地引擎]',</span>
+<span class="cstat-no" title="statement not covered" >    regenerate: '↺ 重新生成',</span>
+<span class="cstat-no" title="statement not covered" >    deepAnalysis: '深度AI分析',</span>
+<span class="cstat-no" title="statement not covered" >    deepAnalysisDesc: '完整的 Claude / GPT-4o / Gemini AI 报告',</span>
+<span class="cstat-no" title="statement not covered" >    configureApiKey: '配置 API 密钥 →',</span>
+<span class="cstat-no" title="statement not covered" >    switchToChat: '切换到聊天 →',</span>
+<span class="cstat-no" title="statement not covered" >    uploadStlBegin: '上传 STL 开始',</span>
+<span class="cstat-no" title="statement not covered" >    featureFree: '免费',</span>
+<span class="cstat-no" title="statement not covered" >    featureAiKey: 'AI密钥',</span>
+<span class="cstat-no" title="statement not covered" >    feature1: '几何分析 — 壁厚、悬垂、尺寸',</span>
+<span class="cstat-no" title="statement not covered" >    feature2: '快速报告 — 材料、设置、时间估算',</span>
+<span class="cstat-no" title="statement not covered" >    feature3: '常见问题 — 即时本地回答',</span>
+<span class="cstat-no" title="statement not covered" >    feature4: '深度聊天 — Claude / GPT-4o / Gemini',</span>
+<span class="cstat-no" title="statement not covered" >    feature5: '复杂设计优化建议',</span>
+<span class="cstat-no" title="statement not covered" >    stlParsed: 'STL 解析完成 — ',</span>
+<span class="cstat-no" title="statement not covered" >    api: 'AI',</span>
+<span class="cstat-no" title="statement not covered" >    apiKeys: 'API 密钥',</span>
+<span class="cstat-no" title="statement not covered" >    wallThicknessLabel: '壁厚',</span>
+<span class="cstat-no" title="statement not covered" >    overhangLabel: '悬垂',</span>
+<span class="cstat-no" title="statement not covered" >    minThickness: '最小厚度',</span>
+<span class="cstat-no" title="statement not covered" >    volume: '体积',</span>
+<span class="cstat-no" title="statement not covered" >    surfaceArea: '表面积',</span>
+<span class="cstat-no" title="statement not covered" >    dimX: '尺寸X',</span>
+<span class="cstat-no" title="statement not covered" >    dimY: '尺寸Y',</span>
+<span class="cstat-no" title="statement not covered" >    dimZ: '尺寸Z',</span>
+<span class="cstat-no" title="statement not covered" >    overhangFaces: '悬垂面',</span>
+<span class="cstat-no" title="statement not covered" >    good: '正常',</span>
+<span class="cstat-no" title="statement not covered" >    warning: '警告',</span>
+<span class="cstat-no" title="statement not covered" >    critical: '严重',</span>
+<span class="cstat-no" title="statement not covered" >    printPath: '打印路径',</span>
+<span class="cstat-no" title="statement not covered" >    layerReveal: '层显示',</span>
+<span class="cstat-no" title="statement not covered" >    failure: '故障预测',</span>
+<span class="cstat-no" title="statement not covered" >    thermal: '热分布',</span>
+<span class="cstat-no" title="statement not covered" >    causality: '因果关系',</span>
+<span class="cstat-no" title="statement not covered" >    phaseBase: '基底',</span>
+<span class="cstat-no" title="statement not covered" >    phaseSupport: '支撑',</span>
+<span class="cstat-no" title="statement not covered" >    phaseBridge: '桥接',</span>
+<span class="cstat-no" title="statement not covered" >    phaseThermal: '热',</span>
+<span class="cstat-no" title="statement not covered" >    phaseOverhang: '悬垂',</span>
+<span class="cstat-no" title="statement not covered" >    phaseFailure: '故障区',</span>
+<span class="cstat-no" title="statement not covered" >    causalChain: '因果链',</span>
+<span class="cstat-no" title="statement not covered" >    clearSelection: '← 清除选择',</span>
+<span class="cstat-no" title="statement not covered" >    patternsTitle: '已识别的模式',</span>
+<span class="cstat-no" title="statement not covered" >    noPatterns: '未检测到结构模式。',</span>
+<span class="cstat-no" title="statement not covered" >    suggestionsTitle: '反事实建议',</span>
+<span class="cstat-no" title="statement not covered" >    noSuggestions: '此几何体没有可用的反事实建议。',</span>
+<span class="cstat-no" title="statement not covered" >    metricRisk: '风险',</span>
+<span class="cstat-no" title="statement not covered" >    metricThermal: '热',</span>
+<span class="cstat-no" title="statement not covered" >    metricSupport: '支撑',</span>
+<span class="cstat-no" title="statement not covered" >    playbackPlay: '\u25B6',</span>
+<span class="cstat-no" title="statement not covered" >    playbackPause: '\u23F8',</span>
+<span class="cstat-no" title="statement not covered" >    layerLabel: '层',</span>
+<span class="cstat-no" title="statement not covered" >    confidence: '置信度',</span>
+<span class="cstat-no" title="statement not covered" >    severity: '严重性',</span>
+<span class="cstat-no" title="statement not covered" >    markers: '标记',</span>
+<span class="cstat-no" title="statement not covered" >    consequenceChain: '结果链',</span>
+<span class="cstat-no" title="statement not covered" >    before: '前',</span>
+<span class="cstat-no" title="statement not covered" >    after: '后',</span>
+<span class="cstat-no" title="statement not covered" >    found: '发现',</span>
+<span class="cstat-no" title="statement not covered" >    suggestions: '建议',</span>
+<span class="cstat-no" title="statement not covered" >  },</span>
+<span class="cstat-no" title="statement not covered" >};</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >export function getTranslation(lang: Language, key: keyof (typeof translations)['en']): string {</span>
+<span class="cstat-no" title="statement not covered" >  return translations[lang][key] || translations.en[key];</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-07-15T14:01:37.279Z
+            </div>
+        <script src="../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
+    </body>
+</html>
+    
