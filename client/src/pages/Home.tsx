@@ -11,6 +11,7 @@ import { ChatPanel } from '@/components/ChatPanel';
 import { APIKeyModal } from '@/components/APIKeyModal';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
+import { fromThreeBufferGeometry, runAnalysisPipeline } from '@/analysis';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
 import { Language, getTranslation } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
@@ -272,6 +273,8 @@ export default function Home() {
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
   const [overlayOpacity, setOverlayOpacity] = useState(0.7);
+  const [materialLoading, setMaterialLoading] = useState(false);
+  const materialRequestSeq = useRef(0);
   const orchestratorRef = useRef<AgentOrchestrator | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -323,11 +326,33 @@ export default function Home() {
     setMaterialName(newMaterialName);
     if (!uploadedModel) return;
     const newMat = MATERIALS[newMaterialName];
+
+    materialRequestSeq.current += 1;
+    const currentSeq = materialRequestSeq.current;
+
+    setMaterialLoading(true);
     setQuickReport('');
     setAgentRun(null);
-    await runAgentAnalysis(uploadedModel, newMat);
-    const md = unifiedToModelData(uploadedModel.unifiedAnalysis, uploadedModel.fileName, newMat.overhangThreshold);
+
+    const model = fromThreeBufferGeometry(uploadedModel.geometry);
+    const newUnified = runAnalysisPipeline(model, { fileName: uploadedModel.fileName, material: newMat });
+
+    if (currentSeq !== materialRequestSeq.current) return;
+
+    const updatedModel: UploadedModel = { ...uploadedModel, unifiedAnalysis: newUnified };
+    setUploadedModel(updatedModel);
+
+    if (currentSeq !== materialRequestSeq.current || !orchestratorRef.current) return;
+    const summary = await orchestratorRef.current.runFullAnalysis(
+      updatedModel.geometry, newUnified, updatedModel.fileName, undefined, language, newMat,
+    );
+
+    if (currentSeq !== materialRequestSeq.current) return;
+    setAgentRun(summary);
+
+    const md = unifiedToModelData(newUnified, updatedModel.fileName, newMat.overhangThreshold);
     setQuickReport(generateQuickReport(md, language, newMat));
+    setMaterialLoading(false);
   }, [uploadedModel, language, setMaterialName]);
 
   const getModelData = (): ModelData | null => {
@@ -566,7 +591,12 @@ export default function Home() {
 
                 {/* GEOMETRY TAB */}
                 {tab === 'geometry' && (
-                  <div className="space-y-4 pt-4">
+                  <div className="space-y-4 pt-4 relative">
+                    {materialLoading && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 rounded-sm">
+                        <div className="text-xs font-mono text-primary animate-pulse">&#x258b; RECALCULATING...</div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="p-3 border border-border rounded-sm bg-card">
                         <div className="text-xs text-muted-foreground mb-2 font-mono">{t('wallThicknessLabel')}</div>
@@ -599,7 +629,12 @@ export default function Home() {
 
                 {/* REPORT TAB */}
                 {tab === 'report' && (
-                  <div className="pt-4 space-y-4">
+                  <div className="pt-4 space-y-4 relative">
+                    {materialLoading && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 rounded-sm">
+                        <div className="text-xs font-mono text-primary animate-pulse">&#x258b; RECALCULATING...</div>
+                      </div>
+                    )}
                     {!quickReport && (
                       <button onClick={handleGenerateReport} disabled={reportLoading}
                         className="w-full py-3 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all disabled:opacity-50">
