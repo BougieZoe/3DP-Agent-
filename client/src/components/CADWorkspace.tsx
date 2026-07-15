@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import {
@@ -18,9 +18,11 @@ import {
   buildCADGroup,
   createCADDesignAI,
   createCADDesign,
+  computeChecks,
   downloadTextFile,
   generateOpenSCAD,
 } from "@/lib/cadGenerator";
+import { useMaterial } from "@/contexts/MaterialContext";
 import { Language } from "@/lib/i18n";
 
 interface CADWorkspaceProps {
@@ -437,6 +439,7 @@ function ParameterPanel({
 }
 
 export function CADWorkspace({ language }: CADWorkspaceProps) {
+  const { material } = useMaterial();
   const [input, setInput] = useState(STARTER_PROMPTS[language][0]);
   const [design, setDesign] = useState<CADDesign | null>(() =>
     createCADDesign(STARTER_PROMPTS[language][0])
@@ -446,6 +449,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const scad = useMemo(
     () => (design ? generateOpenSCAD(design) : ""),
     [design]
+  );
+
+  const checks = useMemo(
+    () => (design ? computeChecks(design.params, material) : []),
+    [design, material]
   );
 
   useEffect(() => {
@@ -617,9 +625,9 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                 <div className="text-xs text-muted-foreground/40 font-mono tracking-widest">
                   // PRINT CHECK
                 </div>
-                {design.checks.map(check => (
+                {checks.map((check, i) => (
                   <div
-                    key={check}
+                    key={i}
                     className="text-xs leading-relaxed border border-border/40 rounded-sm px-3 py-2 text-muted-foreground bg-background/40"
                   >
                     {check}

@@ -1,4 +1,6 @@
 import { callAI, getActiveProvider, getKey } from './apiKeys';
+import type { Material } from '@/lib/materialState';
+import { DEFAULT_MATERIAL } from '@/lib/materialState';
 
 export interface CADParams {
   width: number; depth: number; height: number; thickness: number;
@@ -67,18 +69,86 @@ Output ONLY the JSON, no markdown, no explanation.`;
   }
 }
 
+const WORD_TO_NUM: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5,
+  six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+};
+
+function inRange(v: number, min: number, max: number): boolean {
+  return v >= min && v <= max;
+}
+
+function extractParamsFromPrompt(prompt: string): Partial<CADParams> {
+  const t = prompt.toLowerCase();
+  const out: Partial<CADParams> = {};
+
+  const dims = t.match(/(\d+(?:\.\d+)?)\s*(?:mm)?\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:mm)?/);
+  if (dims) {
+    const w = parseFloat(dims[1]);
+    const d = parseFloat(dims[2]);
+    if (inRange(w, 1, 1000)) out.width = w;
+    if (inRange(d, 1, 1000)) out.depth = d;
+  }
+
+  const h = t.match(/(?:height|高|h)\s*(\d+(?:\.\d+)?)\s*(?:mm)?/);
+  if (h) { const v = parseFloat(h[1]); if (inRange(v, 1, 1000)) out.height = v; }
+
+  const thick = t.match(/(?:thickness|thick|厚|壁厚)\s*(\d+(?:\.\d+)?)\s*(?:mm)?/);
+  if (thick) { const v = parseFloat(thick[1]); if (inRange(v, 0.2, 100)) out.thickness = v; }
+
+  const holeWord = t.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:\d+(?:\.\d+)?\s*mm\s*)?holes?\b/);
+  if (holeWord) { out.holeCount = WORD_TO_NUM[holeWord[1]]; }
+
+  const holeDigit = t.match(/(\d+)\s*(?:bolt\s*)?(?:holes?|个孔|個|孔)/);
+  if (holeDigit && !out.holeCount) { const v = parseInt(holeDigit[1]); if (inRange(v, 1, 100)) out.holeCount = v; }
+
+  const hDia = t.match(/(\d+(?:\.\d+)?)\s*mm\s*(?:holes?|dia|diameter|孔|直径)/);
+  if (hDia) { const v = parseFloat(hDia[1]); if (inRange(v, 0.5, 50)) out.holeDiameter = v; }
+
+  const od = t.match(/(?:outer\s*(?:diameter|dia)|外径|od)\s*(\d+(?:\.\d+)?)\s*(?:mm)?/);
+  if (od) { const v = parseFloat(od[1]); if (inRange(v, 1, 1000)) out.outerDiameter = v; }
+
+  const id = t.match(/(?:inner\s*(?:diameter|dia)|内径|id)\s*(\d+(?:\.\d+)?)\s*(?:mm)?/);
+  if (id) { const v = parseFloat(id[1]); if (inRange(v, 1, 1000)) out.innerDiameter = v; }
+
+  const corner = t.match(/(?:corner\s*(?:radius|rad)|圆角|角丸)\s*(?:r)?(\d+(?:\.\d+)?)\s*(?:mm)?/);
+  if (corner) { const v = parseFloat(corner[1]); if (inRange(v, 0, 50)) out.cornerRadius = v; }
+
+  return out;
+}
+
+export function computeChecks(params: CADParams, material: Material = DEFAULT_MATERIAL): string[] {
+  const checks: string[] = [];
+  const wt = params.thickness || params.wallThickness;
+  if (wt >= 2) {
+    checks.push(`Wall ${wt}mm — adequate for ${material.name} FDM.`);
+  } else if (wt >= 0.8) {
+    checks.push(`Wall ${wt}mm — printable${wt < 1.2 ? ', consider thickening for better strength' : ''} for ${material.name}.`);
+  } else {
+    checks.push(`Wall ${wt}mm — too thin for FDM. Increase to 0.8mm+.`);
+  }
+  const fits = params.width <= 256 && params.depth <= 256;
+  checks.push(fits
+    ? `Bed fit OK (${params.width}×${params.depth}mm).`
+    : `May exceed print bed (${params.width}×${params.depth}mm) — split or rotate.`);
+  checks.push(`${material.name}: overhang threshold ${material.overhangThreshold}°, density ${material.densityGPerCm3}g/cm³.`);
+  return checks;
+}
+
 function createCADDesignLocal(prompt: string): CADDesign {
   const t = prompt.toLowerCase();
+  const extracted = extractParamsFromPrompt(prompt);
+
   if (t.includes('flange') || t.includes('法兰')) {
-    const params = { ...DEFAULT_PARAMS, outerDiameter: 100, innerDiameter: 50, holeCount: 8, holeDiameter: 8, boltCircleDiameter: 80, thickness: 12 };
-    return { template: 'flange', params, summary: 'Flange 100mm OD, 50mm ID, 8 holes', scadCode: buildFlangeScad(params), checks: ['Wall thickness OK for 0.4mm nozzle.', 'Fits standard print bed.'], color: '#00ccaa' };
+    const params = { ...DEFAULT_PARAMS, outerDiameter: 100, innerDiameter: 50, holeCount: 8, holeDiameter: 8, boltCircleDiameter: 80, thickness: 12, ...extracted };
+    return { template: 'flange', params, summary: 'Flange', scadCode: buildFlangeScad(params), checks: [], color: '#00ccaa' };
   }
   if (t.includes('cabinet') || t.includes('柜')) {
-    const params = { ...DEFAULT_PARAMS, width: 500, depth: 400, height: 600, thickness: 15, drawerCount: 2, legHeight: 60 };
-    return { template: 'cabinet', params, summary: 'Cabinet 500x400x600mm, 2 drawers', scadCode: buildCabinetScad(params), checks: ['May exceed print bed — split panels before printing.'], color: '#c8a96e' };
+    const params = { ...DEFAULT_PARAMS, width: 500, depth: 400, height: 600, thickness: 15, drawerCount: 2, legHeight: 60, ...extracted };
+    return { template: 'cabinet', params, summary: 'Cabinet', scadCode: buildCabinetScad(params), checks: [], color: '#c8a96e' };
   }
-  const params = { ...DEFAULT_PARAMS, width: 80, depth: 60, thickness: 4, holeCount: 4, holeDiameter: 5 };
-  return { template: 'plate', params, summary: 'Mounting plate 80x60mm, 4 holes', scadCode: buildPlateScad(params), checks: ['Wall thickness OK for 0.4mm nozzle.', 'Hole diameter FDM-compatible.'], color: '#4488ff' };
+  const params = { ...DEFAULT_PARAMS, width: 80, depth: 60, thickness: 4, holeCount: 4, holeDiameter: 5, ...extracted };
+  return { template: 'plate', params, summary: 'Plate', scadCode: buildPlateScad(params), checks: [], color: '#4488ff' };
 }
 
 function buildFlangeScad(p: CADParams): string {
