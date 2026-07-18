@@ -3,6 +3,7 @@ export type AIProviderId =
   | 'openai'
   | 'gemini'
   | 'deepseek'
+  | 'kimi'
   | 'amd-cloud'
   | 'fireworks';
 
@@ -42,6 +43,13 @@ export const AI_PROVIDERS: readonly AIProviderMetadata[] = [
     shortLabel: 'DeepSeek',
     keyPlaceholder: 'sk-...',
     colorClass: 'text-purple-400',
+  },
+  {
+    id: 'kimi',
+    label: 'Moonshot Kimi',
+    shortLabel: 'Kimi',
+    keyPlaceholder: 'sk-...',
+    colorClass: 'text-sky-400',
   },
   {
     id: 'amd-cloud',
