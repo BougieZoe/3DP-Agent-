@@ -36,7 +36,7 @@ export class VisionProvider {
     try {
       const prompt = this.buildVisionPrompt(geometrySummary, language);
 
-      if (apiConfig.provider === 'claude' || apiConfig.provider === 'openai') {
+      if (apiConfig.provider === 'claude' || apiConfig.provider === 'openai' || apiConfig.provider === 'kimi') {
         return await this.callVisionAPI(apiConfig, screenshotBase64, prompt);
       }
 
@@ -78,6 +78,25 @@ Focus on: visible thin walls, sharp overhangs, potential support needs, surface 
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiConfig.apiKey}` },
         body: JSON.stringify({
           model: 'gpt-4o',
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: `data:image/png;base64,${imageData}` } },
+            ],
+          }],
+          max_tokens: 500,
+        }),
+      });
+      return this.parseVisionResponse(await resp.text());
+    }
+
+    if (apiConfig.provider === 'kimi') {
+      const resp = await fetch('https://api.moonshot.cn/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiConfig.apiKey}` },
+        body: JSON.stringify({
+          model: 'kimi-k3',
           messages: [{
             role: 'user',
             content: [

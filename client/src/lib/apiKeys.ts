@@ -139,6 +139,24 @@ export async function callAI(
     return data.choices?.[0]?.message?.content || 'No response';
   }
 
+  if (provider === 'kimi') {
+    const res = await fetch('https://api.moonshot.cn/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'kimi-k3',
+        max_tokens: 1024,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`Kimi API error: ${res.status}`);
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || 'No response';
+  }
+
   if (provider === 'amd-cloud') {
     const res = await fetch(AMD_CLOUD_ENDPOINT, {
       method: 'POST',

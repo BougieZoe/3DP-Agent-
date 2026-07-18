@@ -237,14 +237,20 @@ export function detectPatterns(markers: MarkerInput[]): PatternMatch[] {
     }
   }
 
-  for (const match of matches) {
-    const existing = knownPatterns.find(p => p.id === match.pattern.id);
+  // Recurrence means "seen in N analyses", so count each pattern once per
+  // analysis even when several clusters matched it in the same run.
+  const matchedPatternIds = new Set(matches.map(m => m.pattern.id));
+  matchedPatternIds.forEach(patternId => {
+    const existing = knownPatterns.find(p => p.id === patternId);
     if (existing) {
       existing.recurrenceCount++;
       existing.lastSeen = Date.now();
-      existing.confidence = Math.max(existing.confidence, match.similarity);
+      const bestSimilarity = Math.max(
+        ...matches.filter(m => m.pattern.id === patternId).map(m => m.similarity),
+      );
+      existing.confidence = Math.max(existing.confidence, bestSimilarity);
     }
-  }
+  });
   persistPatterns(knownPatterns);
 
   return matches;
