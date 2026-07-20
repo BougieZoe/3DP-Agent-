@@ -1,10 +1,11 @@
-<img width="1280" height="699" alt="3DPAgent" src="https://github.com/user-attachments/assets/222e0627-e069-456a-9dbf-c1d8ba96ca3a" /># 3DP Agent
+# 3DP AGENT
 
 ### Upload an STL. Watch it think. Ask it anything.
 
 A multi-agent AI system that predicts 3D printing failures before you waste time, material, and money.
 
-<img width="1280" height="699" alt="3DPAgent" src="https://github.com/user-attachments/assets/3faa370a-02be-4ca5-88cb-3cdf144b2e4f" />
+<img width="1280" height="699" alt="3DPAgent" src="https://github.com/user-attachments/assets/40e79ef7-7fc0-4112-aa78-9e0de69eba40" />
+
 
 [Live Demo](https://3dp-agent.vercel.app) · [GitHub](https://github.com/BougieZoe/3DP-Agent-) · MIT License
 
