@@ -1,187 +1,252 @@
+<img width="1280" height="699" alt="3DPAgent" src="https://github.com/user-attachments/assets/222e0627-e069-456a-9dbf-c1d8ba96ca3a" /># 3DP Agent
 
-# 3DP AGENT
+### Upload an STL. Watch it think. Ask it anything.
 
-### a place to see, feel, and question a 3D print before it exists
+A multi-agent AI system that predicts 3D printing failures before you waste time, material, and money.
 
-![3DP Agent](test.gif)
+<img width="1280" height="699" alt="3DPAgent" src="https://github.com/user-attachments/assets/3faa370a-02be-4ca5-88cb-3cdf144b2e4f" />
 
-[![live demo](https://img.shields.io/badge/live-demo-00C7B7?style=flat-square&logo=vercel&logoColor=white)](https://3dp-agent.vercel.app) [![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](https://github.com/BougieZoe/3DP-Agent-/blob/main/LICENSE) [![stars](https://img.shields.io/github/stars/BougieZoe/3DP-Agent-?style=flat-square&color=yellow)](https://github.com/BougieZoe/3DP-Agent-/stargazers) [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react)](https://react.dev) [![Three.js](https://img.shields.io/badge/Three.js-r184-000000?style=flat-square&logo=threedotjs)](https://threejs.org)
-
-**live → [3dp-agent.vercel.app](https://3dp-agent.vercel.app)**
+[Live Demo](https://3dp-agent.vercel.app) · [GitHub](https://github.com/BougieZoe/3DP-Agent-) · MIT License
 
 ---
 
-## 🚀 AMD Developer Hackathon: ACT II — Track 3 (Unicorn)
+## Why It Exists
 
-**🏆 Submission — 3DP Agent: Multi-Agent 3D Print Intelligence on AMD ROCm**
+Most print failures are visible before printing begins.
 
-3DP Agent brings **multi-agent AI reasoning** to desktop 3D printing — powered by **AMD Instinct MI300X** via ROCm + vLLM. Four specialized AI agents (Geometry Analyst, Printability Scorer, Failure Predictor, Optimization Advisor) analyze STL files in parallel, debate their findings, and deliver a consensus verdict — all accelerated by AMD hardware.
+Thin walls.
+Dangerous overhangs.
+Hidden geometry defects.
+Weak structural regions.
 
-**What makes this an AMD-native application:**
-- **AMD Cloud provider** — Qwen3-8B served on MI300X via vLLM, accessed through a dedicated server-side + Vercel proxy (`api/amd-proxy.ts`)
-- **5-agent ACT II pipeline** (`client/src/lib/agentPipeline.ts`) — purpose-built for AMD Developer Hackathon, with sequential debate rounds and critic retry logic
-- **Zero API key friction** — AMD Cloud auto-populates; no key required to use AMD GPUs
-- **Fully containerized** — Dockerfile with two-stage build, ready for AMD Developer Cloud deployment
-- **Browser-local privacy** — AI runs server-to-server via AMD proxy; user API keys never leave the client
+The problem is that most people don't see them until hours later — after the machine, material, and time have already been spent.
 
-### How to Run with ROCm / AMD Developer Cloud
+3DP Agent analyzes a model before it becomes a failed print.
 
-```bash
-# 1. Set your AMD machine endpoint
-export AMD_MACHINE_URL="http://<your-mi300x>:8000/v1/chat/completions"
+Upload an STL.
 
-# 2. Build and run
-docker build -t 3dp-agent .
-docker run -p 3000:3000 -e AMD_MACHINE_URL -e NODE_ENV=production 3dp-agent
+Get a second opinion from four specialized AI agents.
 
-# 3. Open http://localhost:3000 — AMD Cloud is pre-selected, no key needed
+---
+
+## What It Does
+
+Drop in an STL file and receive:
+
+| Analysis | Description |
+|-----------|-------------|
+| Wall Thickness | Detects regions too thin to print reliably |
+| Overhang Detection | Identifies support-heavy geometry |
+| Dimensions | Exact XYZ measurements |
+| Volume & Mass | Material usage estimates |
+| Watertight Check | Open mesh detection |
+| Printability Score | Overall manufacturing readiness |
+| Failure Prediction | Where and why a print may fail |
+| Optimization Advice | Recommended fixes and improvements |
+
+No account required.
+
+Local analysis works immediately.
+
+---
+
+## Multi-Agent Reasoning
+
+Instead of relying on a single AI response, 3DP Agent uses a team of specialized agents.
+
+| Agent | Responsibility |
+|---------|---------|
+| Geometry Analyst | Understands mesh structure and topology |
+| Printability Scorer | Evaluates manufacturing readiness |
+| Failure Predictor | Identifies likely failure points |
+| Optimization Advisor | Suggests design improvements |
+
+Each agent reviews the model independently.
+
+Their findings are debated and merged into a final consensus verdict.
+
+```text
+Geometry Analysis
+        ↓
+Printability Review
+        ↓
+Failure Prediction
+        ↓
+Optimization Pass
+        ↓
+Consensus Verdict
 ```
 
-Or without Docker:
-```bash
-pnpm install && pnpm build
-AMD_MACHINE_URL="http://<your-mi300x>:8000/v1/chat/completions" pnpm start
-```
+The result is not a single opinion.
+
+It is a structured agreement formed from multiple perspectives.
 
 ---
 
-Upload an STL. Watch it think. Ask it anything.
+## Causality Engine
 
-No account. No cloud. No waiting. Everything runs in your browser.
+Most analysis tools stop at:
 
----
+"Something is wrong."
 
-## what it does
+3DP Agent continues with:
 
-**instant — no key needed**
+"Why is it wrong?"
 
-Drop a file. In seconds you get:
+The Causality Engine traces failure chains from geometry decisions to manufacturing outcomes.
 
-| | |
-|:--|:--|
-| wall thickness | catches regions too thin to survive printing |
-| overhang | flags faces beyond 45° — support territory |
-| volume & mass | material usage, weight estimate |
-| dimensions | exact XYZ in mm |
-| watertight check | open mesh detection |
-| quick report | settings, material, time — instant |
+Examples:
 
-**multi-agent AI — your key, your choice**
+- If this wall becomes thicker, what changes?
+- If supports are removed, where will failure begin?
+- Which design decision created this risk?
+- What is the cheapest fix?
 
-Four specialized agents analyze your model in parallel, then debate their findings:
-
-| agent | what it sees |
-|:--|:--|
-| Geometry Analyst | mesh topology, wall thickness, overhangs, features |
-| Printability Scorer | weighted score across all risk dimensions |
-| Failure Predictor | where and why it will fail |
-| Optimization Advisor | what to change and how |
-
-They produce a **CONSENSUS SCORE** — not just one AI's opinion, but a structured disagreement resolved into a verdict.
-
-Point it at Claude, OpenAI, or Gemini. Your key stays in your browser. Nothing leaves your machine.
+The goal is explanation, not just detection.
 
 ---
 
-## causality
+## Visual Intelligence
 
-Most tools tell you *what* is wrong. This one tries to tell you *why*.
+Analysis is visualized directly on the model.
 
-The **CAUSALITY** tab traces failure chains — from geometry decision to print outcome. It shows manufacturing timelines, counterfactual reasoning ("if you thickened this wall, here's what changes"), and pattern memory across your session.
+The viewport acts as a live reasoning surface.
 
----
+Available visual layers:
 
-## the visual layer
+- Cognitive Scan
+- Risk Animation
+- Thermal Field
+- Failure Emergence
+- Layer Reveal
+- Print Path Preview
 
-The 3D viewport isn't just a model viewer. It's an argument made visible.
-
-Overlays animate in real time as analysis runs:
-
-- **Cognitive Scan** — a plane sweeps the model as the AI reads it
-- **Risk Animation** — risk markers breathe with severity
-- **Thermal Field** — heat distribution across the surface
-- **Failure Emergence** — sagging, oscillation, stress pulses appear where failure is predicted
-- **Layer Reveal** — watch the print build layer by layer
-- **Print Path Preview** — the head traces its actual path
-
-Switch between **dark and light** themes. The entire visual system — Three.js scene, UI tokens, animation constants — reacts.
+Instead of reading a report, users can watch the model explain itself.
 
 ---
 
-## how it works
+## Architecture
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#a3c4f3', 'primaryBorderColor': '#2c5aa6', 'lineColor': '#5a8ddf'}}}%%
 flowchart LR
-    User[User] -->|drag STL| Browser[Browser App]
-    Browser --> STL[STL Loader]
-    Browser --> Rules[Rule Engine]
-    Rules -->|fast path| Result[Local Analysis]
-    Rules -->|needs AI| Orch[Orchestrator]
-    Orch --> A1[Geometry Analyst]
-    Orch --> A2[Printability Scorer]
-    Orch --> A3[Failure Predictor]
-    Orch --> A4[Optimization Advisor]
-    A1 & A2 & A3 & A4 --> Debate[Agent Debate]
-    Debate --> Score[Consensus Score]
-    Score --> Causality[Causality Engine]
+
+User --> STL
+
+STL --> Analysis
+
+Analysis --> Geometry
+Analysis --> Printability
+Analysis --> Failure
+Analysis --> Optimization
+
+Geometry --> Consensus
+Printability --> Consensus
+Failure --> Consensus
+Optimization --> Consensus
+
+Consensus --> Causality
+
+Causality --> Verdict
 ```
 
 ---
 
-## stack
+## Technology
 
-React 19 · TypeScript · Three.js · React Three Fiber
-Tailwind v4 · Vite 7 · multi-agent orchestration
+Built with:
+
+- React 19
+- TypeScript
+- Three.js
+- React Three Fiber
+- Tailwind CSS
+- Vite
+
+AI providers:
+
+- OpenAI
+- Claude
+- Gemini
+
+Provider keys remain client-side.
 
 ---
 
-## Docker (containerized submission)
+## AMD Acceleration
 
-```bash
-docker build -t 3dp-agent .
-docker run -p 3000:3000 -e AMD_MACHINE_URL -e NODE_ENV=production 3dp-agent
-```
+For large-scale AI analysis, 3DP Agent can run on AMD Instinct MI300X GPUs through ROCm and vLLM.
 
-The image uses a two-stage build (`node:20-slim`), installs only production dependencies, and exposes port 3000. Pass `AMD_MACHINE_URL` to connect your AMD MI300X instance — or omit it to run without AI (local analysis still works).
+The AMD deployment powers the multi-agent reasoning pipeline used during the AMD Developer Hackathon submission.
+
+Features:
+
+- Qwen models served through vLLM
+- AMD Instinct MI300X acceleration
+- Server-side proxy architecture
+- Containerized deployment
+
+This section is optional for end users.
+
+The product functions without AMD infrastructure.
 
 ---
 
-## run it (dev)
+## Run Locally
 
 ```bash
 git clone https://github.com/BougieZoe/3DP-Agent-
 cd 3DP-Agent-
+
 pnpm install
 pnpm dev
 ```
 
-Add your AI key inside the app. Everything else works out of the box.
+Open:
+
+http://localhost:3000
 
 ---
 
-## who it's for
+## Docker
 
-Designers catching issues before handoff.
-Engineers who want a second opinion fast.
-Manufacturers reviewing files before they quote.
-Anyone who's had a print fail and didn't know why.
+```bash
+docker build -t 3dp-agent .
 
----
-
-## roadmap
-
-- [ ] PDF export
-- [ ] slicer settings output
-- [ ] batch analysis
-- [ ] cost estimation by material
+docker run \
+-p 3000:3000 \
+-e AMD_MACHINE_URL=<endpoint> \
+3dp-agent
+```
 
 ---
 
-## license
+## Roadmap
 
-MIT. If this saves you a failed print, a ⭐ is appreciated.
+- PDF Export
+- Slicer Presets
+- Batch Analysis
+- Cost Estimation
+- Manufacturing Knowledge Graph
+- Historical Failure Memory
 
 ---
 
-*EN · 日本語 · 中文 · [@BougieZoe](https://github.com/BougieZoe)*
+## Who It's For
+
+- Product Designers
+- Mechanical Engineers
+- Manufacturing Teams
+- 3D Printing Enthusiasts
+- Rapid Prototyping Labs
+
+Anyone who has ever asked:
+
+"Will this print actually work?"
+
+---
+
+## License
+
+MIT
+
+If 3DP Agent saves you a failed print, consider giving the project a star.
