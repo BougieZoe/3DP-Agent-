@@ -9,5 +9,8 @@ XPRIZE/
 # Env
 .env.*
 
+# CAD bridge workspace (venv + generation runs)
+.cad-bridge/
+
 # Test coverage
 coverage/

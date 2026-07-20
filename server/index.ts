@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createCadBridgeRouter } from "./cadBridge";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +34,10 @@ async function startServer() {
       res.status(500).json({ error: "AMD proxy failed", detail: String(err) });
     }
   });
+
+  // CAD generation bridge (local dev only): natural language → build123d →
+  // STL. Executes Python on the host — do not expose publicly as-is.
+  app.use("/api/cad/generate", createCadBridgeRouter());
 
   // Serve static files from dist/public in production
   const staticPath =

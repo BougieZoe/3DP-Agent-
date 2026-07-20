@@ -237,5 +237,13 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    proxy: {
+      // Dev: forward CAD bridge calls to the local Express server
+      // (run with PORT=3001, since vite dev owns :3000).
+      "/api/cad": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+      },
+    },
   },
 });
