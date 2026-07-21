@@ -15,7 +15,7 @@ const DEFAULT_VENV_PYTHON = path.join(PROJECT_ROOT, '.cad-bridge', '.venv', 'bin
 const RUNS_ROOT = path.join(PROJECT_ROOT, '.cad-bridge', 'runs');
 const DEFAULT_TIMEOUT_MS = 180_000;
 const MAX_TIMEOUT_MS = 600_000;
-const LLM_TIMEOUT_MS = 120_000;
+const LLM_TIMEOUT_MS = 30_000;
 const STDERR_TAIL = 4000;
 
 interface BridgeLlmConfig {
@@ -115,6 +115,9 @@ async function generateSourceViaLlm(llm: BridgeLlmConfig, userMessage: string): 
     signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   });
   if (!res.ok) {
+    if (res.status === 429) {
+      throw new Error('LLM rate limited (HTTP 429) — provider quota exceeded');
+    }
     throw new Error(`LLM request failed: HTTP ${res.status}`);
   }
   const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
@@ -220,12 +223,17 @@ export function createCadBridgeRouter(): Router {
   router.post('/', async (req: Request, res: Response) => {
     const startedAt = Date.now();
     const body = (req.body ?? {}) as BridgeGenerateBody;
+    const id = randomUUID();
+
+    console.log(`[cadBridge:${id.slice(0, 8)}] POST / — prompt="${(body.prompt ?? '').slice(0, 80)}"`);
 
     if (typeof body.prompt !== 'string' || body.prompt.trim().length === 0) {
+      console.log(`[cadBridge:${id.slice(0, 8)}] REJECT — empty prompt`);
       sendError(res, 400, 'generation-failed', 'prompt must be a non-empty string');
       return;
     }
     if (!body.generatorSource && !body.llm) {
+      console.log(`[cadBridge:${id.slice(0, 8)}] REJECT — no LLM config or generatorSource`);
       sendError(
         res,
         400,
@@ -237,11 +245,11 @@ export function createCadBridgeRouter(): Router {
 
     const ready = bridgeReady();
     if (!ready.ready) {
+      console.log(`[cadBridge:${id.slice(0, 8)}] REJECT — bridge not ready: ${ready.reason}`);
       sendError(res, 503, 'transport-unavailable', ready.reason ?? 'CAD bridge not ready');
       return;
     }
 
-    const id = randomUUID();
     const runDir = path.join(RUNS_ROOT, id);
     const warnings: string[] = [];
 
@@ -262,10 +270,15 @@ export function createCadBridgeRouter(): Router {
     let source: string;
     if (body.generatorSource) {
       source = body.generatorSource;
+      console.log(`[cadBridge:${id.slice(0, 8)}] Using generatorSource (${source.length} chars)`);
     } else {
+      const llmStart = Date.now();
       try {
+        console.log(`[cadBridge:${id.slice(0, 8)}] Calling LLM: ${body.llm!.model} at ${body.llm!.baseUrl}`);
         source = await generateSourceViaLlm(body.llm!, composeUserMessage(body, priorSource));
+        console.log(`[cadBridge:${id.slice(0, 8)}] LLM responded in ${Date.now() - llmStart}ms (${source.length} chars)`);
       } catch (err) {
+        console.log(`[cadBridge:${id.slice(0, 8)}] LLM failed after ${Date.now() - llmStart}ms: ${String(err)}`);
         sendError(res, 502, 'generation-failed', `LLM source generation failed: ${String(err)}`);
         return;
       }
@@ -282,13 +295,18 @@ export function createCadBridgeRouter(): Router {
     }
 
     const timeoutMs = Math.min(body.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
+    console.log(`[cadBridge:${id.slice(0, 8)}] Running: python ${args.join(' ')}`);
+    const stepStart = Date.now();
     const run = await runStepCli(ready.python, args, runDir, timeoutMs);
+    console.log(`[cadBridge:${id.slice(0, 8)}] scripts/step done in ${Date.now() - stepStart}ms (exit code ${run.code})`);
 
     if (run.timedOut) {
+      console.log(`[cadBridge:${id.slice(0, 8)}] TIMEOUT after ${timeoutMs}ms`);
       sendError(res, 504, 'generation-timeout', `scripts/step exceeded ${timeoutMs}ms`, run.stderr.slice(-STDERR_TAIL));
       return;
     }
     if (run.code !== 0) {
+      console.log(`[cadBridge:${id.slice(0, 8)}] FAILED with code ${run.code}`);
       sendError(
         res,
         502,
@@ -305,10 +323,13 @@ export function createCadBridgeRouter(): Router {
     try {
       stl = await readFile(stlPath);
     } catch {
+      console.log(`[cadBridge:${id.slice(0, 8)}] ERROR — no STL file produced`);
       sendError(res, 502, 'invalid-artifact', 'scripts/step completed but produced no STL', run.stderr.slice(-STDERR_TAIL));
       return;
     }
+    console.log(`[cadBridge:${id.slice(0, 8)}] STL file: ${stl.byteLength} bytes`);
     if (stl.byteLength <= 84) {
+      console.log(`[cadBridge:${id.slice(0, 8)}] ERROR — STL too small: ${stl.byteLength} bytes`);
       sendError(res, 502, 'invalid-artifact', `STL artifact too small (${stl.byteLength} bytes)`);
       return;
     }
@@ -364,6 +385,8 @@ export function createCadBridgeRouter(): Router {
       warnings,
     };
 
+    const totalServerMs = Date.now() - startedAt;
+    console.log(`[cadBridge:${id.slice(0, 8)}] Response sent — total ${totalServerMs}ms`);
     res.json({ ok: true, model, stlBase64: stl.toString('base64') });
   });
 
