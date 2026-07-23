@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
 
 /* ─── Types ─── */
@@ -17,6 +17,8 @@ export interface CADPanelProps {
   onChange?: (params: CADPanelParams) => void;
   /** Optional external overrides (e.g. from parent state). */
   initial?: Partial<CADPanelParams>;
+  /** Called (debounced 300ms) with build123d source to drive 3D regeneration. */
+  onRegenerate?: (source: string) => void;
 }
 
 interface SliderDef {
@@ -52,7 +54,50 @@ const DEFAULTS: CADPanelParams = {
   corner: 5.0,
 };
 
-/* ─── OpenSCAD generator ─── */
+/* ─── build123d generator (drives 3D preview) ─── */
+
+export function generateBuild123dSource(p: CADPanelParams): string {
+  const hw = p.width / 2;
+  const hd = p.depth / 2;
+  const margin = 7;
+  let code = `from build123d import *\n\n`;
+  code += `# PARAM plate_w "Plate Width" mm 20 200 1\n`;
+  code += `# PARAM plate_d "Plate Depth" mm 20 200 1\n`;
+  code += `# PARAM plate_h "Plate Thickness" mm 0.8 20 0.2\n`;
+  code += `# PARAM holes "Holes" 0 8 1\n`;
+  code += `# PARAM hole_r "Hole Radius" mm 1 6 0.5\n`;
+  code += `# PARAM corner_r "Corner Radius" mm 0 15 0.5\n`;
+  code += `def gen_step():\n`;
+  code += `    plate_w = ${p.width}; plate_d = ${p.depth}; plate_h = ${p.thickness}; holes = ${p.holes}; hole_r = ${(p.holeDia / 2).toFixed(1)}; corner_r = ${p.corner.toFixed(1)}\n`;
+
+  if (p.corner > 0) {
+    code += `    base = Box(plate_w, plate_d, plate_h, align=(Align.CENTER, Align.CENTER, Align.MIN))\n`;
+    code += `    base = fillet(base.edges().group_by(Axis.Z)[0], radius=corner_r)\n`;
+  } else {
+    code += `    base = Box(plate_w, plate_d, plate_h, align=(Align.CENTER, Align.CENTER, Align.MIN))\n`;
+  }
+
+  code += `    body = base\n`;
+  if (p.holes > 0) {
+    const positions: [number, number][] = [];
+    if (p.holes >= 1) positions.push([-(hw - margin), -(hd - margin)]);
+    if (p.holes >= 2) positions.push([ hw - margin, -(hd - margin)]);
+    if (p.holes >= 3) positions.push([-(hw - margin),  hd - margin]);
+    if (p.holes >= 4) positions.push([ hw - margin,  hd - margin]);
+    if (p.holes >= 5) positions.push([0, -(hd - margin)]);
+    if (p.holes >= 6) positions.push([0,  hd - margin]);
+    if (p.holes >= 7) positions.push([-(hw - margin), 0]);
+    if (p.holes >= 8) positions.push([ hw - margin, 0]);
+    for (const [x, y] of positions) {
+      code += `    hole = Pos(${x.toFixed(1)}, ${y.toFixed(1)}, 0) * Cylinder(radius=hole_r, height=plate_h + 0.2, align=(Align.CENTER, Align.CENTER, Align.MIN))\n`;
+      code += `    body -= hole\n`;
+    }
+  }
+  code += `    return body\n`;
+  return code;
+}
+
+/* ─── OpenSCAD generator (display only) ─── */
 
 function generateOpenSCAD(p: CADPanelParams): string {
   const hw = p.width / 2;
@@ -96,9 +141,12 @@ function generateOpenSCAD(p: CADPanelParams): string {
 
 /* ─── Component ─── */
 
-export function ParametricCADPanel({ onChange, initial }: CADPanelProps) {
+export function ParametricCADPanel({ onChange, initial, onRegenerate }: CADPanelProps) {
   const [params, setParams] = useState<CADPanelParams>({ ...DEFAULTS, ...initial });
   const [codeOpen, setCodeOpen] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const paramsRef = useRef(params);
+  paramsRef.current = params;
 
   const handleChange = useCallback(
     (key: keyof CADPanelParams, raw: number) => {
@@ -110,8 +158,17 @@ export function ParametricCADPanel({ onChange, initial }: CADPanelProps) {
         onChange?.(next);
         return next;
       });
+
+      // Debounced regeneration — fires 300ms after last slider move
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        if (onRegenerate) {
+          const source = generateBuild123dSource(paramsRef.current);
+          onRegenerate(source);
+        }
+      }, 300);
     },
-    [onChange],
+    [onChange, onRegenerate],
   );
 
   // Sync external overrides
