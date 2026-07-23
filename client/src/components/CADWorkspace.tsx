@@ -1249,9 +1249,9 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
           {/* GENERATE + NEW DESIGN + DOWNLOAD */}
           <div className="flex items-stretch gap-3">
             <button onClick={() => handleGenerate()} disabled={loading}
-              className="flex-1 h-11 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm px-5 text-sm font-mono font-bold hover:bg-foreground/90 disabled:opacity-30 transition-all">
+              className="flex-1 h-12 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm px-6 text-sm font-mono font-bold hover:bg-foreground/90 hover:shadow-[0_0_20px_rgba(0,200,255,0.15)] disabled:opacity-30 transition-all duration-200 active:scale-[0.98]">
               {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              GENERATE
+              {loading ? 'GENERATING...' : 'GENERATE'}
             </button>
             <button onClick={handleNewDesign} disabled={loading} title="New Design"
               className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0">
