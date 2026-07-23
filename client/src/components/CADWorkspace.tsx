@@ -1559,9 +1559,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
           {/* ── CAD TAB ── */}
           {rightTab === 'cad' && (
             <ParametricCADPanel
-              onChange={(params) => {
-                console.log('[CADStudio] Params:', params);
-              }}
+              onRegenerate={handleRegenerateFromSource}
             />
           )}
 
