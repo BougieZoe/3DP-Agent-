@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls, PerspectiveCamera, Environment } from "@react-three/drei";
 import * as THREE from "three";
-import { Maximize2, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { Maximize2, Minimize2, Camera, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { CAD_MATERIALS, getCADMaterialPreset, createCADMaterial, type CADMaterialPreset } from "@/lib/cadMaterials";
 import type { UnifiedAnalysis } from "@/analysis";
 
@@ -187,8 +187,25 @@ export function CADViewport({
   fitKey, setFitKey, analysis, score, verdict,
   loading, stages, totalTime, hasGeometry,
 }: CADViewportProps) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
+
+  const handleScreenshot = useCallback(() => {
+    const canvas = sectionRef.current?.querySelector('canvas');
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.download = `cad-screenshot-${Date.now()}.png`;
+    link.href = dataUrl;
+    link.click();
+  }, []);
+
   return (
-    <section className="relative overflow-hidden bg-card/20">
+    <section
+      ref={sectionRef}
+      className={`relative overflow-hidden bg-card/20 transition-all duration-300 ${
+        isFullscreen ? 'fixed inset-0 z-50' : ''
+      }`}>
       <VerdictOverlay verdict={verdict} score={score} visible={analysis != null} />
 
       {loading && stages.length > 0 && !hasGeometry && (
@@ -215,6 +232,19 @@ export function CADViewport({
       <div className="absolute bottom-4 left-5 right-5 z-10 flex items-center gap-2">
         <MaterialSelector current={cadMaterialId} onChange={setCadMaterialId} />
         <div className="ml-auto" />
+        {hasGeometry && (
+          <button onClick={handleScreenshot}
+            className="w-7 h-7 flex items-center justify-center bg-background/70 backdrop-blur border border-border/50 rounded-sm text-muted-foreground/50 hover:text-primary hover:border-primary/30 transition-all"
+            title="Screenshot">
+            <Camera className="w-3 h-3" />
+          </button>
+        )}
+        <button
+          onClick={() => setIsFullscreen(f => !f)}
+          className="w-7 h-7 flex items-center justify-center bg-background/70 backdrop-blur border border-border/50 rounded-sm text-muted-foreground/50 hover:text-primary hover:border-primary/30 transition-all"
+          title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}>
+          {isFullscreen ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+        </button>
         <FitViewButton onFit={() => setFitKey(k => k + 1)} />
       </div>
 
