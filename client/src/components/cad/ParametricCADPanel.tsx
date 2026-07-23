@@ -71,8 +71,9 @@ export function generateBuild123dSource(p: CADPanelParams): string {
   code += `    plate_w = ${p.width}; plate_d = ${p.depth}; plate_h = ${p.thickness}; holes = ${p.holes}; hole_r = ${(p.holeDia / 2).toFixed(1)}; corner_r = ${p.corner.toFixed(1)}\n`;
 
   if (p.corner > 0) {
+    const safeR = Math.min(p.corner, p.thickness * 0.45).toFixed(1);
     code += `    base = Box(plate_w, plate_d, plate_h, align=(Align.CENTER, Align.CENTER, Align.MIN))\n`;
-    code += `    base = fillet(base.edges().group_by(Axis.Z)[0], radius=corner_r)\n`;
+    code += `    try:\n        base = fillet(base.edges().group_by(Axis.Z)[0], radius=${safeR})\n    except:\n        pass\n`;
   } else {
     code += `    base = Box(plate_w, plate_d, plate_h, align=(Align.CENTER, Align.CENTER, Align.MIN))\n`;
   }

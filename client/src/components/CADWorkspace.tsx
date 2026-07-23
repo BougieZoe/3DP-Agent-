@@ -647,18 +647,29 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
         if (!outcome || !outcome.ok) {
           const err = outcome && !outcome.ok ? (outcome as { ok: false; error: { code: string; detail?: string } }).error : null;
-          const detail = err?.detail ?? 'no AI provider configured';
           mark('llm', 'error');
           quality = 'FAILED';
           setGenerationQuality('FAILED');
+
+          if (!outcome) {
+            // No API key configured — LLM was never called.
+            throw new Error(
+              `No AI provider configured.\n\n` +
+              `Configure an API key for one of:\n` +
+              `- OpenAI\n` +
+              `- DeepSeek\n` +
+              `- Kimi\n` +
+              `- Fireworks`,
+            );
+          }
+
+          // LLM generated code but build123d execution failed.
+          const detail = err?.detail ?? 'unknown error';
           throw new Error(
             `CAD generation failed.\n\n` +
             `${detail}\n\n` +
-            `Configure an API key for one of:\n` +
-            `- OpenAI\n` +
-            `- DeepSeek\n` +
-            `- Kimi\n` +
-            `- Fireworks`,
+            `The AI generated a design but the CAD engine could not build it.\n` +
+            `Try simplifying your prompt or use one of the Design Starters.`,
           );
         }
         if (outcome && outcome.ok) {
