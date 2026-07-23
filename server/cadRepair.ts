@@ -61,6 +61,15 @@ export function repairCadSource(
     return { source: repaired, type: 'fillet' };
   }
 
+  // Rule E — build123d operator order: shape * Pos → Pos * shape
+  if (combined.includes('unsupported operand') && combined.includes('*')) {
+    const repaired = source.replace(
+      /\b(\w+)\s*\*\s*(Pos\s*\([^)]+\))/g,
+      '$2 * $1',
+    );
+    return { source: repaired, type: 'boolean' };
+  }
+
   // Rule A — Failed creating a fillet: downgrade radius to 1.
   if (combined.includes('failed creating a fillet')) {
     const repaired = source.replace(
