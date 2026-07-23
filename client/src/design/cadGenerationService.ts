@@ -1,12 +1,18 @@
 import type { PrinterProfileId } from '@/analysis/types';
 import type { Material } from '@/lib/materialState';
 import type { GeneratedModel } from '@shared/domain/generatedModel';
+import type { CADGenerationTransport } from './transport/types';
 
 /**
  * CADGenerationService — turns a natural-language design intent into STL
  * bytes + metadata. The service itself does NOT parse geometry, run
  * analysis, or author build123d source — generation happens behind a
  * CADGenerationTransport (local bridge / remote proxy).
+ *
+ * Usage:
+ *   const transport = createLocalBridgeTransport({ llm: { ... } });
+ *   const service = createCadGenerationService(transport);
+ *   const outcome = await service.generate({ prompt: 'a 20mm cube' });
  */
 
 export interface CADGenerationRequest {
@@ -51,4 +57,23 @@ export type CADGenerationOutcome =
 
 export interface CADGenerationService {
   generate(request: CADGenerationRequest): Promise<CADGenerationOutcome>;
+}
+
+/**
+ * createCadGenerationService — factory that binds a generation transport
+ * (local bridge / remote proxy) to the CADGenerationService interface.
+ *
+ * The caller owns transport selection and lifecycle; the service owns
+ * request validation, retry/fallback logic, and telemetry hooks (future).
+ */
+export function createCadGenerationService(
+  transport: CADGenerationTransport,
+): CADGenerationService {
+  return {
+    async generate(request: CADGenerationRequest): Promise<CADGenerationOutcome> {
+      // Forward the request to the configured transport.
+      // Future: add pre-flight validation, retry with backoff, telemetry.
+      return await transport.generate(request);
+    },
+  };
 }
