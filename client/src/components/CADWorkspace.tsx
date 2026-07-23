@@ -1246,6 +1246,64 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
             placeholder="Describe your object..."
           />
 
+          {/* Manufacturing Config (collapsible) */}
+          <details className="group">
+            <summary className="text-[10px] font-mono text-muted-foreground/30 tracking-[0.2em] cursor-pointer hover:text-muted-foreground/50 transition-colors list-none flex items-center gap-1">
+              <span className="text-[8px] group-open:rotate-90 transition-transform">▸</span>
+              MANUFACTURING CONFIG
+            </summary>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <select
+                value="bambu_x1c"
+                onChange={() => {}}
+                className="text-[10px] font-mono px-2 py-1.5 border border-border/20 bg-background rounded-sm text-muted-foreground/60 focus:outline-none focus:border-primary/30">
+                <option value="bambu_x1c">Bambu X1C</option>
+                <option value="prusa_mk4">Prusa MK4</option>
+                <option value="generic">Generic FDM</option>
+              </select>
+              <select
+                value={materialName}
+                onChange={(e) => { /* material context handles this */ }}
+                className="text-[10px] font-mono px-2 py-1.5 border border-border/20 bg-background rounded-sm text-muted-foreground/60 focus:outline-none focus:border-primary/30">
+                <option value="PLA">PLA</option>
+                <option value="PETG">PETG</option>
+                <option value="ABS">ABS</option>
+                <option value="TPU">TPU</option>
+              </select>
+              <select
+                defaultValue="standard"
+                className="text-[10px] font-mono px-2 py-1.5 border border-border/20 bg-background rounded-sm text-muted-foreground/60 focus:outline-none focus:border-primary/30 col-span-2">
+                <option value="draft">Quality: Draft (0.3mm)</option>
+                <option value="standard">Quality: Standard (0.2mm)</option>
+                <option value="fine">Quality: Fine (0.12mm)</option>
+              </select>
+            </div>
+          </details>
+
+          {/* Quick Edit Chips (after first generation) */}
+          {hasGeometry && (
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { label: 'Make taller', suffix: ' — make it 50% taller' },
+                { label: 'Add fillets', suffix: ' — add fillets to all sharp edges' },
+                { label: 'Thicken walls', suffix: ' — increase wall thickness to 3mm' },
+                { label: 'Scale 50%', suffix: ' — scale down to 50% of current size' },
+                { label: 'Hollow it', suffix: ' — create a hollow shell with 2mm wall thickness' },
+              ].map(chip => (
+                <button
+                  key={chip.label}
+                  onClick={() => {
+                    setPrompt(prompt + chip.suffix);
+                    handleGenerate(prompt + chip.suffix);
+                  }}
+                  disabled={loading}
+                  className="text-[10px] font-mono px-2 py-1 border border-border/20 text-muted-foreground/50 hover:text-primary hover:border-primary/30 rounded-sm transition-all disabled:opacity-20">
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* GENERATE + VARIANT + NEW DESIGN + DOWNLOAD */}
           <div className="space-y-2">
             <div className="flex items-stretch gap-3">
