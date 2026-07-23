@@ -21,6 +21,8 @@ import { applySuggestions } from "@/lib/geometryEditor";
 import { optimizeDesign, type OptimizationDecision } from "@/agents/designOptimizer";
 import { CADHeader } from "./cad/CADHeader";
 import { CADViewport } from "./cad/CADViewport";
+import { ErrorCard } from "./cad/ErrorCard";
+import { AnalysisSubTabs } from "./cad/AnalysisSubTabs";
 
 const LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
   openai:   { baseUrl: 'https://api.openai.com/v1',            model: 'gpt-4o' },
@@ -1183,6 +1185,8 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       setParamValues(vals);
       paramValuesRef.current = vals;
       setHasParams(true);
+      // Auto-switch to CAD tab so parameter sliders are visible
+      setRightTab('cad');
     } else {
       setHasParams(false);
     }
@@ -1262,10 +1266,8 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
           </div>
         </div>
 
-        {/* Error inline */}
-        {error && (
-          <div className="px-4 mt-3 text-sm text-red-400/80 font-mono">{error}</div>
-        )}
+        {/* Error card */}
+        {error && <ErrorCard message={error} />}
 
         {/* Edit warning */}
         {editWarning && (
@@ -1519,260 +1521,28 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
           {/* ── ANALYSIS TAB ── */}
           {rightTab === 'analysis' && (
-            <div className="p-4 space-y-4">
-
-              {/* Manufacturing Confidence */}
-              <div className="text-center">
-                <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em] mb-1.5">MANUFACTURING CONFIDENCE</div>
-                <span className="text-4xl font-bold font-mono tabular-nums tracking-tight" style={{ color: scoreColor(score) }}>
-                  {score}%
-                </span>
-                <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-sm border mt-2 text-[12px] font-bold font-mono ${
-                  verdict === 'PASS' ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' :
-                  verdict === 'WARN' ? 'border-amber-500/30 text-amber-400 bg-amber-500/10' :
-                  'border-red-500/30 text-red-400 bg-red-500/10'
-                }`}>
-                  {verdict === 'PASS' ? <CheckCircle2 className="w-3 h-3" /> :
-                   verdict === 'WARN' ? <AlertTriangle className="w-3 h-3" /> :
-                   <XCircle className="w-3 h-3" />}
-                  <span>{verdict}</span>
-                </div>
-              </div>
-
-              {/* Model Source */}
-              {llmInfo && (
-                <div className="text-center pt-1">
-                  <span className={`text-[10px] font-mono tracking-[0.2em] px-2 py-0.5 rounded-sm border ${
-                    llmInfo.startsWith('Template:')
-                      ? 'text-amber-400/60 border-amber-400/20 bg-amber-400/5'
-                      : 'text-primary/60 border-primary/20 bg-primary/5'
-                  }`}>
-                    {llmInfo.startsWith('Template:') ? 'TEMPLATE' : 'AI GENERATED'}
-                  </span>
-                </div>
-              )}
-
-              {/* Auto Repair status */}
-              {repairInfo && (
-                <div className="text-center pt-0.5">
-                  <span className={`text-[10px] font-mono tracking-[0.15em] px-2 py-0.5 rounded-sm border ${
-                    repairInfo.repaired
-                      ? repairInfo.repairType === 'fillet'
-                        ? 'text-emerald-400/60 border-emerald-400/20 bg-emerald-400/5'
-                        : 'text-amber-400/60 border-amber-400/20 bg-amber-400/5'
-                      : 'text-muted-foreground/30 border-muted-foreground/10'
-                  }`}>
-                    {repairInfo.repaired
-                      ? `AUTO REPAIR · ${repairInfo.repairType.toUpperCase()} · ${repairInfo.attempts} ATTEMPT${repairInfo.attempts !== 1 ? 'S' : ''}`
-                      : 'AUTO REPAIR · NOT NEEDED'}
-                  </span>
-                </div>
-              )}
-
-              {/* Print Check */}
-              <div className="space-y-1.5">
-                <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em]">PRINT CHECK</div>
-                <div className="p-2.5 border border-border/15 rounded-sm space-y-1">
-                  <TechRow label="Bed fit" value={bf ? (bf.fits ? `✓ ${bf.printerProfile.name}` : `✗ ${bf.printerProfile.name}`) : '—'} badge={bf?.fits ? 'pass' : bf?.fits === false ? 'fail' : undefined} />
-                  <TechRow label="Material" value={materialName || '—'} />
-                  <TechRow label="Support" value={sp?.totalSupportVolumeMm3 != null ? `${Math.round(sp.totalSupportVolumeMm3)} mm³` : '—'} />
-                  <TechRow label="Print time" value={pt ? `${pt.estimatedPrintTimeHours.toFixed(1)} h` : '—'} />
-                  <TechRow label="Material wt" value={pt ? `${pt.materialWeightGrams.toFixed(1)} g` : '—'} />
-                  <TechRow label="Cost" value={pt ? `$${pt.materialCostUsd.toFixed(2)}` : '—'} />
-                </div>
-              </div>
-
-              {/* Key Issues */}
-              {gateIssues.length > 0 && (
-                <div className="space-y-1">
-                  <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em]">KEY ISSUES</div>
-                  {gateIssues.slice(0, 3).map((issue, i) => (
-                    <div key={i} className="flex items-start gap-2 text-[12px] font-mono leading-relaxed">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1 ${
-                        issue.severity === 'error' ? 'bg-red-400' :
-                        issue.severity === 'warning' ? 'bg-amber-400' : 'bg-emerald-400'
-                      }`} />
-                      <span className="text-muted-foreground/60">{issue.message}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* IMPROVE DESIGN */}
-              {confidenceReport?.repairSuggestions && confidenceReport.repairSuggestions.length > 0 && (
-                <button onClick={handleImproveDesign} disabled={loading}
-                  className="w-full h-9 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm text-sm font-mono font-bold hover:bg-foreground/90 disabled:opacity-30 transition-all">
-                  <RefreshCw className="w-4 h-4" /> IMPROVE DESIGN
-                </button>
-              )}
-
-              {/* AI Optimization + Design Evolution (only after IMPROVE DESIGN click) */}
-              {optimizationState && (
-                <div className="space-y-3 p-3 border border-primary/15 bg-primary/5 rounded-sm">
-                  <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">AI OPTIMIZATION PLAN</div>
-                  <div className="space-y-1">
-                    <div className="text-[13px] text-muted-foreground/50">Detected:</div>
-                    <div className="text-[13px] text-foreground/80 font-mono">{optimizationState.plan.detected}</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-[13px] text-muted-foreground/50">Action:</div>
-                    <div className="text-[13px] text-primary/90 font-mono">
-                      {optimizationState.plan.action === 'wall_thickening' ? 'Thicken walls' :
-                       optimizationState.plan.action === 'orientation_change' ? 'Rotate orientation' :
-                       'No action needed'}
-                    </div>
-                  </div>
-                  <div className="border-t border-border/10 pt-3">
-                    <div className="text-sm text-muted-foreground/50 font-mono mb-2">DESIGN EVOLUTION</div>
-                    <div className="space-y-1">
-                      <MetricDeltaRow label="Confidence" before={optimizationState.beforeConfidence} after={optimizationState.afterConfidence} beforeDisplay={`${optimizationState.beforeConfidence}%`} afterDisplay={`${optimizationState.afterConfidence}%`} higherBetter />
-                      <MetricDeltaRow label="Issues" before={optimizationState.beforeIssues} after={optimizationState.afterIssues} beforeDisplay={`${optimizationState.beforeIssues}`} afterDisplay={`${optimizationState.afterIssues}`} higherBetter={false} />
-                      <MetricDeltaRow label="Overhang area" before={optimizationState.beforeMetrics?.overhangAreaPercent ?? 0} after={optimizationState.afterMetrics?.overhangAreaPercent ?? 0} beforeDisplay={`${optimizationState.beforeMetrics?.overhangAreaPercent ?? 0}%`} afterDisplay={`${optimizationState.afterMetrics?.overhangAreaPercent ?? 0}%`} higherBetter={false} />
-                      <MetricDeltaRow label="Support vol" before={optimizationState.beforeMetrics?.supportVolumeMm3 ?? 0} after={optimizationState.afterMetrics?.supportVolumeMm3 ?? 0} beforeDisplay={`${optimizationState.beforeMetrics?.supportVolumeMm3 ?? 0} mm³`} afterDisplay={`${optimizationState.afterMetrics?.supportVolumeMm3 ?? 0} mm³`} higherBetter={false} />
-                      <MetricDeltaRow label="Mfg risk" before={optimizationState.beforeMetrics?.manufacturingRisk ?? 0} after={optimizationState.afterMetrics?.manufacturingRisk ?? 0} beforeDisplay={`${optimizationState.beforeMetrics?.manufacturingRisk ?? 0}`} afterDisplay={`${optimizationState.afterMetrics?.manufacturingRisk ?? 0}`} higherBetter={false} />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* VIEW FULL REPORT toggle */}
-              <button onClick={() => setDetailsOpen(v => !v)}
-                className="w-full h-9 inline-flex items-center justify-center gap-2 border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm text-[12px] font-mono transition-all">
-                {detailsOpen ? '— HIDE FULL REPORT' : '+ VIEW FULL REPORT'}
-              </button>
-
-              {detailsOpen && <>
-                <div className="border-t border-border/10" />
-
-                {/* Readiness */}
-                {confidenceReport?.risks && (
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">READINESS</div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <CompactRiskCard title="STRUCTURAL" risk={confidenceReport.risks.structural} />
-                      <CompactRiskCard title="PRINT" risk={confidenceReport.risks.print} />
-                      <CompactRiskCard title="MFG" risk={confidenceReport.risks.manufacturing} />
-                    </div>
-                  </div>
-                )}
-
-                {/* Confidence Breakdown */}
-                {confidenceReport?.categories && confidenceReport.categories.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">CONFIDENCE BREAKDOWN</div>
-                    {confidenceReport.categories.map(cat => (
-                      <div key={cat.id}>
-                        <div className="flex items-center justify-between text-[13px] font-mono mb-1">
-                          <span className="text-muted-foreground/50">{cat.label}</span>
-                          <span className="tabular-nums font-bold" style={{ color: scoreColor(cat.score) }}>{cat.score}%</span>
-                        </div>
-                        <div className="h-1.5 bg-background/60 rounded-sm overflow-hidden">
-                          <div className="h-full rounded-sm transition-all" style={{ width: `${cat.score}%`, background: scoreColor(cat.score) }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Repair Suggestions */}
-                {confidenceReport?.repairSuggestions && confidenceReport.repairSuggestions.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">REPAIR SUGGESTIONS</div>
-                    {confidenceReport.repairSuggestions.map((s, i) => (
-                      <div key={i} className="border border-border/15 rounded-sm p-3">
-                        <div className="flex items-start gap-2.5">
-                          <span className={`text-[11px] font-mono px-1.5 py-0.5 rounded-sm border shrink-0 mt-0.5 ${
-                            s.impact === 'high' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                            s.impact === 'medium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                            'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                          }`}>{s.impact.toUpperCase()}</span>
-                          <div className="min-w-0">
-                            <div className="text-[13px] text-foreground/70 font-medium">{s.action}</div>
-                            <div className="text-[13px] text-muted-foreground/50 mt-0.5">{s.description}</div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Risk Analysis */}
-                {confidenceReport?.explanation?.topRisks && confidenceReport.explanation.topRisks.length > 0 && (
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">RISK ANALYSIS</div>
-                    {confidenceReport.explanation.topRisks.map((risk, i) => (
-                      <div key={i} className="flex items-center gap-2 text-[13px]">
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${risk.impact === 'high' ? 'bg-red-400' : risk.impact === 'medium' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-                        <span className="text-muted-foreground/60">{risk.reason}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Technical Metrics */}
-                <div className="space-y-3">
-                  <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">TECHNICAL METRICS</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="p-3 border border-border/15 rounded-sm">
-                      <div className="text-sm text-muted-foreground/50 font-mono mb-2">TOPOLOGY</div>
-                      <div className="space-y-1.5">
-                        <TechRow label="Tri" value={t?.triangleCount} />
-                        <TechRow label="Verts" value={t?.vertexCount} />
-                        <TechRow label="Shells" value={t?.shellCount} />
-                        <TechRow label="Manifold" value={t?.isManifold ? '✓' : '✗'} badge={t?.isManifold ? 'pass' : 'fail'} />
-                        <TechRow label="Watertight" value={v?.isWatertight ? '✓' : '✗'} badge={v?.isWatertight ? 'pass' : 'fail'} />
-                        <TechRow label="Holes" value={v?.holeCount} />
-                      </div>
-                    </div>
-                    <div className="p-3 border border-border/15 rounded-sm">
-                      <div className="text-sm text-muted-foreground/50 font-mono mb-2">GEOMETRY</div>
-                      <div className="space-y-1.5">
-                        <TechRow label="Volume" value={m?.meshVolumeMm3 != null ? `${Math.round(m.meshVolumeMm3)} mm³` : '—'} />
-                        <TechRow label="Surface" value={m?.surfaceAreaMm2 != null ? `${Math.round(m.surfaceAreaMm2)} mm²` : '—'} />
-                        {bb && <TechRow label="BBox" value={`${bb.x.toFixed(0)} × ${bb.y.toFixed(0)} × ${bb.z.toFixed(0)} mm`} />}
-                        <TechRow label="Avg wall" value={m?.avgWallThicknessMm != null ? `${m.avgWallThicknessMm.toFixed(1)} mm` : '—'} />
-                        <TechRow label="Min wall" value={m?.minWallThicknessMm != null ? `${m.minWallThicknessMm.toFixed(1)} mm` : '—'} />
-                        <TechRow label="Overhang" value={m?.overhang?.severity ?? '—'} badge={m?.overhang?.severity} />
-                      </div>
-                    </div>
-                    <div className="col-span-2 p-3 border border-border/15 rounded-sm">
-                      <div className="text-sm text-muted-foreground/50 font-mono mb-2">PRINTABILITY</div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {sp && <TechRow label="Support" value={sp.totalSupportVolumeMm3 != null ? `${Math.round(sp.totalSupportVolumeMm3)} mm³` : '—'} />}
-                        {sp && <TechRow label="Difficulty" value={sp.difficulty ?? '—'} badge={sp.difficulty} />}
-                        {bf && <TechRow label="Bed" value={bf.fits ? `✓ ${bf.printerProfile.name}` : `✗ ${bf.printerProfile.name}`} badge={bf.fits ? 'pass' : 'fail'} />}
-                        {pt && <TechRow label="Time" value={`${pt.estimatedPrintTimeHours.toFixed(1)} h`} />}
-                        {pt && <TechRow label="Material" value={`${pt.materialWeightGrams.toFixed(1)} g`} />}
-                        {pt && <TechRow label="Cost" value={`$${pt.materialCostUsd.toFixed(2)}`} />}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mesh Details */}
-                <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">MESH DETAILS</div>
-                  {gateIssues.length > 0 && gateIssues.map((issue, i) => (
-                    <div key={i} className="flex items-start gap-2 text-[13px] leading-relaxed p-2 rounded-sm border border-border/10">
-                      {issue.severity === 'error' ? <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" /> :
-                       issue.severity === 'warning' ? <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" /> :
-                       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />}
-                      <span className="text-muted-foreground/60">{issue.message}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Error Logs */}
-                {errorDetails && (
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">ERROR LOGS</div>
-                    <div className="p-3 border border-border/15 rounded-sm text-[12px] font-mono text-muted-foreground/40 leading-relaxed whitespace-pre-wrap">
-                      {errorDetails}
-                    </div>
-                  </div>
-                )}</>}
-
-            </div>
+            <AnalysisSubTabs
+              score={score}
+              verdict={verdict}
+              llmInfo={llmInfo}
+              repairInfo={repairInfo}
+              gateIssues={gateIssues}
+              materialName={materialName}
+              bf={bf}
+              sp={sp}
+              pt={pt}
+              m={m}
+              t={t}
+              v={v}
+              bb={bb}
+              confidenceReport={confidenceReport}
+              optimizationState={optimizationState}
+              detailsOpen={detailsOpen}
+              setDetailsOpen={setDetailsOpen}
+              errorDetails={errorDetails}
+              loading={loading}
+              handleImproveDesign={handleImproveDesign}
+            />
           )}
 
         </div>
