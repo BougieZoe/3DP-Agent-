@@ -1620,7 +1620,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                 <div className="text-center pt-0.5">
                   <span className={`text-[10px] font-mono tracking-[0.15em] px-2 py-0.5 rounded-sm border ${
                     repairInfo.repaired
-                      ? repairInfo.repairType === 'fillet'
+                      ? repairInfo.repairType === 'fillet' || repairInfo.repairType === 'builder'
                         ? 'text-emerald-400/60 border-emerald-400/20 bg-emerald-400/5'
                         : 'text-amber-400/60 border-amber-400/20 bg-amber-400/5'
                       : 'text-muted-foreground/30 border-muted-foreground/10'

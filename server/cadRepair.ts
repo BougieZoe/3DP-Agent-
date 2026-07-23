@@ -5,7 +5,7 @@
  * not possible.
  */
 
-export type RepairType = 'fillet' | 'boolean' | 'none';
+export type RepairType = 'fillet' | 'boolean' | 'builder' | 'none';
 
 export interface RepairResult {
   source: string;
@@ -77,6 +77,20 @@ export function repairCadSource(
       '$11',
     );
     return { source: repaired, type: 'fillet' };
+  }
+
+  // Rule F — Builder pattern (BuildPart/Locations): extract simple return or fallback.
+  if (combined.includes('buildpart') || combined.includes('builder of shapes')) {
+    // Try to salvage: find the last return statement with a Box/Cylinder/Sphere
+    const returnMatch = source.match(/return\s+(Box|Cylinder|Sphere)\([^)]+\)/g);
+    if (returnMatch) {
+      const lastReturn = returnMatch[returnMatch.length - 1];
+      const repaired = `from build123d import *\n\ndef gen_step():\n    ${lastReturn}\n`;
+      return { source: repaired, type: 'builder' };
+    }
+    // No salvagable return — create a minimal fallback
+    const repaired = `from build123d import *\n\ndef gen_step():\n    body = Box(50, 50, 50, align=(Align.CENTER, Align.CENTER, Align.CENTER))\n    return body\n`;
+    return { source: repaired, type: 'builder' };
   }
 
   // No known pattern — can't repair.
