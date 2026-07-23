@@ -29,6 +29,7 @@ import { runConfidenceGate, type CADConfidenceReport, type CADRunRecord, type Im
 import { CAD_MATERIALS, getCADMaterialPreset, createCADMaterial, type CADMaterialPreset } from "@/lib/cadMaterials";
 import { applySuggestions } from "@/lib/geometryEditor";
 import { optimizeDesign, type OptimizationDecision } from "@/agents/designOptimizer";
+import { ParametricCADPanel } from "./cad/ParametricCADPanel";
 
 const LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
   openai:   { baseUrl: 'https://api.openai.com/v1',            model: 'gpt-4o' },
@@ -1557,157 +1558,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
           {/* ── CAD TAB ── */}
           {rightTab === 'cad' && (
-            <div className="p-4 space-y-3">
-
-              {/* ── Feature Tree ── */}
-              {featureTree.length > 0 && (
-                <div className="border-b border-border/5 pb-2 mb-1">
-                  <button onClick={() => setSectionsOpen(s => ({ ...s, _features: !(s._features ?? false) }))}
-                    className="w-full flex items-center gap-2 py-1.5 text-[11px] font-mono tracking-[0.15em] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors">
-                    <span className="text-[10px] text-muted-foreground/30">{sectionsOpen._features ? '▾' : '▸'}</span>
-                    FEATURE TREE
-                  </button>
-                  {sectionsOpen._features && (
-                    <div className="pl-3 pt-1.5 space-y-1">
-                      {featureTree.map(f => (
-                        <div key={f.id} onClick={() => setSelectedFeatureId(f.id === selectedFeatureId ? null : f.id)}
-                          className={`flex items-center gap-2 py-1 px-2 rounded-sm cursor-pointer transition-colors ${
-                            selectedFeatureId === f.id ? 'bg-primary/10 border-l-2 border-primary/50' : 'hover:bg-card/30 border-l-2 border-transparent'
-                          }`}>
-                          <svg className="w-3 h-3 text-primary/50 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
-                          <span className="text-[11px] font-mono">
-                            {selectedFeatureId === f.id && <span className="text-primary text-[9px] mr-1">◆</span>}
-                            <span className="text-primary/60 uppercase tracking-wider text-[10px] mr-1.5">{f.type}</span>
-                            <span className={selectedFeatureId === f.id ? 'text-primary/90' : 'text-muted-foreground/60'}>{f.label}</span>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── Parameters ── */}
-              {hasParams && paramEntries ? (
-                <div className="space-y-1">
-                  {Array.from(new Set(paramEntries.map(e => e.section))).map(sectionKey => {
-                    const sectionParams = paramEntries.filter(e => e.section === sectionKey);
-                    if (sectionParams.length === 0) return null;
-                    const open = sectionsOpen[sectionKey] ?? (sectionKey === 'dimensions');
-                    const sectionLabel = SECTION_LABELS[sectionKey] || sectionKey.toUpperCase();
-
-                    return (
-                      <div key={sectionKey}>
-                        <button onClick={() => setSectionsOpen(s => ({ ...s, [sectionKey]: !(s[sectionKey] ?? sectionKey === 'dimensions') }))}
-                          className="w-full flex items-center gap-2 py-1.5 text-[11px] font-mono tracking-[0.15em] text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors">
-                          <span className="text-[10px] text-muted-foreground/30">{open ? '▾' : '▸'}</span>
-                          {sectionLabel}
-                          <span className="ml-auto text-[10px] text-muted-foreground/20 tabular-nums">{sectionParams.length}</span>
-                        </button>
-                        {open && (
-                          <div className="space-y-0.5 pt-0.5">
-                            {sectionParams.map(e => {
-                              const val = paramValues[e.name] ?? String(e.value);
-                              const numVal = parseFloat(val) || 0;
-                              const bounds = sliderBounds(e.name, val);
-                              const pct = bounds.max > bounds.min ? ((numVal - bounds.min) / (bounds.max - bounds.min)) * 100 : 50;
-                              return (
-                                <div key={e.name} className="group px-2 py-2 rounded-sm hover:bg-card/20 transition-colors">
-                                  {/* Label + Value row */}
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[11px] font-mono tracking-wider text-muted-foreground/50 uppercase">{e.label}</span>
-                                    <div className="flex items-center gap-1">
-                                      {editingParam === e.name ? (
-                                        <input type="number" value={numVal} step={bounds.step} min={bounds.min} max={bounds.max}
-                                          onChange={v => handleParamChange(e.name, v.target.value)}
-                                          onBlur={() => setEditingParam(null)}
-                                          onKeyDown={ev => { if (ev.key === 'Enter') setEditingParam(null); }}
-                                          autoFocus
-                                          className="w-16 h-6 text-right text-[13px] font-mono tabular-nums bg-background border border-primary/40 rounded-sm px-1.5 outline-none" />
-                                      ) : (
-                                        <span className="text-lg font-semibold font-mono tabular-nums text-foreground/90 cursor-default select-none"
-                                          onDoubleClick={() => setEditingParam(e.name)} title="Double-click to edit">
-                                          {numVal}<span className="text-sm font-normal text-muted-foreground/40 ml-0.5">{e.unit}</span>
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {/* Slider + buttons row */}
-                                  <div className="flex items-center gap-2">
-                                    <button onClick={() => handleStep(e.name, -bounds.step)}
-                                      className="w-5 h-5 flex items-center justify-center text-[11px] text-muted-foreground/20 hover:text-muted-foreground/60 hover:bg-card/40 rounded-sm transition-colors shrink-0">−</button>
-                                    <div className="flex-1 min-w-0">
-                                      <input type="range" min={bounds.min} max={bounds.max} step={bounds.step} value={numVal}
-                                        onChange={v => handleParamChange(e.name, v.target.value)}
-                                        style={{ background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${pct}%, #E5E7EB ${pct}%, #E5E7EB 100%)` }}
-                                        className="w-full h-1.5 appearance-none rounded-full outline-none cursor-pointer
-                                          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#3B82F6] [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:duration-150 [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:shadow-lg [&::-webkit-slider-thumb]:active:shadow-blue-500/40
-                                          [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-md [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#3B82F6] [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-track]:bg-transparent" />
-                                      <div className="flex justify-between text-[9px] font-mono text-muted-foreground/20 mt-0.5 px-0.5">
-                                        <span>{bounds.min}</span>
-                                        <span>{bounds.max}</span>
-                                      </div>
-                                    </div>
-                                    <button onClick={() => handleStep(e.name, bounds.step)}
-                                      className="w-5 h-5 flex items-center justify-center text-[11px] text-muted-foreground/20 hover:text-muted-foreground/60 hover:bg-card/40 rounded-sm transition-colors shrink-0">+</button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <div className="text-[11px] text-muted-foreground/30 font-mono tracking-[0.2em]">GEOMETRY</div>
-                  <div className="p-3 border border-border/15 rounded-sm space-y-1.5">
-                    <TechRow label="BBox" value={bb ? `${bb.x.toFixed(0)} × ${bb.y.toFixed(0)} × ${bb.z.toFixed(0)} mm` : '—'} />
-                    <TechRow label="Volume" value={m?.meshVolumeMm3 != null ? `${Math.round(m.meshVolumeMm3)} mm³` : '—'} />
-                    <TechRow label="Wall" value={m?.avgWallThicknessMm != null ? `${m.avgWallThicknessMm.toFixed(1)} mm` : '—'} />
-                  </div>
-                </div>
-              )}
-
-              {/* ── Parameter History + Undo/Redo ── */}
-              {paramHistory.length > 0 && (
-                <div className="border-t border-border/10 pt-2 mt-3 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em]">PARAMETER HISTORY</span>
-                    <div className="flex items-center gap-0.5">
-                      <button onClick={handleUndo} disabled={historyIndex < 0}
-                        className={`px-2 py-1 text-[11px] font-mono rounded-sm transition-all ${
-                          historyIndex >= 0 ? 'text-muted-foreground/50 hover:text-foreground hover:bg-card/40' : 'text-muted-foreground/10 cursor-default'
-                        }`} title="Undo (Ctrl+Z)">↩</button>
-                      <button onClick={handleRedo} disabled={historyIndex >= paramHistory.length - 1}
-                        className={`px-2 py-1 text-[11px] font-mono rounded-sm transition-all ${
-                          historyIndex < paramHistory.length - 1 ? 'text-muted-foreground/50 hover:text-foreground hover:bg-card/40' : 'text-muted-foreground/10 cursor-default'
-                        }`} title="Redo (Ctrl+Y)">↪</button>
-                    </div>
-                  </div>
-                  <div className="space-y-0.5">
-                    {paramHistory.slice(-2).reverse().map(entry => {
-                      const idx = paramHistory.indexOf(entry);
-                      return (
-                        <div key={idx} className="text-[11px] font-mono leading-relaxed">
-                          {entry.diffs.map(d => (
-                            <div key={d.name} className="flex items-center gap-1.5 text-muted-foreground/50">
-                              <span className="text-muted-foreground/70 min-w-[60px]">{d.label}</span>
-                              <span className="text-muted-foreground/30 line-through">{Number(d.before).toFixed(1)}{d.unit}</span>
-                              <span className="text-emerald-400/60">→</span>
-                              <span className="text-emerald-400/80 font-medium">{Number(d.after).toFixed(1)}{d.unit}</span>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-            </div>
+            <ParametricCADPanel
+              onChange={(params) => {
+                console.log('[CADStudio] Params:', params);
+              }}
+            />
           )}
 
           {/* ── ANALYSIS TAB ── */}
