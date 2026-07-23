@@ -72,6 +72,9 @@ RULES:
 8. Maximum ~20 lines of code. Keep it simple.
 
 FORBIDDEN PATTERNS (your code WILL crash if you use these):
+- DO NOT use BuildPart(), with BuildPart(), with Locations(), or any Builder pattern.
+  Write simple procedural code: shape = Box(...); return shape
+  NEVER use: BuildPart, BuildLine, BuildSketch, Locations, or context managers (with statements).
 - DO NOT call fillet() or chamfer() on any shape with holes, cutouts, or lattices.
 - DO NOT fillet after body -= hole (boolean subtraction).
 - DO NOT use fillet on a shape made from many boolean unions.
