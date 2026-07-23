@@ -307,12 +307,15 @@ export function createCadBridgeRouter(): Router {
     }
     if (run.code !== 0) {
       console.log(`[cadBridge:${id.slice(0, 8)}] FAILED with code ${run.code}`);
+      // build123d / scripts/step writes tracebacks to stdout, not stderr.
+      // Merge both so the frontend gets the real error message.
+      const combined = (run.stdout + run.stderr).slice(-STDERR_TAIL);
       sendError(
         res,
         502,
         'generation-failed',
         `scripts/step exited with code ${run.code ?? 'unknown'}`,
-        run.stderr.slice(-STDERR_TAIL),
+        combined,
       );
       return;
     }
@@ -324,7 +327,8 @@ export function createCadBridgeRouter(): Router {
       stl = await readFile(stlPath);
     } catch {
       console.log(`[cadBridge:${id.slice(0, 8)}] ERROR — no STL file produced`);
-      sendError(res, 502, 'invalid-artifact', 'scripts/step completed but produced no STL', run.stderr.slice(-STDERR_TAIL));
+      const combined = (run.stdout + run.stderr).slice(-STDERR_TAIL);
+      sendError(res, 502, 'invalid-artifact', 'scripts/step completed but produced no STL', combined);
       return;
     }
     console.log(`[cadBridge:${id.slice(0, 8)}] STL file: ${stl.byteLength} bytes`);
