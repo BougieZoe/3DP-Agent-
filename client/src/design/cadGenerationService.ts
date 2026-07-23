@@ -41,6 +41,12 @@ export interface CADGenerationResult {
   model: GeneratedModel;
   /** Binary STL, millimeters — ready for the existing parseSTL path. */
   stlBytes: ArrayBuffer;
+  /** Whether the bridge auto-repaired the source before succeeding. */
+  repaired?: boolean;
+  /** Type of repair applied ('fillet', 'boolean', 'none'). */
+  repairType?: string;
+  /** Total execution attempts (1 = first try succeeded). */
+  attempts?: number;
 }
 
 export type CADGenerationError =

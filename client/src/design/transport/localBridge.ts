@@ -40,6 +40,9 @@ interface BridgeSuccessBody {
   ok: true;
   model: GeneratedModel;
   stlBase64: string;
+  repaired?: boolean;
+  repairType?: string;
+  attempts?: number;
 }
 
 interface BridgeErrorBody {
@@ -164,7 +167,16 @@ export function createLocalBridgeTransport(
           return fail({ code: 'invalid-artifact', detail: `STL payload too small (${stlBytes.byteLength} bytes)` });
         }
 
-        return { ok: true, result: { model: success.model, stlBytes } };
+        return {
+          ok: true,
+          result: {
+            model: success.model,
+            stlBytes,
+            repaired: success.repaired ?? false,
+            repairType: success.repairType ?? 'none',
+            attempts: success.attempts ?? 1,
+          },
+        };
       } catch (err) {
         if (timedOut) return fail({ code: 'generation-timeout', timeoutMs });
         if (request.signal?.aborted) return fail({ code: 'cancelled' });

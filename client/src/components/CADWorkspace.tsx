@@ -552,6 +552,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     afterMetrics?: EngineeringMetricsSnapshot;
   } | null>(null);
   const [generationQuality, setGenerationQuality] = useState<GenerationQuality>('SUCCESS');
+  const [repairInfo, setRepairInfo] = useState<{ repaired: boolean; repairType: string; attempts: number } | null>(null);
   const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
   const lastBboxRef = useRef<string | null>(null);
   const startTs = useRef(0);
@@ -580,6 +581,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     setImprovementResult(null);
     setOptimizationState(null);
     setGenerationQuality('SUCCESS');
+    setRepairInfo(null);
     setGeometry(null);
     setAnalysis(null);
     setConfidenceReport(null);
@@ -679,6 +681,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       setRequestId(outcome.result.model.id);
       modelSummaryRef.current = outcome.result.model.summary;
       stlBytesRef.current = outcome.result.stlBytes;
+      setRepairInfo({
+        repaired: outcome.result.repaired ?? false,
+        repairType: outcome.result.repairType ?? 'none',
+        attempts: outcome.result.attempts ?? 1,
+      });
       console.log(`[CADStudio] Generated model: ${outcome.result.model.id}, duration: ${outcome.result.model.durationMs}ms`);
       mark('llm', 'done');
 
@@ -1734,6 +1741,23 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                       : 'text-primary/60 border-primary/20 bg-primary/5'
                   }`}>
                     {llmInfo.startsWith('Template:') ? 'TEMPLATE' : 'AI GENERATED'}
+                  </span>
+                </div>
+              )}
+
+              {/* Auto Repair status */}
+              {repairInfo && (
+                <div className="text-center pt-0.5">
+                  <span className={`text-[10px] font-mono tracking-[0.15em] px-2 py-0.5 rounded-sm border ${
+                    repairInfo.repaired
+                      ? repairInfo.repairType === 'fillet'
+                        ? 'text-emerald-400/60 border-emerald-400/20 bg-emerald-400/5'
+                        : 'text-amber-400/60 border-amber-400/20 bg-amber-400/5'
+                      : 'text-muted-foreground/30 border-muted-foreground/10'
+                  }`}>
+                    {repairInfo.repaired
+                      ? `AUTO REPAIR · ${repairInfo.repairType.toUpperCase()} · ${repairInfo.attempts} ATTEMPT${repairInfo.attempts !== 1 ? 'S' : ''}`
+                      : 'AUTO REPAIR · NOT NEEDED'}
                   </span>
                 </div>
               )}
