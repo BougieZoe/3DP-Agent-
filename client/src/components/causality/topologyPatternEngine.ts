@@ -1,8 +1,4 @@
-interface MarkerInput {
-  position: { x: number; y: number; z: number };
-  severity: number;
-  type: string;
-}
+import type { MarkerInput } from './causalityEngine';
 
 export interface PatternSignature {
   typeComposition: Record<string, number>;
