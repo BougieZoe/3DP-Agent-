@@ -1380,7 +1380,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   return (
     <div className={`grid grid-rows-[72px_1fr] h-[calc(100vh-7rem)] ${hasGeometry ? 'grid-cols-[280px_1fr_380px]' : 'grid-cols-[280px_1fr]'}`}>
       {/* ── HEADER ── */}
-      <header className={`${spanCols} flex items-center justify-between px-6 border-b border-border/15 bg-card/30`}>
+      <header className={`${spanCols} flex items-center justify-between px-6 pt-5 border-b border-border/15 bg-card/30`}>
         <div className="flex items-center gap-6">
           <div>
             <h1 className="text-lg font-mono font-bold tracking-tight text-foreground">3DP AGENT</h1>
