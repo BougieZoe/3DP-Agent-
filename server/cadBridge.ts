@@ -1,11 +1,12 @@
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import express, { Router, type Request, type Response } from 'express';
 import type { GeneratedArtifact, GeneratedModel } from '../shared/domain/generatedModel';
+import { repairCadSource, type RepairType } from './cadRepair';
 
 const SKILL_DIR =
   process.env.CAD_SKILL_DIR ?? path.join(os.homedir(), '.agents', 'skills', 'cad');
@@ -17,6 +18,8 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 const MAX_TIMEOUT_MS = 600_000;
 const LLM_TIMEOUT_MS = 30_000;
 const STDERR_TAIL = 4000;
+const MAX_REPAIR_ATTEMPTS = 2;
+const METRICS_PATH = path.join(PROJECT_ROOT, '.cad-bridge', 'metrics.jsonl');
 
 interface BridgeLlmConfig {
   baseUrl: string;
@@ -297,8 +300,43 @@ export function createCadBridgeRouter(): Router {
     const timeoutMs = Math.min(body.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
     console.log(`[cadBridge:${id.slice(0, 8)}] Running: python ${args.join(' ')}`);
     const stepStart = Date.now();
-    const run = await runStepCli(ready.python, args, runDir, timeoutMs);
-    console.log(`[cadBridge:${id.slice(0, 8)}] scripts/step done in ${Date.now() - stepStart}ms (exit code ${run.code})`);
+
+    // ── Retry loop with auto-repair ──
+    let run = await runStepCli(ready.python, args, runDir, timeoutMs);
+    let repairAttempts = 0;
+    let repairType: RepairType | null = null;
+    const providerLabel = body.llm?.model ?? 'template';
+
+    while (run.code !== 0 && !run.timedOut && repairAttempts < MAX_REPAIR_ATTEMPTS) {
+      const combined = run.stdout + run.stderr;
+      console.log(`[cadBridge:${id.slice(0, 8)}] Attempt ${repairAttempts + 1} failed — inspecting traceback`);
+      const repairResult = repairCadSource(source, combined);
+      if (!repairResult) {
+        console.log(`[cadBridge:${id.slice(0, 8)}] No repairable pattern — giving up`);
+        break;
+      }
+
+      source = repairResult.source;
+      repairType = repairResult.type;
+      repairAttempts++;
+
+      await writeFile(path.join(runDir, 'model.py'), source, 'utf-8');
+      console.log(`[cadBridge:${id.slice(0, 8)}] Repair ${repairAttempts}/${MAX_REPAIR_ATTEMPTS} — type: ${repairType}`);
+
+      run = await runStepCli(ready.python, args, runDir, timeoutMs);
+      console.log(`[cadBridge:${id.slice(0, 8)}] After repair — exit code ${run.code}`);
+    }
+
+    // ── Metrics ──
+    const metricsLine = JSON.stringify({
+      timestamp: new Date().toISOString(),
+      prompt: (body.prompt ?? '').slice(0, 200),
+      provider: providerLabel,
+      repaired: repairAttempts > 0,
+      repairType: repairType ?? 'none',
+      success: run.code === 0 && !run.timedOut,
+    }) + '\n';
+    appendFile(METRICS_PATH, metricsLine, 'utf-8').catch(() => {});
 
     if (run.timedOut) {
       console.log(`[cadBridge:${id.slice(0, 8)}] TIMEOUT after ${timeoutMs}ms`);
@@ -306,9 +344,7 @@ export function createCadBridgeRouter(): Router {
       return;
     }
     if (run.code !== 0) {
-      console.log(`[cadBridge:${id.slice(0, 8)}] FAILED with code ${run.code}`);
-      // build123d / scripts/step writes tracebacks to stdout, not stderr.
-      // Merge both so the frontend gets the real error message.
+      console.log(`[cadBridge:${id.slice(0, 8)}] FAILED with code ${run.code} (${repairAttempts} repairs attempted)`);
       const combined = (run.stdout + run.stderr).slice(-STDERR_TAIL);
       sendError(
         res,
@@ -391,7 +427,14 @@ export function createCadBridgeRouter(): Router {
 
     const totalServerMs = Date.now() - startedAt;
     console.log(`[cadBridge:${id.slice(0, 8)}] Response sent — total ${totalServerMs}ms`);
-    res.json({ ok: true, model, stlBase64: stl.toString('base64') });
+    res.json({
+      ok: true,
+      model,
+      stlBase64: stl.toString('base64'),
+      repaired: repairAttempts > 0,
+      repairType: repairType ?? 'none',
+      attempts: repairAttempts + 1,
+    });
   });
 
   return router;
