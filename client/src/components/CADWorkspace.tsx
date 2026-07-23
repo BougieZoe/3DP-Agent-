@@ -1246,21 +1246,32 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
             placeholder="Describe your object..."
           />
 
-          {/* GENERATE + NEW DESIGN + DOWNLOAD */}
-          <div className="flex items-stretch gap-3">
-            <button onClick={() => handleGenerate()} disabled={loading}
-              className="flex-1 h-12 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm px-6 text-sm font-mono font-bold hover:bg-foreground/90 hover:shadow-[0_0_20px_rgba(0,200,255,0.15)] disabled:opacity-30 transition-all duration-200 active:scale-[0.98]">
-              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {loading ? 'GENERATING...' : 'GENERATE'}
-            </button>
-            <button onClick={handleNewDesign} disabled={loading} title="New Design"
-              className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0">
-              <RotateCcw className="w-4 h-4" />
-            </button>
-            {stlBytesRef.current && (
-              <button onClick={downloadSTL} title="Download STL"
-                className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0">
-                <Download className="w-4 h-4" />
+          {/* GENERATE + VARIANT + NEW DESIGN + DOWNLOAD */}
+          <div className="space-y-2">
+            <div className="flex items-stretch gap-3">
+              <button onClick={() => handleGenerate()} disabled={loading}
+                className="flex-1 h-12 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm px-6 text-sm font-mono font-bold hover:bg-foreground/90 hover:shadow-[0_0_20px_rgba(0,200,255,0.15)] disabled:opacity-30 transition-all duration-200 active:scale-[0.98]">
+                {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {loading ? 'GENERATING...' : 'GENERATE'}
+              </button>
+              <button onClick={handleNewDesign} disabled={loading} title="New Design"
+                className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0 self-center">
+                <RotateCcw className="w-4 h-4" />
+              </button>
+              {stlBytesRef.current && (
+                <button onClick={downloadSTL} title="Download STL"
+                  className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0 self-center">
+                  <Download className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            {hasGeometry && (
+              <button
+                onClick={() => handleGenerate(`${prompt} — create an alternative design with different proportions`)}
+                disabled={loading}
+                className="w-full h-8 inline-flex items-center justify-center gap-1.5 border border-primary/20 text-primary/60 hover:text-primary hover:border-primary/40 rounded-sm text-[11px] font-mono transition-all disabled:opacity-30">
+                <Sparkles className="w-3 h-3" />
+                Generate Variant
               </button>
             )}
           </div>
@@ -1546,7 +1557,20 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
           )}
 
         </div>
-      ) : null}
+      ) : (
+        <div className="flex flex-col border-l border-border/15 bg-card/30 overflow-y-auto items-center justify-center p-8 text-center space-y-4">
+          <div className="w-16 h-16 rounded-full border border-border/30 flex items-center justify-center">
+            <Sparkles className="w-6 h-6 text-muted-foreground/30" />
+          </div>
+          <div className="space-y-1">
+            <div className="text-sm font-mono text-muted-foreground/40 tracking-wider">CAD STUDIO</div>
+            <div className="text-xs text-muted-foreground/30 font-mono leading-relaxed max-w-[240px]">
+              Describe your object and press <span className="text-primary/50">GENERATE</span>.
+              The 3D model and analysis will appear here.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
