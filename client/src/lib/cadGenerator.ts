@@ -78,7 +78,7 @@ function inRange(v: number, min: number, max: number): boolean {
   return v >= min && v <= max;
 }
 
-function extractParamsFromPrompt(prompt: string): Partial<CADParams> {
+export function extractParamsFromPrompt(prompt: string): Partial<CADParams> {
   const t = prompt.toLowerCase();
   const out: Partial<CADParams> = {};
 
