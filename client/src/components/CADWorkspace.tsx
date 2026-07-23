@@ -29,6 +29,7 @@ import { runConfidenceGate, type CADConfidenceReport, type CADRunRecord, type Im
 import { CAD_MATERIALS, getCADMaterialPreset, createCADMaterial, type CADMaterialPreset } from "@/lib/cadMaterials";
 import { applySuggestions } from "@/lib/geometryEditor";
 import { optimizeDesign, type OptimizationDecision } from "@/agents/designOptimizer";
+import { CADHeader } from "./cad/CADHeader";
 
 const LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
   openai:   { baseUrl: 'https://api.openai.com/v1',            model: 'gpt-4o' },
@@ -1383,14 +1384,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   return (
     <div className={`grid grid-rows-[72px_1fr] h-[calc(100vh-7rem)] ${hasGeometry ? 'grid-cols-[280px_1fr_380px]' : 'grid-cols-[280px_1fr]'}`}>
       {/* ── HEADER ── */}
-      <header className={`${spanCols} flex items-center justify-between px-6 pt-5 border-b border-border/15 bg-card/30`}>
-        <div className="flex items-center gap-6">
-          <div>
-            <h1 className="text-lg font-mono font-bold tracking-tight text-foreground">3DP AGENT</h1>
-            <p className="text-sm font-mono text-muted-foreground/40 tracking-wider">CAD Studio</p>
-          </div>
-        </div>
-      </header>
+      <CADHeader spanCols={spanCols} />
 
       {/* ── LEFT PANEL (always visible) ── */}
       <div className="flex flex-col border-r border-border/15 bg-card/30 overflow-y-auto">
