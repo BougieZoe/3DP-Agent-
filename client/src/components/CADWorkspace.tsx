@@ -197,20 +197,7 @@ function fuzzyFindFallback(prompt: string): { source: string; summary: string; m
   const lower = prompt.toLowerCase();
   const exact = FALLBACK_SOURCES[lower];
   if (exact) return { ...exact, matched: lower };
-  const keywords: [RegExp, keyof typeof FALLBACK_SOURCES][] = [
-    [/flange|washer|ring|circular/, '100mm flange'],
-    [/car|vehicle|auto|sports/, 'sports car concept'],
-    [/tower|building|skyscraper|architect/, 'architectural tower'],
-    [/human|figure|person|man|woman|people|character/, 'simplified human figure'],
-    [/house|home|building|residential|japan/, 'japanese house'],
-  ];
-  for (const [re, key] of keywords) {
-    if (re.test(lower)) {
-      const match = FALLBACK_SOURCES[key];
-      if (match) return { ...match, matched: key };
-    }
-  }
-  return { ...FALLBACK_SOURCE_DEFAULT, matched: null };
+  return { source: '', summary: '', matched: null };
 }
 
 function downloadBlob(filename: string, blob: Blob) {
@@ -657,13 +644,22 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
         if (!outcome || !outcome.ok) {
           const err = outcome && !outcome.ok ? (outcome as { ok: false; error: { code: string; detail?: string } }).error : null;
-          const reason = err?.detail ?? 'no LLM configured';
-          mark('llm', 'running', `LLM unavailable (${reason}) — fallback template`);
-          setLlmInfo(`Fallback (${reason})`);
-          quality = 'FALLBACK';
-          templateSourceRef.current = FALLBACK_SOURCE_DEFAULT.source;
-          const transport = createLocalBridgeTransport({ generatorSource: FALLBACK_SOURCE_DEFAULT.source });
-          outcome = await transport.generate({ prompt: p, timeoutMs: 60_000, baseModel });
+          const detail = err?.detail ?? 'no AI provider configured';
+          mark('llm', 'error');
+          quality = 'FAILED';
+          setGenerationQuality('FAILED');
+          throw new Error(
+            `CAD generation failed.\n\n` +
+            `${detail}\n\n` +
+            `Configure an API key for one of:\n` +
+            `- OpenAI\n` +
+            `- DeepSeek\n` +
+            `- Kimi\n` +
+            `- Fireworks`,
+          );
+        }
+        if (outcome && outcome.ok) {
+          setLlmInfo('AI Generated');
         }
       }
 
@@ -1728,6 +1724,19 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                   <span>{verdict}</span>
                 </div>
               </div>
+
+              {/* Model Source */}
+              {llmInfo && (
+                <div className="text-center pt-1">
+                  <span className={`text-[10px] font-mono tracking-[0.2em] px-2 py-0.5 rounded-sm border ${
+                    llmInfo.startsWith('Template:')
+                      ? 'text-amber-400/60 border-amber-400/20 bg-amber-400/5'
+                      : 'text-primary/60 border-primary/20 bg-primary/5'
+                  }`}>
+                    {llmInfo.startsWith('Template:') ? 'TEMPLATE' : 'AI GENERATED'}
+                  </span>
+                </div>
+              )}
 
               {/* Print Check */}
               <div className="space-y-1.5">
