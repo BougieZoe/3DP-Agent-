@@ -1,13 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { Grid, OrbitControls, PerspectiveCamera, Environment } from "@react-three/drei";
 import * as THREE from "three";
 import {
   Download,
   RotateCcw,
   Sparkles,
+  Maximize2,
   RefreshCw,
   AlertTriangle,
   CheckCircle2,
   XCircle,
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  Search,
+  Wrench,
+  Ruler,
+  Settings2,
 } from "lucide-react";
 import { createLocalBridgeTransport } from "@/design/transport/localBridge";
 import { parseSTL } from "@/lib/stlParser";
@@ -19,10 +29,6 @@ import { runConfidenceGate, type CADConfidenceReport, type CADRunRecord, type Im
 import { CAD_MATERIALS, getCADMaterialPreset, createCADMaterial, type CADMaterialPreset } from "@/lib/cadMaterials";
 import { applySuggestions } from "@/lib/geometryEditor";
 import { optimizeDesign, type OptimizationDecision } from "@/agents/designOptimizer";
-import { CADHeader } from "./cad/CADHeader";
-import { CADViewport } from "./cad/CADViewport";
-import { ErrorCard } from "./cad/ErrorCard";
-import { AnalysisSubTabs } from "./cad/AnalysisSubTabs";
 
 const LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
   openai:   { baseUrl: 'https://api.openai.com/v1',            model: 'gpt-4o' },
@@ -226,6 +232,153 @@ function scoreColor(score: number): string {
   if (score >= 80) return '#22c55e';
   if (score >= 50) return '#f59e0b';
   return '#ef4444';
+}
+
+function verdictColor(verdict: string): string {
+  if (verdict === 'PASS') return '#22c55e';
+  if (verdict === 'WARN') return '#f59e0b';
+  return '#ef4444';
+}
+
+function verdictBg(verdict: string): string {
+  if (verdict === 'PASS') return 'bg-emerald-500/15';
+  if (verdict === 'WARN') return 'bg-amber-500/15';
+  return 'bg-red-500/15';
+}
+
+/* ─── 3D Preview ─── */
+
+const PreviewMesh = memo(function PreviewMesh({ geometry, preset, fitKey }: { geometry: THREE.BufferGeometry | null; preset: CADMaterialPreset; fitKey: number }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const { camera } = useThree();
+  const initialFitDone = useRef(false);
+
+  // Center mesh at origin when geometry changes (regeneration-safe)
+  useEffect(() => {
+    if (!geometry || !meshRef.current) return;
+    const box = new THREE.Box3().setFromObject(meshRef.current);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    meshRef.current.position.sub(center);
+  }, [geometry]);
+
+  // Full camera fit: only on very first geometry load
+  useEffect(() => {
+    if (initialFitDone.current || !geometry || !meshRef.current) return;
+    const box = new THREE.Box3().setFromObject(meshRef.current);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    meshRef.current.position.sub(center);
+    const maxDim = Math.max(size.x, size.y, size.z, 1);
+    const dist = maxDim * 1.8;
+    camera.position.set(dist * 0.6, dist * 0.5, dist);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    initialFitDone.current = true;
+  }, [geometry, camera]);
+
+  // Manual Fit View button
+  useEffect(() => {
+    if (fitKey === 0 || !geometry || !meshRef.current) return;
+    const box = new THREE.Box3().setFromObject(meshRef.current);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    meshRef.current.position.sub(center);
+    const maxDim = Math.max(size.x, size.y, size.z, 1);
+    const dist = maxDim * 1.8;
+    camera.position.set(dist * 0.6, dist * 0.5, dist);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+  }, [fitKey]);
+
+  const mesh = useMemo(() => {
+    if (!geometry) return null;
+    const mat = createCADMaterial(preset);
+    const m = new THREE.Mesh(geometry, mat);
+    m.castShadow = true;
+    return m;
+  }, [geometry, preset]);
+
+  if (!mesh) return null;
+  return <primitive ref={meshRef} object={mesh} />;
+});
+
+function PreviewPlaceholder() {
+  return (
+    <group>
+      <mesh>
+        <boxGeometry args={[3, 1.5, 0.2]} />
+        <meshBasicMaterial color={0x2ea3ff} wireframe transparent opacity={0.25} />
+      </mesh>
+      <mesh position={[0, 0.2, 0.8]}>
+        <torusGeometry args={[0.8, 0.1, 12, 32]} />
+        <meshBasicMaterial color={0x66ccff} wireframe transparent opacity={0.15} />
+      </mesh>
+    </group>
+  );
+}
+
+/* ─── Viewport overlays ─── */
+
+function VerdictOverlay({ verdict, score, visible }: { verdict: string; score: number; visible: boolean }) {
+  if (!visible) return null;
+  return (
+    <div className="absolute top-4 right-4 z-10">
+      <div className={`${verdictBg(verdict)} backdrop-blur border border-border/50 rounded-sm px-4 py-2.5 text-center min-w-[120px]`}>
+        <div className="flex items-center justify-center gap-1.5">
+          {verdict === 'PASS' ? <CheckCircle2 className="w-4 h-4" style={{ color: verdictColor(verdict) }} /> :
+           verdict === 'WARN' ? <AlertTriangle className="w-4 h-4" style={{ color: verdictColor(verdict) }} /> :
+           <XCircle className="w-4 h-4" style={{ color: verdictColor(verdict) }} />}
+          <span className="text-sm font-bold font-mono" style={{ color: verdictColor(verdict) }}>{verdict}</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground/60 mt-0.5 font-mono tabular-nums">
+          {score}%
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MaterialSelector({ current, onChange }: { current: string; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const currentPreset = getCADMaterialPreset(current);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 px-2.5 py-1.5 text-[11px] font-mono text-muted-foreground/60 hover:text-muted-foreground hover:border-primary/30 bg-background/70 backdrop-blur border border-border/50 rounded-sm transition-all whitespace-nowrap">
+        <span className="w-3 h-3 rounded-full border border-border/50" style={{ backgroundColor: currentPreset.color }} />
+        {currentPreset.label}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute bottom-full left-0 mb-1.5 z-30 bg-background/95 backdrop-blur border border-border/60 rounded-sm shadow-lg min-w-[160px] py-1">
+            {CAD_MATERIALS.map(m => (
+              <button key={m.id} onClick={() => { onChange(m.id); setOpen(false); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-[11px] font-mono text-left transition-all hover:bg-primary/5 ${m.id === current ? 'text-primary' : 'text-muted-foreground/70'}`}>
+                <span className="w-3 h-3 rounded-full border border-border/40 shrink-0" style={{ backgroundColor: m.color }} />
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function FitViewButton({ onFit }: { onFit: () => void }) {
+  return (
+    <button onClick={onFit}
+      className="w-7 h-7 flex items-center justify-center bg-background/70 backdrop-blur border border-border/50 rounded-sm text-muted-foreground/50 hover:text-primary hover:border-primary/30 transition-all"
+      title="Fit View">
+      <Maximize2 className="w-3 h-3" />
+    </button>
+  );
 }
 
 const DIFFICULTY_RANK: Record<string, number> = { none: 0, easy: 1, moderate: 2, difficult: 3, very_difficult: 4 };
@@ -1185,8 +1338,6 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       setParamValues(vals);
       paramValuesRef.current = vals;
       setHasParams(true);
-      // Auto-switch to CAD tab so parameter sliders are visible
-      setRightTab('cad');
     } else {
       setHasParams(false);
     }
@@ -1232,7 +1383,14 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   return (
     <div className={`grid grid-rows-[72px_1fr] h-[calc(100vh-7rem)] ${hasGeometry ? 'grid-cols-[280px_1fr_380px]' : 'grid-cols-[280px_1fr]'}`}>
       {/* ── HEADER ── */}
-      <CADHeader spanCols={spanCols} />
+      <header className={`${spanCols} flex items-center justify-between px-6 pt-5 border-b border-border/15 bg-card/30`}>
+        <div className="flex items-center gap-6">
+          <div>
+            <h1 className="text-lg font-mono font-bold tracking-tight text-foreground">3DP AGENT</h1>
+            <p className="text-sm font-mono text-muted-foreground/40 tracking-wider">CAD Studio</p>
+          </div>
+        </div>
+      </header>
 
       {/* ── LEFT PANEL (always visible) ── */}
       <div className="flex flex-col border-r border-border/15 bg-card/30 overflow-y-auto">
@@ -1246,97 +1404,30 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
             placeholder="Describe your object..."
           />
 
-          {/* Manufacturing Config (collapsible) */}
-          <details className="group">
-            <summary className="text-[10px] font-mono text-muted-foreground/30 tracking-[0.2em] cursor-pointer hover:text-muted-foreground/50 transition-colors list-none flex items-center gap-1">
-              <span className="text-[8px] group-open:rotate-90 transition-transform">▸</span>
-              MANUFACTURING CONFIG
-            </summary>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <select
-                value="bambu_x1c"
-                onChange={() => {}}
-                className="text-[10px] font-mono px-2 py-1.5 border border-border/20 bg-background rounded-sm text-muted-foreground/60 focus:outline-none focus:border-primary/30">
-                <option value="bambu_x1c">Bambu X1C</option>
-                <option value="prusa_mk4">Prusa MK4</option>
-                <option value="generic">Generic FDM</option>
-              </select>
-              <select
-                value={materialName}
-                onChange={(e) => { /* material context handles this */ }}
-                className="text-[10px] font-mono px-2 py-1.5 border border-border/20 bg-background rounded-sm text-muted-foreground/60 focus:outline-none focus:border-primary/30">
-                <option value="PLA">PLA</option>
-                <option value="PETG">PETG</option>
-                <option value="ABS">ABS</option>
-                <option value="TPU">TPU</option>
-              </select>
-              <select
-                defaultValue="standard"
-                className="text-[10px] font-mono px-2 py-1.5 border border-border/20 bg-background rounded-sm text-muted-foreground/60 focus:outline-none focus:border-primary/30 col-span-2">
-                <option value="draft">Quality: Draft (0.3mm)</option>
-                <option value="standard">Quality: Standard (0.2mm)</option>
-                <option value="fine">Quality: Fine (0.12mm)</option>
-              </select>
-            </div>
-          </details>
-
-          {/* Quick Edit Chips (after first generation) */}
-          {hasGeometry && (
-            <div className="flex flex-wrap gap-1.5">
-              {[
-                { label: 'Make taller', suffix: ' — make it 50% taller' },
-                { label: 'Add fillets', suffix: ' — add fillets to all sharp edges' },
-                { label: 'Thicken walls', suffix: ' — increase wall thickness to 3mm' },
-                { label: 'Scale 50%', suffix: ' — scale down to 50% of current size' },
-                { label: 'Hollow it', suffix: ' — create a hollow shell with 2mm wall thickness' },
-              ].map(chip => (
-                <button
-                  key={chip.label}
-                  onClick={() => {
-                    setPrompt(prompt + chip.suffix);
-                    handleGenerate(prompt + chip.suffix);
-                  }}
-                  disabled={loading}
-                  className="text-[10px] font-mono px-2 py-1 border border-border/20 text-muted-foreground/50 hover:text-primary hover:border-primary/30 rounded-sm transition-all disabled:opacity-20">
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* GENERATE + VARIANT + NEW DESIGN + DOWNLOAD */}
-          <div className="space-y-2">
-            <div className="flex items-stretch gap-3">
-              <button onClick={() => handleGenerate()} disabled={loading}
-                className="flex-1 h-12 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm px-6 text-sm font-mono font-bold hover:bg-foreground/90 hover:shadow-[0_0_20px_rgba(0,200,255,0.15)] disabled:opacity-30 transition-all duration-200 active:scale-[0.98]">
-                {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                {loading ? 'GENERATING...' : 'GENERATE'}
-              </button>
-              <button onClick={handleNewDesign} disabled={loading} title="New Design"
-                className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0 self-center">
-                <RotateCcw className="w-4 h-4" />
-              </button>
-              {stlBytesRef.current && (
-                <button onClick={downloadSTL} title="Download STL"
-                  className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0 self-center">
-                  <Download className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-            {hasGeometry && (
-              <button
-                onClick={() => handleGenerate(`${prompt} — create an alternative design with different proportions`)}
-                disabled={loading}
-                className="w-full h-8 inline-flex items-center justify-center gap-1.5 border border-primary/20 text-primary/60 hover:text-primary hover:border-primary/40 rounded-sm text-[11px] font-mono transition-all disabled:opacity-30">
-                <Sparkles className="w-3 h-3" />
-                Generate Variant
+          {/* GENERATE + NEW DESIGN + DOWNLOAD */}
+          <div className="flex items-stretch gap-3">
+            <button onClick={() => handleGenerate()} disabled={loading}
+              className="flex-1 h-11 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm px-5 text-sm font-mono font-bold hover:bg-foreground/90 disabled:opacity-30 transition-all">
+              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              GENERATE
+            </button>
+            <button onClick={handleNewDesign} disabled={loading} title="New Design"
+              className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0">
+              <RotateCcw className="w-4 h-4" />
+            </button>
+            {stlBytesRef.current && (
+              <button onClick={downloadSTL} title="Download STL"
+                className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0">
+                <Download className="w-4 h-4" />
               </button>
             )}
           </div>
         </div>
 
-        {/* Error card */}
-        {error && <ErrorCard message={error} />}
+        {/* Error inline */}
+        {error && (
+          <div className="px-4 mt-3 text-sm text-red-400/80 font-mono">{error}</div>
+        )}
 
         {/* Edit warning */}
         {editWarning && (
@@ -1397,25 +1488,56 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       </div>
 
       {/* ── CENTER: Viewport ── */}
-      <CADViewport
-        geometry={geometry}
-        cadPreset={cadPreset}
-        cadMaterialId={cadMaterialId}
-        setCadMaterialId={setCadMaterialId}
-        fitKey={fitKey}
-        setFitKey={setFitKey}
-        analysis={analysis}
-        score={score}
-        verdict={verdict}
-        loading={loading}
-        stages={stages}
-        totalTime={totalTime}
-        hasGeometry={hasGeometry}
-      />
+      <section className="relative overflow-hidden bg-card/20">
+        {/* Verdict overlay (STATE 3 only) */}
+        <VerdictOverlay verdict={verdict} score={score} visible={analysis != null} />
+
+        {/* Generation stages overlay (STATE 2 only) */}
+        {loading && stages.length > 0 && !hasGeometry && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center">
+            <div className="flex flex-col gap-3 px-5 py-4 bg-background/70 backdrop-blur border border-border/15 rounded-sm min-w-[300px]">
+              <div className="text-sm text-muted-foreground/40 font-mono tracking-[0.2em] mb-1">GENERATING</div>
+              {stages.map(s => (
+                <div key={s.id} className="flex items-center gap-2 text-sm font-mono text-muted-foreground/60">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${
+                    s.status === 'done' ? 'bg-emerald-400/60' :
+                    s.status === 'running' ? 'bg-primary/60 animate-pulse' :
+                    s.status === 'error' ? 'bg-red-400/60' :
+                    'bg-muted-foreground/20'
+                  }`} />
+                  <span>{s.label}</span>
+                  {s.elapsedMs > 0 && <span className="text-muted-foreground/40 tabular-nums ml-auto">{s.elapsedMs}ms</span>}
+                </div>
+              ))}
+              {totalTime > 0 && <span className="text-sm text-emerald-400/60 font-mono tabular-nums mt-1">Total: {totalTime}ms</span>}
+            </div>
+          </div>
+        )}
+
+        {/* Viewport bottom controls */}
+        <div className="absolute bottom-4 left-5 right-5 z-10 flex items-center gap-2">
+          <MaterialSelector current={cadMaterialId} onChange={setCadMaterialId} />
+          <div className="ml-auto" />
+          <FitViewButton onFit={() => setFitKey(k => k + 1)} />
+        </div>
+
+        {/* Three.js Canvas */}
+        <Canvas gl={{ antialias: true, alpha: true }} style={{ background: 'transparent' }}>
+          <PerspectiveCamera makeDefault position={[0, 0, 8]} fov={55} />
+          <Environment preset="studio" />
+          <ambientLight intensity={0.3} color={0xb9f8ff} />
+          <directionalLight position={[6, 7, 5]} intensity={0.8} color={0xffffff} />
+          <directionalLight position={[-7, 4, -4]} intensity={0.3} color={0x3cf0b6} />
+          <pointLight position={[0, 5, 6]} intensity={0.2} color={0x50a7ff} />
+          <Grid args={[200, 200]} cellSize={10} cellThickness={0.3} cellColor="#0b2b33" sectionSize={50} sectionThickness={0.7} sectionColor="#124650" fadeDistance={180} fadeStrength={1} position={[0, -0.02, 0]} />
+          {hasGeometry ? <PreviewMesh geometry={geometry} preset={cadPreset} fitKey={fitKey} /> : <PreviewPlaceholder />}
+          <OrbitControls enableDamping dampingFactor={0.05} rotateSpeed={1.0} screenSpacePanning={true} />
+        </Canvas>
+      </section>
 
       {/* ── RIGHT: Parametric CAD Controller + Analysis ── */}
       {hasGeometry && analysis ? (
-        <div className="flex flex-col border-l border-border/15 bg-card/30 overflow-y-auto fade-up">
+        <div className="flex flex-col border-l border-border/15 bg-card/30 overflow-y-auto">
 
           {/* ── Tab bar ── */}
           <div className="flex border-b border-border/15 shrink-0">
@@ -1590,45 +1712,264 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
           {/* ── ANALYSIS TAB ── */}
           {rightTab === 'analysis' && (
-            <AnalysisSubTabs
-              score={score}
-              verdict={verdict}
-              llmInfo={llmInfo}
-              repairInfo={repairInfo}
-              gateIssues={gateIssues}
-              materialName={materialName}
-              bf={bf}
-              sp={sp}
-              pt={pt}
-              m={m}
-              t={t}
-              v={v}
-              bb={bb}
-              confidenceReport={confidenceReport}
-              optimizationState={optimizationState}
-              detailsOpen={detailsOpen}
-              setDetailsOpen={setDetailsOpen}
-              errorDetails={errorDetails}
-              loading={loading}
-              handleImproveDesign={handleImproveDesign}
-            />
+            <div className="p-4 space-y-4">
+
+              {/* Manufacturing Confidence */}
+              <div className="text-center">
+                <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em] mb-1.5">MANUFACTURING CONFIDENCE</div>
+                <span className="text-4xl font-bold font-mono tabular-nums tracking-tight" style={{ color: scoreColor(score) }}>
+                  {score}%
+                </span>
+                <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-sm border mt-2 text-[12px] font-bold font-mono ${
+                  verdict === 'PASS' ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' :
+                  verdict === 'WARN' ? 'border-amber-500/30 text-amber-400 bg-amber-500/10' :
+                  'border-red-500/30 text-red-400 bg-red-500/10'
+                }`}>
+                  {verdict === 'PASS' ? <CheckCircle2 className="w-3 h-3" /> :
+                   verdict === 'WARN' ? <AlertTriangle className="w-3 h-3" /> :
+                   <XCircle className="w-3 h-3" />}
+                  <span>{verdict}</span>
+                </div>
+              </div>
+
+              {/* Model Source */}
+              {llmInfo && (
+                <div className="text-center pt-1">
+                  <span className={`text-[10px] font-mono tracking-[0.2em] px-2 py-0.5 rounded-sm border ${
+                    llmInfo.startsWith('Template:')
+                      ? 'text-amber-400/60 border-amber-400/20 bg-amber-400/5'
+                      : 'text-primary/60 border-primary/20 bg-primary/5'
+                  }`}>
+                    {llmInfo.startsWith('Template:') ? 'TEMPLATE' : 'AI GENERATED'}
+                  </span>
+                </div>
+              )}
+
+              {/* Auto Repair status */}
+              {repairInfo && (
+                <div className="text-center pt-0.5">
+                  <span className={`text-[10px] font-mono tracking-[0.15em] px-2 py-0.5 rounded-sm border ${
+                    repairInfo.repaired
+                      ? repairInfo.repairType === 'fillet'
+                        ? 'text-emerald-400/60 border-emerald-400/20 bg-emerald-400/5'
+                        : 'text-amber-400/60 border-amber-400/20 bg-amber-400/5'
+                      : 'text-muted-foreground/30 border-muted-foreground/10'
+                  }`}>
+                    {repairInfo.repaired
+                      ? `AUTO REPAIR · ${repairInfo.repairType.toUpperCase()} · ${repairInfo.attempts} ATTEMPT${repairInfo.attempts !== 1 ? 'S' : ''}`
+                      : 'AUTO REPAIR · NOT NEEDED'}
+                  </span>
+                </div>
+              )}
+
+              {/* Print Check */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em]">PRINT CHECK</div>
+                <div className="p-2.5 border border-border/15 rounded-sm space-y-1">
+                  <TechRow label="Bed fit" value={bf ? (bf.fits ? `✓ ${bf.printerProfile.name}` : `✗ ${bf.printerProfile.name}`) : '—'} badge={bf?.fits ? 'pass' : bf?.fits === false ? 'fail' : undefined} />
+                  <TechRow label="Material" value={materialName || '—'} />
+                  <TechRow label="Support" value={sp?.totalSupportVolumeMm3 != null ? `${Math.round(sp.totalSupportVolumeMm3)} mm³` : '—'} />
+                  <TechRow label="Print time" value={pt ? `${pt.estimatedPrintTimeHours.toFixed(1)} h` : '—'} />
+                  <TechRow label="Material wt" value={pt ? `${pt.materialWeightGrams.toFixed(1)} g` : '—'} />
+                  <TechRow label="Cost" value={pt ? `$${pt.materialCostUsd.toFixed(2)}` : '—'} />
+                </div>
+              </div>
+
+              {/* Key Issues */}
+              {gateIssues.length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em]">KEY ISSUES</div>
+                  {gateIssues.slice(0, 3).map((issue, i) => (
+                    <div key={i} className="flex items-start gap-2 text-[12px] font-mono leading-relaxed">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1 ${
+                        issue.severity === 'error' ? 'bg-red-400' :
+                        issue.severity === 'warning' ? 'bg-amber-400' : 'bg-emerald-400'
+                      }`} />
+                      <span className="text-muted-foreground/60">{issue.message}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* IMPROVE DESIGN */}
+              {confidenceReport?.repairSuggestions && confidenceReport.repairSuggestions.length > 0 && (
+                <button onClick={handleImproveDesign} disabled={loading}
+                  className="w-full h-9 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm text-sm font-mono font-bold hover:bg-foreground/90 disabled:opacity-30 transition-all">
+                  <RefreshCw className="w-4 h-4" /> IMPROVE DESIGN
+                </button>
+              )}
+
+              {/* AI Optimization + Design Evolution (only after IMPROVE DESIGN click) */}
+              {optimizationState && (
+                <div className="space-y-3 p-3 border border-primary/15 bg-primary/5 rounded-sm">
+                  <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">AI OPTIMIZATION PLAN</div>
+                  <div className="space-y-1">
+                    <div className="text-[13px] text-muted-foreground/50">Detected:</div>
+                    <div className="text-[13px] text-foreground/80 font-mono">{optimizationState.plan.detected}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[13px] text-muted-foreground/50">Action:</div>
+                    <div className="text-[13px] text-primary/90 font-mono">
+                      {optimizationState.plan.action === 'wall_thickening' ? 'Thicken walls' :
+                       optimizationState.plan.action === 'orientation_change' ? 'Rotate orientation' :
+                       'No action needed'}
+                    </div>
+                  </div>
+                  <div className="border-t border-border/10 pt-3">
+                    <div className="text-sm text-muted-foreground/50 font-mono mb-2">DESIGN EVOLUTION</div>
+                    <div className="space-y-1">
+                      <MetricDeltaRow label="Confidence" before={optimizationState.beforeConfidence} after={optimizationState.afterConfidence} beforeDisplay={`${optimizationState.beforeConfidence}%`} afterDisplay={`${optimizationState.afterConfidence}%`} higherBetter />
+                      <MetricDeltaRow label="Issues" before={optimizationState.beforeIssues} after={optimizationState.afterIssues} beforeDisplay={`${optimizationState.beforeIssues}`} afterDisplay={`${optimizationState.afterIssues}`} higherBetter={false} />
+                      <MetricDeltaRow label="Overhang area" before={optimizationState.beforeMetrics?.overhangAreaPercent ?? 0} after={optimizationState.afterMetrics?.overhangAreaPercent ?? 0} beforeDisplay={`${optimizationState.beforeMetrics?.overhangAreaPercent ?? 0}%`} afterDisplay={`${optimizationState.afterMetrics?.overhangAreaPercent ?? 0}%`} higherBetter={false} />
+                      <MetricDeltaRow label="Support vol" before={optimizationState.beforeMetrics?.supportVolumeMm3 ?? 0} after={optimizationState.afterMetrics?.supportVolumeMm3 ?? 0} beforeDisplay={`${optimizationState.beforeMetrics?.supportVolumeMm3 ?? 0} mm³`} afterDisplay={`${optimizationState.afterMetrics?.supportVolumeMm3 ?? 0} mm³`} higherBetter={false} />
+                      <MetricDeltaRow label="Mfg risk" before={optimizationState.beforeMetrics?.manufacturingRisk ?? 0} after={optimizationState.afterMetrics?.manufacturingRisk ?? 0} beforeDisplay={`${optimizationState.beforeMetrics?.manufacturingRisk ?? 0}`} afterDisplay={`${optimizationState.afterMetrics?.manufacturingRisk ?? 0}`} higherBetter={false} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW FULL REPORT toggle */}
+              <button onClick={() => setDetailsOpen(v => !v)}
+                className="w-full h-9 inline-flex items-center justify-center gap-2 border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm text-[12px] font-mono transition-all">
+                {detailsOpen ? '— HIDE FULL REPORT' : '+ VIEW FULL REPORT'}
+              </button>
+
+              {detailsOpen && <>
+                <div className="border-t border-border/10" />
+
+                {/* Readiness */}
+                {confidenceReport?.risks && (
+                  <div className="space-y-2">
+                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">READINESS</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <CompactRiskCard title="STRUCTURAL" risk={confidenceReport.risks.structural} />
+                      <CompactRiskCard title="PRINT" risk={confidenceReport.risks.print} />
+                      <CompactRiskCard title="MFG" risk={confidenceReport.risks.manufacturing} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Confidence Breakdown */}
+                {confidenceReport?.categories && confidenceReport.categories.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">CONFIDENCE BREAKDOWN</div>
+                    {confidenceReport.categories.map(cat => (
+                      <div key={cat.id}>
+                        <div className="flex items-center justify-between text-[13px] font-mono mb-1">
+                          <span className="text-muted-foreground/50">{cat.label}</span>
+                          <span className="tabular-nums font-bold" style={{ color: scoreColor(cat.score) }}>{cat.score}%</span>
+                        </div>
+                        <div className="h-1.5 bg-background/60 rounded-sm overflow-hidden">
+                          <div className="h-full rounded-sm transition-all" style={{ width: `${cat.score}%`, background: scoreColor(cat.score) }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Repair Suggestions */}
+                {confidenceReport?.repairSuggestions && confidenceReport.repairSuggestions.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">REPAIR SUGGESTIONS</div>
+                    {confidenceReport.repairSuggestions.map((s, i) => (
+                      <div key={i} className="border border-border/15 rounded-sm p-3">
+                        <div className="flex items-start gap-2.5">
+                          <span className={`text-[11px] font-mono px-1.5 py-0.5 rounded-sm border shrink-0 mt-0.5 ${
+                            s.impact === 'high' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                            s.impact === 'medium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                            'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          }`}>{s.impact.toUpperCase()}</span>
+                          <div className="min-w-0">
+                            <div className="text-[13px] text-foreground/70 font-medium">{s.action}</div>
+                            <div className="text-[13px] text-muted-foreground/50 mt-0.5">{s.description}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Risk Analysis */}
+                {confidenceReport?.explanation?.topRisks && confidenceReport.explanation.topRisks.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">RISK ANALYSIS</div>
+                    {confidenceReport.explanation.topRisks.map((risk, i) => (
+                      <div key={i} className="flex items-center gap-2 text-[13px]">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${risk.impact === 'high' ? 'bg-red-400' : risk.impact === 'medium' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                        <span className="text-muted-foreground/60">{risk.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Technical Metrics */}
+                <div className="space-y-3">
+                  <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">TECHNICAL METRICS</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-3 border border-border/15 rounded-sm">
+                      <div className="text-sm text-muted-foreground/50 font-mono mb-2">TOPOLOGY</div>
+                      <div className="space-y-1.5">
+                        <TechRow label="Tri" value={t?.triangleCount} />
+                        <TechRow label="Verts" value={t?.vertexCount} />
+                        <TechRow label="Shells" value={t?.shellCount} />
+                        <TechRow label="Manifold" value={t?.isManifold ? '✓' : '✗'} badge={t?.isManifold ? 'pass' : 'fail'} />
+                        <TechRow label="Watertight" value={v?.isWatertight ? '✓' : '✗'} badge={v?.isWatertight ? 'pass' : 'fail'} />
+                        <TechRow label="Holes" value={v?.holeCount} />
+                      </div>
+                    </div>
+                    <div className="p-3 border border-border/15 rounded-sm">
+                      <div className="text-sm text-muted-foreground/50 font-mono mb-2">GEOMETRY</div>
+                      <div className="space-y-1.5">
+                        <TechRow label="Volume" value={m?.meshVolumeMm3 != null ? `${Math.round(m.meshVolumeMm3)} mm³` : '—'} />
+                        <TechRow label="Surface" value={m?.surfaceAreaMm2 != null ? `${Math.round(m.surfaceAreaMm2)} mm²` : '—'} />
+                        {bb && <TechRow label="BBox" value={`${bb.x.toFixed(0)} × ${bb.y.toFixed(0)} × ${bb.z.toFixed(0)} mm`} />}
+                        <TechRow label="Avg wall" value={m?.avgWallThicknessMm != null ? `${m.avgWallThicknessMm.toFixed(1)} mm` : '—'} />
+                        <TechRow label="Min wall" value={m?.minWallThicknessMm != null ? `${m.minWallThicknessMm.toFixed(1)} mm` : '—'} />
+                        <TechRow label="Overhang" value={m?.overhang?.severity ?? '—'} badge={m?.overhang?.severity} />
+                      </div>
+                    </div>
+                    <div className="col-span-2 p-3 border border-border/15 rounded-sm">
+                      <div className="text-sm text-muted-foreground/50 font-mono mb-2">PRINTABILITY</div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {sp && <TechRow label="Support" value={sp.totalSupportVolumeMm3 != null ? `${Math.round(sp.totalSupportVolumeMm3)} mm³` : '—'} />}
+                        {sp && <TechRow label="Difficulty" value={sp.difficulty ?? '—'} badge={sp.difficulty} />}
+                        {bf && <TechRow label="Bed" value={bf.fits ? `✓ ${bf.printerProfile.name}` : `✗ ${bf.printerProfile.name}`} badge={bf.fits ? 'pass' : 'fail'} />}
+                        {pt && <TechRow label="Time" value={`${pt.estimatedPrintTimeHours.toFixed(1)} h`} />}
+                        {pt && <TechRow label="Material" value={`${pt.materialWeightGrams.toFixed(1)} g`} />}
+                        {pt && <TechRow label="Cost" value={`$${pt.materialCostUsd.toFixed(2)}`} />}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mesh Details */}
+                <div className="space-y-2">
+                  <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">MESH DETAILS</div>
+                  {gateIssues.length > 0 && gateIssues.map((issue, i) => (
+                    <div key={i} className="flex items-start gap-2 text-[13px] leading-relaxed p-2 rounded-sm border border-border/10">
+                      {issue.severity === 'error' ? <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" /> :
+                       issue.severity === 'warning' ? <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" /> :
+                       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />}
+                      <span className="text-muted-foreground/60">{issue.message}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Error Logs */}
+                {errorDetails && (
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">ERROR LOGS</div>
+                    <div className="p-3 border border-border/15 rounded-sm text-[12px] font-mono text-muted-foreground/40 leading-relaxed whitespace-pre-wrap">
+                      {errorDetails}
+                    </div>
+                  </div>
+                )}</>}
+
+            </div>
           )}
 
         </div>
-      ) : (
-        <div className="flex flex-col border-l border-border/15 bg-card/30 overflow-y-auto items-center justify-center p-8 text-center space-y-4">
-          <div className="w-16 h-16 rounded-full border border-border/30 flex items-center justify-center">
-            <Sparkles className="w-6 h-6 text-muted-foreground/30" />
-          </div>
-          <div className="space-y-1">
-            <div className="text-sm font-mono text-muted-foreground/40 tracking-wider">CAD STUDIO</div>
-            <div className="text-xs text-muted-foreground/30 font-mono leading-relaxed max-w-[240px]">
-              Describe your object and press <span className="text-primary/50">GENERATE</span>.
-              The 3D model and analysis will appear here.
-            </div>
-          </div>
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }
