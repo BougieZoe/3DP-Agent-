@@ -1357,7 +1357,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
       {/* ── RIGHT: Parametric CAD Controller + Analysis ── */}
       {hasGeometry && analysis ? (
-        <div className="flex flex-col border-l border-border/15 bg-card/30 overflow-y-auto">
+        <div className="flex flex-col border-l border-border/15 bg-card/30 overflow-y-auto fade-up">
 
           {/* ── Tab bar ── */}
           <div className="flex border-b border-border/15 shrink-0">
