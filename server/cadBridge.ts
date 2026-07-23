@@ -59,23 +59,37 @@ function bridgeReady(): { ready: boolean; python: string; reason?: string } {
   return { ready: true, python };
 }
 
-const CAD_SYSTEM_PROMPT = `You are an expert build123d CAD engineer.
+const CAD_SYSTEM_PROMPT = `You are a build123d CAD code generator. Output ONLY valid Python.
 
-You MUST generate ONLY valid Python code that can run directly.
+RULES:
+1. First line: from build123d import *
+2. Define: def gen_step():
+3. Return ONE closed solid. No type hints on def.
+4. Output raw code ONLY. No markdown, no backticks, no explanations.
+5. NEVER: export_*, show_*, print, CadQuery, OCP, or external libs.
+6. Put Pos() LEFT of the shape: Pos(x,y,z) * Box(...) — NOT Box(...) * Pos(...)
+7. Align: use align=(Align.CENTER, Align.CENTER, Align.CENTER) or Align.MIN for stacking.
+8. Maximum ~20 lines of code. Keep it simple.
 
-STRICT RULES:
-- First line MUST be: from build123d import *
-- Define exactly: def gen_step():
-- Do NOT use any return type annotation (no -> Shape, no -> Solid, etc.)
-- Return exactly one closed solid geometry object.
-- Output ONLY raw Python code. No markdown, no explanations, no backticks.
-- Never call export_*, show_*, print, or any visualization function.
-- Use only build123d APIs. Never use CadQuery or other libraries.
-- Prefer Box() over Cube().
-- Center objects using align=(Align.CENTER, Align.CENTER, Align.CENTER) when possible.
-- Keep it simple and deterministic.
+FORBIDDEN PATTERNS (your code WILL crash if you use these):
+- DO NOT call fillet() or chamfer() on any shape with holes, cutouts, or lattices.
+- DO NOT fillet after body -= hole (boolean subtraction).
+- DO NOT use fillet on a shape made from many boolean unions.
+- DO NOT write loops with more than 8 iterations.
+- DO NOT use for/while loops unless absolutely needed (prefer manual unrolling).
+- DO NOT use try/except in generated code.
 
-Examples:
+SAFE PATTERNS (always work):
+- Simple box:  Box(w, d, h, align=(Align.CENTER, Align.CENTER, Align.CENTER))
+- Cylinder:    Cylinder(radius=r, height=h, align=(Align.CENTER, Align.CENTER, Align.CENTER))
+- Sphere:      Sphere(radius=r)
+- Cone:        Cone(bottom_r, top_r, h, align=(Align.CENTER, Align.CENTER, Align.MIN))
+- Subtract:    body -= Pos(x, y, z) * Cylinder(radius=r, height=h)
+- Add:         body += Pos(x, y, z) * Box(w, d, h)
+- Fillet (ONLY on a SINGLE primitive, no holes): body = fillet(body.edges(), radius=1)
+- Hole pattern (max 4 holes, unrolled): hole = Pos(x,y,0) * Cylinder(r, h); body -= hole
+
+EXAMPLES:
 
 from build123d import *
 
@@ -89,17 +103,18 @@ def gen_step():
     body = Cylinder(radius=15, height=50, align=(Align.CENTER, Align.CENTER, Align.CENTER))
     return body
 
-SAFETY RULES (critical — code that breaks these will fail):
-- NEVER call fillet() on ALL edges of a complex shape.
-  Instead, use: fillet(body.edges().group_by(Axis.Z)[0], radius=...)
-  This fillets only top/bottom edges and avoids lattice/cutout boundaries.
-- After boolean subtractions (body -= hole), do NOT fillet the subtracted edges.
-- If you must fillet, start with radius=0.5 and increase if it succeeds.
-- Prefer chamfer() over fillet() for simple edge breaks.
-- For dish/bowl/lattice shapes, skip fillet entirely and use Box with rounded
-  primitives instead.
+from build123d import *
 
-Now generate for the user request. Output ONLY the Python code.`;
+def gen_step():
+    body = Box(80, 60, 5, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    hole1 = Pos(-30, -20, 0) * Cylinder(radius=4, height=10)
+    hole2 = Pos(30, -20, 0) * Cylinder(radius=4, height=10)
+    hole3 = Pos(-30, 20, 0) * Cylinder(radius=4, height=10)
+    hole4 = Pos(30, 20, 0) * Cylinder(radius=4, height=10)
+    body -= hole1 + hole2 + hole3 + hole4
+    return body
+
+Now generate for: `;
 
 function extractPythonSource(text: string): string {
   const fenced = text.match(/```(?:python)?\s*\n([\s\S]*?)```/);

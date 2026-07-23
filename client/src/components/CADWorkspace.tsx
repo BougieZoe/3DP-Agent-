@@ -761,12 +761,12 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
   /* ─── Parametric regeneration from source ─── */
   const handleRegenerateFromSource = useCallback(async (source: string) => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() && !geometry) return;
     setLoading(true);
     setError(null);
     try {
       const transport = createLocalBridgeTransport({ generatorSource: source });
-      const outcome = await transport.generate({ prompt, timeoutMs: 60_000 });
+      const outcome = await transport.generate({ prompt: prompt || 'parametric plate', timeoutMs: 60_000 });
       if (!outcome || !outcome.ok) throw new Error('Regeneration failed');
 
       templateSourceRef.current = source;
@@ -778,7 +778,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
       const model = fromThreeBufferGeometry(geo);
       const unified = runAnalysisPipeline(model, {
-        fileName: `${prompt}.stl`,
+        fileName: `${prompt || 'parametric'}.stl`,
         material,
         printerId: 'bambu_x1c',
       });
@@ -786,9 +786,14 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       setGeometry(geo);
       setAnalysis(unified);
 
-      const gateResult = runConfidenceGate(unified, prompt, 'SUCCESS');
+      const gateResult = runConfidenceGate(unified, prompt || 'parametric plate', 'SUCCESS');
       setConfidenceReport(gateResult.report);
       setGateIssues(gateResult.issues);
+      setRepairInfo({
+        repaired: outcome.result.repaired ?? false,
+        repairType: outcome.result.repairType ?? 'none',
+        attempts: outcome.result.attempts ?? 1,
+      });
 
       setCadRunHistory(prev => {
         const updated = [...prev];
@@ -803,11 +808,12 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
+      console.error('[CADStudio] Slider regen failed:', msg);
+      // Don't set error for slider regen — too disruptive. Log only.
     } finally {
       setLoading(false);
     }
-  }, [prompt, material]);
+  }, [prompt, material, geometry]);
 
   const handleApplyImprovement = useCallback(async (suggestion: RepairSuggestion, editInstruction: string) => {
     const typeMap: Record<string, string | undefined> = {
