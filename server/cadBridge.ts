@@ -89,6 +89,16 @@ def gen_step():
     body = Cylinder(radius=15, height=50, align=(Align.CENTER, Align.CENTER, Align.CENTER))
     return body
 
+SAFETY RULES (critical — code that breaks these will fail):
+- NEVER call fillet() on ALL edges of a complex shape.
+  Instead, use: fillet(body.edges().group_by(Axis.Z)[0], radius=...)
+  This fillets only top/bottom edges and avoids lattice/cutout boundaries.
+- After boolean subtractions (body -= hole), do NOT fillet the subtracted edges.
+- If you must fillet, start with radius=0.5 and increase if it succeeds.
+- Prefer chamfer() over fillet() for simple edge breaks.
+- For dish/bowl/lattice shapes, skip fillet entirely and use Box with rounded
+  primitives instead.
+
 Now generate for the user request. Output ONLY the Python code.`;
 
 function extractPythonSource(text: string): string {
@@ -336,7 +346,9 @@ export function createCadBridgeRouter(): Router {
       repairType: repairType ?? 'none',
       success: run.code === 0 && !run.timedOut,
     }) + '\n';
-    appendFile(METRICS_PATH, metricsLine, 'utf-8').catch(() => {});
+    appendFile(METRICS_PATH, metricsLine, 'utf-8').catch((err) =>
+      console.error(`[cadBridge] metrics write failed: ${(err as Error).message}`),
+    );
 
     if (run.timedOut) {
       console.log(`[cadBridge:${id.slice(0, 8)}] TIMEOUT after ${timeoutMs}ms`);
