@@ -89,6 +89,19 @@ export interface SlicerAdapterDeps {
 }
 
 const DEFAULT_TIMEOUT_MS = 180_000;
+/**
+ * Hard ceiling for a single slice invocation. Client-supplied timeouts are
+ * clamped to this value so a hostile/buggy request cannot pin a worker forever.
+ */
+export const MAX_TIMEOUT_MS = 300_000;
+
+/** Security: only absolute paths may be executed — a bare name could resolve
+ * via PATH to an attacker-controlled binary. */
+function assertAbsoluteBinary(binary: string): void {
+  if (!path.isAbsolute(binary)) {
+    throw new Error(`Refusing to run non-absolute slicer binary: "${binary}"`);
+  }
+}
 
 export function createSlicerAdapter(profile: SlicerProfile, deps: SlicerAdapterDeps = {}): SlicerAdapter {
   const runExec = deps.execFile ?? execFile;
@@ -102,13 +115,16 @@ export function createSlicerAdapter(profile: SlicerProfile, deps: SlicerAdapterD
     id: profile.id,
 
     async isAvailable(): Promise<boolean> {
+      if (!path.isAbsolute(profile.binary)) return false;
       return new Promise((resolve) => {
         runExec(profile.binary, ['--help'], { timeout: 5_000 }, (err) => resolve(err === null));
       });
     },
 
     async slice(request: SlicerRequest): Promise<SlicerResult> {
-      const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+      // Security: refuse anything that is not an absolute, server-whitelisted path.
+      assertAbsoluteBinary(request.profile.binary);
+      const timeoutMs = Math.min(request.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
       const dir = await mkdir(path.join(tmp(), 'slicer-'));
       const stlPath = path.join(dir, 'model.stl');
       const gcodePath = path.join(dir, 'model.gcode');
@@ -186,6 +202,12 @@ export function dropStlToBed(stlBytes: Uint8Array): Uint8Array {
   if (stlBytes.byteLength < 84) return stlBytes;
   const view = new DataView(stlBytes.buffer, stlBytes.byteOffset, stlBytes.byteLength);
   const triCount = view.getUint32(80, true);
+
+  // Strict boundary check: the claimed triangle count must match the buffer
+  // size. A hostile header claiming millions of triangles over a tiny buffer
+  // would otherwise index past the end (throw / DoS). Malformed input is
+  // returned untouched rather than processed.
+  if (!Number.isInteger(triCount) || 84 + triCount * 50 > stlBytes.byteLength) return stlBytes;
 
   let minZ = Infinity;
   let off = 84;

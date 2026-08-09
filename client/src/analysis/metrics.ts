@@ -112,6 +112,8 @@ export function analyzeOverhang(
   const totalFaceCount = Math.floor(indices.length / 3);
   const bucketCounts = OVERHANG_ANGLE_BUCKETS.map(() => 0);
   let overhangCount = 0;
+  let overhangAreaMm2 = 0;
+  let totalAreaMm2 = 0;
 
   // Build-plate plane (lowest vertex Z) and model height, for bed-contact exclusion.
   let minZ = Infinity, maxZ = -Infinity;
@@ -140,6 +142,9 @@ export function analyzeOverhang(
     const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
     if (len < 1e-12) continue;
 
+    const area = len / 2;
+    totalAreaMm2 += area;
+
     const tiltDeg = overhangTiltBelowHorizontalDeg(nz, len);
     if (tiltDeg === null) continue;
 
@@ -157,10 +162,14 @@ export function analyzeOverhang(
 
     if (tiltDeg > overhangThresholdDeg) {
       overhangCount++;
+      overhangAreaMm2 += area;
     }
   }
 
-  const ratio = totalFaceCount > 0 ? overhangCount / totalFaceCount : 0;
+  // Area-weighted overhang fraction: a large overhang face weighs more than a
+  // tiny one. (Face-count ratio under-reported small-but-critical regions and
+  // over-reported many tiny faces.)
+  const ratio = totalAreaMm2 > 0 ? overhangAreaMm2 / totalAreaMm2 : 0;
 
   const severity: OverhangMetrics['severity'] =
     overhangCount === 0 ? 'none' :
@@ -172,16 +181,17 @@ export function analyzeOverhang(
     faceCount: bucketCounts[idx],
   }));
 
-  return { faceCount: overhangCount, totalFaceCount, ratio, severity, breakdownByAngleDeg: breakdownByAngle };
+  return { faceCount: overhangCount, totalFaceCount, ratio, severity, breakdownByAngleDeg: breakdownByAngle, overhangAreaMm2, totalAreaMm2 };
 }
 
 /**
- * Derive printability status from overhang-to-total-face ratio.
+ * Derive printability status from the AREA-WEIGHTED overhang fraction
+ * (overhang surface area / total surface area).
  *
  * Threshold rationale (FDM empirical):
- * - 0–5%   overhang faces: negligible — standard supports or orientation handles this.
- * - 5–15%  overhang faces: moderate — support strategy matters; evaluate orientation.
- * - >15%   overhang faces: critical — model has significant overhang geometry;
+ * - 0–5%   overhang area: negligible — standard supports or orientation handles this.
+ * - 5–15%  overhang area: moderate — support strategy matters; evaluate orientation.
+ * - >15%   overhang area: critical — model has significant overhang geometry;
  *           mandatory support strategy or redesign needed.
  *
  * These thresholds are intentionally lower than the analysis-layer `severity`
@@ -284,7 +294,7 @@ export function computeMetrics(
       p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null,
       thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, lowConfidenceSampleCount: 0,
       wallThicknessSamples: [],
-      overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [] },
+      overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 },
     }, 'No position data');
   }
 
@@ -296,7 +306,7 @@ export function computeMetrics(
       p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null,
       thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, lowConfidenceSampleCount: 0,
       wallThicknessSamples: [],
-      overhang: { faceCount: 0, totalFaceCount: g.triangleCount, ratio: 0, severity: 'none', breakdownByAngleDeg: [] },
+      overhang: { faceCount: 0, totalFaceCount: g.triangleCount, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 },
     }, 'Non-indexed geometry — volume and wall thickness cannot be computed accurately');
   }
 
@@ -363,7 +373,7 @@ export function computeMetrics(
   } else {
     parts.push('Wall thickness: could not be sampled (no opposing faces found)');
   }
-  parts.push(`Overhang faces: ${overhang.faceCount}/${overhang.totalFaceCount} (${(overhang.ratio * 100).toFixed(1)}%)`);
+  parts.push(`Overhang: ${overhang.faceCount}/${overhang.totalFaceCount} faces, ${(overhang.ratio * 100).toFixed(1)}% of surface area`);
 
   return moduleResult('metrics', overallConfidence, Math.round(performance.now() - startTime), result, parts.join('. '));
 }

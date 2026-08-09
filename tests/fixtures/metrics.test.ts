@@ -91,6 +91,18 @@ describe('analyzeOverhang — Z-up physical truth', () => {
     // Only the ceiling's two triangles are downward + off the bed.
     expect(result.faceCount).toBe(2);
   });
+
+  it('overhang ratio is AREA-weighted, not face-count weighted', () => {
+    const model = modelOf(createSuspendedCeiling(20, 20, 20));
+    const result = analyzeOverhang(model.positions, model.indices);
+    // Ceiling surface 20×20 = 400 mm² (2 tris); anchor cube surface 6×8×8 = 384 mm².
+    // Area ratio = 400 / 784 ≈ 0.51. A face-count ratio would be 2/14 ≈ 0.14 —
+    // the difference is exactly the fix.
+    expect(result.faceCount).toBe(2);
+    expect(result.overhangAreaMm2).toBeCloseTo(400, 1);
+    expect(result.totalAreaMm2).toBeCloseTo(784, 1);
+    expect(result.ratio).toBeCloseTo(400 / 784, 3);
+  });
 });
 
 describe('computeMetrics — no silent bounding-box fallback', () => {

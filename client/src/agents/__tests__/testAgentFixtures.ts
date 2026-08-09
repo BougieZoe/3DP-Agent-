@@ -57,6 +57,8 @@ export function normalMetrics(): MetricsResult {
         { minAngle: 60, maxAngle: 75, faceCount: 2 },
         { minAngle: 75, maxAngle: 90, faceCount: 0 },
       ],
+      overhangAreaMm2: 5,
+      totalAreaMm2: 100,
     },
   };
 }
@@ -94,6 +96,8 @@ export function overhangMetrics(): MetricsResult {
         { minAngle: 60, maxAngle: 75, faceCount: 20 },
         { minAngle: 75, maxAngle: 90, faceCount: 5 },
       ],
+      overhangAreaMm2: 60,
+      totalAreaMm2: 100,
     },
     wallThicknessSamples: sample(50),
   };
@@ -120,6 +124,8 @@ export function criticalBothMetrics(): MetricsResult {
         { minAngle: 60, maxAngle: 75, faceCount: 35 },
         { minAngle: 75, maxAngle: 90, faceCount: 15 },
       ],
+      overhangAreaMm2: 80,
+      totalAreaMm2: 100,
     },
   };
 }

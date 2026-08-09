@@ -40,5 +40,6 @@ export function dropToBed(model: GeometryModel): GeometryModel {
     indices: model.indices,
     vertexCount: model.vertexCount,
     triangleCount: model.triangleCount,
+    units: model.units,
   };
 }
