@@ -40,7 +40,7 @@ export class PrintabilityScorer extends BaseAgent {
     const overhangRatio = oh?.ratio ?? 0;
     const p5Thickness = metrics?.p5WallThicknessMm;
     const thinWallRatio = (metrics?.thinWallRatio ?? 0);
-    const minThickness = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
+    const minThickness = p5Thickness ?? metrics?.minWallThicknessMm ?? null;
     const wtStatus = deriveWtStatus(thinWallRatio, p5Thickness);
     const ohStatus = deriveOhStatus(overhangRatio);
 
@@ -153,7 +153,7 @@ export class PrintabilityScorer extends BaseAgent {
     };
   }
 
-  private buildExplanation(breakdown: ScoringBreakdown, analysis: { wallThickness: { status: string; minThickness: number; thinWallRatio?: number }; overhang: { status: string; areas: number } }): string {
+  private buildExplanation(breakdown: ScoringBreakdown, analysis: { wallThickness: { status: string; minThickness: number | null; thinWallRatio?: number }; overhang: { status: string; areas: number } }): string {
     const lines = [
       `Printability Score: ${Math.round(breakdown.weightedTotal)}/100 (${breakdown.category.toUpperCase()})`,
       ``,
@@ -167,10 +167,13 @@ export class PrintabilityScorer extends BaseAgent {
 
     if (breakdown.wallThicknessScore < 50) {
       const twr = analysis.wallThickness.thinWallRatio;
+      const minLabel = analysis.wallThickness.minThickness != null
+        ? analysis.wallThickness.minThickness.toFixed(2)
+        : 'not measured';
       if (twr != null && twr > 0) {
-        lines.push(``, `\u26a0 Thin walls: ${(twr * 100).toFixed(1)}% of sampled regions below FDM threshold (p5=${analysis.wallThickness.minThickness.toFixed(2)}mm). Consider thickening.`);
+        lines.push(``, `\u26a0 Thin walls: ${(twr * 100).toFixed(1)}% of sampled regions below FDM threshold (p5=${minLabel}mm). Consider thickening.`);
       } else {
-        lines.push(``, `\u26a0 Primary concern: wall thickness (${analysis.wallThickness.minThickness.toFixed(2)}mm). Consider thickening to 2mm+ for reliable printing.`);
+        lines.push(``, `\u26a0 Primary concern: wall thickness (${minLabel}mm). Consider thickening to 2mm+ for reliable printing.`);
       }
     }
     if (breakdown.overhangScore < 50) {

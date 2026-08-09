@@ -45,6 +45,11 @@ const SUGGESTED: Record<Language, string[]> = {
   ],
 };
 
+// An unmeasured wall thickness (null) is reported honestly, never fabricated.
+function minWallLabel(mm: number | null): string {
+  return mm != null ? mm.toFixed(2) : '—';
+}
+
 function buildSystemPrompt(model: ModelData, lang: Language, material: Material = DEFAULT_MATERIAL): string {
   const wallStatus = model.wallThickness.status;
   const overhangStatus = model.overhang.status;
@@ -67,7 +72,7 @@ Risk Assessment: ${riskLevel}
 
 ## GEOMETRY FINDINGS
 Wall Thickness:
-  - Minimum: ${model.wallThickness.minThickness.toFixed(2)} mm
+  - Minimum: ${minWallLabel(model.wallThickness.minThickness)} mm
   - Status: ${wallStatus.toUpperCase()}
   - Affected areas: ${model.wallThickness.areas}
   ${wallStatus === 'critical' ? '⚠ CRITICAL: Walls below 0.8mm will not survive FDM printing. Structural failure likely.' : ''}
@@ -105,14 +110,14 @@ function buildInitialAssessment(model: ModelData, lang: Language): string {
   if (lang === 'zh') {
     if (hasCritical) {
       return `已扫描 ${model.fileName}（${dims}）。\n\n⚠ 发现严重问题：${
-        wallStatus === 'critical' ? `最小壁厚 ${model.wallThickness.minThickness.toFixed(2)}mm，低于FDM可打印阈值。` : ''
+        wallStatus === 'critical' ? `最小壁厚 ${minWallLabel(model.wallThickness.minThickness)}mm，低于FDM可打印阈值。` : ''
       }${
         overhangStatus === 'critical' ? `检测到 ${model.overhang.areas} 个严重悬垂面。` : ''
       }\n\n打印前必须处理这些问题。你想先从哪里开始？`;
     }
     if (hasWarning) {
       return `已扫描 ${model.fileName}（${dims}）。\n\n模型基本可打印，但有几个需要注意的地方：${
-        wallStatus === 'warning' ? `\n— 部分区域壁厚偏薄（最小 ${model.wallThickness.minThickness.toFixed(2)}mm），材料选择和摆放方向会影响结果` : ''
+        wallStatus === 'warning' ? `\n— 部分区域壁厚偏薄（最小 ${minWallLabel(model.wallThickness.minThickness)}mm），材料选择和摆放方向会影响结果` : ''
       }${
         overhangStatus === 'warning' ? `\n— ${model.overhang.areas} 个悬垂面超过45°，建议评估是否需要支撑` : ''
       }\n\n你想优先解决哪个问题？`;
@@ -123,14 +128,14 @@ function buildInitialAssessment(model: ModelData, lang: Language): string {
   if (lang === 'ja') {
     if (hasCritical) {
       return `${model.fileName}（${dims}）をスキャンしました。\n\n⚠ 重大な問題を検出：${
-        wallStatus === 'critical' ? `最小肉厚 ${model.wallThickness.minThickness.toFixed(2)}mm はFDM印刷の閾値以下です。` : ''
+        wallStatus === 'critical' ? `最小肉厚 ${minWallLabel(model.wallThickness.minThickness)}mm はFDM印刷の閾値以下です。` : ''
       }${
         overhangStatus === 'critical' ? `${model.overhang.areas} 箇所の深刻なオーバーハングを検出。` : ''
       }\n\n印刷前にこれらを修正する必要があります。どこから確認しますか？`;
     }
     if (hasWarning) {
       return `${model.fileName}（${dims}）をスキャンしました。\n\n基本的には印刷可能ですが、注意点があります：${
-        wallStatus === 'warning' ? `\n— 一部の壁が薄い（最小 ${model.wallThickness.minThickness.toFixed(2)}mm）。素材と向きの選択が重要です` : ''
+        wallStatus === 'warning' ? `\n— 一部の壁が薄い（最小 ${minWallLabel(model.wallThickness.minThickness)}mm）。素材と向きの選択が重要です` : ''
       }${
         overhangStatus === 'warning' ? `\n— ${model.overhang.areas} 箇所が45°を超えるオーバーハング。サポートを検討してください` : ''
       }\n\nどこから対処しますか？`;
@@ -140,14 +145,14 @@ function buildInitialAssessment(model: ModelData, lang: Language): string {
 
   if (hasCritical) {
     return `Scanned ${model.fileName} (${dims}).\n\n⚠ Critical issues found:${
-      wallStatus === 'critical' ? `\n— Min wall thickness ${model.wallThickness.minThickness.toFixed(2)}mm — below the FDM survival threshold. These walls will not hold.` : ''
+      wallStatus === 'critical' ? `\n— Min wall thickness ${minWallLabel(model.wallThickness.minThickness)}mm — below the FDM survival threshold. These walls will not hold.` : ''
     }${
       overhangStatus === 'critical' ? `\n— ${model.overhang.areas} faces with severe overhang. Support strategy is not optional here.` : ''
     }\n\nThis needs to be addressed before you send this to a printer. What do you want to tackle first?`;
   }
   if (hasWarning) {
     return `Scanned ${model.fileName} (${dims}).\n\nPrintable, but there are things to watch:${
-      wallStatus === 'warning' ? `\n— Some areas are thin (min ${model.wallThickness.minThickness.toFixed(2)}mm). Material choice and orientation will matter here.` : ''
+      wallStatus === 'warning' ? `\n— Some areas are thin (min ${minWallLabel(model.wallThickness.minThickness)}mm). Material choice and orientation will matter here.` : ''
     }${
       overhangStatus === 'warning' ? `\n— ${model.overhang.areas} faces beyond 45°. Worth evaluating orientation before committing to supports.` : ''
     }\n\nWhat do you want to dig into?`;

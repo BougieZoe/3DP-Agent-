@@ -44,7 +44,7 @@ export class FailurePredictor extends BaseAgent {
     const p5Thickness = metrics?.p5WallThicknessMm;
     const thinWallRatio = (metrics?.thinWallRatio ?? 0);
     const avgConfidence = (metrics?.averageConfidence ?? 0);
-    const minThickness = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
+    const minThickness = p5Thickness ?? metrics?.minWallThicknessMm ?? null;
     const wtStatus = deriveWtStatus(thinWallRatio, p5Thickness);
     const thinWallRatioRaw = thinWallRatio;
     const ohStatus = deriveOhStatus(overhangRatio);
@@ -127,7 +127,7 @@ export class FailurePredictor extends BaseAgent {
     };
   }
 
-  private predictWallFailure(analysis: { wallThickness: { status: string; minThickness: number; thinWallRatio?: number; confidence?: number; p5Thickness?: number | null } }): PredictedRisk | null {
+  private predictWallFailure(analysis: { wallThickness: { status: string; minThickness: number | null; thinWallRatio?: number; confidence?: number; p5Thickness?: number | null } }): PredictedRisk | null {
     if (analysis.wallThickness.status === 'good') return null;
 
     const twr = analysis.wallThickness.thinWallRatio ?? 0;
@@ -145,7 +145,8 @@ export class FailurePredictor extends BaseAgent {
       recommendation = 'Increase wall thickness model-wide to at least 2mm. Use 3+ perimeters in slicer.';
     } else {
       severity = 'high';
-      description = `Thin walls detected (p5=${p5.toFixed(2)}mm, ${(twr * 100).toFixed(1)}% of samples) — moderate failure risk`;
+      const p5Label = p5 != null ? `p5=${p5.toFixed(2)}mm, ` : '';
+      description = `Thin walls detected (${p5Label}${(twr * 100).toFixed(1)}% of samples) — moderate failure risk`;
       recommendation = 'Thin areas detected. Increase wall thickness or use 3 perimeters.';
     }
 

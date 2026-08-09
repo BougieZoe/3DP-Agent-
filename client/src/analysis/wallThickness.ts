@@ -3,6 +3,35 @@ import { type Confidence, type WallThicknessSample } from './types';
 const THIN_WALL_THRESHOLD_MM = 0.8;
 const LOW_CONFIDENCE_THRESHOLD = 0.3;
 
+/**
+ * Ray budget = bounding-box diagonal × this factor.
+ *
+ * The longest interior chord of a part is bounded by its bounding-box
+ * diagonal, so a ray cast along an inward normal can always reach a back
+ * surface when one exists. The previous hardcoded `maxRayDist = 20` silently
+ * discarded every sample on parts whose interior chord exceeded it (e.g. any
+ * solid thicker than 20 mm), which forced the report layer to substitute a
+ * bounding-box heuristic for a real measurement. The factor (>1) tolerates
+ * numerically off-axis rays without admitting a ray past the geometry.
+ */
+export const MAX_RAY_DIST_DIAGONAL_FACTOR = 1.05;
+
+function boundingBoxDiagonal(positions: Float32Array): number {
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i], y = positions[i + 1], z = positions[i + 2];
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
+  }
+  const dx = maxX - minX, dy = maxY - minY, dz = maxZ - minZ;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   if (sorted.length === 1) return sorted[0];
@@ -48,6 +77,10 @@ function rayTriangleIntersection(
   return t >= 0 ? t : null;
 }
 
+/**
+ * Wall-thickness confidence. Returns 0.0 — never a fabricated number — when the
+ * raycast could not produce a valid measurement (no opposing faces found).
+ */
 export function computeWallConfidence(
   minThickness: number | null,
   p5Thickness: number | null,
@@ -57,7 +90,7 @@ export function computeWallConfidence(
   lowConfidenceSampleCount: number,
   sampleCount: number,
 ): Confidence {
-  if (minThickness === null || sampleCount === 0) return 0.1 as Confidence;
+  if (minThickness === null || sampleCount === 0) return 0.0 as Confidence;
 
   let confidence = averageConfidence;
 
@@ -90,6 +123,7 @@ export function sampleWallThickness(
   positions: Float32Array,
   indices: Uint16Array | Uint32Array,
   maxSamples: number = 200,
+  maxRayDist?: number,
 ): {
   samples: WallThicknessSample[];
   minThickness: number | null;
@@ -110,6 +144,11 @@ export function sampleWallThickness(
   if (triCount < 4) {
     return { samples, minThickness: null, avgThickness: null, p1Thickness: null, p5Thickness: null, p10Thickness: null, medianThickness: null, thinWallCount: 0, thinWallRatio: 0, thinWallPercentage: 0, averageConfidence: 0, lowConfidenceSampleCount: 0 };
   }
+
+  // Scale-aware ray budget (see MAX_RAY_DIST_DIAGONAL_FACTOR). Callers that
+  // already computed the bounding box pass the diagonal-derived value to avoid
+  // a redundant scan; standalone callers derive it from the positions.
+  const rayLimit = maxRayDist ?? boundingBoxDiagonal(positions) * MAX_RAY_DIST_DIAGONAL_FACTOR;
 
   const step = Math.max(1, Math.floor(triCount / maxSamples));
 
@@ -134,8 +173,7 @@ export function sampleWallThickness(
 
     const invNx = -nx / len, invNy = -ny / len, invNz = -nz / len;
 
-    const maxRayDist = 20;
-    let minDist = maxRayDist;
+    let minDist = rayLimit;
     let hitCount = 0;
 
     for (let j = 0; j < indices.length; j += 3) {
@@ -163,7 +201,7 @@ export function sampleWallThickness(
 
     samples.push({
       position: { x: fcx, y: fcy, z: fcz },
-      thickness: minDist < maxRayDist ? minDist : 0,
+      thickness: minDist < rayLimit ? minDist : 0,
       confidence,
     });
   }

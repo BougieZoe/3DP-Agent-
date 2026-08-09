@@ -1,6 +1,7 @@
 import { moduleResult, type AnalysisModuleResult, type Confidence, type SupportRegion, type SupportResult, type SupportDifficulty } from './types';
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
+import { overhangTiltBelowHorizontalDeg, isOnBuildPlate } from './metrics';
 
 export function estimateSupportVolume(
   model: GeometryModel,
@@ -25,7 +26,10 @@ export function estimateSupportVolume(
   const indices = g.indices;
   const faceCount = g.triangleCount;
   const bbox = g.boundingBox;
-  const minY = bbox.minY;
+  // Build axis is Z (slicer convention): supports grow upward from the bed at
+  // the model's lowest Z, and only downward-facing surfaces need them.
+  const minZ = bbox.minZ;
+  const modelHeight = Math.max(1e-6, bbox.maxZ - bbox.minZ);
 
   let totalSupportVolume = 0;
   let totalOverhangAngle = 0;
@@ -62,19 +66,24 @@ export function estimateSupportVolume(
     const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
     if (len < 1e-12) continue;
 
-    const cosAngle = Math.abs(ny) / len;
-    const angleDeg = Math.acos(Math.max(-1, Math.min(1, cosAngle))) * (180 / Math.PI);
+    // Z-up overhang test shared with the metrics module (sign-aware, downward only).
+    const tiltDeg = overhangTiltBelowHorizontalDeg(nz, len);
+    if (tiltDeg === null) continue;
 
-    if (angleDeg <= overhangThresholdDeg) continue;
+    const fcz = (az + bz + cz) / 3;
+    const height = fcz - minZ;
+
+    // Faces resting on the build plate are supported by the bed, not by supports.
+    if (isOnBuildPlate(fcz, minZ, modelHeight)) continue;
+
+    if (tiltDeg <= overhangThresholdDeg) continue;
 
     const area = len / 2;
-    const fcy = (ay + by + cy) / 3;
-    const height = fcy - minY;
 
     let bucketRatio = 0.3;
     let bucketLabel = '45-60°';
     for (const bucket of angleBuckets) {
-      if (angleDeg >= bucket.min && angleDeg < bucket.max) {
+      if (tiltDeg >= bucket.min && tiltDeg < bucket.max) {
         bucketRatio = bucket.ratio;
         bucketLabel = bucket.label;
         break;
@@ -84,14 +93,14 @@ export function estimateSupportVolume(
     const supportVol = area * Math.max(0.5, height) * bucketRatio;
 
     totalSupportVolume += supportVol;
-    totalOverhangAngle += angleDeg;
+    totalOverhangAngle += tiltDeg;
     supportFaceCount++;
     supportFaceArea += area;
 
     const triIdx = i / 3;
     supportFaceIndices.push(triIdx);
     supportFaceVolumes.push(supportVol);
-    supportFaceAngles.push(angleDeg);
+    supportFaceAngles.push(tiltDeg);
 
     const bucketData = volumeByAngle.get(bucketLabel);
     if (bucketData) {
@@ -201,13 +210,13 @@ export function estimateSupportVolume(
   // Z gradient: weighted mean Z of support faces vs model midpoint
   let tallSupportCount = 0;
   let weightedZSum = 0;
-  const zMid = (bbox.maxY + bbox.minY) / 2;
-  const zRange = Math.max(bbox.maxY - bbox.minY, 1);
+  const zMid = (bbox.maxZ + bbox.minZ) / 2;
+  const zRange = Math.max(bbox.maxZ - bbox.minZ, 1);
 
   for (let k = 0; k < supportFaceIndices.length; k++) {
     const fi = supportFaceIndices[k];
     const cz = g.faceCentroids[fi].z;
-    const relZ = (cz - bbox.minY) / zRange;  // 0–1 from bottom to top
+    const relZ = (cz - bbox.minZ) / zRange;  // 0–1 from bottom to top
     weightedZSum += relZ;
     if (cz > zMid) tallSupportCount++;
   }

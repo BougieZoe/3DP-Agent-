@@ -60,7 +60,7 @@ function unifiedToModelData(
   return {
     fileName,
     wallThickness: {
-      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
+      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall,
       p1Thickness: metrics?.p1WallThicknessMm ?? null,
       p5Thickness: metrics?.p5WallThicknessMm ?? null,
       p10Thickness: metrics?.p10WallThicknessMm ?? null,
@@ -97,7 +97,7 @@ function unifiedToAnalysisSummary(unifiedAnalysis: import('@/analysis').UnifiedA
 
   return {
     wallThickness: {
-      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
+      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall,
       p1Thickness: metrics?.p1WallThicknessMm ?? null,
       p5Thickness: metrics?.p5WallThicknessMm ?? null,
       p10Thickness: metrics?.p10WallThicknessMm ?? null,
@@ -609,7 +609,7 @@ export default function Home() {
                     </div>
                     <div className="border border-border rounded-sm bg-card p-4">
                       <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">GEOMETRY DATA</div>
-                      <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness.toFixed(3)} unit="mm" highlight />
+                      <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness != null ? analysis.wallThickness.minThickness.toFixed(3) : '—'} unit="mm" highlight />
                       {unifiedAnalysis?.metrics.result?.minWallThicknessMm != null && (
                         <MetricRow label="Min (abs)" value={unifiedAnalysis.metrics.result.minWallThicknessMm.toFixed(3)} unit="mm" />
                       )}

@@ -9,7 +9,8 @@ import { DEFAULT_MATERIAL } from '@/lib/materialState';
 export interface ModelData {
   fileName: string;
   wallThickness: {
-    minThickness: number;
+    /** null when the raycast could not produce a measurement — never a bbox estimate. */
+    minThickness: number | null;
     p1Thickness: number | null;
     p5Thickness: number | null;
     p10Thickness: number | null;
@@ -36,6 +37,13 @@ export interface RuleResult {
   category: string;
 }
 
+// Format a wall-thickness value for display; an unmeasured (null) value is
+// reported honestly instead of substituting a fabricated number.
+function formatMinThickness(v: number | null, lang: 'en' | 'ja' | 'zh'): string {
+  if (v === null) return lang === 'zh' ? '未测量' : lang === 'ja' ? '未測定' : 'not measured';
+  return `${v.toFixed(2)}mm`;
+}
+
 // Quick local analysis report — no API
 export function generateQuickReport(model: ModelData, lang: 'en' | 'ja' | 'zh', material: Material = DEFAULT_MATERIAL): string {
   const issues: string[] = [];
@@ -50,18 +58,18 @@ export function generateQuickReport(model: ModelData, lang: 'en' | 'ja' | 'zh', 
 
   if (model.wallThickness.status === 'critical') {
     if ((twr ?? 0) > 0.15) {
-      issues.push(lang === 'zh' ? `壁厚过薄: ${pct}% 采样区域低于FDM阈值。最小测量值: ${model.wallThickness.minThickness.toFixed(2)}mm。置信度: ${confLabel}` :
-        lang === 'ja' ? `壁厚過小: サンプルの${pct}%がFDM閾値未満。最小測定: ${model.wallThickness.minThickness.toFixed(2)}mm。信頼度: ${confLabel}` :
-        `Widespread thin walls: ${pct}% of sampled regions below FDM threshold. Minimum measured: ${model.wallThickness.minThickness.toFixed(2)}mm. Confidence: ${confLabel}`);
+      issues.push(lang === 'zh' ? `壁厚过薄: ${pct}% 采样区域低于FDM阈值。最小测量值: ${formatMinThickness(model.wallThickness.minThickness, lang)}。置信度: ${confLabel}` :
+        lang === 'ja' ? `壁厚過小: サンプルの${pct}%がFDM閾値未満。最小測定: ${formatMinThickness(model.wallThickness.minThickness, lang)}。信頼度: ${confLabel}` :
+        `Widespread thin walls: ${pct}% of sampled regions below FDM threshold. Minimum measured: ${formatMinThickness(model.wallThickness.minThickness, lang)}. Confidence: ${confLabel}`);
     } else {
-      issues.push(lang === 'zh' ? `检测到孤立薄壁异常。最小测量值: ${model.wallThickness.minThickness.toFixed(2)}mm，但仅${pct}%采样区域低于阈值。置信度: ${confLabel}` :
-        lang === 'ja' ? `孤立した薄壁異常を検出。最小測定: ${model.wallThickness.minThickness.toFixed(2)}mm、ただしサンプルの${pct}%のみが閾値未満。信頼度: ${confLabel}` :
-        `Isolated thin wall anomaly. Minimum measured: ${model.wallThickness.minThickness.toFixed(2)}mm, but only ${pct}% of sampled regions below threshold. Confidence: ${confLabel}`);
+      issues.push(lang === 'zh' ? `检测到孤立薄壁异常。最小测量值: ${formatMinThickness(model.wallThickness.minThickness, lang)}，但仅${pct}%采样区域低于阈值。置信度: ${confLabel}` :
+        lang === 'ja' ? `孤立した薄壁異常を検出。最小測定: ${formatMinThickness(model.wallThickness.minThickness, lang)}、ただしサンプルの${pct}%のみが閾値未満。信頼度: ${confLabel}` :
+        `Isolated thin wall anomaly. Minimum measured: ${formatMinThickness(model.wallThickness.minThickness, lang)}, but only ${pct}% of sampled regions below threshold. Confidence: ${confLabel}`);
     }
   } else if (model.wallThickness.status === 'warning') {
-    issues.push(lang === 'zh' ? `${pct}% 采样区域壁厚偏薄 (p5=${model.wallThickness.minThickness.toFixed(2)}mm)。建议加厚至2mm以上` :
-      lang === 'ja' ? `サンプルの${pct}%が薄い壁 (p5=${model.wallThickness.minThickness.toFixed(2)}mm)。2mm以上を推奨` :
-      `${pct}% of sampled walls are thin (p5=${model.wallThickness.minThickness.toFixed(2)}mm). Consider thickening to 2mm+`);
+    issues.push(lang === 'zh' ? `${pct}% 采样区域壁厚偏薄 (p5=${formatMinThickness(model.wallThickness.minThickness, lang)})。建议加厚至2mm以上` :
+      lang === 'ja' ? `サンプルの${pct}%が薄い壁 (p5=${formatMinThickness(model.wallThickness.minThickness, lang)})。2mm以上を推奨` :
+      `${pct}% of sampled walls are thin (p5=${formatMinThickness(model.wallThickness.minThickness, lang)}). Consider thickening to 2mm+`);
   }
 
   if (model.overhang.status === 'warning' || model.overhang.status === 'critical') {
@@ -177,9 +185,9 @@ export function answerLocally(category: string, model: ModelData, lang: 'en' | '
         `Material cost estimate: ~$${cost} (${material.name}, volume-based). Excludes machine time, labor, post-processing.`;
     }
     case 'geometry':
-      return isZh ? `模型尺寸：${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm。最小壁厚：${model.wallThickness.minThickness.toFixed(2)}mm。悬垂面：${model.overhang.areas} 个。` :
-        isJa ? `寸法: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm。最小壁厚: ${model.wallThickness.minThickness.toFixed(2)}mm。オーバーハング: ${model.overhang.areas}面。` :
-        `Dims: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm. Min wall: ${model.wallThickness.minThickness.toFixed(2)}mm. Overhangs: ${model.overhang.areas} faces.`;
+      return isZh ? `模型尺寸：${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm。最小壁厚：${formatMinThickness(model.wallThickness.minThickness, lang)}。悬垂面：${model.overhang.areas} 个。` :
+        isJa ? `寸法: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm。最小壁厚: ${formatMinThickness(model.wallThickness.minThickness, lang)}。オーバーハング: ${model.overhang.areas}面。` :
+        `Dims: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm. Min wall: ${formatMinThickness(model.wallThickness.minThickness, lang)}. Overhangs: ${model.overhang.areas} faces.`;
     default:
       return '';
   }

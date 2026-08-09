@@ -8,7 +8,7 @@ interface GeometryAnalystDetails {
   boundingBoxVolumeMm3: number;
   dimensions: { x: number; y: number; z: number };
   wallThickness: {
-    minEstimated: number;
+    minEstimated: number | null;
     status: string;
   };
   overhang: {
@@ -43,7 +43,9 @@ export class GeometryAnalyst extends BaseAgent {
     const p5Thickness = metrics?.p5WallThicknessMm;
     const thinWallRatio = (metrics?.thinWallRatio ?? 0);
     const avgConfidence = (metrics?.averageConfidence ?? 0);
-    const estimatedMinWall = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
+    // Never fabricate a wall thickness from the bounding box: if the raycast
+    // produced no measurement, surface the honest null (confidence 0).
+    const estimatedMinWall = p5Thickness ?? metrics?.minWallThicknessMm ?? null;
     const featureDetail = this.computeFeatureDetail(triCount, volume);
 
     const wtStatus = deriveWtStatus(thinWallRatio, p5Thickness);
