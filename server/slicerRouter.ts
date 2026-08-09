@@ -9,18 +9,17 @@
  * requested slicer (PrusaSlicer / BambuStudio).
  */
 import express, { Router, type Request, type Response } from 'express';
+import path from 'node:path';
 import {
   createSlicerAdapter,
   type SlicerId,
   type SlicerProfile,
 } from './slicerBridge';
 
-const SLICER_BINARY_CANDIDATES: Record<SlicerId, string[]> = {
-  prusaslicer: ['prusa-slicer', 'prusaslicer'],
-  bambustudio: ['bambu-studio', 'bambustudio', 'BambuStudio'],
-  custom: [],
-};
-
+// SECURITY: only ABSOLUTE paths may be executed. Bare binary names (resolved
+// via PATH) and any client-supplied path are never run. Discovery is limited
+// to (a) server-configured paths via the SLICER_PATHS env var and (b) well
+// known absolute install locations.
 const SLICER_APP_PATHS: Record<SlicerId, string[]> = {
   prusaslicer: ['/Applications/PrusaSlicer.app/Contents/MacOS/PrusaSlicer'],
   bambustudio: [
@@ -30,16 +29,29 @@ const SLICER_APP_PATHS: Record<SlicerId, string[]> = {
   custom: [],
 };
 
+/** Server-configured absolute slicer paths (colon-separated). */
+function serverConfiguredSlicerPaths(): string[] {
+  const raw = process.env.SLICER_PATHS ?? '';
+  return raw
+    .split(':')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && path.isAbsolute(s));
+}
+
 /**
- * Probe candidate binaries (PATH names first, then app install paths) and
- * return the first that answers `--help` successfully, or null.
+ * Probe the server-configured whitelist and return the first binary that
+ * answers `--help` successfully, or null. When SLICER_PATHS is set it is the
+ * AUTHORITATIVE whitelist (only those paths are probed); otherwise discovery
+ * falls back to well-known install locations. Either way, only absolute,
+ * server-configured paths are ever executed.
  */
 export async function discoverSlicer(id: SlicerId): Promise<string | null> {
-  const candidates = [
-    ...(SLICER_BINARY_CANDIDATES[id] ?? []),
-    ...(SLICER_APP_PATHS[id] ?? []),
-  ];
+  const configured = serverConfiguredSlicerPaths();
+  const candidates = configured.length > 0 ? configured : (SLICER_APP_PATHS[id] ?? []);
+  const seen = new Set<string>();
   for (const binary of candidates) {
+    if (seen.has(binary)) continue;
+    seen.add(binary);
     const adapter = createSlicerAdapter({ id, binary });
     if (await adapter.isAvailable()) return binary;
   }
@@ -51,14 +63,11 @@ interface SliceBody {
   stlBase64?: string;
   fileName?: string;
   slicer?: SlicerId;
-  /** Explicit CLI binary; when omitted, the route auto-discovers. */
-  binary?: string;
   printerPreset?: string;
   materialPreset?: string;
   layerHeightMm?: number;
   autoDropToBed?: boolean;
   timeoutMs?: number;
-  extraArgs?: string[];
 }
 
 function sendError(res: Response, status: number, code: string, detail: string): void {
@@ -88,14 +97,15 @@ export function createSlicerRouter(): Router {
 
     const id: SlicerId = body.slicer ?? 'prusaslicer';
 
-    let binary = typeof body.binary === 'string' && body.binary.length > 0 ? body.binary : null;
-    if (!binary) binary = await discoverSlicer(id);
+    // SECURITY: never execute a client-supplied binary path or client-provided
+    // extra flags. Only server-whitelisted, auto-discovered slicers run.
+    const binary = await discoverSlicer(id);
     if (!binary) {
       sendError(
         res,
         404,
         'slicer-not-found',
-        `No ${id} CLI found on this machine. Pass an explicit "binary" path.`,
+        `No ${id} slicer found on this machine (checked SLICER_PATHS and well-known install paths).`,
       );
       return;
     }
@@ -106,13 +116,18 @@ export function createSlicerRouter(): Router {
       printerPreset: body.printerPreset,
       materialPreset: body.materialPreset,
       layerHeightMm: typeof body.layerHeightMm === 'number' ? body.layerHeightMm : undefined,
-      extraArgs: Array.isArray(body.extraArgs) ? body.extraArgs : undefined,
+      // NOTE: extraArgs is intentionally never populated from request input —
+      // it is reserved for server-side configuration only.
     };
 
     const adapter = createSlicerAdapter(profile);
 
     try {
       const stlBytes = Buffer.from(body.stlBase64, 'base64');
+      if (stlBytes.byteLength < 84) {
+        sendError(res, 400, 'invalid-stl', 'STL payload too small to be a valid binary STL');
+        return;
+      }
       const result = await adapter.slice({
         stlBytes,
         fileName: body.fileName,

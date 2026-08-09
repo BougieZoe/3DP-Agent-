@@ -1,13 +1,18 @@
 import * as THREE from 'three';
+import type { LengthUnit } from '@shared/domain/geometry';
 import { type GeometryModel, createGeometryModel } from './geometryModel';
 
-export function fromThreeBufferGeometry(geo: THREE.BufferGeometry): GeometryModel {
+export function fromThreeBufferGeometry(
+  geo: THREE.BufferGeometry,
+  units: LengthUnit = 'mm',
+): GeometryModel {
   const pos = geo.getAttribute('position');
   if (!pos) {
     return createGeometryModel(
       new Float32Array(0),
       new Float32Array(0),
       new Uint32Array(0),
+      units,
     );
   }
 
@@ -22,7 +27,7 @@ export function fromThreeBufferGeometry(geo: THREE.BufferGeometry): GeometryMode
     ? new Uint32Array(index.array)
     : new Uint32Array(0);
 
-  return createGeometryModel(positions, normals, indices);
+  return createGeometryModel(positions, normals, indices, units);
 }
 
 export function toThreeBufferGeometry(model: GeometryModel): THREE.BufferGeometry {

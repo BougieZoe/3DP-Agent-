@@ -53,6 +53,7 @@ export function normalizeModelAnalysis(modelAnalysis: ModelAnalysis): ModelAnaly
       fileName: modelAnalysis.source.fileName,
       fileSizeBytes: modelAnalysis.source.fileSizeBytes,
       fileType: modelAnalysis.source.fileType,
+      units: modelAnalysis.source.units,
     },
     metrics: {
       bounds: createGeometryBounds(

@@ -2,6 +2,7 @@ import { useRef, useState, useCallback } from 'react';
 import { loadSTLFile, createMeshFromGeometry } from '@/lib/stlLoader';
 import { Language } from '@/lib/i18n';
 import { runAnalysisPipeline, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
+import { LENGTH_UNIT_TO_MM, type LengthUnit } from '@shared/domain/geometry';
 import * as THREE from 'three';
 
 export interface UploadedModel {
@@ -10,6 +11,8 @@ export interface UploadedModel {
   unifiedAnalysis: UnifiedAnalysis;
   fileName: string;
   fileSizeBytes?: number;
+  /** Declared units of the source file; geometry is normalized to mm before analysis. */
+  units: LengthUnit;
 }
 
 interface STLUploadHandlerProps {
@@ -35,6 +38,7 @@ const labels = {
     releaseToUpload: '— RELEASE TO UPLOAD —',
     dragOrClick: 'DRAG FILE HERE OR CLICK TO BROWSE',
     supported: 'Binary & ASCII STL supported',
+    units: 'UNITS',
   },
   ja: {
     invalidFile: '無効なファイル形式 — STLが必要です',
@@ -52,6 +56,7 @@ const labels = {
     releaseToUpload: '— リリースしてアップロード —',
     dragOrClick: 'ファイルをドラッグするか、クリックして参照',
     supported: 'バイナリ＆ASCII STL対応',
+    units: '単位',
   },
   zh: {
     invalidFile: '无效的文件类型 — 需要 STL',
@@ -69,6 +74,7 @@ const labels = {
     releaseToUpload: '— 释放以上传 —',
     dragOrClick: '拖放文件到此处或点击浏览',
     supported: '支持二进制和 ASCII STL',
+    units: '单位',
   },
 };
 
@@ -77,6 +83,7 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [progress, setProgress] = useState<string[]>([]);
+  const [units, setUnits] = useState<LengthUnit>('mm');
   const t = labels[language];
 
   const log = (msg: string) => setProgress(p => [...p, msg]);
@@ -94,6 +101,13 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
     try {
       log(`> ${t.parsing}`);
       const geometry = await loadSTLFile(file);
+      // Explicit unit contract: a non-mm STL is scaled to millimeters here so
+      // every downstream metric (dimensions, volume, weight, bed fit) is in mm.
+      // The declared source units are recorded on the model for provenance.
+      if (units !== 'mm') {
+        const f = LENGTH_UNIT_TO_MM[units];
+        geometry.scale(f, f, f);
+      }
       log(`> ${t.computing}`);
       const model = fromThreeBufferGeometry(geometry);
       const unifiedAnalysis = runAnalysisPipeline(model, { fileName: file.name });
@@ -102,7 +116,7 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
       log(`> ${t.complete}`);
 
       setTimeout(() => {
-        onModelLoaded({ geometry, mesh, unifiedAnalysis, fileName: file.name, fileSizeBytes: file.size });
+        onModelLoaded({ geometry, mesh, unifiedAnalysis, fileName: file.name, fileSizeBytes: file.size, units });
         setIsLoading(false);
       }, 400);
     } catch (error) {
@@ -110,7 +124,7 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
       onError(`${t.parseFailed}${error instanceof Error ? error.message : t.unknownError}`);
       setIsLoading(false);
     }
-  }, [onModelLoaded, onError, t]);
+  }, [onModelLoaded, onError, t, units]);
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
   const handleDragLeave = () => setIsDragging(false);
@@ -166,6 +180,26 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
         </div>
         <div className="text-xs text-muted-foreground/40">
           {t.supported}
+        </div>
+
+        {/* Declared source units — STL carries no unit metadata; non-mm models
+            are scaled to mm before analysis instead of being silently misread. */}
+        <div className="flex items-center justify-center gap-1.5 text-xs font-mono">
+          <span className="text-muted-foreground/40">{t.units}</span>
+          {(['mm', 'cm', 'inch'] as const).map((u) => (
+            <button
+              key={u}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setUnits(u); }}
+              className={`px-2 py-0.5 border rounded-sm transition-all ${
+                units === u
+                  ? 'border-primary text-primary'
+                  : 'border-border text-muted-foreground/50 hover:text-primary'
+              }`}
+            >
+              {u === 'inch' ? 'in' : u}
+            </button>
+          ))}
         </div>
       </div>
     </div>
