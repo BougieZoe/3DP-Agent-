@@ -44,7 +44,7 @@ export class OptimizationAdvisor extends BaseAgent {
     const overhangRatio = oh?.ratio ?? 0;
     const p5Thickness = metrics?.p5WallThicknessMm;
     const thinWallRatio = (metrics?.thinWallRatio ?? 0);
-    const minThickness = p5Thickness ?? (Math.min(modelSize.x, modelSize.y, modelSize.z) * 0.5);
+    const minThickness = p5Thickness ?? metrics?.minWallThicknessMm ?? null;
     const wtStatus = deriveWtStatus(thinWallRatio, p5Thickness);
     const ohStatus = deriveOhStatus(overhangRatio);
 
@@ -82,7 +82,7 @@ export class OptimizationAdvisor extends BaseAgent {
   }
 
   private generateSuggestions(
-    analysis: { wallThickness: { status: string; minThickness: number; thinWallRatio?: number }; overhang: { status: string; areas: number } },
+    analysis: { wallThickness: { status: string; minThickness: number | null; thinWallRatio?: number }; overhang: { status: string; areas: number } },
     metrics: { size: { x: number; y: number; z: number }; triangleCount: number },
     supportDecision?: { status: string; reasons: string[]; confidence: number } | null,
     geometryOutput?: AgentOutput,
@@ -92,12 +92,15 @@ export class OptimizationAdvisor extends BaseAgent {
   ): OptimizedGeometrySuggestion[] {
     const suggestions: OptimizedGeometrySuggestion[] = [];
     const twr = analysis.wallThickness.thinWallRatio ?? 0;
+    const minLabel = analysis.wallThickness.minThickness != null
+      ? analysis.wallThickness.minThickness.toFixed(2)
+      : 'not measured';
 
     if (analysis.wallThickness.status === 'critical') {
       suggestions.push({
         type: 'wall_thickening',
         priority: 'critical',
-        description: `Widespread thin walls — ${(twr * 100).toFixed(1)}% of sampled regions below FDM threshold (p5=${analysis.wallThickness.minThickness.toFixed(2)}mm)`,
+        description: `Widespread thin walls — ${(twr * 100).toFixed(1)}% of sampled regions below FDM threshold (p5=${minLabel}mm)`,
         implementation: 'Increase wall thickness to at least 2mm model-wide. Use 3-4 perimeters in slicer. Consider shell offset in CAD.',
         expectedImprovement: 'Reduces collapse risk by 60-80%',
         difficulty: 'moderate',
@@ -106,7 +109,7 @@ export class OptimizationAdvisor extends BaseAgent {
       suggestions.push({
         type: 'wall_thickening',
         priority: 'high',
-        description: `Some thin regions — ${(twr * 100).toFixed(1)}% of samples thin (p5=${analysis.wallThickness.minThickness.toFixed(2)}mm)`,
+        description: `Some thin regions — ${(twr * 100).toFixed(1)}% of samples thin (p5=${minLabel}mm)`,
         implementation: 'Increase to 3 perimeters. If structural, thicken to 2.5mm+ in CAD.',
         expectedImprovement: 'Eliminates isolated thin spots',
         difficulty: 'moderate',
@@ -213,7 +216,7 @@ export class OptimizationAdvisor extends BaseAgent {
   }
 
   private recommendMaterials(
-    analysis: { wallThickness: { status: string; minThickness: number } },
+    analysis: { wallThickness: { status: string; minThickness: number | null } },
     metrics: { size: { x: number; y: number; z: number } },
   ): MaterialRecommendation[] {
     const volume = metrics.size.x * metrics.size.y * metrics.size.z;

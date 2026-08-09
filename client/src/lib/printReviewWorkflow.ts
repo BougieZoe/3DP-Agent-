@@ -32,7 +32,7 @@ function unifiedToModelData(unifiedAnalysis: UnifiedAnalysis, fileName: string, 
   return {
     fileName,
     wallThickness: {
-      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
+      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall,
       p1Thickness: metrics?.p1WallThicknessMm ?? null,
       p5Thickness: metrics?.p5WallThicknessMm ?? null,
       p10Thickness: metrics?.p10WallThicknessMm ?? null,

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createWatertightCubeModel, createDisconnectedShellsModel, createLargeFlatPlate, createOverhangPlate } from './testMeshes';
+import * as THREE from 'three';
+import { createWatertightCubeModel, createLargeFlatPlate, createOverhangPlate } from './testMeshes';
 import { fromThreeBufferGeometry } from '../geometryConversion';
 import { estimateSupportVolume } from '../support';
 import { deriveSupportStatus } from '../metrics';
@@ -40,10 +41,25 @@ describe('estimateSupportVolume', () => {
     );
   });
 
-  it('produces two support regions for two disconnected shells with overhangs', () => {
-    const model = createDisconnectedShellsModel();
+  it('produces two support regions for two disconnected overhang plates', () => {
+    // Two genuine Z-up overhang plates, spaced apart, disconnected in space.
+    const p1 = createOverhangPlate(10, 10, 60);
+    const p2 = createOverhangPlate(10, 10, 60);
+    p2.translate(20, 0, 0);
+    const a = p1.getAttribute('position').array as Float32Array;
+    const b = p2.getAttribute('position').array as Float32Array;
+    const ia = p1.getIndex().array as number[];
+    const ib = p2.getIndex().array as number[];
+    const positions = new Float32Array(a.length + b.length);
+    positions.set(a, 0);
+    positions.set(b, a.length);
+    const offset = a.length / 3;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setIndex([...ia, ...ib.map(i => i + offset)]);
+    const model = fromThreeBufferGeometry(geo);
+
     const result = estimateSupportVolume(model);
-    // Both cubes have vertical side faces → overhangs. Cubes are disconnected → 2 regions
     expect(result.result.supportFaceCount).toBeGreaterThan(0);
     expect(result.result.supportRegions.length).toBe(2);
     expect(result.result.largestRegionRatio).toBeGreaterThan(0.4);
@@ -56,12 +72,13 @@ describe('estimateSupportVolume', () => {
     expect(result.result.directionality).toBeGreaterThan(0.95);
   });
 
-  it('directionality lower for multi-directional overhangs (cube)', () => {
+  it('a cube resting on the build plate needs zero supports', () => {
     const model = createWatertightCubeModel();
     const result = estimateSupportVolume(model);
-    // Cube vertical faces point ±x, ±z → vectors partially cancel
-    expect(result.result.supportFaceCount).toBeGreaterThan(0);
-    expect(result.result.directionality).toBeLessThan(0.5);
+    // Physically true: bottom rests on the bed; sides/top are not downward-facing.
+    expect(result.result.supportFaceCount).toBe(0);
+    expect(result.result.difficulty).toBe('none');
+    expect(result.result.supportRegions).toEqual([]);
   });
 
   it('zGradient is within -1..1 range', () => {
@@ -87,12 +104,11 @@ describe('estimateSupportVolume', () => {
     }
   });
 
-  it('watertight cube has connected support region covering all vertical walls', () => {
+  it('a cube on the build plate has no support regions at all', () => {
     const model = createWatertightCubeModel();
     const result = estimateSupportVolume(model);
-    // All 4 vertical walls are adjacent → single BFS cluster
-    expect(result.result.supportRegions.length).toBe(1);
-    expect(result.result.largestRegionRatio).toBe(1);
+    expect(result.result.supportRegions.length).toBe(0);
+    expect(result.result.largestRegionRatio).toBe(0);
   });
 });
 
