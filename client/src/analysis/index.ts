@@ -9,6 +9,7 @@ export { estimatePrintTime } from './printTime';
 export { buildGeometryGraph } from './geometryGraph';
 export type { GeometryGraph, TriangleNormal } from './geometryGraph';
 export { fromThreeBufferGeometry, toThreeBufferGeometry } from './geometryConversion';
+export { dropToBed } from './bedPlacement';
 export { createGeometryModel, type GeometryModel } from './geometryModel';
 export { extractVertexData, type VertexData } from './geometryData';
 export * from './types';
