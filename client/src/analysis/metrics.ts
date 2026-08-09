@@ -271,6 +271,7 @@ export function computeMetrics(
   model: GeometryModel,
   graph?: GeometryGraph | null,
   overhangThresholdDeg: number = 50,
+  profiling?: Record<string, number>,
 ): AnalysisModuleResult<MetricsResult> {
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
@@ -308,15 +309,24 @@ export function computeMetrics(
   const dimZ = bbox.maxZ - bbox.minZ;
   const bboxDiagonal = Math.sqrt(dimX * dimX + dimY * dimY + dimZ * dimZ);
 
-  const meshVolume = computeMeshVolume(positions, indices);
-  const surfaceArea = computeSurfaceArea(positions, indices);
-  const overhang = analyzeOverhang(positions, indices, overhangThresholdDeg);
+  const time = <T>(key: string, fn: () => T): T => {
+    if (!profiling) return fn();
+    const start = performance.now();
+    const result = fn();
+    profiling[key] = performance.now() - start;
+    return result;
+  };
+
+  const meshVolume = time('computeMeshVolume', () => computeMeshVolume(positions, indices));
+  const surfaceArea = time('computeSurfaceArea', () => computeSurfaceArea(positions, indices));
+  const overhang = time('analyzeOverhang', () => analyzeOverhang(positions, indices, overhangThresholdDeg));
   // Scale-aware ray budget derived from the model's own bounding box: large
   // parts are measured rather than silently failing the raycast (which used to
   // trigger the report layer's bounding-box substitution).
-  const { samples, minThickness, avgThickness, p1Thickness, p5Thickness, p10Thickness, medianThickness, thinWallCount, thinWallRatio, thinWallPercentage, averageConfidence, lowConfidenceSampleCount } = sampleWallThickness(
+  const wallThickness = time('sampleWallThickness', () => sampleWallThickness(
     positions, indices, 200, bboxDiagonal * MAX_RAY_DIST_DIAGONAL_FACTOR,
-  );
+  ));
+  const { samples, minThickness, avgThickness, p1Thickness, p5Thickness, p10Thickness, medianThickness, thinWallCount, thinWallRatio, thinWallPercentage, averageConfidence, lowConfidenceSampleCount } = wallThickness;
 
   const wallConfidence = computeWallConfidence(
     minThickness, p5Thickness, thinWallCount, thinWallRatio,

@@ -268,4 +268,9 @@ export interface UnifiedAnalysis {
   modelFileName: string;
   /** Minimum confidence across all modules that ran successfully */
   overallConfidence: Confidence;
+  /**
+   * Per-module (and wall-thickness sub-module) wall-clock durations, populated
+   * only when the pipeline is run with `enableProfiling: true`.
+   */
+  profiling?: Record<string, number>;
 }

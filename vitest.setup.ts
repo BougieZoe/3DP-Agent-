@@ -12,6 +12,6 @@ if (typeof localStorage === 'undefined') {
   Object.defineProperty(globalThis, 'localStorage', { value: new MockStorage() });
 }
 
-// jest-dom matchers (toBeInTheDocument etc.) are loaded via @testing-library/jest-dom/vitest
-// when the package is installed alongside jsdom.
+// jest-dom matchers (toBeInTheDocument etc.).
+import '@testing-library/jest-dom/vitest';
 
