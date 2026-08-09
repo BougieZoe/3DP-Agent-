@@ -15,6 +15,12 @@ export interface PipelineOptions {
   layerHeightMm?: number;
   fileName?: string;
   material?: Material;
+  /**
+   * When true, each module (and the wall-thickness sub-modules) records its
+   * own wall-clock duration in the result's `profiling` map. This is the
+   * instrumentation the telemetry/BVH decision relies on.
+   */
+  enableProfiling?: boolean;
 }
 
 export function runAnalysisPipeline(
@@ -25,7 +31,16 @@ export function runAnalysisPipeline(
   const fileName = options.fileName ?? 'unknown.stl';
   const mat = options.material;
 
-  const graph = buildGeometryGraph(model);
+  const profiling = options.enableProfiling ? ({} as Record<string, number>) : undefined;
+  const time = <T>(key: string, fn: () => T): T => {
+    if (!profiling) return fn();
+    const start = performance.now();
+    const result = fn();
+    profiling[key] = performance.now() - start;
+    return result;
+  };
+
+  const graph = time('buildGeometryGraph', () => buildGeometryGraph(model));
 
   const emptyTopology: TopologyResult = { triangleCount: 0, vertexCount: 0, edgeCount: 0, manifoldEdgeCount: 0, boundaryEdgeCount: 0, nonManifoldEdgeCount: 0, shellCount: 0, isManifold: false, problemEdges: [] };
   const emptyValidation: ValidationResult = { isWatertight: false, holeCount: 0, boundaryEdgeCount: 0, flippedNormalFaceCount: 0, totalFaceCount: 0, flippedNormalRatio: 0, normalOrientation: 'unknown', degenerateFaceCount: 0 };
@@ -36,41 +51,41 @@ export function runAnalysisPipeline(
     return moduleResult(moduleName, 0.0 as Confidence, 0, defaultValue, `Failed: ${message}`);
   };
 
-  const topology = (() => {
+  const topology = time('topology', () => {
     try { return analyzeTopology(model, fileName, graph); }
     catch (e) { return failResult('topology', e, emptyTopology); }
-  })();
+  });
 
-  const validation = (() => {
+  const validation = time('validation', () => {
     try { return validateMesh(model, graph); }
     catch (e) { return failResult('validation', e, emptyValidation); }
-  })();
+  });
 
-  const metrics = (() => {
-    try { return computeMetrics(model, graph, mat?.overhangThreshold); }
+  const metrics = time('metrics', () => {
+    try { return computeMetrics(model, graph, mat?.overhangThreshold, profiling); }
     catch (e) { return failResult('metrics', e, emptyMetrics); }
-  })();
+  });
 
-  const bedFit = (() => {
+  const bedFit = time('bedFit', () => {
     try {
       if (topology.result.triangleCount === 0) return null;
       return checkBedFit(model, options.printerId ?? 'bambu_x1c', graph);
     } catch (e) { return null; }
-  })();
+  });
 
-  const support = (() => {
+  const support = time('support', () => {
     try {
       if (metrics.result.meshVolumeMm3 <= 0) return null;
       return estimateSupportVolume(model, graph, mat?.overhangThreshold, mat ? mat.densityGPerCm3 / 1000 : undefined);
     } catch (e) { return null; }
-  })();
+  });
 
-  const printTime = (() => {
+  const printTime = time('printTime', () => {
     try {
       if (metrics.result.meshVolumeMm3 <= 0) return null;
       return estimatePrintTime(metrics.result, options.printerId ?? 'bambu_x1c', options.layerHeightMm ?? 0.2, mat?.densityGPerCm3, mat?.pricePerKgUsd);
     } catch (e) { return null; }
-  })();
+  });
 
   const confidences = [topology, validation, metrics, bedFit, support, printTime]
     .filter((m): m is NonNullable<typeof m> => m !== null)
@@ -89,5 +104,6 @@ export function runAnalysisPipeline(
     timestamp: now,
     modelFileName: fileName,
     overallConfidence,
+    profiling,
   };
 }

@@ -25,7 +25,10 @@ describe("attemptLLMFix", () => {
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-28T10:20:30.000Z"));
-    vi.mocked(execFile).mockImplementation((command, args, callback) => {
+    // runCodexExec calls execFile(command, args, options, callback) — four
+    // arguments. The mock must match that shape or it will try to invoke the
+    // options object as the callback.
+    vi.mocked(execFile).mockImplementation((_command, _args, _options, callback) => {
       const done = callback as (
         error: Error | null,
         stdout: string,
