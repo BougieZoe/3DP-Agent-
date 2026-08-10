@@ -15,6 +15,19 @@ const TYPE_ICON_MAP: Record<string, string> = {
   hollow_region:   SEMANTIC.suggestionIcon.hollowRegion,
 };
 
+/**
+ * Collapse repeated pattern names into one entry per distinct type with its
+ * occurrence count (most common first), so a card shows e.g.
+ * "Thermal Trap Cavity ×17" instead of 17 identical tags.
+ */
+function groupPatternNames(names: string[]): Array<{ name: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1);
+  return Array.from(counts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
 function Delta({ value, suffix = '' }: { value: number; suffix?: string }) {
   const color = value > 0 ? SEMANTIC.delta.improvement : value < 0 ? SEMANTIC.delta.regression : SEMANTIC.delta.neutral;
   return <span className={`${PANEL.fontTiny} ${color}`}>{value > 0 ? '+' : ''}{value}{suffix}</span>;
@@ -62,11 +75,12 @@ function SuggestionCard({ suggestion, selected, onSelect }: {
       </div>
 
       {suggestion.patternImpact.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2">
-          {suggestion.patternImpact.map(p => (
-            <span key={p} className={`${PANEL.chip} ${SEMANTIC.delta.improvementChip}`}>
-              {p}
-            </span>
+        <div className="space-y-0.5 mb-2">
+          {groupPatternNames(suggestion.patternImpact).map(({ name, count }) => (
+            <div key={name} className="flex items-center gap-1.5">
+              <span className={`${PANEL.chip} ${SEMANTIC.delta.improvementChip}`}>{name}</span>
+              <span className={`${PANEL.fontTiny} text-muted-foreground/40`}>×{count}</span>
+            </div>
           ))}
         </div>
       )}
