@@ -1,3 +1,5 @@
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
+
 export type EventType =
   | 'thermal_accumulation'
   | 'cooling_imbalance'
@@ -50,9 +52,10 @@ function centroid(markers: MarkerInput[]): { x: number; y: number; z: number } {
   };
 }
 
-export function buildCausalityGraph(markers: MarkerInput[], supportStatus?: string): CausalityGraph {
+export function buildCausalityGraph(markers: MarkerInput[], supportStatus?: string, language: ContentLang = 'en'): CausalityGraph {
   const events: CausalityEvent[] = [];
   const edges: CausalEdge[] = [];
+  const t = (key: string, params?: Record<string, string | number>) => translate(CONTENT, key, language, params);
 
   const overhangs = markers.filter(m => m.type === 'overhang' && m.severity > 0.2);
   const thinWalls = markers.filter(m => m.type === 'thin_wall' && m.severity > 0.2);
@@ -63,22 +66,22 @@ export function buildCausalityGraph(markers: MarkerInput[], supportStatus?: stri
     const sev = avgSeverity(supports);
     let severity = sev;
     let duration = 0.35;
-    let description = `${supports.length} support regions with potential instability`;
+    let description = t('causality.desc.support_instability', { count: supports.length });
 
     if (supportStatus === 'critical') {
       severity = Math.min(sev + 0.2, 1);
       duration = 0.45;
-      description = 'Critical support instability — high risk of support failure or difficult removal';
+      description = t('causality.desc.support_instability_critical');
     } else if (supportStatus === 'warning') {
       severity = Math.min(sev + 0.1, 1);
       duration = 0.4;
-      description = 'Moderate support concerns — review support strategy before printing';
+      description = t('causality.desc.support_instability_warning');
     }
 
     events.push({
       id: 'support_instability',
       type: 'support_instability',
-      label: 'Support Instability',
+      label: t('causality.event.support_instability'),
       description,
       severity,
       timestamp: 0.05,
@@ -92,8 +95,8 @@ export function buildCausalityGraph(markers: MarkerInput[], supportStatus?: stri
     events.push({
       id: 'overhang_sag',
       type: 'overhang_sag',
-      label: 'Overhang Sag',
-      description: `${overhangs.length} overhanging surfaces at sag risk`,
+      label: t('causality.event.overhang_sag'),
+      description: t('causality.desc.overhang_sag', { count: overhangs.length }),
       severity: sev,
       timestamp: 0.2,
       duration: 0.3,
@@ -104,8 +107,8 @@ export function buildCausalityGraph(markers: MarkerInput[], supportStatus?: stri
       events.push({
         id: 'bridge_oscillation',
         type: 'bridge_oscillation',
-        label: 'Bridge Oscillation',
-        description: `Unsupported spans oscillating under thermal stress`,
+        label: t('causality.event.bridge_oscillation'),
+        description: t('causality.desc.bridge_oscillation'),
         severity: (avgSeverity(overhangs) + avgSeverity(supports)) / 2,
         timestamp: 0.35,
         duration: 0.25,
@@ -118,8 +121,8 @@ export function buildCausalityGraph(markers: MarkerInput[], supportStatus?: stri
     events.push({
       id: 'wall_vibration',
       type: 'wall_vibration',
-      label: 'Wall Vibration',
-      description: `${thinWalls.length} thin-walled regions vulnerable to vibration`,
+      label: t('causality.event.wall_vibration'),
+      description: t('causality.desc.wall_vibration', { count: thinWalls.length }),
       severity: avgSeverity(thinWalls),
       timestamp: 0.3,
       duration: 0.3,
@@ -131,8 +134,8 @@ export function buildCausalityGraph(markers: MarkerInput[], supportStatus?: stri
     events.push({
       id: 'thermal_accumulation',
       type: 'thermal_accumulation',
-      label: 'Thermal Accumulation',
-      description: `Heat building up in dense feature regions`,
+      label: t('causality.event.thermal_accumulation'),
+      description: t('causality.desc.thermal_accumulation'),
       severity: Math.min(avgSeverity(markers) + 0.2, 1),
       timestamp: 0.1,
       duration: 0.4,
@@ -144,8 +147,8 @@ export function buildCausalityGraph(markers: MarkerInput[], supportStatus?: stri
     events.push({
       id: 'delamination_risk',
       type: 'delamination_risk',
-      label: 'Delamination Risk',
-      description: `High-severity regions prone to layer separation`,
+      label: t('causality.event.delamination_risk'),
+      description: t('causality.desc.delamination_risk'),
       severity: Math.max(...markers.filter(m => m.severity > 0.6).map(m => m.severity)),
       timestamp: 0.45,
       duration: 0.2,
@@ -162,8 +165,8 @@ export function buildCausalityGraph(markers: MarkerInput[], supportStatus?: stri
     events.push({
       id: 'failure_spike',
       type: 'failure_spike',
-      label: 'Failure Probability',
-      description: `Aggregate failure risk across ${events.length} active events`,
+      label: t('causality.event.failure_spike'),
+      description: t('causality.desc.failure_spike', { count: events.length }),
       severity: failureSev,
       timestamp: 0.6,
       duration: 0.15,
@@ -180,37 +183,37 @@ export function buildCausalityGraph(markers: MarkerInput[], supportStatus?: stri
   const failureEvent = events.find(e => e.id === 'failure_spike');
 
   if (thermalEvent && supportEvent) {
-    edges.push({ sourceId: 'thermal_accumulation', targetId: 'support_instability', strength: 0.6, label: 'heating weakens supports' });
+    edges.push({ sourceId: 'thermal_accumulation', targetId: 'support_instability', strength: 0.6, label: t('causality.edge.thermal_support') });
   }
   if (supportEvent && bridgeEvent) {
-    edges.push({ sourceId: 'support_instability', targetId: 'bridge_oscillation', strength: 0.7, label: 'unstable supports amplify oscillation' });
+    edges.push({ sourceId: 'support_instability', targetId: 'bridge_oscillation', strength: 0.7, label: t('causality.edge.support_bridge') });
   }
   if (thermalEvent && sagEvent) {
-    edges.push({ sourceId: 'thermal_accumulation', targetId: 'overhang_sag', strength: 0.5, label: 'heat softens overhangs' });
+    edges.push({ sourceId: 'thermal_accumulation', targetId: 'overhang_sag', strength: 0.5, label: t('causality.edge.thermal_sag') });
   }
   if (sagEvent && bridgeEvent) {
-    edges.push({ sourceId: 'overhang_sag', targetId: 'bridge_oscillation', strength: 0.4, label: 'sagging increases span stress' });
+    edges.push({ sourceId: 'overhang_sag', targetId: 'bridge_oscillation', strength: 0.4, label: t('causality.edge.sag_bridge') });
   }
   if (thermalEvent && wallEvent) {
-    edges.push({ sourceId: 'thermal_accumulation', targetId: 'wall_vibration', strength: 0.5, label: 'thermal gradient excites walls' });
+    edges.push({ sourceId: 'thermal_accumulation', targetId: 'wall_vibration', strength: 0.5, label: t('causality.edge.thermal_wall') });
   }
   if (bridgeEvent && delamEvent) {
-    edges.push({ sourceId: 'bridge_oscillation', targetId: 'delamination_risk', strength: 0.6, label: 'oscillation propagates to layers' });
+    edges.push({ sourceId: 'bridge_oscillation', targetId: 'delamination_risk', strength: 0.6, label: t('causality.edge.bridge_delam') });
   }
   if (wallEvent && delamEvent) {
-    edges.push({ sourceId: 'wall_vibration', targetId: 'delamination_risk', strength: 0.5, label: 'vibration stresses layer bond' });
+    edges.push({ sourceId: 'wall_vibration', targetId: 'delamination_risk', strength: 0.5, label: t('causality.edge.wall_delam') });
   }
   if (delamEvent && failureEvent) {
-    edges.push({ sourceId: 'delamination_risk', targetId: 'failure_spike', strength: 0.8, label: 'layer separation leads to failure' });
+    edges.push({ sourceId: 'delamination_risk', targetId: 'failure_spike', strength: 0.8, label: t('causality.edge.delam_failure') });
   }
   if (bridgeEvent && failureEvent) {
-    edges.push({ sourceId: 'bridge_oscillation', targetId: 'failure_spike', strength: 0.5, label: 'oscillation increases failure probability' });
+    edges.push({ sourceId: 'bridge_oscillation', targetId: 'failure_spike', strength: 0.5, label: t('causality.edge.bridge_failure') });
   }
   if (wallEvent && failureEvent) {
-    edges.push({ sourceId: 'wall_vibration', targetId: 'failure_spike', strength: 0.4, label: 'wall fatigue contributes to failure' });
+    edges.push({ sourceId: 'wall_vibration', targetId: 'failure_spike', strength: 0.4, label: t('causality.edge.wall_failure') });
   }
   if (sagEvent && failureEvent) {
-    edges.push({ sourceId: 'overhang_sag', targetId: 'failure_spike', strength: 0.5, label: 'sagging reduces structural integrity' });
+    edges.push({ sourceId: 'overhang_sag', targetId: 'failure_spike', strength: 0.5, label: t('causality.edge.sag_failure') });
   }
 
   return { events, edges };

@@ -1,4 +1,5 @@
 import { moduleResult, type AnalysisModuleResult, type Confidence, type SupportRegion, type SupportResult, type SupportDifficulty } from './types';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
 import { overhangTiltBelowHorizontalDeg, isOnBuildPlate } from './metrics';
@@ -8,6 +9,7 @@ export function estimateSupportVolume(
   graph?: GeometryGraph | null,
   overhangThresholdDeg: number = 50,
   densityGPerMm3: number = 0.00124,
+  language: ContentLang = 'en',
 ): AnalysisModuleResult<SupportResult> {
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
@@ -19,7 +21,7 @@ export function estimateSupportVolume(
       estimatedSupportGrams: 0, volumeByAngleDeg: [],
       supportRegions: [], largestRegionRatio: 0,
       tallSupportRatio: 0, zGradient: 0, directionality: 0,
-    }, 'Cannot estimate supports: need indexed geometry');
+    }, translate(CONTENT, 'support.noIndexedGeometry', language));
   }
 
   const positions = g.positions;
@@ -259,11 +261,14 @@ export function estimateSupportVolume(
 
   const parts: string[] = [];
   if (supportFaceCount === 0) {
-    parts.push('No supports needed');
+    parts.push(translate(CONTENT, 'support.none', language));
   } else {
-    parts.push(`Estimated support volume: ${totalSupportVolume.toFixed(0)} mm³ (${supportGrams.toFixed(1)}g)`);
-    parts.push(`Difficulty: ${difficulty}`);
-    parts.push(`${supportFaceCount} overhang faces with average angle ${avgAngle.toFixed(1)}°`);
+    parts.push(translate(CONTENT, 'support.volume', language, {
+      volume: totalSupportVolume.toFixed(0),
+      grams: supportGrams.toFixed(1),
+    }));
+    parts.push(translate(CONTENT, 'support.difficultyLabel', language, { difficulty }));
+    parts.push(translate(CONTENT, 'support.overhangFaces', language, { count: supportFaceCount, angle: avgAngle.toFixed(1) }));
   }
 
   return moduleResult('support', confidence, Math.round(performance.now() - startTime), result, parts.join('. '));

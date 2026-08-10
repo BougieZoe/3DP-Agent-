@@ -1,5 +1,6 @@
 import type { MaterialName } from "@/contexts/MaterialContext";
 import { MATERIALS } from "@/lib/materialState";
+import { SUPPORTED_LANGUAGES } from "@shared/i18n/content";
 import type { Language, translations } from '@/lib/i18n';
 
 type TKey = keyof (typeof translations)['en'];
@@ -44,7 +45,7 @@ export function AnalysisHeader({ mode, onModeChange, materialName, onMaterialCha
           ))}
         </select>
         <div className="flex items-center gap-0.5">
-          {(['en', 'ja', 'zh'] as Language[]).map(lang => (
+          {SUPPORTED_LANGUAGES.map(lang => (
             <button key={lang} onClick={() => onLanguageChange(lang)}
               className={`text-xs font-mono px-2 py-1 rounded-sm transition-all ${
                 language === lang ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-primary'

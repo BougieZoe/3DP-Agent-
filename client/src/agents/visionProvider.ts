@@ -1,3 +1,5 @@
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
+
 export interface VisionAnalysisResult {
   qualitativeAssessment: string;
   observedIssues: string[];
@@ -27,29 +29,29 @@ export class VisionProvider {
     screenshotBase64: string,
     geometrySummary: string,
     apiConfig?: { provider: string; apiKey: string },
-    language?: string,
+    language?: ContentLang,
   ): Promise<VisionAnalysisResult> {
+    const lang = language ?? 'en';
     if (!apiConfig?.apiKey) {
-      return this.fallbackLocalAnalysis(geometrySummary);
+      return this.fallbackLocalAnalysis(lang);
     }
 
     try {
-      const prompt = this.buildVisionPrompt(geometrySummary, language);
+      const prompt = this.buildVisionPrompt(geometrySummary, lang);
 
       if (apiConfig.provider === 'claude' || apiConfig.provider === 'openai' || apiConfig.provider === 'kimi') {
-        return await this.callVisionAPI(apiConfig, screenshotBase64, prompt);
+        return await this.callVisionAPI(apiConfig, screenshotBase64, prompt, lang);
       }
 
-      return this.fallbackLocalAnalysis(geometrySummary);
+      return this.fallbackLocalAnalysis(lang);
     } catch {
-      return this.fallbackLocalAnalysis(geometrySummary || '');
+      return this.fallbackLocalAnalysis(lang);
     }
   }
 
-  private buildVisionPrompt(geometrySummary: string, language?: string): string {
-    const langInstr = language
-      ? `\n\nPlease respond in ${language === 'zh' ? 'Simplified Chinese' : language === 'ja' ? 'Japanese' : 'English'}. Use natural and professional ${language === 'zh' ? 'Chinese' : language === 'ja' ? 'Japanese' : 'English'} terms. Current interface language is ${language}.`
-      : '';
+  private buildVisionPrompt(geometrySummary: string, language: ContentLang): string {
+    const langName = translate(CONTENT, 'prompt.languageName', language);
+    const langInstr = translate(CONTENT, 'vision.langInstr', language, { language: langName });
     return `You are a 3D printing geometry analyst. Analyze this STL model render and geometry data.
 
 Geometry Data:
@@ -69,6 +71,7 @@ Focus on: visible thin walls, sharp overhangs, potential support needs, surface 
     apiConfig: { provider: string; apiKey: string },
     imageBase64: string,
     prompt: string,
+    language: ContentLang,
   ): Promise<VisionAnalysisResult> {
     const imageData = imageBase64.replace(/^data:image\/png;base64,/, '');
 
@@ -88,7 +91,7 @@ Focus on: visible thin walls, sharp overhangs, potential support needs, surface 
           max_tokens: 500,
         }),
       });
-      return this.parseVisionResponse(await resp.text());
+      return this.parseVisionResponse(await resp.text(), language);
     }
 
     if (apiConfig.provider === 'kimi') {
@@ -107,7 +110,7 @@ Focus on: visible thin walls, sharp overhangs, potential support needs, surface 
           max_tokens: 500,
         }),
       });
-      return this.parseVisionResponse(await resp.text());
+      return this.parseVisionResponse(await resp.text(), language);
     }
 
     if (apiConfig.provider === 'claude') {
@@ -130,13 +133,13 @@ Focus on: visible thin walls, sharp overhangs, potential support needs, surface 
           }],
         }),
       });
-      return this.parseVisionResponse(await resp.text());
+      return this.parseVisionResponse(await resp.text(), language);
     }
 
-    return this.fallbackLocalAnalysis('');
+    return this.fallbackLocalAnalysis(language);
   }
 
-  private parseVisionResponse(responseText: string): VisionAnalysisResult {
+  private parseVisionResponse(responseText: string, language: ContentLang): VisionAnalysisResult {
     try {
       const parsed = JSON.parse(responseText);
       const content = parsed.choices?.[0]?.message?.content || parsed.content?.[0]?.text || responseText;
@@ -145,7 +148,7 @@ Focus on: visible thin walls, sharp overhangs, potential support needs, surface 
       if (jsonMatch) {
         const parsedJson = JSON.parse(jsonMatch[0]);
         return {
-          qualitativeAssessment: parsedJson.qualitativeAssessment || 'No assessment available',
+          qualitativeAssessment: parsedJson.qualitativeAssessment || translate(CONTENT, 'vision.noAssessment', language),
           observedIssues: parsedJson.observedIssues || [],
           confidence: parsedJson.confidence || 0.5,
           rawResponse: content,
@@ -159,13 +162,13 @@ Focus on: visible thin walls, sharp overhangs, potential support needs, surface 
         rawResponse: content,
       };
     } catch {
-      return this.fallbackLocalAnalysis('');
+      return this.fallbackLocalAnalysis(language);
     }
   }
 
-  private fallbackLocalAnalysis(_geometrySummary: string): VisionAnalysisResult {
+  private fallbackLocalAnalysis(language: ContentLang = 'en'): VisionAnalysisResult {
     return {
-      qualitativeAssessment: 'Vision analysis unavailable (no API key configured or API call failed)',
+      qualitativeAssessment: translate(CONTENT, 'vision.unavailable', language),
       observedIssues: [],
       confidence: 0,
       rawResponse: '',

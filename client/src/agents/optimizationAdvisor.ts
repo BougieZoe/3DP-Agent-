@@ -1,4 +1,5 @@
 import type { AgentOutput } from '@shared/domain/agent';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { BaseAgent, type AgentContext } from './baseAgent';
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from '@/analysis/metrics';
 
@@ -56,15 +57,15 @@ export class OptimizationAdvisor extends BaseAgent {
       size: modelSize,
       triangleCount: triCount,
     };
-    const supportDecision = support ? deriveSupportStatus(support) : null;
+    const supportDecision = support ? deriveSupportStatus(support, ctx.language) : null;
 
     const geometryOutput = previousOutputs.get('geometry_analyst');
     const scorerOutput = previousOutputs.get('printability_scorer');
     const failureOutput = previousOutputs.get('failure_predictor');
 
-    const suggestions = this.generateSuggestions(analysisInput, metricsInput, supportDecision, geometryOutput, scorerOutput, failureOutput, material.overhangThreshold);
-    const recommendedMaterials = this.recommendMaterials(analysisInput, metricsInput);
-    const optimalOrientation = this.suggestOrientation(analysisInput, metricsInput);
+    const suggestions = this.generateSuggestions(analysisInput, metricsInput, supportDecision, geometryOutput, scorerOutput, failureOutput, material.overhangThreshold, ctx.language);
+    const recommendedMaterials = this.recommendMaterials(analysisInput, metricsInput, ctx.language);
+    const optimalOrientation = this.suggestOrientation(analysisInput, metricsInput, ctx.language);
 
     const score = Math.round(this.computeOptimizationScore(suggestions, recommendedMaterials.length));
     const confidence = 0.7;
@@ -76,7 +77,7 @@ export class OptimizationAdvisor extends BaseAgent {
       estimatedImprovement: this.estimateImprovement(suggestions),
     };
 
-    const explanation = this.buildExplanation(suggestions, recommendedMaterials, optimalOrientation, score);
+    const explanation = this.buildExplanation(suggestions, recommendedMaterials, optimalOrientation, score, ctx.language);
 
     return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details as unknown as Record<string, unknown>);
   }
@@ -89,29 +90,30 @@ export class OptimizationAdvisor extends BaseAgent {
     scorerOutput?: AgentOutput,
     failureOutput?: AgentOutput,
     overhangThreshold: number = 50,
+    language: ContentLang = 'en',
   ): OptimizedGeometrySuggestion[] {
     const suggestions: OptimizedGeometrySuggestion[] = [];
     const twr = analysis.wallThickness.thinWallRatio ?? 0;
     const minLabel = analysis.wallThickness.minThickness != null
       ? analysis.wallThickness.minThickness.toFixed(2)
-      : 'not measured';
+      : translate(CONTENT, 'notMeasured', language);
 
     if (analysis.wallThickness.status === 'critical') {
       suggestions.push({
         type: 'wall_thickening',
         priority: 'critical',
-        description: `Widespread thin walls — ${(twr * 100).toFixed(1)}% of sampled regions below FDM threshold (p5=${minLabel}mm)`,
-        implementation: 'Increase wall thickness to at least 2mm model-wide. Use 3-4 perimeters in slicer. Consider shell offset in CAD.',
-        expectedImprovement: 'Reduces collapse risk by 60-80%',
+        description: translate(CONTENT, 'optimizationAdvisor.wallCriticalDesc', language, { pct: (twr * 100).toFixed(1), minLabel }),
+        implementation: translate(CONTENT, 'optimizationAdvisor.wallCriticalImpl', language),
+        expectedImprovement: translate(CONTENT, 'optimizationAdvisor.wallCriticalExp', language),
         difficulty: 'moderate',
       });
     } else if (analysis.wallThickness.status === 'warning') {
       suggestions.push({
         type: 'wall_thickening',
         priority: 'high',
-        description: `Some thin regions — ${(twr * 100).toFixed(1)}% of samples thin (p5=${minLabel}mm)`,
-        implementation: 'Increase to 3 perimeters. If structural, thicken to 2.5mm+ in CAD.',
-        expectedImprovement: 'Eliminates isolated thin spots',
+        description: translate(CONTENT, 'optimizationAdvisor.wallWarningDesc', language, { pct: (twr * 100).toFixed(1), minLabel }),
+        implementation: translate(CONTENT, 'optimizationAdvisor.wallWarningImpl', language),
+        expectedImprovement: translate(CONTENT, 'optimizationAdvisor.wallWarningExp', language),
         difficulty: 'moderate',
       });
     }
@@ -120,18 +122,18 @@ export class OptimizationAdvisor extends BaseAgent {
       suggestions.push({
         type: 'orientation_change',
         priority: analysis.overhang.status === 'critical' ? 'high' : 'medium',
-        description: `${analysis.overhang.areas} overhang faces exceed ${overhangThreshold}°`,
-        implementation: `Rotate model so most overhangs face upward. Use ${overhangThreshold}° rule — overhangs under ${overhangThreshold}° print without support. For remaining overhangs, enable auto-tree supports in slicer.`,
-        expectedImprovement: 'Reduces support material by 40-60%',
+        description: translate(CONTENT, 'optimizationAdvisor.overhangDesc', language, { areas: analysis.overhang.areas, threshold: overhangThreshold }),
+        implementation: translate(CONTENT, 'optimizationAdvisor.overhangImpl', language, { threshold: overhangThreshold }),
+        expectedImprovement: translate(CONTENT, 'optimizationAdvisor.overhangExp', language),
         difficulty: 'easy',
       });
 
       suggestions.push({
         type: 'support_addition',
         priority: analysis.overhang.status === 'critical' ? 'critical' : 'high',
-        description: `Support structures required for ${analysis.overhang.areas} overhang faces`,
-        implementation: 'Enable tree/organic supports in slicer (PrusaSlicer organic, Orca tree). Set overhang threshold to 50°. Use support blocker where not needed.',
-        expectedImprovement: 'Eliminates sagging on overhangs',
+        description: translate(CONTENT, 'optimizationAdvisor.supportDesc', language, { areas: analysis.overhang.areas }),
+        implementation: translate(CONTENT, 'optimizationAdvisor.supportImpl', language),
+        expectedImprovement: translate(CONTENT, 'optimizationAdvisor.supportExp', language),
         difficulty: 'easy',
       });
     }
@@ -144,8 +146,8 @@ export class OptimizationAdvisor extends BaseAgent {
             type: 'support_addition',
             priority: supportDecision.status === 'critical' ? 'critical' : 'high',
             description: reason,
-            implementation: 'Use organic/tree supports for easier breakaway. Consider splitting model at the overhang boundary.',
-            expectedImprovement: 'Simplifies support removal and improves surface finish',
+            implementation: translate(CONTENT, 'optimizationAdvisor.largeIslandImpl', language),
+            expectedImprovement: translate(CONTENT, 'optimizationAdvisor.largeIslandExp', language),
             difficulty: 'moderate',
           });
         } else if (reason.includes('separate support islands')) {
@@ -153,8 +155,8 @@ export class OptimizationAdvisor extends BaseAgent {
             type: 'support_addition',
             priority: 'medium',
             description: reason,
-            implementation: 'Consider consolidating overhangs into fewer continuous regions by adjusting orientation or adding bridging geometry.',
-            expectedImprovement: 'Reduces support interface area and post-processing time',
+            implementation: translate(CONTENT, 'optimizationAdvisor.islandsImpl', language),
+            expectedImprovement: translate(CONTENT, 'optimizationAdvisor.islandsExp', language),
             difficulty: 'moderate',
           });
         } else if (reason.includes('tall supports')) {
@@ -162,8 +164,8 @@ export class OptimizationAdvisor extends BaseAgent {
             type: 'support_addition',
             priority: 'high',
             description: reason,
-            implementation: 'Consider reorienting model to reduce Z-height of supports. Use support blockers where possible.',
-            expectedImprovement: 'Reduces tall support wobble and post-processing time',
+            implementation: translate(CONTENT, 'optimizationAdvisor.tallImpl', language),
+            expectedImprovement: translate(CONTENT, 'optimizationAdvisor.tallExp', language),
             difficulty: 'moderate',
           });
         } else if (reason.includes('Directionally concentrated')) {
@@ -171,8 +173,8 @@ export class OptimizationAdvisor extends BaseAgent {
             type: 'orientation_change',
             priority: 'medium',
             description: reason,
-            implementation: 'Test rotations that spread overhang faces across multiple axes. 15-30° tilt can significantly reduce peak overhang severity.',
-            expectedImprovement: 'More uniform support distribution, lower peak support height',
+            implementation: translate(CONTENT, 'optimizationAdvisor.directionalImpl', language),
+            expectedImprovement: translate(CONTENT, 'optimizationAdvisor.directionalExp', language),
             difficulty: 'easy',
           });
         } else if (reason.includes('Very difficult') || reason.includes('Difficult support') || reason.includes('Moderate support')) {
@@ -180,8 +182,8 @@ export class OptimizationAdvisor extends BaseAgent {
             type: 'support_addition',
             priority: reason.includes('Very difficult') ? 'critical' : reason.includes('Difficult') ? 'high' : 'medium',
             description: reason,
-            implementation: 'Enable tree/organic supports in slicer (PrusaSlicer organic, Orca tree). Set overhang threshold to 50°. Use support blockers where not needed.',
-            expectedImprovement: 'Reduces sagging and support failure risk',
+            implementation: translate(CONTENT, 'optimizationAdvisor.difficultImpl', language),
+            expectedImprovement: translate(CONTENT, 'optimizationAdvisor.difficultExp', language),
             difficulty: 'easy',
           });
         }
@@ -194,9 +196,9 @@ export class OptimizationAdvisor extends BaseAgent {
       suggestions.push({
         type: 'bridging_redesign',
         priority: 'medium',
-        description: `Extreme aspect ratio (${(maxDim / minDim).toFixed(1)}:1)`,
-        implementation: 'Consider splitting model into parts and assembling post-print. Or print at 45° angle to reduce Z-height.',
-        expectedImprovement: 'Eliminates tall-print failure modes',
+        description: translate(CONTENT, 'optimizationAdvisor.bridgeAspectDesc', language, { ratio: (maxDim / minDim).toFixed(1) }),
+        implementation: translate(CONTENT, 'optimizationAdvisor.bridgeAspectImpl', language),
+        expectedImprovement: translate(CONTENT, 'optimizationAdvisor.bridgeAspectExp', language),
         difficulty: 'moderate',
       });
     }
@@ -205,9 +207,9 @@ export class OptimizationAdvisor extends BaseAgent {
       suggestions.push({
         type: 'hole_fill',
         priority: 'medium',
-        description: `Low polygon count (${metrics.triangleCount} triangles) — model may have holes or non-manifold edges`,
-        implementation: 'Run mesh repair (Netfabb, PrusaSlicer repair, or Meshmixer). Simplify3D and Windows 3D Builder have free repair tools.',
-        expectedImprovement: 'Ensures watertight model for reliable slicing',
+        description: translate(CONTENT, 'optimizationAdvisor.lowPolyDesc', language, { tri: metrics.triangleCount }),
+        implementation: translate(CONTENT, 'optimizationAdvisor.lowPolyImpl', language),
+        expectedImprovement: translate(CONTENT, 'optimizationAdvisor.lowPolyExp', language),
         difficulty: 'easy',
       });
     }
@@ -218,6 +220,7 @@ export class OptimizationAdvisor extends BaseAgent {
   private recommendMaterials(
     analysis: { wallThickness: { status: string; minThickness: number | null } },
     metrics: { size: { x: number; y: number; z: number } },
+    language: ContentLang = 'en',
   ): MaterialRecommendation[] {
     const volume = metrics.size.x * metrics.size.y * metrics.size.z;
     const maxDim = Math.max(metrics.size.x, metrics.size.y, metrics.size.z);
@@ -225,32 +228,39 @@ export class OptimizationAdvisor extends BaseAgent {
     const isSmall = volume < 50000;
     const isThin = analysis.wallThickness.status !== 'good';
 
+    const supportLabel = (key: 'minimal' | 'standard' | 'required' | 'asNeeded') =>
+      translate(CONTENT, `optimizationAdvisor.matSupport.${key}`, language);
+
     if (isLarge) {
       return [
-        { material: 'PLA+', process: 'FDM', reason: 'Best for large parts — low cost, easy printing, good layer adhesion', confidence: 0.9, layerHeight: '0.2mm', infill: '15-20%', supports: 'Minimal' },
-        { material: 'PETG', process: 'FDM', reason: 'Stronger than PLA, better layer adhesion, slightly harder to print', confidence: 0.7, layerHeight: '0.2mm', infill: '20-25%', supports: 'Standard' },
+        { material: 'PLA+', process: 'FDM', reason: translate(CONTENT, 'optimizationAdvisor.matReason.plaLarge', language), confidence: 0.9, layerHeight: '0.2mm', infill: '15-20%', supports: supportLabel('minimal') },
+        { material: 'PETG', process: 'FDM', reason: translate(CONTENT, 'optimizationAdvisor.matReason.petgLarge', language), confidence: 0.7, layerHeight: '0.2mm', infill: '20-25%', supports: supportLabel('standard') },
       ];
     }
 
     if (isSmall && isThin) {
       return [
-        { material: 'SLA Resin', process: 'SLA', reason: 'Perfect for fine details and thin walls — much higher resolution than FDM', confidence: 0.85, layerHeight: '0.05mm', infill: '100%', supports: 'Required' },
-        { material: 'PLA (0.4mm nozzle)', process: 'FDM', reason: 'If using FDM, use smallest nozzle (0.2mm) for thin walls', confidence: 0.6, layerHeight: '0.12mm', infill: '30%', supports: 'Standard' },
+        { material: 'SLA Resin', process: 'SLA', reason: translate(CONTENT, 'optimizationAdvisor.matReason.slaSmall', language), confidence: 0.85, layerHeight: '0.05mm', infill: '100%', supports: supportLabel('required') },
+        { material: 'PLA (0.4mm nozzle)', process: 'FDM', reason: translate(CONTENT, 'optimizationAdvisor.matReason.plaSmall', language), confidence: 0.6, layerHeight: '0.12mm', infill: '30%', supports: supportLabel('standard') },
       ];
     }
 
     return [
-      { material: 'PLA', process: 'FDM', reason: 'Versatile, easy to print, good strength for general parts', confidence: 0.85, layerHeight: '0.2mm', infill: '20%', supports: 'As needed' },
-      { material: 'PETG', process: 'FDM', reason: 'Better for functional parts — stronger, more durable', confidence: 0.7, layerHeight: '0.2mm', infill: '25%', supports: 'Standard' },
-      { material: 'ABS/ASA', process: 'FDM (enclosed)', reason: 'For outdoor/heat-resistant applications', confidence: 0.5, layerHeight: '0.2mm', infill: '30%', supports: 'Standard' },
+      { material: 'PLA', process: 'FDM', reason: translate(CONTENT, 'optimizationAdvisor.matReason.plaGeneral', language), confidence: 0.85, layerHeight: '0.2mm', infill: '20%', supports: supportLabel('asNeeded') },
+      { material: 'PETG', process: 'FDM', reason: translate(CONTENT, 'optimizationAdvisor.matReason.petgFunctional', language), confidence: 0.7, layerHeight: '0.2mm', infill: '25%', supports: supportLabel('standard') },
+      { material: 'ABS/ASA', process: 'FDM (enclosed)', reason: translate(CONTENT, 'optimizationAdvisor.matReason.absOutdoor', language), confidence: 0.5, layerHeight: '0.2mm', infill: '30%', supports: supportLabel('standard') },
     ];
   }
 
-  private suggestOrientation(analysis: { overhang: { status: string } }, metrics: { size: { x: number; y: number; z: number } }): string {
+  private suggestOrientation(
+    analysis: { overhang: { status: string } },
+    metrics: { size: { x: number; y: number; z: number } },
+    language: ContentLang = 'en',
+  ): string {
     if (analysis.overhang.status !== 'good') {
-      return 'Rotate model to minimize overhangs facing downward. Print flat faces parallel to build plate. Consider tilting 15-20° to reduce stair-stepping on curved surfaces.';
+      return translate(CONTENT, 'optimizationAdvisor.orientationOverhang', language);
     }
-    return 'Model can be printed in current orientation. For best surface finish, orient the most visible face upward.';
+    return translate(CONTENT, 'optimizationAdvisor.orientationOk', language);
   }
 
   private computeOptimizationScore(suggestions: OptimizedGeometrySuggestion[], materialCount: number): number {
@@ -277,27 +287,28 @@ export class OptimizationAdvisor extends BaseAgent {
     materials: MaterialRecommendation[],
     orientation: string,
     score: number,
+    language: ContentLang = 'en',
   ): string {
     const lines = [
-      `Optimization Report (Score: ${score}/100)`,
+      translate(CONTENT, 'optimizationAdvisor.report', language, { score }),
       ``,
-      `Orientation: ${orientation}`,
+      translate(CONTENT, 'optimizationAdvisor.orientationLine', language, { orientation }),
       ``,
-      `Recommended Process & Materials:`,
+      translate(CONTENT, 'optimizationAdvisor.materialsHeader', language),
       ...materials.map(m => `  \u2022 ${m.material} (${m.process}): ${m.reason}`),
       ``,
     ];
 
     if (suggestions.length > 0) {
-      lines.push(`Suggested Improvements (${suggestions.length}):`);
+      lines.push(translate(CONTENT, 'optimizationAdvisor.improvementsHeader', language, { count: suggestions.length }));
       for (const s of suggestions) {
         lines.push(`  [${s.priority.toUpperCase()}] ${s.description}`);
         lines.push(`    \u2192 ${s.implementation}`);
-        lines.push(`    \u2192 Expected: ${s.expectedImprovement}`);
+        lines.push(`    ${translate(CONTENT, 'optimizationAdvisor.expectedLine', language, { expected: s.expectedImprovement })}`);
         lines.push('');
       }
     } else {
-      lines.push('No improvements needed — model is well-optimized for printing.');
+      lines.push(translate(CONTENT, 'optimizationAdvisor.noImprovements', language));
     }
 
     return lines.join('\n');

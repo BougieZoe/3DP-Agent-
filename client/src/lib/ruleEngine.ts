@@ -3,6 +3,7 @@
  * Handles common 3D printing questions with deterministic answers
  */
 
+import { CONTENT, translate } from '@shared/i18n/content';
 import type { Material } from '@/lib/materialState';
 import { DEFAULT_MATERIAL } from '@/lib/materialState';
 
@@ -40,7 +41,7 @@ export interface RuleResult {
 // Format a wall-thickness value for display; an unmeasured (null) value is
 // reported honestly instead of substituting a fabricated number.
 function formatMinThickness(v: number | null, lang: 'en' | 'ja' | 'zh'): string {
-  if (v === null) return lang === 'zh' ? '未测量' : lang === 'ja' ? '未測定' : 'not measured';
+  if (v === null) return translate(CONTENT, 'notMeasured', lang);
   return `${v.toFixed(2)}mm`;
 }
 
@@ -54,64 +55,58 @@ export function generateQuickReport(model: ModelData, lang: 'en' | 'ja' | 'zh', 
     : model.wallThickness.thinWallPercentage;
   const pct = ((twr ?? 0) * 100).toFixed(1);
   const conf = model.wallThickness.averageConfidence;
-  const confLabel = conf < 0.4 ? 'Low' : conf < 0.7 ? 'Moderate' : 'High';
+  const confLabel = conf < 0.4
+    ? translate(CONTENT, 'report.confidence.low', lang)
+    : conf < 0.7
+      ? translate(CONTENT, 'report.confidence.moderate', lang)
+      : translate(CONTENT, 'report.confidence.high', lang);
 
   if (model.wallThickness.status === 'critical') {
     if ((twr ?? 0) > 0.15) {
-      issues.push(lang === 'zh' ? `壁厚过薄: ${pct}% 采样区域低于FDM阈值。最小测量值: ${formatMinThickness(model.wallThickness.minThickness, lang)}。置信度: ${confLabel}` :
-        lang === 'ja' ? `壁厚過小: サンプルの${pct}%がFDM閾値未満。最小測定: ${formatMinThickness(model.wallThickness.minThickness, lang)}。信頼度: ${confLabel}` :
-        `Widespread thin walls: ${pct}% of sampled regions below FDM threshold. Minimum measured: ${formatMinThickness(model.wallThickness.minThickness, lang)}. Confidence: ${confLabel}`);
+      issues.push(translate(CONTENT, 'rule.wallCritical', lang, { pct, t: formatMinThickness(model.wallThickness.minThickness, lang), conf: confLabel }));
     } else {
-      issues.push(lang === 'zh' ? `检测到孤立薄壁异常。最小测量值: ${formatMinThickness(model.wallThickness.minThickness, lang)}，但仅${pct}%采样区域低于阈值。置信度: ${confLabel}` :
-        lang === 'ja' ? `孤立した薄壁異常を検出。最小測定: ${formatMinThickness(model.wallThickness.minThickness, lang)}、ただしサンプルの${pct}%のみが閾値未満。信頼度: ${confLabel}` :
-        `Isolated thin wall anomaly. Minimum measured: ${formatMinThickness(model.wallThickness.minThickness, lang)}, but only ${pct}% of sampled regions below threshold. Confidence: ${confLabel}`);
+      issues.push(translate(CONTENT, 'rule.wallCriticalIsolated', lang, { pct, t: formatMinThickness(model.wallThickness.minThickness, lang), conf: confLabel }));
     }
   } else if (model.wallThickness.status === 'warning') {
-    issues.push(lang === 'zh' ? `${pct}% 采样区域壁厚偏薄 (p5=${formatMinThickness(model.wallThickness.minThickness, lang)})。建议加厚至2mm以上` :
-      lang === 'ja' ? `サンプルの${pct}%が薄い壁 (p5=${formatMinThickness(model.wallThickness.minThickness, lang)})。2mm以上を推奨` :
-      `${pct}% of sampled walls are thin (p5=${formatMinThickness(model.wallThickness.minThickness, lang)}). Consider thickening to 2mm+`);
+    issues.push(translate(CONTENT, 'rule.wallWarning', lang, { pct, t: formatMinThickness(model.wallThickness.minThickness, lang) }));
   }
 
   if (model.overhang.status === 'warning' || model.overhang.status === 'critical') {
-    issues.push(lang === 'zh' ? `${model.overhang.areas} 个悬垂面超过${material.overhangThreshold}°，需要支撑` :
-      lang === 'ja' ? `${model.overhang.areas}面が${material.overhangThreshold}°超 — サポート必要` :
-      `${model.overhang.areas} faces exceed ${material.overhangThreshold}° — support structures required`);
+    issues.push(translate(CONTENT, 'rule.overhang', lang, { areas: model.overhang.areas, threshold: material.overhangThreshold }));
   }
 
   const maxDim = Math.max(model.dims.x, model.dims.y, model.dims.z);
   if (maxDim < 1 || maxDim > 1000) {
-    issues.push(lang === 'zh' ? `尺寸看起来不寻常 (最长边=${maxDim.toFixed(1)}mm) —— 这个模型是用英寸建模的吗？` :
-      lang === 'ja' ? `サイズが不自然です (最大辺=${maxDim.toFixed(1)}mm) —— インチでモデリングされていませんか？` :
-      `This size looks unusual for millimeters (longest side=${maxDim.toFixed(1)}mm) — was this modeled in inches?`);
+    issues.push(translate(CONTENT, 'rule.sizeUnusual', lang, { max: maxDim.toFixed(1) }));
   }
 
   const volume = model.volume;
-  const process = volume > 500000 ? (lang === 'zh' ? 'FDM (大型件)' : lang === 'ja' ? 'FDM（大型）' : 'FDM (large part)') :
-    volume > 50000 ? (lang === 'zh' ? 'FDM / SLA' : 'FDM / SLA') :
-    (lang === 'zh' ? 'SLA / SLS (精细件)' : lang === 'ja' ? 'SLA / SLS（精細）' : 'SLA / SLS (fine detail)');
+  const process = volume > 500000
+    ? translate(CONTENT, 'rule.processLarge', lang)
+    : volume > 50000
+      ? translate(CONTENT, 'rule.processMid', lang)
+      : translate(CONTENT, 'rule.processSmall', lang);
 
   const verdict = issues.length === 0
-    ? (lang === 'zh' ? '✓ 可直接打印' : lang === 'ja' ? '✓ 印刷可能' : '✓ Print-ready')
-    : (lang === 'zh' ? '⚠ 需要修复后打印' : lang === 'ja' ? '⚠ 修正が必要' : '⚠ Needs fixes before printing');
+    ? translate(CONTENT, 'rule.verdictOk', lang)
+    : translate(CONTENT, 'rule.verdictFix', lang);
 
   const lines = [
-    `VERDICT: ${verdict}`,
+    translate(CONTENT, 'report.verdict', lang, { verdict }),
     ``,
-    lang === 'zh' ? `尺寸: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm` :
-    lang === 'ja' ? `寸法: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm` :
-    `Dims: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm`,
-    lang === 'zh' ? `推荐工艺: ${process}` : lang === 'ja' ? `推奨工法: ${process}` : `Recommended: ${process}`,
-    lang === 'zh' ? `层高建议: 0.2mm  填充率: 20%` : lang === 'ja' ? `積層ピッチ: 0.2mm  充填率: 20%` : `Layer: 0.2mm  Infill: 20%`,
+    translate(CONTENT, 'rule.dims', lang, { x: model.dims.x.toFixed(1), y: model.dims.y.toFixed(1), z: model.dims.z.toFixed(1) }),
+    translate(CONTENT, 'rule.processLabel', lang, { process }),
+    translate(CONTENT, 'rule.layer', lang),
   ];
 
   if (issues.length > 0) {
     lines.push('');
-    lines.push(lang === 'zh' ? 'ISSUES:' : lang === 'ja' ? '問題点:' : 'ISSUES:');
+    lines.push(translate(CONTENT, 'report.issues', lang));
     issues.forEach((i, idx) => lines.push(`${idx + 1}. ${i}`));
   }
   if (tips.length > 0) {
     lines.push('');
-    lines.push(lang === 'zh' ? 'TIPS:' : 'TIPS:');
+    lines.push(translate(CONTENT, 'report.tips', lang));
     tips.forEach(t => lines.push(`› ${t}`));
   }
 

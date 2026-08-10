@@ -1,7 +1,8 @@
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { UnifiedAnalysis, OverhangSeverity, SupportDifficulty, SupportResult, BedFitResult } from '@/analysis';
 import type { ConfidenceCategory, ConfidenceExplanation, Impact, Issue, RepairSuggestion } from './types';
 
-export function computeCategories(analysis: UnifiedAnalysis): ConfidenceCategory[] {
+export function computeCategories(analysis: UnifiedAnalysis, language: ContentLang = 'en'): ConfidenceCategory[] {
   const m = analysis.metrics?.result;
   const t = analysis.topology?.result;
   const v = analysis.validation?.result;
@@ -9,10 +10,10 @@ export function computeCategories(analysis: UnifiedAnalysis): ConfidenceCategory
   const bf = analysis.bedFit?.result;
 
   return [
-    computeTopologyCategory(t),
-    computeValidationCategory(v),
-    computeGeometryCategory(m),
-    computePrintabilityCategory(m, sp, bf),
+    computeTopologyCategory(t, language),
+    computeValidationCategory(v, language),
+    computeGeometryCategory(m, language),
+    computePrintabilityCategory(m, sp, bf, language),
   ];
 }
 
@@ -41,48 +42,49 @@ export function buildIssuesFromCategories(categories: ConfidenceCategory[]): imp
   return issues;
 }
 
-function computeTopologyCategory(t: UnifiedAnalysis['topology']['result'] | undefined): ConfidenceCategory {
+function computeTopologyCategory(t: UnifiedAnalysis['topology']['result'] | undefined, language: ContentLang = 'en'): ConfidenceCategory {
   const issues: string[] = [];
   let score = 0;
-  if (t?.isManifold) { score += 40; } else { issues.push('Non-manifold mesh'); }
-  if (t?.shellCount != null && t.shellCount <= 1) { score += 30; } else if (t?.shellCount != null) { issues.push(`${t.shellCount} disconnected shells`); }
-  if (t?.triangleCount != null && t.triangleCount >= 50) { score += 30; } else { issues.push('Very low triangle count'); }
-  return { id: 'topology', label: 'Topology', score, weight: 0.15, issues };
+  if (t?.isManifold) { score += 40; } else { issues.push(translate(CONTENT, 'cad.cat.nonManifold', language)); }
+  if (t?.shellCount != null && t.shellCount <= 1) { score += 30; } else if (t?.shellCount != null) { issues.push(translate(CONTENT, 'cad.cat.disconnectedShells', language, { count: t.shellCount })); }
+  if (t?.triangleCount != null && t.triangleCount >= 50) { score += 30; } else { issues.push(translate(CONTENT, 'cad.cat.lowTriangles', language)); }
+  return { id: 'topology', label: translate(CONTENT, 'cad.catLabel.topology', language), score, weight: 0.15, issues };
 }
 
-function computeValidationCategory(v: UnifiedAnalysis['validation']['result'] | undefined): ConfidenceCategory {
+function computeValidationCategory(v: UnifiedAnalysis['validation']['result'] | undefined, language: ContentLang = 'en'): ConfidenceCategory {
   const issues: string[] = [];
   let score = 0;
-  if (v?.isWatertight) { score += 50; } else { issues.push('Mesh is not watertight'); }
-  if (v?.holeCount != null && v.holeCount === 0) { score += 30; } else if (v?.holeCount != null && v.holeCount > 0) { issues.push(`${v.holeCount} holes detected`); }
-  if (v?.flippedNormalRatio != null && v.flippedNormalRatio < 0.05) { score += 20; } else { issues.push('Flipped normals detected'); }
-  return { id: 'validation', label: 'Validation', score, weight: 0.15, issues };
+  if (v?.isWatertight) { score += 50; } else { issues.push(translate(CONTENT, 'cad.cat.notWatertight', language)); }
+  if (v?.holeCount != null && v.holeCount === 0) { score += 30; } else if (v?.holeCount != null && v.holeCount > 0) { issues.push(translate(CONTENT, 'cad.cat.holes', language, { count: v.holeCount })); }
+  if (v?.flippedNormalRatio != null && v.flippedNormalRatio < 0.05) { score += 20; } else { issues.push(translate(CONTENT, 'cad.cat.flippedNormals', language)); }
+  return { id: 'validation', label: translate(CONTENT, 'cad.catLabel.validation', language), score, weight: 0.15, issues };
 }
 
-function computeGeometryCategory(m: UnifiedAnalysis['metrics']['result'] | undefined): ConfidenceCategory {
+function computeGeometryCategory(m: UnifiedAnalysis['metrics']['result'] | undefined, language: ContentLang = 'en'): ConfidenceCategory {
   const issues: string[] = [];
   let score = 0;
 
   const sev = m?.overhang?.severity as OverhangSeverity | undefined;
   if (sev === 'none' || sev == null) { score += 35; }
-  else if (sev === 'moderate') { score += 20; issues.push('Moderate overhang'); }
-  else { score += 5; issues.push('Severe overhang'); }
+  else if (sev === 'moderate') { score += 20; issues.push(translate(CONTENT, 'cad.cat.moderateOverhang', language)); }
+  else { score += 5; issues.push(translate(CONTENT, 'cad.cat.severeOverhang', language)); }
 
   const thinRatio = m?.thinWallRatio ?? 0;
   if (thinRatio <= 0.05) { score += 35; }
-  else if (thinRatio <= 0.2) { score += 20; issues.push('Some thin walls'); }
-  else { score += 5; issues.push('Extensive thin walls'); }
+  else if (thinRatio <= 0.2) { score += 20; issues.push(translate(CONTENT, 'cad.cat.someThinWalls', language)); }
+  else { score += 5; issues.push(translate(CONTENT, 'cad.cat.extensiveThinWalls', language)); }
 
   if (m?.meshVolumeMm3 != null && m.meshVolumeMm3 > 0) { score += 30; }
-  else { issues.push('Zero or negative volume'); }
+  else { issues.push(translate(CONTENT, 'cad.cat.zeroVolume', language)); }
 
-  return { id: 'geometry', label: 'Geometry', score, weight: 0.30, issues };
+  return { id: 'geometry', label: translate(CONTENT, 'cad.catLabel.geometry', language), score, weight: 0.30, issues };
 }
 
 function computePrintabilityCategory(
   m: UnifiedAnalysis['metrics']['result'] | undefined,
   sp: SupportResult | null | undefined,
   bf: BedFitResult | null | undefined,
+  language: ContentLang = 'en',
 ): ConfidenceCategory {
   const issues: string[] = [];
   let score = 0;
@@ -90,16 +92,16 @@ function computePrintabilityCategory(
   const diff = sp?.difficulty as SupportDifficulty | undefined;
   if (diff === 'none' || diff == null) { score += 35; }
   else if (diff === 'easy') { score += 25; }
-  else if (diff === 'moderate') { score += 15; issues.push('Moderate support needed'); }
-  else { score += 0; issues.push('Complex support required'); }
+  else if (diff === 'moderate') { score += 15; issues.push(translate(CONTENT, 'cad.cat.moderateSupport', language)); }
+  else { score += 0; issues.push(translate(CONTENT, 'cad.cat.complexSupport', language)); }
 
   if (bf?.fits) { score += 35; }
-  else if (bf != null) { issues.push('Model exceeds printer bed'); }
+  else if (bf != null) { issues.push(translate(CONTENT, 'cad.cat.exceedsBed', language)); }
 
   if (m?.meshVolumeMm3 != null && m.meshVolumeMm3 < 500000) { score += 30; }
-  else { issues.push('Large print volume — long print time expected'); }
+  else { issues.push(translate(CONTENT, 'cad.cat.largeVolume', language)); }
 
-  return { id: 'printability', label: 'Printability', score, weight: 0.30, issues };
+  return { id: 'printability', label: translate(CONTENT, 'cad.catLabel.printability', language), score, weight: 0.30, issues };
 }
 
 export function generateExplanation(
@@ -107,6 +109,7 @@ export function generateExplanation(
   issues: Issue[],
   repairSuggestions: RepairSuggestion[],
   aggregatedRiskScore: number,
+  language: ContentLang = 'en',
 ): ConfidenceExplanation {
   const failureProbability = Math.min(100, Math.max(0, aggregatedRiskScore));
 
@@ -119,7 +122,7 @@ export function generateExplanation(
       return { reason: c.issues[0], impact, category: c.id };
     });
 
-  let recommendedAction = 'Model appears manufacturable. Consider running a test print.';
+  let recommendedAction = translate(CONTENT, 'cad.explanation.recommended', language);
   if (repairSuggestions.length > 0) {
     const best = [...repairSuggestions].sort((a, b) => {
       const ord: Record<Impact, number> = { high: 3, medium: 2, low: 1 };
@@ -127,9 +130,9 @@ export function generateExplanation(
     })[0];
     recommendedAction = `${best.action}. ${best.description.split('.')[0]}.`;
   } else if (failureProbability > 30 && topRisks.length > 0) {
-    recommendedAction = 'Review highlighted issues and consider adjusting design parameters before printing.';
+    recommendedAction = translate(CONTENT, 'cad.explanation.review', language);
   } else if (failureProbability > 50) {
-    recommendedAction = 'Significant design issues detected. Consider regenerating with modified parameters.';
+    recommendedAction = translate(CONTENT, 'cad.explanation.regenerate', language);
   }
 
   return { failureProbability, topRisks, recommendedAction };

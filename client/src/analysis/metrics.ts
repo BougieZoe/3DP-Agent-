@@ -6,6 +6,7 @@ import {
   type OverhangMetrics,
   type SupportResult,
 } from './types';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
 import {
@@ -226,23 +227,23 @@ export interface SupportStatusResult {
  * Good:
  *   Everything else.
  */
-export function deriveSupportStatus(result: SupportResult): SupportStatusResult {
+export function deriveSupportStatus(result: SupportResult, language: ContentLang = 'en'): SupportStatusResult {
   const reasons: string[] = [];
 
   if (result.difficulty === 'none' || result.supportRegions.length === 0) {
-    return { status: 'good', reasons: ['No support structures needed'], confidence: 1 };
+    return { status: 'good', reasons: [translate(CONTENT, 'support.noSupport', language)], confidence: 1 };
   }
 
   // ── Critical evaluation ───────────────────────────────────────────────────
   let isCritical = false;
 
   if (result.difficulty === 'very_difficult') {
-    reasons.push('Very difficult support structure');
+    reasons.push(translate(CONTENT, 'support.veryDifficult', language));
     isCritical = true;
   }
 
   if (result.largestRegionRatio > 0.5 && result.tallSupportRatio > 0.3) {
-    reasons.push('Large continuous support island with tall supports — removal risk');
+    reasons.push(translate(CONTENT, 'support.largeIslandRemoval', language));
     isCritical = true;
   }
 
@@ -252,19 +253,19 @@ export function deriveSupportStatus(result: SupportResult): SupportStatusResult 
 
   // ── Warning evaluation ────────────────────────────────────────────────────
   if (result.difficulty === 'difficult') {
-    reasons.push('Difficult support structure');
+    reasons.push(translate(CONTENT, 'support.difficult', language));
   }
   if (result.difficulty === 'moderate') {
-    reasons.push('Moderate support complexity');
+    reasons.push(translate(CONTENT, 'support.moderate', language));
   }
   if (result.supportRegions.length > 3) {
-    reasons.push(`${result.supportRegions.length} separate support islands`);
+    reasons.push(translate(CONTENT, 'support.islands', language, { count: result.supportRegions.length }));
   }
   if (result.tallSupportRatio > 0.3) {
-    reasons.push(`${(result.tallSupportRatio * 100).toFixed(0)}% of support faces in top half — tall supports`);
+    reasons.push(translate(CONTENT, 'support.tallSupports', language, { pct: (result.tallSupportRatio * 100).toFixed(0) }));
   }
   if (result.directionality > 0.7) {
-    reasons.push('Directionally concentrated supports — consider rotation');
+    reasons.push(translate(CONTENT, 'support.directional', language));
   }
 
   if (reasons.length > 0) {
@@ -273,7 +274,7 @@ export function deriveSupportStatus(result: SupportResult): SupportStatusResult 
   }
 
   // ── Good ──────────────────────────────────────────────────────────────────
-  reasons.push('Isolated manageable supports');
+  reasons.push(translate(CONTENT, 'support.isolated', language));
   return { status: 'good', reasons, confidence: 0.9 };
 }
 
@@ -282,6 +283,7 @@ export function computeMetrics(
   graph?: GeometryGraph | null,
   overhangThresholdDeg: number = 50,
   profiling?: Record<string, number>,
+  language: ContentLang = 'en',
 ): AnalysisModuleResult<MetricsResult> {
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
@@ -295,7 +297,7 @@ export function computeMetrics(
       thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, lowConfidenceSampleCount: 0,
       wallThicknessSamples: [],
       overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 },
-    }, 'No position data');
+    }, translate(CONTENT, 'metrics.noPositionData', language));
   }
 
   if (g.indices.length === 0) {
@@ -307,7 +309,7 @@ export function computeMetrics(
       thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, lowConfidenceSampleCount: 0,
       wallThicknessSamples: [],
       overhang: { faceCount: 0, totalFaceCount: g.triangleCount, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 },
-    }, 'Non-indexed geometry — volume and wall thickness cannot be computed accurately');
+    }, translate(CONTENT, 'metrics.nonIndexed', language));
   }
 
   const positions = g.positions;
@@ -365,15 +367,19 @@ export function computeMetrics(
   };
 
   const parts: string[] = [];
-  parts.push(`Volume: ${meshVolume.toFixed(1)} mm³`);
-  parts.push(`Surface area: ${surfaceArea.toFixed(1)} mm²`);
-  parts.push(`Dimensions: ${dimX.toFixed(1)} × ${dimY.toFixed(1)} × ${dimZ.toFixed(1)} mm`);
+  parts.push(translate(CONTENT, 'metrics.volume', language, { volume: meshVolume.toFixed(1) }));
+  parts.push(translate(CONTENT, 'metrics.surfaceArea', language, { area: surfaceArea.toFixed(1) }));
+  parts.push(translate(CONTENT, 'metrics.dimensions', language, { x: dimX.toFixed(1), y: dimY.toFixed(1), z: dimZ.toFixed(1) }));
   if (minThickness !== null) {
-    parts.push(`Min wall thickness (sampled): ${minThickness.toFixed(3)} mm (approximate)`);
+    parts.push(translate(CONTENT, 'metrics.minWallSampled', language, { t: minThickness.toFixed(3) }));
   } else {
-    parts.push('Wall thickness: could not be sampled (no opposing faces found)');
+    parts.push(translate(CONTENT, 'metrics.wallNotSampled', language));
   }
-  parts.push(`Overhang: ${overhang.faceCount}/${overhang.totalFaceCount} faces, ${(overhang.ratio * 100).toFixed(1)}% of surface area`);
+  parts.push(translate(CONTENT, 'metrics.overhangSummary', language, {
+    faces: overhang.faceCount,
+    total: overhang.totalFaceCount,
+    pct: (overhang.ratio * 100).toFixed(1),
+  }));
 
   return moduleResult('metrics', overallConfidence, Math.round(performance.now() - startTime), result, parts.join('. '));
 }

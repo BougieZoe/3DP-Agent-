@@ -16,6 +16,7 @@
  */
 
 import { moduleResult, PRINTER_PROFILES, type AnalysisModuleResult, type Confidence, type PrintTimeResult, type PrinterProfileId } from './types';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { MetricsResult } from './types';
 
 const MACHINE_RATE_PER_HOUR_USD = 2;
@@ -47,6 +48,7 @@ export function estimatePrintTime(
   layerHeightMm: number = DEFAULT_LAYER_HEIGHT,
   densityGPerCm3: number = 1.24,
   pricePerKgUsd: number = 22,
+  language: ContentLang = 'en',
 ): AnalysisModuleResult<PrintTimeResult> {
   const startTime = performance.now();
 
@@ -59,7 +61,7 @@ export function estimatePrintTime(
       estimatedPrintTimeMinutes: 0, estimatedPrintTimeHours: 0,
       materialWeightGrams: 0, materialCostUsd: 0, totalCostUsd: 0,
       layerCount: 0, printerProfile: { id: printerId, name: profile.name, widthMm: profile.widthMm, depthMm: profile.depthMm, heightMm: profile.heightMm },
-    }, 'Cannot estimate: zero volume');
+    }, translate(CONTENT, 'printTime.zeroVolume', language));
   }
 
   // Pick closest layer height rate
@@ -111,7 +113,15 @@ export function estimatePrintTime(
     printerProfile: { id: printerId, name: profile.name, widthMm: profile.widthMm, depthMm: profile.depthMm, heightMm: profile.heightMm },
   };
 
-  const explanation = `Est. ${totalMinutes}min (${totalHours}h) at ${layerHeightMm}mm layer height. Material: ${weightGrams.toFixed(1)}g ($${materialCost.toFixed(2)}). Total cost: $${totalCost.toFixed(2)}. ${layerCount} layers.`;
+  const explanation = translate(CONTENT, 'printTime.estimate', language, {
+    minutes: totalMinutes,
+    hours: totalHours,
+    layerHeight: layerHeightMm,
+    weight: weightGrams.toFixed(1),
+    materialCost: materialCost.toFixed(2),
+    totalCost: totalCost.toFixed(2),
+    layers: layerCount,
+  });
 
   return moduleResult('printTime', confidence, Math.round(performance.now() - startTime), result, explanation);
 }

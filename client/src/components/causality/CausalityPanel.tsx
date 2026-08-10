@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { CausalityGraph, CausalityEvent, CausalEdge } from './causalityEngine';
 import { PANEL, EVENT_COLORS_CSS } from '@/lib/visualLanguage';
 
@@ -6,6 +7,7 @@ interface CausalityPanelProps {
   graph: CausalityGraph | null;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  language?: ContentLang;
 }
 
 const TYPE_ICONS: Record<string, string> = {
@@ -46,12 +48,12 @@ function EventNode({ event, selected, onSelect }: { event: CausalityEvent; selec
   );
 }
 
-export function CausalityPanel({ graph, selectedId, onSelect }: CausalityPanelProps) {
+export function CausalityPanel({ graph, selectedId, onSelect, language = 'en' }: CausalityPanelProps) {
   if (!graph || graph.events.length === 0) {
     return (
       <div className="pt-4 space-y-4">
         <div className={`${PANEL.fontTiny} text-muted-foreground/40 text-center py-12`}>
-          No causal data available.
+          {translate(CONTENT, 'causality.noData', language)}
         </div>
       </div>
     );
@@ -98,13 +100,13 @@ export function CausalityPanel({ graph, selectedId, onSelect }: CausalityPanelPr
   return (
     <div className="pt-4 space-y-4">
       <div className="flex items-center justify-between">
-        <span className={PANEL.fontLabel}>CAUSAL CHAIN</span>
+        <span className={PANEL.fontLabel}>{translate(CONTENT, 'causality.chainHeader', language)}</span>
         {chainActive && (
           <button
             onClick={() => onSelect(null)}
             className={`${PANEL.fontTiny} text-muted-foreground/40 hover:text-muted-foreground transition-colors`}
           >
-            {'←'} Clear selection
+            {translate(CONTENT, 'causality.clearSelection', language)}
           </button>
         )}
       </div>

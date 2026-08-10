@@ -1,4 +1,5 @@
 import type { AgentOutput, RiskMarker } from '@shared/domain/agent';
+import { CONTENT, translate } from '@shared/i18n/content';
 import { BaseAgent, type AgentContext } from './baseAgent';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 
@@ -62,21 +63,25 @@ export class GeometryAnalyst extends BaseAgent {
       markers.push(...this.collectWallThicknessMarkers(ctx));
     }
 
+    const lang = ctx.language;
     const issues: string[] = [];
     if (wtStatus === 'critical') {
       const pct = (thinWallRatio * 100).toFixed(1);
-      issues.push(`Widespread thin walls detected — ${pct}% of sampled regions below FDM threshold`);
+      issues.push(translate(CONTENT, 'geometryAnalyst.widespreadThinWalls', lang, { pct }));
     } else if (wtStatus === 'warning') {
-      issues.push('Some walls thinner than recommended — consider thickening');
+      issues.push(translate(CONTENT, 'geometryAnalyst.someThinWalls', lang));
     }
     if (hasOverhangIssue) {
-      issues.push(`${overhangFaces} faces exceed ${material.overhangThreshold}° overhang — support required`);
+      issues.push(translate(CONTENT, 'geometryAnalyst.overhangSupport', lang, {
+        faces: overhangFaces,
+        threshold: material.overhangThreshold,
+      }));
     }
     if (aspectRatio > 5) {
-      issues.push('Extreme aspect ratio — model may be fragile');
+      issues.push(translate(CONTENT, 'geometryAnalyst.extremeAspectRatio', lang));
     }
     if (triCount < 100) {
-      issues.push('Very low triangle count — model may lack detail');
+      issues.push(translate(CONTENT, 'geometryAnalyst.lowTriangles', lang));
     }
 
     const score = this.computeScore(wtStatus, ohStatus, overhangRatio, aspectRatio, triCount);
@@ -103,8 +108,8 @@ export class GeometryAnalyst extends BaseAgent {
     };
 
     const explanation = issues.length > 0
-      ? `Geometry analysis found ${issues.length} area(s) of concern:\n${issues.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}`
-      : 'Geometry analysis passed — no significant issues detected';
+      ? `${translate(CONTENT, 'geometryAnalyst.concernsFound', lang, { count: issues.length })}\n${issues.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}`
+      : translate(CONTENT, 'geometryAnalyst.passed', lang);
 
     return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details as unknown as Record<string, unknown>, markers);
   }
@@ -158,7 +163,7 @@ export class GeometryAnalyst extends BaseAgent {
           position: { x: positions[idx], y: positions[idx + 1], z: positions[idx + 2] },
           type: 'overhang',
           severity: Math.min(1, (angle - threshold) / (90 - threshold) * 2),
-          description: `Overhang face at ${angle.toFixed(1)}°`,
+          description: translate(CONTENT, 'geometryAnalyst.markerOverhang', ctx.language, { angle: angle.toFixed(1) }),
         });
         if (markers.length >= 20) break;
       }
@@ -181,7 +186,7 @@ export class GeometryAnalyst extends BaseAgent {
           position: { x: positions[i], y: positions[i + 1], z: positions[i + 2] },
           type: 'thin_wall',
           severity: markerWtStatus === 'critical' ? 0.9 : 0.5,
-          description: `Thin wall area (est. ${minThickness.toFixed(2)}mm)`,
+          description: translate(CONTENT, 'geometryAnalyst.markerThinWall', ctx.language, { t: minThickness.toFixed(2) }),
         });
         if (markers.length >= 15) break;
       }

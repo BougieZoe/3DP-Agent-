@@ -3,7 +3,10 @@
  * Supports: English, Japanese, Chinese
  */
 
-export type Language = 'en' | 'ja' | 'zh';
+import type { ContentLang } from '@shared/i18n/content';
+
+/** Single shared language type — extensions (KO/DE/…) live in @shared/i18n/content. */
+export type Language = ContentLang;
 
 export const translations = {
   en: {

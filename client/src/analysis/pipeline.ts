@@ -1,4 +1,5 @@
 import { moduleResult, PRINTER_PROFILES, type UnifiedAnalysis, type AnalysisModuleResult, type Confidence, type TopologyResult, type ValidationResult, type MetricsResult, type BedFitResult, type SupportResult, type PrintTimeResult } from './types';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { analyzeTopology } from './topology';
 import { validateMesh } from './validation';
 import { computeMetrics } from './metrics';
@@ -15,6 +16,8 @@ export interface PipelineOptions {
   layerHeightMm?: number;
   fileName?: string;
   material?: Material;
+  /** UI language — module explanations/reasons are localized. */
+  language?: ContentLang;
   /**
    * When true, each module (and the wall-thickness sub-modules) records its
    * own wall-clock duration in the result's `profiling` map. This is the
@@ -30,6 +33,7 @@ export function runAnalysisPipeline(
   const now = new Date().toISOString();
   const fileName = options.fileName ?? 'unknown.stl';
   const mat = options.material;
+  const lang = options.language ?? 'en';
 
   const profiling = options.enableProfiling ? ({} as Record<string, number>) : undefined;
   const time = <T>(key: string, fn: () => T): T => {
@@ -47,43 +51,51 @@ export function runAnalysisPipeline(
   const emptyMetrics: MetricsResult = { meshVolumeMm3: 0, surfaceAreaMm2: 0, boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 }, minWallThicknessMm: null, avgWallThicknessMm: null, p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null, thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, lowConfidenceSampleCount: 0, wallThicknessSamples: [], overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 } };
 
   const failResult = <T>(moduleName: string, error: unknown, defaultValue: T): AnalysisModuleResult<T> => {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return moduleResult(moduleName, 0.0 as Confidence, 0, defaultValue, `Failed: ${message}`);
+    const message = error instanceof Error
+      ? error.message
+      : translate(CONTENT, 'analysis.unknownError', lang);
+    return moduleResult(
+      moduleName,
+      0.0 as Confidence,
+      0,
+      defaultValue,
+      translate(CONTENT, 'analysis.failed', lang, { message }),
+    );
   };
 
   const topology = time('topology', () => {
-    try { return analyzeTopology(model, fileName, graph); }
+    try { return analyzeTopology(model, fileName, graph, lang); }
     catch (e) { return failResult('topology', e, emptyTopology); }
   });
 
   const validation = time('validation', () => {
-    try { return validateMesh(model, graph); }
+    try { return validateMesh(model, graph, lang); }
     catch (e) { return failResult('validation', e, emptyValidation); }
   });
 
   const metrics = time('metrics', () => {
-    try { return computeMetrics(model, graph, mat?.overhangThreshold, profiling); }
+    try { return computeMetrics(model, graph, mat?.overhangThreshold, profiling, lang); }
     catch (e) { return failResult('metrics', e, emptyMetrics); }
   });
 
   const bedFit = time('bedFit', () => {
     try {
       if (topology.result.triangleCount === 0) return null;
-      return checkBedFit(model, options.printerId ?? 'bambu_x1c', graph);
+      return checkBedFit(model, options.printerId ?? 'bambu_x1c', graph, lang);
     } catch (e) { return null; }
   });
 
   const support = time('support', () => {
     try {
       if (metrics.result.meshVolumeMm3 <= 0) return null;
-      return estimateSupportVolume(model, graph, mat?.overhangThreshold, mat ? mat.densityGPerCm3 / 1000 : undefined);
+      return estimateSupportVolume(model, graph, mat?.overhangThreshold, mat ? mat.densityGPerCm3 / 1000 : undefined, lang);
     } catch (e) { return null; }
   });
 
   const printTime = time('printTime', () => {
     try {
       if (metrics.result.meshVolumeMm3 <= 0) return null;
-      return estimatePrintTime(metrics.result, options.printerId ?? 'bambu_x1c', options.layerHeightMm ?? 0.2, mat?.densityGPerCm3, mat?.pricePerKgUsd);
+      return estimatePrintTime(metrics.result, options.printerId ?? 'bambu_x1c', options.layerHeightMm ?? 0.2, mat?.densityGPerCm3, mat?.pricePerKgUsd, lang);
     } catch (e) { return null; }
   });
 

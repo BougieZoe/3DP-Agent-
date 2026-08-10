@@ -1,4 +1,5 @@
 import { AI_PROVIDERS, type AIProviderId } from '@shared/domain/providers';
+import { LANGUAGE_NAMES } from '@shared/i18n/content';
 import { AMD_CLOUD_ENDPOINT } from './config';
 
 /**
@@ -56,9 +57,7 @@ export function getActiveProvider(): AIProvider | null {
 
 function langInstruction(language?: string): string {
   if (!language) return '';
-  const name = language === 'zh' ? 'Simplified Chinese'
-    : language === 'ja' ? 'Japanese'
-    : 'English';
+  const name = LANGUAGE_NAMES[language as keyof typeof LANGUAGE_NAMES] ?? 'English';
   return `\n\nPlease respond in ${name}. Use natural and professional ${name} terms. Current interface language is ${language}.`;
 }
 

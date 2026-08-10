@@ -1,4 +1,5 @@
 import type { AgentOutput, AgentVerdict, RiskMarker } from '@shared/domain/agent';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { BaseAgent, type AgentContext } from './baseAgent';
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from '@/analysis/metrics';
 
@@ -61,30 +62,30 @@ export class FailurePredictor extends BaseAgent {
     const risks: PredictedRisk[] = [];
     const markers: RiskMarker[] = [];
 
-    const overhangRisk = this.predictOverhangFailure(analysisInput, metricsInput, material.overhangThreshold);
+    const overhangRisk = this.predictOverhangFailure(analysisInput, metricsInput, material.overhangThreshold, ctx.language);
     if (overhangRisk) {
       risks.push(overhangRisk);
       markers.push(...this.generateOverhangMarkers(ctx, overhangRisk.severity, material.overhangThreshold));
     }
 
-    const wallRisk = this.predictWallFailure(analysisInput);
+    const wallRisk = this.predictWallFailure(analysisInput, ctx.language);
     if (wallRisk) {
       risks.push(wallRisk);
       markers.push(...this.generateWallMarkers(ctx, wallRisk.severity));
     }
 
-    const warpingRisk = this.predictWarping(analysisInput, metricsInput);
+    const warpingRisk = this.predictWarping(analysisInput, metricsInput, ctx.language);
     if (warpingRisk) risks.push(warpingRisk);
 
-    const bridgingRisk = this.predictBridgingIssues(analysisInput);
+    const bridgingRisk = this.predictBridgingIssues(analysisInput, ctx.language);
     if (bridgingRisk) risks.push(bridgingRisk);
 
-    const delaminationRisk = this.predictDelamination(analysisInput, metricsInput);
+    const delaminationRisk = this.predictDelamination(analysisInput, metricsInput, ctx.language);
     if (delaminationRisk) risks.push(delaminationRisk);
 
-    const supportDecision = support ? deriveSupportStatus(support) : null;
+    const supportDecision = support ? deriveSupportStatus(support, ctx.language) : null;
     if (supportDecision) {
-      risks.push(...this.deriveSupportRisks(supportDecision));
+      risks.push(...this.deriveSupportRisks(supportDecision, ctx.language));
     }
 
     const overallRiskLevel = this.computeOverallRisk(risks);
@@ -100,7 +101,7 @@ export class FailurePredictor extends BaseAgent {
       predictedFailureRate: this.computeFailureRate(risks),
     };
 
-    const explanation = this.buildExplanation(risks, overallRiskLevel);
+    const explanation = this.buildExplanation(risks, overallRiskLevel, ctx.language);
 
     return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details as unknown as Record<string, unknown>, markers);
   }
@@ -109,6 +110,7 @@ export class FailurePredictor extends BaseAgent {
     analysis: { overhang: { status: string; areas: number } },
     _metrics: { triangleCount: number },
     threshold: number,
+    language: ContentLang = 'en',
   ): PredictedRisk | null {
     if (analysis.overhang.status === 'good') return null;
 
@@ -119,15 +121,15 @@ export class FailurePredictor extends BaseAgent {
       type: 'overhang_failure',
       severity,
       confidence: 0.8,
-      description: `${analysis.overhang.areas} faces exceed ${threshold}° overhang angle — supports required to prevent sagging`,
+      description: translate(CONTENT, 'failurePredictor.overhangDesc', language, { faces: analysis.overhang.areas, threshold }),
       affectedFaces: analysis.overhang.areas,
       recommendation: severity === 'critical' || severity === 'high'
-        ? `Add supports in slicer or redesign overhangs to be <${threshold}°`
-        : 'Standard supports recommended in slicer',
+        ? translate(CONTENT, 'failurePredictor.overhangRecHigh', language, { threshold })
+        : translate(CONTENT, 'failurePredictor.overhangRecStandard', language),
     };
   }
 
-  private predictWallFailure(analysis: { wallThickness: { status: string; minThickness: number | null; thinWallRatio?: number; confidence?: number; p5Thickness?: number | null } }): PredictedRisk | null {
+  private predictWallFailure(analysis: { wallThickness: { status: string; minThickness: number | null; thinWallRatio?: number; confidence?: number; p5Thickness?: number | null } }, language: ContentLang = 'en'): PredictedRisk | null {
     if (analysis.wallThickness.status === 'good') return null;
 
     const twr = analysis.wallThickness.thinWallRatio ?? 0;
@@ -141,13 +143,13 @@ export class FailurePredictor extends BaseAgent {
 
     if (status === 'critical') {
       severity = 'critical';
-      description = `${(twr * 100).toFixed(1)}% of sampled walls below FDM threshold — widespread thin wall failure risk`;
-      recommendation = 'Increase wall thickness model-wide to at least 2mm. Use 3+ perimeters in slicer.';
+      description = translate(CONTENT, 'failurePredictor.wallCriticalDesc', language, { pct: (twr * 100).toFixed(1) });
+      recommendation = translate(CONTENT, 'failurePredictor.wallCriticalRec', language);
     } else {
       severity = 'high';
       const p5Label = p5 != null ? `p5=${p5.toFixed(2)}mm, ` : '';
-      description = `Thin walls detected (${p5Label}${(twr * 100).toFixed(1)}% of samples) — moderate failure risk`;
-      recommendation = 'Thin areas detected. Increase wall thickness or use 3 perimeters.';
+      description = translate(CONTENT, 'failurePredictor.wallHighDesc', language, { extra: p5Label, pct: (twr * 100).toFixed(1) });
+      recommendation = translate(CONTENT, 'failurePredictor.wallHighRec', language);
     }
 
     const riskConfidence = confidence > 0 ? Math.min(0.85, confidence + 0.1) : 0.7;
@@ -162,7 +164,7 @@ export class FailurePredictor extends BaseAgent {
     };
   }
 
-  private predictWarping(analysis: { wallThickness: { status: string } }, metrics: { size: { x: number; y: number; z: number } }): PredictedRisk | null {
+  private predictWarping(analysis: { wallThickness: { status: string } }, metrics: { size: { x: number; y: number; z: number } }, language: ContentLang = 'en'): PredictedRisk | null {
     const maxDim = Math.max(metrics.size.x, metrics.size.y, metrics.size.z);
     if (maxDim < 100) return null;
 
@@ -173,13 +175,13 @@ export class FailurePredictor extends BaseAgent {
       type: 'warping',
       severity,
       confidence: isThin ? 0.7 : 0.5,
-      description: `Large flat area (${maxDim.toFixed(0)}mm) — risk of corner warping during cooling`,
+      description: translate(CONTENT, 'failurePredictor.warpDesc', language, { maxDim: maxDim.toFixed(0) }),
       affectedFaces: 0,
-      recommendation: 'Add brim/raft in slicer, use enclosure, consider mouse ears on corners',
+      recommendation: translate(CONTENT, 'failurePredictor.warpRec', language),
     };
   }
 
-  private predictBridgingIssues(analysis: { overhang: { areas: number; status: string; ratio: number } }): PredictedRisk | null {
+  private predictBridgingIssues(analysis: { overhang: { areas: number; status: string; ratio: number } }, language: ContentLang = 'en'): PredictedRisk | null {
     if (analysis.overhang.status === 'good') return null;
 
     const severity: PredictedRisk['severity'] =
@@ -190,13 +192,13 @@ export class FailurePredictor extends BaseAgent {
       type: 'bridging',
       severity,
       confidence: 0.6,
-      description: `Large overhang area with ${analysis.overhang.areas} affected faces — bridging may cause sagging`,
+      description: translate(CONTENT, 'failurePredictor.bridgeDesc', language, { areas: analysis.overhang.areas }),
       affectedFaces: analysis.overhang.areas,
-      recommendation: 'Enable bridging calibration in slicer, increase part cooling fan speed',
+      recommendation: translate(CONTENT, 'failurePredictor.bridgeRec', language),
     };
   }
 
-  private deriveSupportRisks(decision: { status: string; reasons: string[]; confidence: number }): PredictedRisk[] {
+  private deriveSupportRisks(decision: { status: string; reasons: string[]; confidence: number }, language: ContentLang = 'en'): PredictedRisk[] {
     const risks: PredictedRisk[] = [];
     const conf = decision.confidence;
 
@@ -208,7 +210,7 @@ export class FailurePredictor extends BaseAgent {
           confidence: conf * 0.9,
           description: reason,
           affectedFaces: 0,
-          recommendation: 'Use tree/organic supports for easier breakaway. Consider splitting model or adjusting orientation.',
+          recommendation: translate(CONTENT, 'failurePredictor.supportRemovalRec', language),
         });
       } else if (reason.includes('Large continuous') || reason.includes('Very difficult')) {
         risks.push({
@@ -217,7 +219,7 @@ export class FailurePredictor extends BaseAgent {
           confidence: conf * 0.9,
           description: reason,
           affectedFaces: 0,
-          recommendation: 'Add support interface brims in slicer. Consider splitting large overhang regions with support blockers.',
+          recommendation: translate(CONTENT, 'failurePredictor.supportCollapseRec', language),
         });
       } else if (reason.includes('Difficult support') || reason.includes('Moderate support')) {
         risks.push({
@@ -226,7 +228,7 @@ export class FailurePredictor extends BaseAgent {
           confidence: conf * 0.85,
           description: reason,
           affectedFaces: 0,
-          recommendation: 'Ensure adequate support density and interface layers in slicer. Consider tree supports.',
+          recommendation: translate(CONTENT, 'failurePredictor.supportDensityRec', language),
         });
       }
     }
@@ -234,7 +236,7 @@ export class FailurePredictor extends BaseAgent {
     return risks;
   }
 
-  private predictDelamination(analysis: { wallThickness: { status: string } }, metrics: { size: { z: number } }): PredictedRisk | null {
+  private predictDelamination(analysis: { wallThickness: { status: string } }, metrics: { size: { z: number } }, language: ContentLang = 'en'): PredictedRisk | null {
     if (metrics.size.z < 50) return null;
 
     const severity: PredictedRisk['severity'] =
@@ -245,9 +247,9 @@ export class FailurePredictor extends BaseAgent {
       type: 'delamination',
       severity,
       confidence: 0.5,
-      description: `Tall model (${metrics.size.z.toFixed(0)}mm) — risk of layer delamination, especially with thin walls`,
+      description: translate(CONTENT, 'failurePredictor.delamDesc', language, { z: metrics.size.z.toFixed(0) }),
       affectedFaces: 0,
-      recommendation: 'Increase nozzle temperature by 5-10°C, reduce layer height, enable Z-hop',
+      recommendation: translate(CONTENT, 'failurePredictor.delamRec', language),
     };
   }
 
@@ -293,7 +295,7 @@ export class FailurePredictor extends BaseAgent {
           position: { x: positions[i * 3], y: positions[i * 3 + 1], z: positions[i * 3 + 2] },
           type: 'support_needed',
           severity: severity === 'critical' ? 0.9 : severity === 'high' ? 0.7 : 0.5,
-          description: `Steep overhang (${angle.toFixed(1)}°) — support recommended`,
+          description: translate(CONTENT, 'failurePredictor.markerOverhang', ctx.language, { angle: angle.toFixed(1) }),
         });
         count++;
         if (count >= 25) break;
@@ -318,21 +320,21 @@ export class FailurePredictor extends BaseAgent {
           position: { x: positions[idx], y: positions[idx + 1], z: positions[idx + 2] },
           type: 'thin_wall',
           severity: severity === 'critical' ? 0.9 : 0.6,
-          description: `Thin wall — p5 thickness ${displayThickness.toFixed(2)}mm`,
+          description: translate(CONTENT, 'failurePredictor.markerThinWall', ctx.language, { t: displayThickness.toFixed(2) }),
         });
       }
     }
     return markers;
   }
 
-  private buildExplanation(risks: PredictedRisk[], overallRiskLevel: string): string {
+  private buildExplanation(risks: PredictedRisk[], overallRiskLevel: string, language: ContentLang = 'en'): string {
     if (risks.length === 0) {
-      return 'No significant failure risks predicted. Model appears structurally sound for printing.';
+      return translate(CONTENT, 'failurePredictor.noRisks', language);
     }
 
     const lines = [
-      `Failure Risk Assessment: ${overallRiskLevel.toUpperCase()}`,
-      `${risks.length} risk(s) identified`,
+      translate(CONTENT, 'failurePredictor.assessment', language, { level: overallRiskLevel.toUpperCase() }),
+      translate(CONTENT, 'failurePredictor.riskCount', language, { count: risks.length }),
       ``,
     ];
 

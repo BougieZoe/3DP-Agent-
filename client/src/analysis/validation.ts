@@ -1,4 +1,5 @@
 import { moduleResult, type AnalysisModuleResult, type Confidence, type ValidationResult, type NormalOrientation } from './types';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
 
@@ -7,6 +8,7 @@ const DEGENERATE_AREA_THRESHOLD = 1e-12;
 export function validateMesh(
   model: GeometryModel,
   graph?: GeometryGraph | null,
+  language: ContentLang = 'en',
 ): AnalysisModuleResult<ValidationResult> {
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
@@ -16,7 +18,7 @@ export function validateMesh(
       isWatertight: false, holeCount: 0, boundaryEdgeCount: 0,
       flippedNormalFaceCount: 0, totalFaceCount: 0, flippedNormalRatio: 0,
       normalOrientation: 'unknown', degenerateFaceCount: 0,
-    }, 'No position data');
+    }, translate(CONTENT, 'validation.noPositionData', language));
   }
 
   if (g.indices.length === 0) {
@@ -24,7 +26,7 @@ export function validateMesh(
       isWatertight: false, holeCount: 0, boundaryEdgeCount: 0,
       flippedNormalFaceCount: 0, totalFaceCount: g.triangleCount,
       flippedNormalRatio: 0, normalOrientation: 'unknown', degenerateFaceCount: 0,
-    }, 'Cannot validate non-indexed geometry');
+    }, translate(CONTENT, 'validation.nonIndexed', language));
   }
 
   const positions = g.positions;
@@ -106,11 +108,11 @@ export function validateMesh(
   };
 
   const parts: string[] = [];
-  if (isWatertight) parts.push('Mesh is watertight');
-  else parts.push(`Mesh is NOT watertight — ${holeCount} hole(s), ${boundaryCount} boundary edge(s)`);
-  if (flippedCount > 0) parts.push(`${flippedCount} face(s) (${(flippedNormalRatio * 100).toFixed(1)}%) have flipped normals`);
-  if (degenerateCount > 0) parts.push(`${degenerateCount} degenerate face(s)`);
-  parts.push(`Normal orientation: ${orientation}`);
+  if (isWatertight) parts.push(translate(CONTENT, 'validation.watertight', language));
+  else parts.push(translate(CONTENT, 'validation.notWatertight', language, { holes: holeCount, boundary: boundaryCount }));
+  if (flippedCount > 0) parts.push(translate(CONTENT, 'validation.flippedNormals', language, { count: flippedCount, pct: (flippedNormalRatio * 100).toFixed(1) }));
+  if (degenerateCount > 0) parts.push(translate(CONTENT, 'validation.degenerateFaces', language, { count: degenerateCount }));
+  parts.push(translate(CONTENT, 'validation.normalOrientation', language, { orientation }));
 
   return moduleResult('validation', confidence, Math.round(performance.now() - startTime), result, parts.join('. '));
 }

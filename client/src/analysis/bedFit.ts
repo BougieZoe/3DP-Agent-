@@ -7,6 +7,7 @@ import {
   type PrinterBedProfile,
   type PrinterProfileId,
 } from './types';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
 
@@ -27,12 +28,13 @@ export function checkBedFit(
   model: GeometryModel,
   printerId: PrinterProfileId = 'bambu_x1c',
   graph?: GeometryGraph | null,
+  language: ContentLang = 'en',
 ): AnalysisModuleResult<BedFitResult> {
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
 
   if (!g) {
-    return moduleResult('bedFit', 0.0, 0, emptyBedFitResult(printerId), 'No position data');
+    return moduleResult('bedFit', 0.0, 0, emptyBedFitResult(printerId), translate(CONTENT, 'bedFit.noPositionData', language));
   }
 
   const origSize = { x: g.boundingBoxDimensions.x, y: g.boundingBoxDimensions.y, z: g.boundingBoxDimensions.z };
@@ -65,8 +67,8 @@ export function checkBedFit(
       rotation: { x: rot.x, y: rot.y, z: rot.z },
       score,
       reason: fitsX && fitsY && fitsZ
-        ? `Fits with ${clearX.toFixed(0)}mm X, ${clearY.toFixed(0)}mm Y, ${clearZ.toFixed(0)}mm Z clearance`
-        : `Does not fit (${rotatedSize.x.toFixed(0)}×${rotatedSize.y.toFixed(0)}×${rotatedSize.z.toFixed(0)})`,
+        ? translate(CONTENT, 'bedFit.fits', language, { x: clearX.toFixed(0), y: clearY.toFixed(0), z: clearZ.toFixed(0) })
+        : translate(CONTENT, 'bedFit.noFit', language, { x: rotatedSize.x.toFixed(0), y: rotatedSize.y.toFixed(0), z: rotatedSize.z.toFixed(0) }),
     });
   }
 
@@ -92,8 +94,17 @@ export function checkBedFit(
   const confidence: Confidence = 1.0;
 
   const explanation = fits
-    ? `Model fits on ${profile.name} (${profile.widthMm}×${profile.depthMm}×${profile.heightMm}mm). Best orientation: ${best.reason}`
-    : `Model does NOT fit on ${profile.name} in any orientation. Largest dimension: ${Math.max(origSize.x, origSize.y, origSize.z).toFixed(0)}mm`;
+    ? translate(CONTENT, 'bedFit.fitsProfile', language, {
+        name: profile.name,
+        w: profile.widthMm,
+        d: profile.depthMm,
+        h: profile.heightMm,
+        reason: best.reason,
+      })
+    : translate(CONTENT, 'bedFit.noFitProfile', language, {
+        name: profile.name,
+        max: Math.max(origSize.x, origSize.y, origSize.z).toFixed(0),
+      });
 
   return moduleResult('bedFit', confidence, Math.round(performance.now() - startTime), result, explanation);
 }
