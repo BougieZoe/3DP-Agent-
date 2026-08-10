@@ -12,6 +12,7 @@ import { APIKeyModal } from '@/components/APIKeyModal';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 import { fromThreeBufferGeometry, runAnalysisPipeline } from '@/analysis';
+import { CONTENT, translate, SUPPORTED_LANGUAGES } from '@shared/i18n/content';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
 import { Language, getTranslation } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
