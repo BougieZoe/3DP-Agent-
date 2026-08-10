@@ -1,5 +1,6 @@
 import type * as THREE from 'three';
 import type { AgentId, AgentOutput, AgentVerdict, RiskMarker } from '@shared/domain/agent';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { AgentResultWithExplanation } from './types';
 import type { UnifiedAnalysis } from '@/analysis';
 import type { Material } from '@/lib/materialState';
@@ -16,6 +17,8 @@ export interface AgentContext {
   previousOutputs: Map<AgentId, AgentOutput>;
   fileName: string;
   material: Material;
+  /** UI language — agents localize their user-facing analysis text. */
+  language: ContentLang;
 }
 
 export interface AgentCapabilities {
@@ -55,7 +58,9 @@ export abstract class BaseAgent {
       };
     } catch (error) {
       const durationMs = Math.round(performance.now() - startTime);
-      const message = error instanceof Error ? error.message : 'Unknown agent error';
+      const message = error instanceof Error
+        ? error.message
+        : translate(CONTENT, 'agent.unknownError', ctx.language);
 
       return {
         agentId: this.agentId,
@@ -63,7 +68,7 @@ export abstract class BaseAgent {
         score: 0,
         confidence: 0,
         verdict: 'inconclusive',
-        explanation: `Agent failed: ${message}`,
+        explanation: translate(CONTENT, 'agent.failed', ctx.language, { message }),
         details: { error: message },
         markers: [],
         durationMs,

@@ -1,3 +1,4 @@
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { UnifiedAnalysis } from '@/analysis';
 import {
   computeCategories,
@@ -29,6 +30,7 @@ function computeIntentMatch(
   intent: DesignIntent,
   categories: ConfidenceCategory[],
   semanticChecks: SemanticCheckResult[],
+  language: ContentLang = 'en',
 ): { score: number; matches: { aspect: string; passed: boolean; detail: string }[] } {
   const matches: { aspect: string; passed: boolean; detail: string }[] = [];
   const hasDims = intent.dimensions.x != null || intent.dimensions.y != null || intent.dimensions.z != null;
@@ -43,10 +45,10 @@ function computeIntentMatch(
       matches.push({
         aspect: 'dimensions',
         passed: ratio >= 0.66,
-        detail: `${passed}/${dimChecks.length} requested dimensions verified`,
+        detail: translate(CONTENT, 'cad.intent.dimsVerified', language, { passed, total: dimChecks.length }),
       });
     } else {
-      matches.push({ aspect: 'dimensions', passed: true, detail: 'Dimensions extracted but not verifiable from geometry' });
+      matches.push({ aspect: 'dimensions', passed: true, detail: translate(CONTENT, 'cad.intent.dimsNotVerifiable', language) });
     }
   }
 
@@ -58,8 +60,8 @@ function computeIntentMatch(
       aspect: 'process',
       passed: isCompatible,
       detail: isCompatible
-        ? `${intent.process} process compatible with geometry`
-        : `${intent.process} process may require support or orientation adjustments`,
+        ? translate(CONTENT, 'cad.intent.processCompatible', language, { process: intent.process })
+        : translate(CONTENT, 'cad.intent.processNeedsAdjust', language, { process: intent.process }),
     });
   }
 
@@ -70,13 +72,13 @@ function computeIntentMatch(
       aspect: 'requirements',
       passed: plausible,
       detail: plausible
-        ? 'Geometry supports stated functional requirements'
-        : 'Geometry may not meet all stated requirements',
+        ? translate(CONTENT, 'cad.intent.requirementsMet', language)
+        : translate(CONTENT, 'cad.intent.requirementsNotMet', language),
     });
   }
 
   if (matches.length === 0) {
-    matches.push({ aspect: 'general', passed: true, detail: 'Design intent parsed; verification limited by prompt specificity' });
+    matches.push({ aspect: 'general', passed: true, detail: translate(CONTENT, 'cad.intent.limited', language) });
   }
 
   const weightedScore = Math.round(
@@ -90,25 +92,27 @@ export function runConfidenceGate(
   analysis: UnifiedAnalysis,
   prompt: string,
   generationQuality?: GenerationQuality,
+  language?: ContentLang,
 ): {
   report: CADConfidenceReport;
   issues: Issue[];
 } {
+  const lang = language ?? 'en';
   const meta = parsePromptMeta(prompt);
   const designIntent = parseDesignIntent(prompt);
-  const categories = computeCategories(analysis);
+  const categories = computeCategories(analysis, lang);
   const quality = generationQuality ?? 'SUCCESS';
   const qualityPenalty = quality === 'FALLBACK' ? 12 : quality === 'FAILED' ? 40 : 0;
   const overallScore = Math.max(0, computeOverallScore(categories) - qualityPenalty);
   const semanticChecks = runSemanticChecks(meta, analysis);
-  const repairSuggestions = generateRepairSuggestions(analysis);
+  const repairSuggestions = generateRepairSuggestions(analysis, lang);
 
   const hasFailedChecks = semanticChecks.some(c => !c.passed && c.severity === 'error') || quality === 'FAILED';
   const hasWarningChecks = semanticChecks.some(c => !c.passed && c.severity === 'warning') || quality === 'FALLBACK';
   const verdict = computeVerdict(overallScore, hasFailedChecks, hasWarningChecks);
 
   const categoryIssues = buildIssuesFromCategories(categories);
-  const suggestionIssues = buildIssuesFromSuggestions(repairSuggestions, analysis);
+  const suggestionIssues = buildIssuesFromSuggestions(repairSuggestions, analysis, lang);
 
   const existingMessages = new Set(categoryIssues.map(i => i.message));
   for (const si of suggestionIssues) {
@@ -118,12 +122,12 @@ export function runConfidenceGate(
     }
   }
 
-  const structuralRisk = computeStructuralRisk(analysis);
-  const printRisk = computePrintRisk(analysis);
-  const intentMatch = computeIntentMatch(designIntent, categories, semanticChecks);
-  const manufacturingRisk = computeManufacturingRisk(structuralRisk, printRisk, intentMatch);
+  const structuralRisk = computeStructuralRisk(analysis, lang);
+  const printRisk = computePrintRisk(analysis, lang);
+  const intentMatch = computeIntentMatch(designIntent, categories, semanticChecks, lang);
+  const manufacturingRisk = computeManufacturingRisk(structuralRisk, printRisk, intentMatch, lang);
   const aggregatedRiskScore = aggregateOverallRisk(analysis, intentMatch.score);
-  const explanation = generateExplanation(categories, categoryIssues, repairSuggestions, aggregatedRiskScore);
+  const explanation = generateExplanation(categories, categoryIssues, repairSuggestions, aggregatedRiskScore, lang);
 
   return {
     report: {

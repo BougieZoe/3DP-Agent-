@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { AgentId, AgentOutput, AgentConsensus, DebateRound } from '@shared/domain/agent';
 import { calculateAgreementDelta, computeConsensusVerdict } from '@shared/domain/agent';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { UnifiedAnalysis } from '@/analysis';
 import type { Material } from '@/lib/materialState';
 import { DEFAULT_MATERIAL } from '@/lib/materialState';
@@ -55,7 +56,7 @@ export class AgentOrchestrator {
     unifiedAnalysis: UnifiedAnalysis,
     fileName: string,
     visionCanvas?: HTMLCanvasElement | null,
-    language?: string,
+    language?: ContentLang,
     material: Material = DEFAULT_MATERIAL,
   ): Promise<AgentRunSummary> {
     const startTime = performance.now();
@@ -71,6 +72,7 @@ export class AgentOrchestrator {
       previousOutputs: new Map(),
       fileName,
       material,
+      language: language ?? 'en',
     };
 
     if (visionCanvas) {
@@ -103,7 +105,7 @@ export class AgentOrchestrator {
     const debateResults = await this.runDebatePhase(ctx, enabledAgents, initialResults);
     const finalResults = this.applyDebateAdjustments(initialResults, debateResults);
 
-    const consensus = this.computeConsensus(finalResults, debateResults);
+    const consensus = this.computeConsensus(finalResults, debateResults, language ?? 'en');
     const votingRecords = this.buildVotingRecords(finalResults, debateResults);
     const totalDurationMs = Math.round(performance.now() - startTime);
 
@@ -126,7 +128,7 @@ export class AgentOrchestrator {
 
       const result = await Promise.race([
         agent.execute(ctx),
-        this.timeout(timeoutMs, agent.agentId),
+        this.timeout(timeoutMs, agent.agentId, ctx.language),
       ]);
 
       return result;
@@ -163,7 +165,7 @@ export class AgentOrchestrator {
         currentResult.score = adjustedScore;
         currentResult.verdict = agent.computeVerdict(adjustedScore);
         if (adjustment !== 0) {
-          currentResult.explanation += `\n\n[Debate Round ${round}] ${reviewResult.notes}`;
+          currentResult.explanation += `\n\n[${translate(CONTENT, 'agent.debateRound', ctx.language, { round })}] ${reviewResult.notes}`;
         }
       }
 
@@ -193,13 +195,14 @@ export class AgentOrchestrator {
   private computeConsensus(
     results: AgentResultWithExplanation[],
     debateRounds: DebateRound[],
+    language: ContentLang = 'en',
   ): AgentConsensus {
     if (results.length === 0) {
       return {
         overallScore: 0,
         agreementDelta: 0,
         verdict: 'inconclusive',
-        summary: 'No agent results available',
+        summary: translate(CONTENT, 'orchestrator.noResults', language),
         round: 0,
         totalRounds: 0,
         agentScores: {} as Record<AgentId, number>,
@@ -232,20 +235,37 @@ export class AgentOrchestrator {
 
     const summaryParts: string[] = [];
     for (const result of results) {
-      summaryParts.push(`${result.agentName}: ${Math.round(result.score)}/100 (${result.verdict})`);
+      summaryParts.push(translate(CONTENT, 'orchestrator.agentLine', language, {
+        name: getAgentLabel(result.agentId, language),
+        score: Math.round(result.score),
+        verdict: result.verdict,
+      }));
     }
 
-    let summary = `Consensus Score: ${overallScore}/100 (${consensusVerdict.toUpperCase()})\n`;
-    summary += `Agreement Delta: ${agreementDelta.toFixed(1)} (${agreementDelta < 10 ? 'strong agreement' : agreementDelta < 20 ? 'moderate agreement' : 'disagreement'})\n`;
-    summary += `Debate Rounds: ${totalRounds}\n\n`;
+    const agreementLabel =
+      agreementDelta < 10
+        ? translate(CONTENT, 'orchestrator.agreement.strong', language)
+        : agreementDelta < 20
+          ? translate(CONTENT, 'orchestrator.agreement.moderate', language)
+          : translate(CONTENT, 'orchestrator.agreement.disagreement', language);
+
+    let summary = translate(CONTENT, 'orchestrator.consensusScore', language, {
+      score: overallScore,
+      verdict: consensusVerdict.toUpperCase(),
+    });
+    summary += `\n${translate(CONTENT, 'orchestrator.agreementDelta', language, {
+      delta: agreementDelta.toFixed(1),
+      label: agreementLabel,
+    })}`;
+    summary += `\n${translate(CONTENT, 'orchestrator.debateRounds', language, { rounds: totalRounds })}\n\n`;
     summary += summaryParts.join('\n');
 
     if (consensusVerdict === 'pass') {
-      summary += '\n\nModel is print-ready. Minor optimizations may still improve quality.';
+      summary += `\n\n${translate(CONTENT, 'orchestrator.verdict.pass', language)}`;
     } else if (consensusVerdict === 'warning') {
-      summary += '\n\nModel has moderate issues. Review recommendations before printing.';
+      summary += `\n\n${translate(CONTENT, 'orchestrator.verdict.warning', language)}`;
     } else {
-      summary += '\n\nModel has critical issues. Significant modifications recommended before printing.';
+      summary += `\n\n${translate(CONTENT, 'orchestrator.verdict.fail', language)}`;
     }
 
     return {
@@ -282,7 +302,7 @@ export class AgentOrchestrator {
   private async captureVisionAnalysis(
     vertexData: { triangleCount: number; size: { x: number; y: number; z: number } },
     fileName: string,
-    language?: string,
+    language?: ContentLang,
   ): Promise<string | undefined> {
     const activeProvider = getActiveProvider();
     if (!activeProvider) return undefined;
@@ -296,7 +316,12 @@ export class AgentOrchestrator {
       + vertexData.size.y * vertexData.size.z * 2;
     const volume = vertexData.size.x * vertexData.size.y * vertexData.size.z;
 
-    const summary = `File: ${fileName}\nTriangles: ${vertexData.triangleCount}\nSurface Area: ${surfaceArea.toFixed(1)}mm²\nVolume: ${volume.toFixed(1)}mm³`;
+    const summary = translate(CONTENT, 'vision.geometrySummary', language ?? 'en', {
+      file: fileName,
+      triangles: vertexData.triangleCount,
+      area: surfaceArea.toFixed(1),
+      volume: volume.toFixed(1),
+    });
 
     const result = await visionProvider.analyzeWithAI(screenshot, summary, {
       provider: activeProvider,
@@ -306,16 +331,20 @@ export class AgentOrchestrator {
     return result.rawResponse;
   }
 
-  private timeout(ms: number, agentId: AgentId): Promise<AgentResultWithExplanation> {
+  private timeout(
+    ms: number,
+    agentId: AgentId,
+    language: ContentLang = 'en',
+  ): Promise<AgentResultWithExplanation> {
     return new Promise(resolve => {
       setTimeout(() => {
         resolve({
           agentId,
-          agentName: getAgentLabel(agentId),
+          agentName: getAgentLabel(agentId, language),
           score: 0,
           confidence: 0,
           verdict: 'inconclusive',
-          explanation: `Agent timed out after ${ms}ms`,
+          explanation: translate(CONTENT, 'orchestrator.timedOut', language, { ms }),
           details: { error: 'timeout' },
           markers: [],
           durationMs: ms,

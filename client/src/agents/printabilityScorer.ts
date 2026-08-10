@@ -1,4 +1,5 @@
 import type { AgentOutput } from '@shared/domain/agent';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { BaseAgent, type AgentContext } from './baseAgent';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 
@@ -59,11 +60,11 @@ export class PrintabilityScorer extends BaseAgent {
     const explanation = this.buildExplanation(breakdown, {
       wallThickness: { status: wtStatus, minThickness, thinWallRatio },
       overhang: { status: ohStatus, areas: overhangFaces },
-    });
+    }, ctx.language);
 
     const markers = [
-      ...this.scoreToMarkers(breakdown.wallThicknessScore, 'thin_wall', 'Wall thickness score'),
-      ...this.scoreToMarkers(breakdown.overhangScore, 'overhang', 'Overhang score'),
+      ...this.scoreToMarkers(breakdown.wallThicknessScore, 'thin_wall', 'printabilityScorer.marker.wallThickness', ctx.language),
+      ...this.scoreToMarkers(breakdown.overhangScore, 'overhang', 'printabilityScorer.marker.overhang', ctx.language),
     ];
 
     const score = Math.round(breakdown.weightedTotal);
@@ -81,6 +82,7 @@ export class PrintabilityScorer extends BaseAgent {
   review(ctx: AgentContext, otherOutputs: AgentOutput[]): { scoreAdjustment: number; notes: string } {
     let adjustment = 0;
     const notes: string[] = [];
+    const lang = ctx.language;
 
     for (const output of otherOutputs) {
       if (output.agentId === 'failure_predictor') {
@@ -88,20 +90,20 @@ export class PrintabilityScorer extends BaseAgent {
         const riskCount = (details?.risks as unknown[])?.length ?? 0;
         if (riskCount > 3) {
           adjustment -= 10;
-          notes.push('Failure predictor found significant risks — adjusted score down');
+          notes.push(translate(CONTENT, 'printabilityScorer.review.failureRisks', lang));
         }
       }
       if (output.agentId === 'geometry_analyst') {
         if (output.score < 40) {
           adjustment -= 5;
-          notes.push('Geometry analyst flagged critical issues — adjusted score down');
+          notes.push(translate(CONTENT, 'printabilityScorer.review.geometryCritical', lang));
         }
       }
     }
 
     return {
       scoreAdjustment: adjustment,
-      notes: notes.join('; ') || 'No significant adjustments from peer review',
+      notes: notes.join('; ') || translate(CONTENT, 'printabilityScorer.review.noAdjustments', lang),
     };
   }
 
@@ -153,43 +155,64 @@ export class PrintabilityScorer extends BaseAgent {
     };
   }
 
-  private buildExplanation(breakdown: ScoringBreakdown, analysis: { wallThickness: { status: string; minThickness: number | null; thinWallRatio?: number }; overhang: { status: string; areas: number } }): string {
+  private buildExplanation(
+    breakdown: ScoringBreakdown,
+    analysis: { wallThickness: { status: string; minThickness: number | null; thinWallRatio?: number }; overhang: { status: string; areas: number } },
+    language: ContentLang = 'en',
+  ): string {
     const lines = [
-      `Printability Score: ${Math.round(breakdown.weightedTotal)}/100 (${breakdown.category.toUpperCase()})`,
+      translate(CONTENT, 'printabilityScorer.score', language, { score: Math.round(breakdown.weightedTotal), category: breakdown.category.toUpperCase() }),
       ``,
-      `Breakdown:`,
-      `  Wall Thickness (${(breakdown.wallThicknessWeight * 100).toFixed(0)}%): ${breakdown.wallThicknessScore}/100 — ${analysis.wallThickness.status}`,
-      `  Overhang (${(breakdown.overhangWeight * 100).toFixed(0)}%): ${breakdown.overhangScore}/100 — ${analysis.overhang.status}`,
-      `  Aspect Ratio (${(breakdown.aspectRatioWeight * 100).toFixed(0)}%): ${breakdown.aspectRatioScore}/100`,
-      `  Volume (${(breakdown.volumeWeight * 100).toFixed(0)}%): ${breakdown.volumeScore}/100`,
-      `  Feature Detail (${(breakdown.featureDetailWeight * 100).toFixed(0)}%): ${breakdown.featureDetailScore}/100`,
+      translate(CONTENT, 'printabilityScorer.breakdown', language),
+      translate(CONTENT, 'printabilityScorer.wallThicknessLine', language, {
+        weight: (breakdown.wallThicknessWeight * 100).toFixed(0),
+        score: breakdown.wallThicknessScore,
+        status: analysis.wallThickness.status,
+      }),
+      translate(CONTENT, 'printabilityScorer.overhangLine', language, {
+        weight: (breakdown.overhangWeight * 100).toFixed(0),
+        score: breakdown.overhangScore,
+        status: analysis.overhang.status,
+      }),
+      translate(CONTENT, 'printabilityScorer.aspectRatioLine', language, {
+        weight: (breakdown.aspectRatioWeight * 100).toFixed(0),
+        score: breakdown.aspectRatioScore,
+      }),
+      translate(CONTENT, 'printabilityScorer.volumeLine', language, {
+        weight: (breakdown.volumeWeight * 100).toFixed(0),
+        score: breakdown.volumeScore,
+      }),
+      translate(CONTENT, 'printabilityScorer.featureDetailLine', language, {
+        weight: (breakdown.featureDetailWeight * 100).toFixed(0),
+        score: breakdown.featureDetailScore,
+      }),
     ];
 
     if (breakdown.wallThicknessScore < 50) {
       const twr = analysis.wallThickness.thinWallRatio;
       const minLabel = analysis.wallThickness.minThickness != null
         ? analysis.wallThickness.minThickness.toFixed(2)
-        : 'not measured';
+        : translate(CONTENT, 'notMeasured', language);
       if (twr != null && twr > 0) {
-        lines.push(``, `\u26a0 Thin walls: ${(twr * 100).toFixed(1)}% of sampled regions below FDM threshold (p5=${minLabel}mm). Consider thickening.`);
+        lines.push(``, translate(CONTENT, 'printabilityScorer.thinWalls', language, { pct: (twr * 100).toFixed(1), minLabel }));
       } else {
-        lines.push(``, `\u26a0 Primary concern: wall thickness (${minLabel}mm). Consider thickening to 2mm+ for reliable printing.`);
+        lines.push(``, translate(CONTENT, 'printabilityScorer.primaryConcern', language, { minLabel }));
       }
     }
     if (breakdown.overhangScore < 50) {
-      lines.push(`\u26a0 Secondary concern: ${analysis.overhang.areas} overhang faces need support.`);
+      lines.push(translate(CONTENT, 'printabilityScorer.secondaryConcern', language, { areas: analysis.overhang.areas }));
     }
 
     return lines.join('\n');
   }
 
-  private scoreToMarkers(score: number, type: 'thin_wall' | 'overhang', prefix: string) {
+  private scoreToMarkers(score: number, type: 'thin_wall' | 'overhang', key: string, language: ContentLang) {
     if (score >= 50) return [];
     return [{
       position: { x: 0, y: 0, z: 0 },
       type: type as 'thin_wall' | 'overhang',
       severity: 1 - score / 100,
-      description: `${prefix}: ${Math.round(score)}/100`,
+      description: translate(CONTENT, key, language, { score: Math.round(score) }),
     }];
   }
 

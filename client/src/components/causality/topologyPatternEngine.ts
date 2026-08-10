@@ -1,3 +1,4 @@
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { MarkerInput } from './causalityEngine';
 
 export interface PatternSignature {
@@ -199,7 +200,7 @@ function persistPatterns(patterns: TopologyPattern[]): void {
   } catch { /* storage may be full */ }
 }
 
-export function detectPatterns(markers: MarkerInput[]): PatternMatch[] {
+export function detectPatterns(markers: MarkerInput[], language: ContentLang = 'en'): PatternMatch[] {
   const clusters = clusterMarkers(markers);
   const knownPatterns = getKnownPatterns();
   const matches: PatternMatch[] = [];
@@ -222,6 +223,8 @@ export function detectPatterns(markers: MarkerInput[]): PatternMatch[] {
       matches.push({
         pattern: {
           ...bestPattern,
+          name: translate(CONTENT, `causality.pattern.${bestPattern.id}.name`, language),
+          description: translate(CONTENT, `causality.pattern.${bestPattern.id}.desc`, language),
           confidence: Math.round(bestSim * 100),
           lastSeen: Date.now(),
           signature: sig,

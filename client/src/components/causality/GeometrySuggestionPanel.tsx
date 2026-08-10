@@ -1,3 +1,4 @@
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { GeometrySuggestion } from './counterfactualEngine';
 import { PANEL, SEMANTIC } from '@/lib/visualLanguage';
 
@@ -5,6 +6,7 @@ interface GeometrySuggestionPanelProps {
   suggestions: GeometrySuggestion[];
   selectedSuggestionId: string | null;
   onSelectSuggestion: (id: string | null) => void;
+  language?: ContentLang;
 }
 
 const TYPE_ICON_MAP: Record<string, string> = {
@@ -33,10 +35,11 @@ function Delta({ value, suffix = '' }: { value: number; suffix?: string }) {
   return <span className={`${PANEL.fontTiny} ${color}`}>{value > 0 ? '+' : ''}{value}{suffix}</span>;
 }
 
-function SuggestionCard({ suggestion, selected, onSelect }: {
+function SuggestionCard({ suggestion, selected, onSelect, language }: {
   suggestion: GeometrySuggestion;
   selected: boolean;
   onSelect: () => void;
+  language: ContentLang;
 }) {
   return (
     <button
@@ -51,7 +54,7 @@ function SuggestionCard({ suggestion, selected, onSelect }: {
         <span className={`text-xs text-muted-foreground/50`}>{TYPE_ICON_MAP[suggestion.type] ?? '\u25CF'}</span>
         <span className={`${PANEL.fontSmall} text-foreground/80`}>{suggestion.label}</span>
         <span className={`ml-auto ${PANEL.fontValue} text-muted-foreground/40`}>
-          {suggestion.confidence}% confidence
+          {suggestion.confidence}% {translate(CONTENT, 'causality.confidence', language)}
         </span>
       </div>
 
@@ -87,7 +90,7 @@ function SuggestionCard({ suggestion, selected, onSelect }: {
 
       {suggestion.chainComparison.length > 0 && (
         <div className={`${PANEL.borderSubtle} pt-1.5 mt-1 border-t-0 border-l-0 border-r-0`}>
-          <div className={`${PANEL.fontTiny} text-muted-foreground/30 mb-1`}>CONSEQUENCE CHAIN</div>
+          <div className={`${PANEL.fontTiny} text-muted-foreground/30 mb-1`}>{translate(CONTENT, 'causality.consequenceChain', language)}</div>
           <div className="space-y-0.5">
             {suggestion.chainComparison.map(c => (
               <div key={c.eventId} className={`flex items-center gap-2 ${PANEL.fontTiny}`}>
@@ -110,13 +113,13 @@ function SuggestionCard({ suggestion, selected, onSelect }: {
   );
 }
 
-export function GeometrySuggestionPanel({ suggestions, selectedSuggestionId, onSelectSuggestion }: GeometrySuggestionPanelProps) {
+export function GeometrySuggestionPanel({ suggestions, selectedSuggestionId, onSelectSuggestion, language = 'en' }: GeometrySuggestionPanelProps) {
   if (suggestions.length === 0) {
     return (
       <div className="pt-4 space-y-4">
-        <div className={PANEL.fontLabel}>COUNTERFACTUAL SUGGESTIONS</div>
+        <div className={PANEL.fontLabel}>{translate(CONTENT, 'causality.suggestionsHeader', language)}</div>
         <div className={`${PANEL.fontTiny} text-muted-foreground/40 text-center py-8 ${PANEL.borderSubtle} ${PANEL.roundedInner} border-dashed`}>
-          No counterfactual suggestions available for this geometry.
+          {translate(CONTENT, 'causality.noSuggestions', language)}
         </div>
       </div>
     );
@@ -125,8 +128,8 @@ export function GeometrySuggestionPanel({ suggestions, selectedSuggestionId, onS
   return (
     <div className="pt-4 space-y-3">
       <div className="flex items-center justify-between">
-        <span className={PANEL.fontLabel}>COUNTERFACTUAL SUGGESTIONS</span>
-        <span className={`${PANEL.fontValue} text-muted-foreground/30`}>{suggestions.length} suggestions</span>
+        <span className={PANEL.fontLabel}>{translate(CONTENT, 'causality.suggestionsHeader', language)}</span>
+        <span className={`${PANEL.fontValue} text-muted-foreground/30`}>{translate(CONTENT, 'causality.suggestionsCount', language, { count: suggestions.length })}</span>
       </div>
 
       {suggestions.map(s => (
@@ -135,6 +138,7 @@ export function GeometrySuggestionPanel({ suggestions, selectedSuggestionId, onS
           suggestion={s}
           selected={selectedSuggestionId === s.id}
           onSelect={() => onSelectSuggestion(selectedSuggestionId === s.id ? null : s.id)}
+          language={language}
         />
       ))}
     </div>

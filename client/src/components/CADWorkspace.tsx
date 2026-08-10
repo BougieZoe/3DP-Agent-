@@ -721,7 +721,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
       setGeometry(geo);
       setAnalysis(unified);
-      const gateResult = runConfidenceGate(unified, p, quality);
+      const gateResult = runConfidenceGate(unified, p, quality, language);
       setConfidenceReport(gateResult.report);
       setGateIssues(gateResult.issues);
       setCadRunHistory(prev => [...prev, {
@@ -786,7 +786,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       setGeometry(geo);
       setAnalysis(unified);
 
-      const gateResult = runConfidenceGate(unified, prompt || 'parametric plate', 'SUCCESS');
+      const gateResult = runConfidenceGate(unified, prompt || 'parametric plate', 'SUCCESS', language);
       setConfidenceReport(gateResult.report);
       setGateIssues(gateResult.issues);
       setRepairInfo({
@@ -860,7 +860,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       material,
       printerId: 'bambu_x1c',
     });
-    const gateResult = runConfidenceGate(unified, prompt, 'SUCCESS');
+    const gateResult = runConfidenceGate(unified, prompt, 'SUCCESS', language);
 
     setGeometry(modifiedGeo);
     setAnalysis(unified);
@@ -987,7 +987,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       material,
       printerId: 'bambu_x1c',
     });
-    const gateResult = runConfidenceGate(unified, prompt, 'SUCCESS');
+    const gateResult = runConfidenceGate(unified, prompt, 'SUCCESS', language);
 
     const afterConfidence = gateResult.report.overallScore;
     const afterVerdict = gateResult.report.verdict;

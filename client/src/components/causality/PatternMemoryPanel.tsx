@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { PatternMatch } from './topologyPatternEngine';
 import { PANEL, PATTERN_COLORS_CSS } from '@/lib/visualLanguage';
 
@@ -6,6 +7,7 @@ interface PatternMemoryPanelProps {
   matches: PatternMatch[];
   selectedPatternId: string | null;
   onSelectPattern: (id: string | null) => void;
+  language?: ContentLang;
 }
 
 /**
@@ -76,11 +78,12 @@ function groupByPattern(matches: PatternMatch[]): PatternGroup[] {
   return result.sort((a, b) => b.avgSeverity - a.avgSeverity);
 }
 
-function OccurrenceRow({ match, colorClass, selected, onSelect }: {
+function OccurrenceRow({ match, colorClass, selected, onSelect, language }: {
   match: PatternMatch;
   colorClass: string;
   selected: boolean;
   onSelect: () => void;
+  language: ContentLang;
 }) {
   return (
     <button
@@ -93,21 +96,22 @@ function OccurrenceRow({ match, colorClass, selected, onSelect }: {
     >
       <span className={colorClass}>{match.similarity}%</span>
       <span className="text-muted-foreground/40">
-        {(match.avgClusterSeverity * 100).toFixed(0)}% severity
+        {(match.avgClusterSeverity * 100).toFixed(0)}% {translate(CONTENT, 'causality.severity', language)}
       </span>
       <span className="text-muted-foreground/40">
-        {match.clusterPositions.length} markers
+        {match.clusterPositions.length} {translate(CONTENT, 'causality.markers', language)}
       </span>
     </button>
   );
 }
 
-function PatternGroupCard({ group, selectedPatternId, onSelectPattern, open, onToggle }: {
+function PatternGroupCard({ group, selectedPatternId, onSelectPattern, open, onToggle, language }: {
   group: PatternGroup;
   selectedPatternId: string | null;
   onSelectPattern: (id: string | null) => void;
   open: boolean;
   onToggle: () => void;
+  language: ContentLang;
 }) {
   const colorClass = PATTERN_COLORS_CSS[group.pattern.id] ?? 'text-muted-foreground';
   const sevMin = (group.severityMin * 100).toFixed(0);
@@ -132,7 +136,7 @@ function PatternGroupCard({ group, selectedPatternId, onSelectPattern, open, onT
         </span>
         {group.pattern.recurrenceCount > 1 && (
           <span className={`${PANEL.chip} text-muted-foreground/30 ${PANEL.borderSubtle}`}>
-            seen {group.pattern.recurrenceCount}×
+            {translate(CONTENT, 'causality.seen', language, { count: group.pattern.recurrenceCount })}
           </span>
         )}
         <span className={`ml-auto ${PANEL.fontValue} ${colorClass}`}>{sevAvg}%</span>
@@ -140,7 +144,7 @@ function PatternGroupCard({ group, selectedPatternId, onSelectPattern, open, onT
 
       {/* Summary line — the collapsed state shows severity range + average. */}
       <div className={`${PANEL.fontTiny} text-muted-foreground/40 mt-0.5 ml-4 leading-tight`}>
-        severity {sevMin}–{sevMax}% · avg {sevAvg}% · best match {group.bestSimilarity}%
+        {translate(CONTENT, 'causality.severity', language)} {sevMin}–{sevMax}% · avg {sevAvg}% · {translate(CONTENT, 'causality.bestMatch', language)} {group.bestSimilarity}%
       </div>
 
       {/* Expanded: description, per-occurrence rows, consequence chain. */}
@@ -160,6 +164,7 @@ function PatternGroupCard({ group, selectedPatternId, onSelectPattern, open, onT
                   colorClass={colorClass}
                   selected={selectedPatternId === occurrenceId}
                   onSelect={() => onSelectPattern(selectedPatternId === occurrenceId ? null : occurrenceId)}
+                  language={language}
                 />
               );
             })}
@@ -172,7 +177,7 @@ function PatternGroupCard({ group, selectedPatternId, onSelectPattern, open, onT
   );
 }
 
-export function PatternMemoryPanel({ matches, selectedPatternId, onSelectPattern }: PatternMemoryPanelProps) {
+export function PatternMemoryPanel({ matches, selectedPatternId, onSelectPattern, language = 'en' }: PatternMemoryPanelProps) {
   const groups = groupByPattern(matches);
 
   // Groups are collapsed by default; open one if it contains the selected occurrence.
@@ -196,9 +201,9 @@ export function PatternMemoryPanel({ matches, selectedPatternId, onSelectPattern
   if (matches.length === 0) {
     return (
       <div className="pt-4 space-y-4">
-        <div className={PANEL.fontLabel}>RECOGNIZED PATTERNS</div>
+        <div className={PANEL.fontLabel}>{translate(CONTENT, 'causality.patternsHeader', language)}</div>
         <div className={`${PANEL.fontTiny} text-muted-foreground/40 text-center py-8 ${PANEL.borderSubtle} ${PANEL.roundedInner} border-dashed`}>
-          No structural patterns detected in this analysis.
+          {translate(CONTENT, 'causality.noPatterns', language)}
         </div>
       </div>
     );
@@ -213,8 +218,8 @@ export function PatternMemoryPanel({ matches, selectedPatternId, onSelectPattern
   return (
     <div className="pt-4 space-y-3">
       <div className="flex items-center justify-between">
-        <span className={PANEL.fontLabel}>RECOGNIZED PATTERNS</span>
-        <span className={`${PANEL.fontValue} text-muted-foreground/30`}>{groups.length} found</span>
+        <span className={PANEL.fontLabel}>{translate(CONTENT, 'causality.patternsHeader', language)}</span>
+        <span className={`${PANEL.fontValue} text-muted-foreground/30`}>{translate(CONTENT, 'causality.patternsFound', language, { count: groups.length })}</span>
       </div>
 
       {groups.map(group => (
@@ -225,6 +230,7 @@ export function PatternMemoryPanel({ matches, selectedPatternId, onSelectPattern
           onSelectPattern={onSelectPattern}
           open={openGroups.has(group.pattern.id)}
           onToggle={() => toggle(group.pattern.id)}
+          language={language}
         />
       ))}
     </div>

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ModelData, classifyQuestion, answerLocally } from '@/lib/ruleEngine';
 import { getActiveProvider, getKey, callAI, AIProvider } from '@/lib/apiKeys';
+import { CONTENT, translate } from '@shared/i18n/content';
 import { Language } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
 import type { Material } from '@/lib/materialState';
@@ -75,14 +76,14 @@ Wall Thickness:
   - Minimum: ${minWallLabel(model.wallThickness.minThickness)} mm
   - Status: ${wallStatus.toUpperCase()}
   - Affected areas: ${model.wallThickness.areas}
-  ${wallStatus === 'critical' ? '⚠ CRITICAL: Walls below 0.8mm will not survive FDM printing. Structural failure likely.' : ''}
-  ${wallStatus === 'warning' ? '⚠ WARNING: Some walls are thin. Material choice and orientation matter here.' : ''}
+  ${wallStatus === 'critical' ? translate(CONTENT, 'prompt.criticalWall', lang) : ''}
+  ${wallStatus === 'warning' ? translate(CONTENT, 'prompt.warningWall', lang) : ''}
 
 Overhang Analysis:
   - Faces beyond 45°: ${model.overhang.areas}
   - Status: ${overhangStatus.toUpperCase()}
-  ${overhangStatus === 'critical' ? '⚠ CRITICAL: Severe overhangs detected. Support strategy is mandatory.' : ''}
-  ${overhangStatus === 'warning' ? '⚠ WARNING: Moderate overhangs. Evaluate orientation before adding supports.' : ''}
+  ${overhangStatus === 'critical' ? translate(CONTENT, 'prompt.criticalOverhang', lang) : ''}
+  ${overhangStatus === 'warning' ? translate(CONTENT, 'prompt.warningOverhang', lang) : ''}
 
 ## HOW YOU RESPOND
 - Reason from the actual numbers above. Reference them when relevant.
@@ -96,8 +97,9 @@ Overhang Analysis:
 - Keep your reply under 120 words. No internal reasoning, no restating what
   was asked, no meta-commentary about your process — just the direct answer.
 
-## LANGUAGE
-Reply in ${lang === 'zh' ? 'Chinese (Simplified)' : lang === 'ja' ? 'Japanese' : 'English'}.`;
+${translate(CONTENT, 'prompt.language', lang, {
+    language: translate(CONTENT, 'prompt.languageName', lang),
+  })}`;
 }
 
 function buildInitialAssessment(model: ModelData, lang: Language): string {
@@ -106,58 +108,25 @@ function buildInitialAssessment(model: ModelData, lang: Language): string {
   const hasCritical = wallStatus === 'critical' || overhangStatus === 'critical';
   const hasWarning = wallStatus === 'warning' || overhangStatus === 'warning';
   const dims = `${model.dims.x.toFixed(0)}×${model.dims.y.toFixed(0)}×${model.dims.z.toFixed(0)}mm`;
+  const minWall = minWallLabel(model.wallThickness.minThickness);
 
-  if (lang === 'zh') {
-    if (hasCritical) {
-      return `已扫描 ${model.fileName}（${dims}）。\n\n⚠ 发现严重问题：${
-        wallStatus === 'critical' ? `最小壁厚 ${minWallLabel(model.wallThickness.minThickness)}mm，低于FDM可打印阈值。` : ''
-      }${
-        overhangStatus === 'critical' ? `检测到 ${model.overhang.areas} 个严重悬垂面。` : ''
-      }\n\n打印前必须处理这些问题。你想先从哪里开始？`;
-    }
-    if (hasWarning) {
-      return `已扫描 ${model.fileName}（${dims}）。\n\n模型基本可打印，但有几个需要注意的地方：${
-        wallStatus === 'warning' ? `\n— 部分区域壁厚偏薄（最小 ${minWallLabel(model.wallThickness.minThickness)}mm），材料选择和摆放方向会影响结果` : ''
-      }${
-        overhangStatus === 'warning' ? `\n— ${model.overhang.areas} 个悬垂面超过45°，建议评估是否需要支撑` : ''
-      }\n\n你想优先解决哪个问题？`;
-    }
-    return `已扫描 ${model.fileName}（${dims}）。\n\n几何结构良好——壁厚和悬垂角度都在可接受范围内。这个模型打印风险较低。\n\n你想讨论材料选择、打印参数，还是有其他问题？`;
-  }
-
-  if (lang === 'ja') {
-    if (hasCritical) {
-      return `${model.fileName}（${dims}）をスキャンしました。\n\n⚠ 重大な問題を検出：${
-        wallStatus === 'critical' ? `最小肉厚 ${minWallLabel(model.wallThickness.minThickness)}mm はFDM印刷の閾値以下です。` : ''
-      }${
-        overhangStatus === 'critical' ? `${model.overhang.areas} 箇所の深刻なオーバーハングを検出。` : ''
-      }\n\n印刷前にこれらを修正する必要があります。どこから確認しますか？`;
-    }
-    if (hasWarning) {
-      return `${model.fileName}（${dims}）をスキャンしました。\n\n基本的には印刷可能ですが、注意点があります：${
-        wallStatus === 'warning' ? `\n— 一部の壁が薄い（最小 ${minWallLabel(model.wallThickness.minThickness)}mm）。素材と向きの選択が重要です` : ''
-      }${
-        overhangStatus === 'warning' ? `\n— ${model.overhang.areas} 箇所が45°を超えるオーバーハング。サポートを検討してください` : ''
-      }\n\nどこから対処しますか？`;
-    }
-    return `${model.fileName}（${dims}）をスキャンしました。\n\nジオメトリは良好です。肉厚とオーバーハングともに許容範囲内です。印刷リスクは低いと判断します。\n\n素材選択や印刷設定について質問はありますか？`;
-  }
+  let text = translate(CONTENT, 'chat.assessment.scanned', lang, { file: model.fileName, dims });
 
   if (hasCritical) {
-    return `Scanned ${model.fileName} (${dims}).\n\n⚠ Critical issues found:${
-      wallStatus === 'critical' ? `\n— Min wall thickness ${minWallLabel(model.wallThickness.minThickness)}mm — below the FDM survival threshold. These walls will not hold.` : ''
-    }${
-      overhangStatus === 'critical' ? `\n— ${model.overhang.areas} faces with severe overhang. Support strategy is not optional here.` : ''
-    }\n\nThis needs to be addressed before you send this to a printer. What do you want to tackle first?`;
+    text += translate(CONTENT, 'chat.assessment.criticalLead', lang);
+    if (wallStatus === 'critical') text += translate(CONTENT, 'chat.assessment.criticalWall', lang, { t: minWall });
+    if (overhangStatus === 'critical') text += translate(CONTENT, 'chat.assessment.criticalOverhang', lang, { faces: model.overhang.areas });
+    text += translate(CONTENT, 'chat.assessment.criticalTail', lang);
+  } else if (hasWarning) {
+    text += translate(CONTENT, 'chat.assessment.warningLead', lang);
+    if (wallStatus === 'warning') text += translate(CONTENT, 'chat.assessment.warningWall', lang, { t: minWall });
+    if (overhangStatus === 'warning') text += translate(CONTENT, 'chat.assessment.warningOverhang', lang, { faces: model.overhang.areas });
+    text += translate(CONTENT, 'chat.assessment.warningTail', lang);
+  } else {
+    text += translate(CONTENT, 'chat.assessment.good', lang);
   }
-  if (hasWarning) {
-    return `Scanned ${model.fileName} (${dims}).\n\nPrintable, but there are things to watch:${
-      wallStatus === 'warning' ? `\n— Some areas are thin (min ${minWallLabel(model.wallThickness.minThickness)}mm). Material choice and orientation will matter here.` : ''
-    }${
-      overhangStatus === 'warning' ? `\n— ${model.overhang.areas} faces beyond 45°. Worth evaluating orientation before committing to supports.` : ''
-    }\n\nWhat do you want to dig into?`;
-  }
-  return `Scanned ${model.fileName} (${dims}).\n\nGeometry looks clean — wall thickness and overhangs are both within acceptable range. Low print risk.\n\nWhat do you want to talk through — material, settings, or something else?`;
+
+  return text;
 }
 
 export function ChatPanel({ model, language, onNeedAPIKey, material = DEFAULT_MATERIAL }: ChatPanelProps) {
@@ -208,11 +177,7 @@ export function ChatPanel({ model, language, onNeedAPIKey, material = DEFAULT_MA
       setMessages(prev => [...prev, {
         id: Date.now().toString() + '_a',
         role: 'assistant',
-        content: language === 'zh'
-          ? '这个问题需要AI推理。配置API Key后我可以给你更深入的制造分析。'
-          : language === 'ja'
-            ? 'この質問にはAI推論が必要です。API Keyを設定すると、より深い製造分析が可能になります。'
-            : 'This needs AI reasoning. Add an API key and I can give you a proper fabrication analysis.',
+        content: translate(CONTENT, 'chat.needApiKey', language),
         source: 'local',
       }]);
       setIsLoading(false);
@@ -233,7 +198,9 @@ export function ChatPanel({ model, language, onNeedAPIKey, material = DEFAULT_MA
       setMessages(prev => [...prev, {
         id: Date.now().toString() + '_err',
         role: 'assistant',
-        content: `// ERROR: ${err instanceof Error ? err.message : 'API call failed'}`,
+        content: translate(CONTENT, 'chat.errorPrefix', language, {
+          message: err instanceof Error ? err.message : translate(CONTENT, 'chat.errorFallback', language),
+        }),
         source: provider,
       }]);
     } finally {
@@ -252,10 +219,10 @@ export function ChatPanel({ model, language, onNeedAPIKey, material = DEFAULT_MA
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-          <span className="text-xs font-mono text-primary tracking-widest">FABRICATION CONSULTANT</span>
+          <span className="text-xs font-mono text-primary tracking-widest">{translate(CONTENT, 'chat.header', language)}</span>
         </div>
         <span className="text-xs font-mono text-muted-foreground/40">
-          {getActiveProvider() ? `AI: ${AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel}` : 'LOCAL MODE'}
+          {getActiveProvider() ? `AI: ${AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel}` : translate(CONTENT, 'chat.localMode', language)}
         </span>
       </div>
 
@@ -265,7 +232,7 @@ export function ChatPanel({ model, language, onNeedAPIKey, material = DEFAULT_MA
             <div className={`max-w-[85%] ${msg.role === 'user' ? 'text-right' : ''}`}>
               {msg.role === 'assistant' && (
                 <div className={`text-xs font-mono mb-1 ${sourceColor(msg.source)}`}>
-                  {msg.source && msg.source !== 'local' ? `[${AI_PROVIDER_METADATA[msg.source].shortLabel}]` : '[LOCAL]'}
+                  {msg.source && msg.source !== 'local' ? `[${AI_PROVIDER_METADATA[msg.source].shortLabel}]` : translate(CONTENT, 'chat.localBadge', language)}
                 </div>
               )}
               <div className={`text-xs font-mono leading-relaxed whitespace-pre-wrap px-3 py-2 rounded-sm ${
@@ -281,7 +248,7 @@ export function ChatPanel({ model, language, onNeedAPIKey, material = DEFAULT_MA
         {isLoading && (
           <div className="flex justify-start">
             <div className="text-xs font-mono text-muted-foreground px-3 py-2 border border-border/50 rounded-sm bg-background">
-              <span className="animate-pulse">▋ analyzing...</span>
+              <span className="animate-pulse">{translate(CONTENT, 'chat.analyzing', language)}</span>
             </div>
           </div>
         )}
@@ -308,11 +275,7 @@ export function ChatPanel({ model, language, onNeedAPIKey, material = DEFAULT_MA
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
-          placeholder={
-            language === 'zh' ? '问关于这个模型的制造问题...' :
-            language === 'ja' ? 'このモデルの製造について質問...' :
-            'Ask about this model...'
-          }
+          placeholder={translate(CONTENT, 'chat.placeholder', language)}
           className="flex-1 bg-background border border-border rounded-sm px-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/50"
         />
         <button

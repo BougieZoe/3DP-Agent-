@@ -285,5 +285,6 @@ export function buildAgentContext(overrides?: {
     fileName: overrides?.fileName ?? 'test.stl',
     material: overrides?.material ?? mockMaterial(),
     visionAnalysis: undefined,
+    language: 'en',
   };
 }

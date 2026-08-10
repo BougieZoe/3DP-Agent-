@@ -1,4 +1,5 @@
 import type { AgentId, AgentOutput, AgentVerdict, RiskMarker } from '@shared/domain/agent';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 
 export interface AgentStageConfig {
   agentId: AgentId;
@@ -48,22 +49,10 @@ export interface AgentRunSummary {
   usedVision: boolean;
 }
 
-export function getAgentLabel(agentId: AgentId): string {
-  const labels: Record<AgentId, string> = {
-    geometry_analyst: 'Geometry Analyst',
-    printability_scorer: 'Printability Scorer',
-    failure_predictor: 'Failure Predictor',
-    optimization_advisor: 'Optimization Advisor',
-  };
-  return labels[agentId];
+export function getAgentLabel(agentId: AgentId, lang: ContentLang = 'en'): string {
+  return translate(CONTENT, `agentName.${agentId}`, lang);
 }
 
-export function getAgentDescription(agentId: AgentId): string {
-  const descriptions: Record<AgentId, string> = {
-    geometry_analyst: 'Analyzes mesh geometry, wall thickness, overhangs, and features',
-    printability_scorer: 'Scores overall printability based on weighted geometry metrics',
-    failure_predictor: 'Identifies potential failure modes during printing',
-    optimization_advisor: 'Suggests geometry improvements and orientation changes',
-  };
-  return descriptions[agentId];
+export function getAgentDescription(agentId: AgentId, lang: ContentLang = 'en'): string {
+  return translate(CONTENT, `agentDesc.${agentId}`, lang);
 }

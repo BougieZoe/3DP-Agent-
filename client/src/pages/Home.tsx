@@ -380,16 +380,16 @@ export default function Home() {
     ? deriveSupportStatus(unifiedAnalysis.support.result)
     : null;
   const causalityGraph = useMemo(() => agentMarkers.length > 0
-    ? buildCausalityGraph(agentMarkers, supportDecision?.status)
-    : null, [agentMarkers, supportDecision?.status]);
+    ? buildCausalityGraph(agentMarkers, supportDecision?.status, language)
+    : null, [agentMarkers, supportDecision?.status, language]);
   const patternMatches: PatternMatch[] = useMemo(() =>
-    agentMarkers.length > 0 ? detectPatterns(agentMarkers) : [],
-    [agentMarkers],
+    agentMarkers.length > 0 ? detectPatterns(agentMarkers, language) : [],
+    [agentMarkers, language],
   );
 
   const counterfactualSuggestions: GeometrySuggestion[] = useMemo(() =>
-    agentMarkers.length > 0 ? evaluateCounterfactuals(agentMarkers, patternMatches) : [],
-    [agentMarkers, patternMatches],
+    agentMarkers.length > 0 ? evaluateCounterfactuals(agentMarkers, patternMatches, language) : [],
+    [agentMarkers, patternMatches, language],
   );
 
   const selectedSuggestionPositions = useMemo(() => {
@@ -457,7 +457,7 @@ export default function Home() {
           </select>
           {/* Language */}
           <div className="flex items-center gap-0.5">
-            {(['en', 'ja', 'zh'] as Language[]).map(lang => (
+            {SUPPORTED_LANGUAGES.map(lang => (
               <button key={lang} onClick={() => setLanguage(lang)}
                 className={`text-xs font-mono px-2 py-1 rounded-sm transition-all ${
                   language === lang ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-primary'
@@ -658,6 +658,7 @@ export default function Home() {
   <ReportGenerator
     analysis={unifiedAnalysis}
     fileName={uploadedModel?.fileName ?? "model.stl"}
+    language={language}
   />
 )}
                       </div>
@@ -721,8 +722,8 @@ export default function Home() {
                           <div key={result.agentId} className="border border-border rounded-sm bg-card p-4">
                             <div className="flex items-center justify-between mb-2">
                               <div>
-                                <span className="text-xs font-mono text-primary">{getAgentLabel(result.agentId)}</span>
-                                <span className="ml-2 text-xs text-muted-foreground/50">{getAgentDescription(result.agentId)}</span>
+                                <span className="text-xs font-mono text-primary">{getAgentLabel(result.agentId, language)}</span>
+                                <span className="ml-2 text-xs text-muted-foreground/50">{getAgentDescription(result.agentId, language)}</span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className={`text-xs font-mono px-2 py-0.5 border rounded-sm ${
@@ -751,12 +752,12 @@ export default function Home() {
 
                         {/* Voting Records */}
                         <details className="border border-border rounded-sm bg-card/50 p-3 cursor-pointer">
-                          <summary className="text-xs font-mono text-muted-foreground">Voting & Debate Record</summary>
+                          <summary className="text-xs font-mono text-muted-foreground">{translate(CONTENT, 'agent.votingRecord', language)}</summary>
                           <div className="mt-2 space-y-1">
                             {agentRun.votingRecords.map(record => (
                               <div key={record.agentId} className="flex justify-between text-xs font-mono text-muted-foreground/70">
-                                <span>{getAgentLabel(record.agentId)}</span>
-                                <span>weight: {(record.weight * 100).toFixed(0)}% | score: {Math.round(record.adjustedScore)} | confidence: {(record.confidence * 100).toFixed(0)}%</span>
+                                <span>{getAgentLabel(record.agentId, language)}</span>
+                                <span>{translate(CONTENT, 'agent.weight', language)}: {(record.weight * 100).toFixed(0)}% | {translate(CONTENT, 'agent.score', language)}: {Math.round(record.adjustedScore)} | {translate(CONTENT, 'agent.confidence', language)}: {(record.confidence * 100).toFixed(0)}%</span>
                               </div>
                             ))}
                           </div>
@@ -779,13 +780,14 @@ export default function Home() {
                 {/* CAUSALITY TAB */}
                 {tab === 'causality' && (
                   <div className="pt-4 space-y-4">
-                    <CausalityPanel graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} />
+                    <CausalityPanel graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} language={language} />
                     <div className="border-t border-border/20 my-2" />
                     {patternMatches.length > 0 && (
                       <PatternMemoryPanel
                         matches={patternMatches}
                         selectedPatternId={selectedPatternId}
                         onSelectPattern={setSelectedPatternId}
+                        language={language}
                       />
                     )}
                     <div className="border-t border-border/20 my-2" />
@@ -793,6 +795,7 @@ export default function Home() {
                       suggestions={counterfactualSuggestions}
                       selectedSuggestionId={selectedSuggestionId}
                       onSelectSuggestion={setSelectedSuggestionId}
+                      language={language}
                     />
                   </div>
                 )}
