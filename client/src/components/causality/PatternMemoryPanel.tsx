@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { PatternMatch } from './topologyPatternEngine';
 import { PANEL, PATTERN_COLORS_CSS } from '@/lib/visualLanguage';
 
@@ -35,7 +36,13 @@ interface PatternGroup {
    * same array, so the id must use the prop index, not the display order.
    */
   occurrences: Array<{ match: PatternMatch; index: number }>;
+  /** Best (highest) per-occurrence similarity in this group. */
   bestSimilarity: number;
+  /** Average severity (0–1) across occurrences. */
+  avgSeverity: number;
+  /** Min / max severity (0–1) across occurrences. */
+  severityMin: number;
+  severityMax: number;
 }
 
 function groupByPattern(matches: PatternMatch[]): PatternGroup[] {
@@ -43,18 +50,30 @@ function groupByPattern(matches: PatternMatch[]): PatternGroup[] {
   matches.forEach((match, index) => {
     let group = groups.get(match.pattern.id);
     if (!group) {
-      group = { pattern: match.pattern, occurrences: [], bestSimilarity: 0 };
+      group = {
+        pattern: match.pattern,
+        occurrences: [],
+        bestSimilarity: 0,
+        avgSeverity: 0,
+        severityMin: 1,
+        severityMax: 0,
+      };
       groups.set(match.pattern.id, group);
     }
     group.occurrences.push({ match, index });
     group.bestSimilarity = Math.max(group.bestSimilarity, match.similarity);
+    group.severityMin = Math.min(group.severityMin, match.avgClusterSeverity);
+    group.severityMax = Math.max(group.severityMax, match.avgClusterSeverity);
   });
   const result: PatternGroup[] = [];
   groups.forEach(group => {
-    group.occurrences.sort((a, b) => b.match.similarity - a.match.similarity);
+    group.occurrences.sort((a, b) => b.match.avgClusterSeverity - a.match.avgClusterSeverity);
+    group.avgSeverity =
+      group.occurrences.reduce((sum, o) => sum + o.match.avgClusterSeverity, 0) / group.occurrences.length;
     result.push(group);
   });
-  return result.sort((a, b) => b.bestSimilarity - a.bestSimilarity);
+  // Most critical group (highest average severity) first.
+  return result.sort((a, b) => b.avgSeverity - a.avgSeverity);
 }
 
 function OccurrenceRow({ match, colorClass, selected, onSelect }: {
@@ -83,53 +102,97 @@ function OccurrenceRow({ match, colorClass, selected, onSelect }: {
   );
 }
 
-function PatternGroupCard({ group, selectedPatternId, onSelectPattern }: {
+function PatternGroupCard({ group, selectedPatternId, onSelectPattern, open, onToggle }: {
   group: PatternGroup;
   selectedPatternId: string | null;
   onSelectPattern: (id: string | null) => void;
+  open: boolean;
+  onToggle: () => void;
 }) {
   const colorClass = PATTERN_COLORS_CSS[group.pattern.id] ?? 'text-muted-foreground';
+  const sevMin = (group.severityMin * 100).toFixed(0);
+  const sevMax = (group.severityMax * 100).toFixed(0);
+  const sevAvg = (group.avgSeverity * 100).toFixed(0);
+
   return (
     <div className={`${PANEL.paddingCard} ${PANEL.roundedInner} ${PANEL.borderSubtle}`}>
-      <div className="flex items-center gap-2 mb-1">
-        <span className={`${PANEL.fontSmall} ${colorClass}`}>
-          {group.pattern.name}
+      {/* Collapsible group header — name, occurrence count, average severity.
+          Collapsed by default; click to expand the individual occurrences. */}
+      <button
+        onClick={onToggle}
+        className="w-full text-left flex items-center gap-2"
+        aria-expanded={open}
+      >
+        <span className={`${PANEL.fontTiny} text-muted-foreground/30 transition-transform duration-150 ${open ? 'rotate-90' : ''}`}>
+          {'▸'}
+        </span>
+        <span className={`${PANEL.fontSmall} ${colorClass}`}>{group.pattern.name}</span>
+        <span className={`${PANEL.chip} text-muted-foreground/40 ${PANEL.borderSubtle}`}>
+          ×{group.occurrences.length}
         </span>
         {group.pattern.recurrenceCount > 1 && (
-          <span className={`${PANEL.chip} text-muted-foreground/40 ${PANEL.borderSubtle}`}>
-            x{group.pattern.recurrenceCount}
+          <span className={`${PANEL.chip} text-muted-foreground/30 ${PANEL.borderSubtle}`}>
+            seen {group.pattern.recurrenceCount}×
           </span>
         )}
-        <span className={`ml-auto ${PANEL.fontTiny} text-muted-foreground/40`}>
-          {group.occurrences.length} occurrence{group.occurrences.length > 1 ? 's' : ''}
-        </span>
+        <span className={`ml-auto ${PANEL.fontValue} ${colorClass}`}>{sevAvg}%</span>
+      </button>
+
+      {/* Summary line — the collapsed state shows severity range + average. */}
+      <div className={`${PANEL.fontTiny} text-muted-foreground/40 mt-0.5 ml-4 leading-tight`}>
+        severity {sevMin}–{sevMax}% · avg {sevAvg}% · best match {group.bestSimilarity}%
       </div>
 
-      <div className={`${PANEL.fontTiny} text-muted-foreground/60 mb-2 leading-tight`}>
-        {group.pattern.description}
-      </div>
+      {/* Expanded: description, per-occurrence rows, consequence chain. */}
+      {open && (
+        <div className="mt-2 space-y-2">
+          <div className={`${PANEL.fontTiny} text-muted-foreground/60 leading-tight`}>
+            {group.pattern.description}
+          </div>
 
-      <div className={PANEL.gapItems}>
-        {group.occurrences.map(({ match, index }) => {
-          const occurrenceId = `${match.pattern.id}-${index}`;
-          return (
-            <OccurrenceRow
-              key={occurrenceId}
-              match={match}
-              colorClass={colorClass}
-              selected={selectedPatternId === occurrenceId}
-              onSelect={() => onSelectPattern(selectedPatternId === occurrenceId ? null : occurrenceId)}
-            />
-          );
-        })}
-      </div>
+          <div className={PANEL.gapItems}>
+            {group.occurrences.map(({ match, index }) => {
+              const occurrenceId = `${match.pattern.id}-${index}`;
+              return (
+                <OccurrenceRow
+                  key={occurrenceId}
+                  match={match}
+                  colorClass={colorClass}
+                  selected={selectedPatternId === occurrenceId}
+                  onSelect={() => onSelectPattern(selectedPatternId === occurrenceId ? null : occurrenceId)}
+                />
+              );
+            })}
+          </div>
 
-      <ConsequenceChain steps={group.pattern.consequenceChain} />
+          <ConsequenceChain steps={group.pattern.consequenceChain} />
+        </div>
+      )}
     </div>
   );
 }
 
 export function PatternMemoryPanel({ matches, selectedPatternId, onSelectPattern }: PatternMemoryPanelProps) {
+  const groups = groupByPattern(matches);
+
+  // Groups are collapsed by default; open one if it contains the selected occurrence.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    if (selectedPatternId) {
+      // Occurrence ids are `${pattern.id}-${index}`; pattern ids use underscores.
+      const id = selectedPatternId.split('-')[0];
+      if (groups.some(g => g.pattern.id === id)) initial.add(id);
+    }
+    return initial;
+  });
+
+  // Selecting an occurrence (e.g. from a 3D highlight) opens its group.
+  useEffect(() => {
+    if (!selectedPatternId) return;
+    const id = selectedPatternId.split('-')[0];
+    setOpenGroups(prev => (prev.has(id) ? prev : new Set(prev).add(id)));
+  }, [selectedPatternId]);
+
   if (matches.length === 0) {
     return (
       <div className="pt-4 space-y-4">
@@ -141,7 +204,11 @@ export function PatternMemoryPanel({ matches, selectedPatternId, onSelectPattern
     );
   }
 
-  const groups = groupByPattern(matches);
+  const toggle = (id: string) => setOpenGroups(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   return (
     <div className="pt-4 space-y-3">
@@ -156,6 +223,8 @@ export function PatternMemoryPanel({ matches, selectedPatternId, onSelectPattern
           group={group}
           selectedPatternId={selectedPatternId}
           onSelectPattern={onSelectPattern}
+          open={openGroups.has(group.pattern.id)}
+          onToggle={() => toggle(group.pattern.id)}
         />
       ))}
     </div>
