@@ -18,9 +18,9 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 const MAX_TIMEOUT_MS = 600_000;
 // Authoring build123d source from a natural-language prompt is a single,
 // often multi-step code-gen call — 30s was far too tight and caused frequent
-// "TimeoutError: The operation was aborted due to timeout". Must stay well
-// under the client request timeout (180s) so the LLM call isn't the bottleneck.
-const LLM_TIMEOUT_MS = 90_000;
+// "TimeoutError: The operation was aborted due to timeout". 150s stays under
+// the client request budget (180s) while giving reasoning models headroom.
+const LLM_TIMEOUT_MS = 150_000;
 const STDERR_TAIL = 4000;
 const MAX_REPAIR_ATTEMPTS = 2;
 const METRICS_PATH = path.join(PROJECT_ROOT, '.cad-bridge', 'metrics.jsonl');
