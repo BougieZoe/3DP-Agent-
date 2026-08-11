@@ -18,6 +18,7 @@ import {
   Wrench,
   Ruler,
   Settings2,
+  Box,
 } from "lucide-react";
 import { createLocalBridgeTransport } from "@/design/transport/localBridge";
 import { parseSTL } from "@/lib/stlParser";
@@ -35,6 +36,7 @@ import { optimizeDesign, type OptimizationDecision } from "@/agents/designOptimi
 import { DynamicParamsPanel } from "./cad/DynamicParamsPanel";
 import { parseParamsFromSource, sliderBounds } from "@/lib/cadParams";
 import { runCadAnalysis } from "@/lib/cadAnalysis";
+import { geometryToThreeMf } from "@/lib/threeMf";
 
 const LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
   openai:   { baseUrl: 'https://api.openai.com/v1',            model: 'gpt-4o' },
@@ -1150,6 +1152,13 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       .catch((err) => console.error('[CADStudio] STEP download failed:', err));
   };
 
+  const download3MF = () => {
+    if (!geometry) return;
+    const bytes = geometryToThreeMf(geometry);
+    const blob = new Blob([bytes], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel' });
+    downloadBlob(`cad-model.3mf`, blob);
+  };
+
   const score = confidenceReport?.overallScore ?? 0;
   const verdict = confidenceReport?.verdict ?? 'FAIL';
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -1383,6 +1392,12 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
               <button onClick={downloadSTEP} title={t('cadDownloadStep')}
                 className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0">
                 <FileText className="w-4 h-4" />
+              </button>
+            )}
+            {geometry && (
+              <button onClick={download3MF} title={t('meshDownload3mf')}
+                className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0">
+                <Box className="w-4 h-4" />
               </button>
             )}
           </div>
