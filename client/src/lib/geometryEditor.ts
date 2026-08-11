@@ -1,11 +1,5 @@
 import * as THREE from 'three';
 
-export interface GeometryModification {
-  type: 'wall_thickening' | 'vertex_offset' | 'smooth';
-  regions?: number[][];
-  amount?: number;
-}
-
 export function cloneGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   const cloned = geometry.clone();
   cloned.computeVertexNormals();
@@ -92,50 +86,6 @@ export function optimizeOrientation(
   cloned.computeVertexNormals();
 
   return { geometry: cloned, rotation: { x: rotX, y: rotY, z: rotZ } };
-}
-
-export function smoothGeometry(
-  geometry: THREE.BufferGeometry,
-  iterations: number = 1,
-): THREE.BufferGeometry {
-  const cloned = geometry.clone();
-  const pos = cloned.getAttribute('position');
-  if (!pos) return cloned;
-
-  const positions = pos.array as Float32Array;
-  const vertexCount = positions.length / 3;
-
-  for (let iter = 0; iter < iterations; iter++) {
-    const newPositions = new Float32Array(positions);
-
-    for (let i = 3; i < positions.length - 3; i += 3) {
-      const neighbors: number[] = [];
-
-      if (i - 9 >= 0) { neighbors.push(i - 9, i - 8, i - 7); }
-      if (i + 9 < positions.length) { neighbors.push(i + 9, i + 10, i + 11); }
-
-      if (neighbors.length > 0) {
-        let sumX = 0, sumY = 0, sumZ = 0;
-        const neighborCount = neighbors.length / 3;
-        for (let n = 0; n < neighbors.length; n += 3) {
-          sumX += positions[neighbors[n]];
-          sumY += positions[neighbors[n + 1]];
-          sumZ += positions[neighbors[n + 2]];
-        }
-        newPositions[i] = positions[i] * 0.5 + (sumX / neighborCount) * 0.5;
-        newPositions[i + 1] = positions[i + 1] * 0.5 + (sumY / neighborCount) * 0.5;
-        newPositions[i + 2] = positions[i + 2] * 0.5 + (sumZ / neighborCount) * 0.5;
-      }
-    }
-
-    for (let i = 0; i < positions.length; i++) {
-      positions[i] = newPositions[i];
-    }
-  }
-
-  pos.needsUpdate = true;
-  cloned.computeVertexNormals();
-  return cloned;
 }
 
 export function applySuggestions(
