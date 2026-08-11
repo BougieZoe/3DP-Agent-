@@ -298,6 +298,25 @@ export function createCadBridgeRouter(): Router {
     res.json({ ok: true, ...status, skillDir: SKILL_DIR });
   });
 
+  // Download the exact STEP file produced for a run (the primary CAD artifact
+  // for CNC / machining). Only the run's own file is exposed; ids are validated
+  // to avoid path traversal.
+  router.get('/:id/step', async (req: Request, res: Response) => {
+    const id = req.params.id ?? '';
+    if (!/^[0-9a-f-]{20,}$/i.test(id)) {
+      res.status(400).json({ ok: false, error: { code: 'invalid-artifact', detail: 'invalid run id' } });
+      return;
+    }
+    try {
+      const buf = await readFile(path.join(RUNS_ROOT, id, 'model.step'));
+      res.setHeader('Content-Type', 'application/step');
+      res.setHeader('Content-Disposition', 'attachment; filename="model.step"');
+      res.send(buf);
+    } catch {
+      res.status(404).json({ ok: false, error: { code: 'invalid-artifact', detail: 'STEP file not found' } });
+    }
+  });
+
   router.post('/', async (req: Request, res: Response) => {
     const startedAt = Date.now();
     const body = (req.body ?? {}) as BridgeGenerateBody;
