@@ -83,8 +83,8 @@ export function createPdfCanvasSurface() {
   function splitTextToSize(s: string, maxWidthMm: number): string[] {
     applyFont();
     const maxPx = mm2px(maxWidthMm);
-    const words = s.split(/\s+/);
-    if (words.length <= 1 && s.trim()) return [s];
+    const words = s.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [s];
     const lines: string[] = [];
     let line = '';
     for (const w of words) {
@@ -94,6 +94,20 @@ export function createPdfCanvasSurface() {
         line = w;
       } else {
         line = candidate;
+      }
+      // A single token still too wide (typical for CJK, no spaces): break by char.
+      if (line && current.ctx.measureText(line).width > maxPx) {
+        let chunk = '';
+        for (const ch of line) {
+          if (current.ctx.measureText(chunk + ch).width > maxPx && chunk) {
+            lines.push(chunk);
+            chunk = ch;
+          } else {
+            chunk += ch;
+          }
+        }
+        if (chunk) lines.push(chunk);
+        line = '';
       }
     }
     if (line) lines.push(line);
