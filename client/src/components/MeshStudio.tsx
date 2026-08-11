@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import { Grid, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { Sparkles } from 'lucide-react';
 import { parseSTL } from '@/lib/stlParser';
+import { fitCameraToGeometry } from '@/lib/modelNormalization';
 import { runCadAnalysis } from '@/lib/cadAnalysis';
 import { createMeshProvider } from '@/design/mesh';
 import { useMaterial } from '@/contexts/MaterialContext';
@@ -42,18 +43,26 @@ function MeshPreview({ geometry }: { geometry: THREE.BufferGeometry | null }) {
     );
   }, [geometry]);
 
-  // Center the mesh on the build plate for a consistent view.
-  const centered = useMemo(() => {
-    if (!mesh || !geometry) return null;
-    geometry.computeBoundingBox();
-    const center = new THREE.Vector3();
-    geometry.boundingBox?.getCenter(center);
-    mesh.position.copy(center.clone().negate());
-    return mesh;
-  }, [mesh, geometry]);
+  if (!mesh) return null;
+  return <primitive object={mesh} />;
+}
 
-  if (!centered) return null;
-  return <primitive object={centered} />;
+/** Frame the camera to the current mesh so it never fills the viewport. */
+function CameraFit({
+  geometry,
+  controlsRef,
+}: {
+  geometry: THREE.BufferGeometry | null;
+  controlsRef: { current: any };
+}) {
+  const { camera } = useThree();
+  useEffect(() => {
+    if (!geometry) return;
+    // Defer a frame so the mesh/controls exist before framing.
+    const raf = requestAnimationFrame(() => fitCameraToGeometry(camera, controlsRef.current, geometry));
+    return () => cancelAnimationFrame(raf);
+  }, [geometry, camera, controlsRef]);
+  return null;
 }
 
 interface PrintRow {
@@ -73,6 +82,7 @@ export function MeshStudio({ language }: { language: Language }) {
   const [issues, setIssues] = useState<ConfidenceIssue[]>([]);
   const [status, setStatus] = useState<'idle' | 'submitting' | 'generating' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const controlsRef = useRef<any>(null);
 
   const generate = useCallback(async () => {
     const p = prompt.trim();
@@ -201,7 +211,8 @@ export function MeshStudio({ language }: { language: Language }) {
             fadeStrength={1}
           />
           <MeshPreview geometry={geometry} />
-          <OrbitControls enableDamping dampingFactor={0.05} />
+          <CameraFit geometry={geometry} controlsRef={controlsRef} />
+          <OrbitControls ref={controlsRef} enableDamping dampingFactor={0.05} />
         </Canvas>
       </section>
 
