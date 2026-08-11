@@ -143,6 +143,9 @@ async function llmChatOnce(llm: BridgeLlmConfig, userMessage: string): Promise<s
     body: JSON.stringify({
       model: llm.model,
       max_tokens: 4096,
+      // Low temperature → repeatable output. Same prompt should yield a
+      // similar shape across clicks instead of a random variation each time.
+      temperature: 0.2,
       messages: [
         { role: 'system', content: CAD_SYSTEM_PROMPT },
         { role: 'user', content: userMessage },
