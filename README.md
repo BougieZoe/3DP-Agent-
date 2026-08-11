@@ -221,7 +221,15 @@ Open http://localhost:3000.
 >
 > **Mesh Studio** works fully in the browser in mock mode (procedural
 > primitives, no API server). Its optional "REPAIR & PROCESS" step needs the
-> API server (trimesh-based mesh diagnostics/decimate/place-on-plate).
+> API server (mesh diagnostics/decimate/place-on-plate) and, for watertight
+> repair, an isolated mesh venv (numpy 1.x + pymeshfix, separate from the
+> build123d venv which needs numpy 2.x):
+>
+> ```bash
+> .cad-bridge/.venv/bin/python -m venv .cad-bridge/mesh-venv
+> .cad-bridge/mesh-venv/bin/pip install "numpy<2" trimesh pymeshfix \
+>   fast-simplification networkx manifold3d
+> ```
 
 ---
 
