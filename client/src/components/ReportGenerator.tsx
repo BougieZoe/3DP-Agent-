@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { CONTENT, translate, type ContentLang } from "@shared/i18n/content";
 import type { UnifiedAnalysis } from "../analysis/types";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
-import { preparePdfFonts } from "@/lib/pdfFont";
+import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -515,9 +515,7 @@ async function generateClientPDF(
   lang: Language,
   fileName: string
 ): Promise<void> {
-  const { jsPDF } = await import("jspdf" as never) as { jsPDF: new (o?: object) => JsPDF };
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  pdfFont = await preparePdfFonts(doc as never, lang);
+  const doc = createPdfCanvasSurface();
 
   const { light, score } = getTrafficLight(analysis);
   const metrics = analysis.metrics?.result;
@@ -623,7 +621,7 @@ async function generateClientPDF(
   drawFooter(doc, score);
 
   const baseName = fileName.replace(/\.stl$/i, "");
-  doc.save(`${baseName}_client.pdf`);
+  await doc.save(`${baseName}_client.pdf`);
 }
 
 // ─── DESIGNER PDF ──────────────────────────────────────────────────────────────
@@ -634,9 +632,7 @@ async function generateDesignerPDF(
   lang: Language,
   fileName: string
 ): Promise<void> {
-  const { jsPDF } = await import("jspdf" as never) as { jsPDF: new (o?: object) => JsPDF };
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  pdfFont = await preparePdfFonts(doc as never, lang);
+  const doc = createPdfCanvasSurface();
 
   const { light, score } = getTrafficLight(analysis);
   const metrics = analysis.metrics?.result;
@@ -833,7 +829,7 @@ async function generateDesignerPDF(
   drawFooter(doc, score);
 
   const baseName = fileName.replace(/\.stl$/i, "");
-  doc.save(`${baseName}_designer.pdf`);
+  await doc.save(`${baseName}_designer.pdf`);
 }
 
 // ─── FACTORY PDF ───────────────────────────────────────────────────────────────
@@ -843,9 +839,7 @@ async function generateFactoryPDF(
   lang: Language,
   fileName: string
 ): Promise<void> {
-  const { jsPDF } = await import("jspdf" as never) as { jsPDF: new (o?: object) => JsPDF };
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  pdfFont = await preparePdfFonts(doc as never, lang);
+  const doc = createPdfCanvasSurface();
 
   const { light, score } = getTrafficLight(analysis);
   const metrics = analysis.metrics?.result;
@@ -1011,7 +1005,7 @@ async function generateFactoryPDF(
   drawFooter(doc, score, reportId);
 
   const baseName = fileName.replace(/\.stl$/i, "");
-  doc.save(`${baseName}_factory.pdf`);
+  await doc.save(`${baseName}_factory.pdf`);
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
