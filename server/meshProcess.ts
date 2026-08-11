@@ -59,7 +59,7 @@ function runMeshProcess(
  */
 export function createMeshProcessRouter(): Router {
   const router = Router();
-  router.use(expressJson({ limit: '2mb' }));
+  router.use(expressJson({ limit: '50mb' }));
 
   router.post('/', async (req, res) => {
     const body = (req.body ?? {}) as { stlBase64?: string; decimateTo?: number };
