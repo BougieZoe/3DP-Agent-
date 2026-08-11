@@ -40,6 +40,10 @@ const LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
   fireworks:{ baseUrl: 'https://api.fireworks.ai/inference/v1', model: 'accounts/fireworks/models/deepseek-v4-pro' },
 };
 
+// Whole-request budget (LLM source authoring + build123d execution). Must be
+// ≥ the bridge's LLM_TIMEOUT_MS (90s) so the client never aborts first.
+const CAD_GENERATE_TIMEOUT_MS = 180_000;
+
 interface FallbackEntry { source: string; summary: string }
 
 const FALLBACK_SOURCES: Record<string, FallbackEntry> = {
@@ -637,7 +641,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         templateSourceRef.current = fallback.source;
         setSourceVersion(v => v + 1);
         const transport = createLocalBridgeTransport({ generatorSource: fallback.source });
-        outcome = await transport.generate({ prompt: p, timeoutMs: 60_000, baseModel });
+        outcome = await transport.generate({ prompt: p, timeoutMs: CAD_GENERATE_TIMEOUT_MS, baseModel });
         if (outcome.ok) setLlmInfo(`Template: ${fallback.matched}`);
       } else {
         const llmProvider = getActiveProvider();
@@ -648,7 +652,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
           const transport = createLocalBridgeTransport({
             llm: { baseUrl: llmCfg.baseUrl, apiKey: llmKey, model: llmCfg.model },
           });
-          outcome = await transport.generate({ prompt: p, timeoutMs: 60_000, baseModel });
+          outcome = await transport.generate({ prompt: p, timeoutMs: CAD_GENERATE_TIMEOUT_MS, baseModel });
         } else {
           outcome = null;
         }
@@ -773,7 +777,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     setError(null);
     try {
       const transport = createLocalBridgeTransport({ generatorSource: source });
-      const outcome = await transport.generate({ prompt: prompt || 'parametric plate', timeoutMs: 60_000 });
+      const outcome = await transport.generate({ prompt: prompt || 'parametric plate', timeoutMs: CAD_GENERATE_TIMEOUT_MS });
       if (!outcome || !outcome.ok) throw new Error('Regeneration failed');
 
       templateSourceRef.current = source;
