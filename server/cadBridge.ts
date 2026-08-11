@@ -16,7 +16,11 @@ const DEFAULT_VENV_PYTHON = path.join(PROJECT_ROOT, '.cad-bridge', '.venv', 'bin
 const RUNS_ROOT = path.join(PROJECT_ROOT, '.cad-bridge', 'runs');
 const DEFAULT_TIMEOUT_MS = 180_000;
 const MAX_TIMEOUT_MS = 600_000;
-const LLM_TIMEOUT_MS = 30_000;
+// Authoring build123d source from a natural-language prompt is a single,
+// often multi-step code-gen call — 30s was far too tight and caused frequent
+// "TimeoutError: The operation was aborted due to timeout". Must stay well
+// under the client request timeout (180s) so the LLM call isn't the bottleneck.
+const LLM_TIMEOUT_MS = 90_000;
 const STDERR_TAIL = 4000;
 const MAX_REPAIR_ATTEMPTS = 2;
 const METRICS_PATH = path.join(PROJECT_ROOT, '.cad-bridge', 'metrics.jsonl');
