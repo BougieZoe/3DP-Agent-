@@ -81,7 +81,7 @@ export function FeaturesSection({ t }: { t: (key: TKey) => string }) {
       <FeatureGroup
         title={t('featuresIncludedTitle')}
         accentBorder="border-primary"
-        iconColor="text-primary"
+        iconColor="text-muted-foreground"
         items={LOCAL_FEATURES}
         t={t}
       />
@@ -89,7 +89,7 @@ export function FeaturesSection({ t }: { t: (key: TKey) => string }) {
         title={t('featuresAiTitle')}
         subtitle={t('featuresAiSub')}
         accentBorder="border-orange-400"
-        iconColor="text-orange-400"
+        iconColor="text-muted-foreground"
         items={AI_FEATURES}
         t={t}
         keyTag
