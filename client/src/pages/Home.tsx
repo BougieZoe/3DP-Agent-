@@ -41,6 +41,10 @@ import { GeometrySuggestionPanel } from '@/components/causality/GeometrySuggesti
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
 import { CognitiveScan } from '@/components/3D/CognitiveScan';
 import { AttentionPulse } from '@/components/3D/AttentionPulse';
+import { ViewfinderCorners } from '@/components/decorative/ViewfinderCorners';
+import { ScanlineSweep } from '@/components/decorative/ScanlineSweep';
+import { BedStatusTicker } from '@/components/decorative/BedStatusTicker';
+import { LayerHeightLabel } from '@/components/decorative/LayerHeightLabel';
 import { toast } from 'sonner';
 
 function unifiedToModelData(
@@ -624,13 +628,20 @@ export default function Home() {
             {/* Upload */}
             <div>
               <div className="text-xs text-muted-foreground/50 mb-2 font-mono tracking-widest">// {t('input')}</div>
-              <STLUploadHandler
-                onModelLoaded={handleModelLoaded}
-                onError={e => toast.error(e)}
-                language={language}
-                units={units}
-                onUnitsChange={handleUnitsChange}
-              />
+              <div className="relative">
+                <STLUploadHandler
+                  onModelLoaded={handleModelLoaded}
+                  onError={e => toast.error(e)}
+                  language={language}
+                  units={units}
+                  onUnitsChange={handleUnitsChange}
+                />
+                {/* Decorative presentation-only touches — remove any one freely */}
+                <ViewfinderCorners />
+                <ScanlineSweep />
+                <BedStatusTicker />
+                <LayerHeightLabel />
+              </div>
             </div>
 
             {/* Analysis tabs */}
