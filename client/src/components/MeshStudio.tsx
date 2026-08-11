@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { Grid, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import { Sparkles, Download, Box } from 'lucide-react';
+import { Sparkles, Download, Box, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 import { parseSTL } from '@/lib/stlParser';
 import { fitCameraToGeometry } from '@/lib/modelNormalization';
 import { countTriangles, decimateGeometry } from '@/lib/meshOps';
 import { processMesh, type MeshProcessDiagnostics } from '@/lib/meshProcessClient';
 import { runCadAnalysis } from '@/lib/cadAnalysis';
 import { geometryToThreeMf } from '@/lib/threeMf';
+import { recordPrintOutcome, getPrintStats, type PrintOutcome } from '@/lib/printFeedback';
 import { createMeshProvider } from '@/design/mesh';
 import { useMaterial } from '@/contexts/MaterialContext';
 import { getTranslation, translations } from '@/lib/i18n';
@@ -94,6 +95,7 @@ export function MeshStudio({ language }: { language: Language }) {
   const [stlBytes, setStlBytes] = useState<ArrayBuffer | null>(null);
   const [serverDiag, setServerDiag] = useState<MeshProcessDiagnostics | null>(null);
   const [fitKey, setFitKey] = useState(0);
+  const [printStats, setPrintStats] = useState(() => getPrintStats());
   const controlsRef = useRef<any>(null);
 
   const generate = useCallback(async (overridePrompt?: string) => {
@@ -161,6 +163,12 @@ export function MeshStudio({ language }: { language: Language }) {
     a.download = `${(prompt || 'mesh').slice(0, 40).replace(/[^a-z0-9_-]/gi, '_')}.3mf`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handlePrintFeedback = (outcome: PrintOutcome) => {
+    if (!gate) return;
+    recordPrintOutcome({ confidence: gate.overallScore, verdict: gate.verdict, outcome });
+    setPrintStats(getPrintStats());
   };
 
   const handleDecimate = () => {
@@ -439,6 +447,41 @@ export function MeshStudio({ language }: { language: Language }) {
                     )}
                   </>
                 )}
+
+                {/* Print feedback — calibrates the confidence gate with reality */}
+                <div className="pt-1.5 border-t border-border/10 space-y-1.5">
+                  <div className="text-[10px] text-muted-foreground/40 font-mono tracking-[0.2em]">
+                    {t('meshPrintFeedback')}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground/50 font-mono">
+                    {t('meshPrintStats')
+                      .replace('{n}', String(printStats.count))
+                      .replace('{pct}', printStats.okRate != null ? String(Math.round(printStats.okRate * 100)) : '—')}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handlePrintFeedback('ok')}
+                      title={t('meshPrintOk')}
+                      className="h-6 w-6 inline-flex items-center justify-center border border-border/40 rounded-sm text-emerald-400/70 hover:text-emerald-400 hover:border-emerald-400/40 transition-colors"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handlePrintFeedback('issue')}
+                      title={t('meshPrintIssue')}
+                      className="h-6 w-6 inline-flex items-center justify-center border border-border/40 rounded-sm text-amber-400/70 hover:text-amber-400 hover:border-amber-400/40 transition-colors"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handlePrintFeedback('fail')}
+                      title={t('meshPrintFail')}
+                      className="h-6 w-6 inline-flex items-center justify-center border border-border/40 rounded-sm text-red-400/70 hover:text-red-400 hover:border-red-400/40 transition-colors"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
