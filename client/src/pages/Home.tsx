@@ -507,6 +507,16 @@ export default function Home() {
     if (dest.tab) setTab(dest.tab);
   }, [uploadedModel]);
 
+  // Re-generate the rule-based quick report in the current language whenever the
+  // language switches (instant, client-side). LLM-generated prose (agent run,
+  // chat) stays in the language it was generated in.
+  useEffect(() => {
+    if (!uploadedModel || !quickReport) return;
+    const md = getModelData();
+    if (md) setQuickReport(generateQuickReport(md, language, material));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
+
   const unifiedAnalysis = uploadedModel?.unifiedAnalysis;
   const analysis = unifiedAnalysis ? unifiedToAnalysisSummary(unifiedAnalysis) : null;
   const modelData = getModelData();
@@ -675,7 +685,7 @@ export default function Home() {
           </Canvas>
           {uploadedModel && (
             <div className="hidden lg:block">
-              <ManufacturingTimeline graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} />
+              <ManufacturingTimeline graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} language={language} />
             </div>
           )}
           {uploadedModel && (
