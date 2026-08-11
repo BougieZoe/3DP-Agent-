@@ -87,7 +87,6 @@ export function FeaturesSection({ t }: { t: (key: TKey) => string }) {
       />
       <FeatureGroup
         title={t('featuresAiTitle')}
-        subtitle={t('featuresAiSub')}
         accentBorder="border-orange-400"
         iconColor="text-muted-foreground"
         items={AI_FEATURES}
