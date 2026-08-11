@@ -194,17 +194,30 @@ The product functions without AMD infrastructure.
 
 ## Run Locally
 
+The app needs **two processes**: the Vite web app and the Express API server
+(the CAD bridge + slicer live on the API side, the web app proxies `/api/*`
+to it).
+
 ```bash
 git clone https://github.com/BougieZoe/3DP-Agent-
 cd 3DP-Agent-
 
 pnpm install
+
+# Terminal 1 — web app → http://localhost:3000
 pnpm dev
+
+# Terminal 2 — API / CAD bridge → http://localhost:3001
+pnpm dev:server
 ```
 
-Open:
+Open http://localhost:3000.
 
-http://localhost:3000
+> **CAD Studio "Generate"** requires the API server (terminal 2) to be
+> running. It also depends on the local `cad` skill
+> (`earthtojake/text-to-cad`) at `~/.agents/skills/cad` plus a Python venv at
+> `.cad-bridge/.venv` — verify with
+> `curl http://localhost:3001/api/cad/generate/health` (expect `ready: true`).
 
 ---
 
