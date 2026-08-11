@@ -46,6 +46,7 @@ import { ScanlineSweep } from '@/components/decorative/ScanlineSweep';
 import { BedStatusTicker } from '@/components/decorative/BedStatusTicker';
 import { LayerHeightLabel } from '@/components/decorative/LayerHeightLabel';
 import { FeaturesSection } from '@/pages/home/FeaturesSection';
+import type { FeatureDestination } from '@/pages/home/featuresNavigation';
 import { toast } from 'sonner';
 
 function unifiedToModelData(
@@ -422,6 +423,20 @@ export default function Home() {
       setReportLoading(false);
     }, 600);
   };
+
+  // Feature-section navigation. Destinations come from FEATURE_DESTINATIONS
+  // (FeaturesSection); this handler resolves them against current state.
+  const handleFeatureNavigate = useCallback((dest: FeatureDestination) => {
+    if (dest.needsModel && !uploadedModel) {
+      // No model loaded — tactile feedback only, no navigation.
+      return;
+    }
+    if (dest.requiresKey && !hasAnyKey()) {
+      setShowAPIModal(true);
+      return;
+    }
+    if (dest.tab) setTab(dest.tab);
+  }, [uploadedModel]);
 
   const unifiedAnalysis = uploadedModel?.unifiedAnalysis;
   const analysis = unifiedAnalysis ? unifiedToAnalysisSummary(unifiedAnalysis) : null;
@@ -895,7 +910,7 @@ export default function Home() {
                   <div className="text-muted-foreground/20 text-3xl font-mono">[ ]</div>
                   <div className="text-xs text-muted-foreground/50 font-mono">{t('uploadStlBegin')}</div>
                 </div>
-                <FeaturesSection t={t} />
+                <FeaturesSection t={t} onNavigate={handleFeatureNavigate} />
               </div>
             )}
 

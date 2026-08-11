@@ -1,0 +1,19 @@
+/* Tactile feedback for FeaturesSection item clicks.
+   Co-located with FeaturesSection.tsx — remove together. */
+
+@keyframes feature-shake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-2px); }
+  50%      { transform: translateX(2px); }
+  75%      { transform: translateX(-1px); }
+}
+
+.feature-shake {
+  animation: feature-shake 180ms ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-shake {
+    animation: none;
+  }
+}
