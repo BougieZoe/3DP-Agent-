@@ -126,25 +126,32 @@ export function MeshStudio({ language }: { language: Language }) {
   if (pt) rows.push({ label: t('cadMaterialWt'), value: `${pt.materialWeightGrams.toFixed(1)} g` });
   if (pt) rows.push({ label: t('cadCost'), value: `$${pt.materialCostUsd.toFixed(2)}` });
 
+  const hasResult = gate != null;
+
   return (
-    <div className="grid grid-rows-[1fr] h-[calc(100vh-7rem)] grid-cols-[300px_1fr] lg:grid-cols-[300px_1fr_340px]">
-      {/* Left: prompt + status */}
+    <div className={`grid grid-rows-[72px_1fr] h-[calc(100vh-7rem)] grid-cols-[280px_1fr] ${hasResult ? 'lg:grid-cols-[280px_1fr_380px]' : ''}`}>
+      {/* ── HEADER ── */}
+      <header className="col-span-full flex items-center justify-between px-6 pt-5 border-b border-border/15 bg-card/30">
+        <div className="flex items-center gap-6">
+          <div>
+            <h1 className="text-lg font-mono font-bold tracking-tight text-foreground">3DP AGENT</h1>
+            <p className="text-sm font-mono text-muted-foreground/40 tracking-wider">{t('meshStudio')}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-sm border ${
+            provider.id === 'tripo'
+              ? 'text-primary border-primary/30 bg-primary/5'
+              : 'text-amber-400 border-amber-400/30 bg-amber-400/5'
+          }`}>
+            {provider.id === 'tripo' ? t('meshProviderTripo') : t('meshProviderMock')}
+          </span>
+        </div>
+      </header>
+
+      {/* ── LEFT PANEL ── */}
       <div className="flex flex-col border-r border-border/15 bg-card/30 overflow-y-auto">
         <div className="px-4 pt-5 pb-3 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-mono text-muted-foreground/40 tracking-[0.2em]">
-              {t('cadStudio')}
-            </span>
-            <span
-              className={`text-[10px] font-mono px-2 py-0.5 rounded-sm border ${
-                provider.id === 'tripo'
-                  ? 'text-primary border-primary/30 bg-primary/5'
-                  : 'text-amber-400 border-amber-400/30 bg-amber-400/5'
-              }`}
-            >
-              {provider.id === 'tripo' ? t('meshProviderTripo') : t('meshProviderMock')}
-            </span>
-          </div>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
@@ -175,7 +182,7 @@ export function MeshStudio({ language }: { language: Language }) {
         </div>
       </div>
 
-      {/* Center: viewport */}
+      {/* ── CENTER: VIEWPORT ── */}
       <section className="relative overflow-hidden bg-card/20">
         <Canvas gl={{ antialias: true, alpha: true }} style={{ background: 'transparent' }}>
           <PerspectiveCamera makeDefault position={[0, 6, 18]} fov={55} />
@@ -198,9 +205,9 @@ export function MeshStudio({ language }: { language: Language }) {
         </Canvas>
       </section>
 
-      {/* Right: analysis report */}
-      <div className="hidden lg:flex flex-col border-l border-border/15 bg-card/30 overflow-y-auto">
-        {gate ? (
+      {/* ── RIGHT: ANALYSIS REPORT ── */}
+      {hasResult && (
+        <div className="hidden lg:flex flex-col border-l border-border/15 bg-card/30 overflow-y-auto">
           <div className="p-4 space-y-4">
             <div className="text-center">
               <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em] mb-1.5">
@@ -258,10 +265,8 @@ export function MeshStudio({ language }: { language: Language }) {
               </div>
             )}
           </div>
-        ) : (
-          <div className="p-4 text-xs font-mono text-muted-foreground/40">{t('meshEmptyHint')}</div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
