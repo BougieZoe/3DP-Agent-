@@ -517,7 +517,7 @@ export default function Home() {
                 className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${
                   mode === m ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-primary'
                 }`}>
-                {m === 'analyze' ? 'ANALYZE' : m === 'cad' ? 'CAD STUDIO' : 'MESH STUDIO'}
+                {m === 'analyze' ? 'ANALYZE' : m === 'cad' ? 'CAD' : 'MESH'}
               </button>
             ))}
           </div>
