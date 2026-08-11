@@ -46,6 +46,8 @@ const LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
 // Whole-request budget (LLM source authoring + build123d execution). Must be
 // ≥ the bridge's LLM_TIMEOUT_MS (90s) so the client never aborts first.
 const CAD_GENERATE_TIMEOUT_MS = 180_000;
+// Cap the recent-design rail so run history can't grow unbounded.
+const MAX_RUN_HISTORY = 30;
 
 interface FallbackEntry { source: string; summary: string }
 
@@ -184,7 +186,9 @@ const STARTER_EXAMPLES: Record<Language, string[]> = {
   ],
 };
 
-function fuzzyFindFallback(prompt: string): { source: string; summary: string; matched: string | null } {
+// Exact-match template lookup (not fuzzy — kept deliberately narrow so we never
+// route a prompt to a conceptually-wrong canned design).
+function findTemplateFallback(prompt: string): { source: string; summary: string; matched: string | null } {
   const lower = prompt.toLowerCase();
   const exact = FALLBACK_SOURCES[lower];
   if (exact) return { ...exact, matched: lower };
@@ -737,7 +741,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       mark('bridge', 'done');
 
       mark('llm', 'running');
-      const fallback = fuzzyFindFallback(p);
+      const fallback = findTemplateFallback(p);
       let quality: GenerationQuality = 'SUCCESS';
       let outcome;
 
@@ -828,7 +832,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         verdict: gate.verdict,
         issues: issues.map(i => ({ severity: i.severity, message: i.message })),
         risks: gate.risks,
-      }]);
+      }].slice(-MAX_RUN_HISTORY));
       if (baseModel) {
         const newBbox = unified.metrics?.result?.boundingBoxDimensionsMm;
         const oldBboxStr = lastBboxRef.current;
