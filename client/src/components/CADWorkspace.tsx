@@ -849,6 +849,10 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         if (bbox) lastBboxRef.current = `${bbox.x.toFixed(1)}x${bbox.y.toFixed(1)}x${bbox.z.toFixed(1)}`;
       }
 
+      // Re-fit the camera on every freshly generated model so it appears at a
+      // consistent size (previously only the first model was camera-fit, making
+      // later clicks look like the shape changed size).
+      setFitKey(k => k + 1);
       setTotalTime(Math.round(performance.now() - startTs.current));
     } catch (err) {
       if (seq !== runSeqRef.current) return; // superseded — don't surface a stale error

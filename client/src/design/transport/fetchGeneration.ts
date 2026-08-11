@@ -80,6 +80,11 @@ export async function postGeneration(args: GenerationPostArgs): Promise<CADGener
       try {
         const errBody = (await res.json()) as BridgeErrorBody;
         if (errBody?.error?.detail) detail = errBody.error.detail;
+        // Surface the engine's actual Python traceback so a build failure is
+        // diagnosable instead of a bare "exited with code 1".
+        if (errBody?.error?.stderr) {
+          detail = `${detail}\n\nBuild log:\n${errBody.error.stderr.slice(-2000)}`;
+        }
         if (errBody?.error?.code && KNOWN_ERROR_CODES.has(errBody.error.code)) {
           code = errBody.error.code;
         }
