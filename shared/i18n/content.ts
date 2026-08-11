@@ -1277,6 +1277,7 @@ const cadConfidence = {
 // ─── PDF report (client / designer / factory) ──────────────────────────────────
 const pdf = {
   'pdf.title': { en: 'Print Analysis Report', ja: 'プリント分析レポート', zh: '打印分析报告' },
+  'pdf.brand': { en: '3DP AGENT · PRINTABILITY ASSESSMENT', ja: '3DPエージェント · プリント性評価', zh: '3DP 智能体 · 可打印性评估' },
   'pdf.verdict.ready': { en: 'Ready to print', ja: '印刷可能です', zh: '可直接打印' },
   'pdf.verdict.review': { en: 'Review recommended', ja: '要確認', zh: '建议复核' },
   'pdf.verdict.notReady': { en: 'Not ready to print', ja: '印刷には不向きです', zh: '暂不建议打印' },
@@ -1304,6 +1305,7 @@ const pdf = {
   'pdf.label.dimensions': { en: 'Dimensions', ja: '寸法', zh: '尺寸' },
   'pdf.label.weight': { en: 'Est. weight', ja: '推定重量', zh: '估算重量' },
   'pdf.label.time': { en: 'Est. print time', ja: '推定印刷時間', zh: '估算打印时间' },
+  'pdf.label.cost': { en: 'Est. cost', ja: '推定コスト', zh: '估算成本' },
   'pdf.label.volume': { en: 'Volume', ja: '体積', zh: '体积' },
   'pdf.label.minWall': { en: 'Min wall thickness', ja: '最小壁厚', zh: '最小壁厚' },
   'pdf.label.p5Wall': { en: 'p5 wall thickness', ja: '5パーセンタイル壁厚', zh: 'p5壁厚' },

@@ -357,7 +357,7 @@ function drawHeader(
   doc.setFontSize(7);
   doc.setTextColor(...C.muted);
   doc.text(
-    kern("3DP AGENT · PRINTABILITY ASSESSMENT"),
+    kernText(translate(CONTENT, 'pdf.brand', lang)),
     PAGE_M,
     28
   );
@@ -457,6 +457,10 @@ function drawSectionLine(doc: JsPDF, y: number): number {
 }
 
 function drawSectionHeader(doc: JsPDF, label: string, y: number): number {
+  if (y > PAGE_BOT - 12) {
+    doc.addPage();
+    y = PAGE_M + 6;
+  }
   y = drawSectionLine(doc, y);
   doc.setFont(pdfFont, "bold");
   doc.setFontSize(7);
@@ -472,6 +476,10 @@ function drawDataRow(
   y: number,
   warn = false
 ): number {
+  if (y > PAGE_BOT - 8) {
+    doc.addPage();
+    y = PAGE_M + 6;
+  }
   doc.setFont(pdfFont, "normal");
   doc.setFontSize(9);
   doc.setTextColor(...C.muted);
@@ -522,7 +530,7 @@ async function generateClientPDF(
   const dims = metrics?.boundingBoxDimensionsMm;
   const pt = analysis.printTime?.result;
   const now = new Date();
-  const dateStr = now.toLocaleDateString(lang === "ja" ? "ja-JP" : "en-US", {
+  const dateStr = now.toLocaleDateString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US", {
     year: "numeric", month: "long", day: "numeric",
   });
 
@@ -579,6 +587,12 @@ async function generateClientPDF(
     pt?.estimatedPrintTimeMinutes != null ? computeTimeRange(pt.estimatedPrintTimeMinutes, lang) : "—",
     y
   );
+  if (pt?.materialCostUsd != null) {
+    y = drawDataRow(doc, translate(CONTENT, 'pdf.label.cost', lang), `$${pt.materialCostUsd.toFixed(2)}`, y);
+  }
+  if (metrics?.meshVolumeMm3 != null) {
+    y = drawDataRow(doc, translate(CONTENT, 'pdf.label.volume', lang), `${(metrics.meshVolumeMm3 / 1000).toFixed(2)} cm³`, y);
+  }
 
   // ── Section: ISSUES FOUND ──
   y += 4;
@@ -642,7 +656,7 @@ async function generateDesignerPDF(
   const s = analysis.support?.result;
   const issues = buildDesignerIssues(analysis, tone, lang);
   const now = new Date();
-  const dateStr = now.toLocaleDateString(lang === "ja" ? "ja-JP" : "en-US", {
+  const dateStr = now.toLocaleDateString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US", {
     year: "numeric", month: "long", day: "numeric",
   });
 
@@ -849,7 +863,7 @@ async function generateFactoryPDF(
   const t = analysis.topology?.result;
   const s = analysis.support?.result;
   const now = new Date();
-  const dateStr = now.toLocaleDateString(lang === "ja" ? "ja-JP" : "en-US", {
+  const dateStr = now.toLocaleDateString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US", {
     year: "numeric", month: "long", day: "numeric",
   });
 
