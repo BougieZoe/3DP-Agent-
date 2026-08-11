@@ -53,7 +53,7 @@ interface BridgeGenerateBody {
   timeoutMs?: number;
 }
 
-function resolvePython(): string {
+export function resolvePython(): string {
   if (process.env.CAD_BRIDGE_PYTHON) return process.env.CAD_BRIDGE_PYTHON;
   if (existsSync(DEFAULT_VENV_PYTHON)) return DEFAULT_VENV_PYTHON;
   return 'python3';
