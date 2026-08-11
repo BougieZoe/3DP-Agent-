@@ -21,17 +21,22 @@ export function shapeForPrompt(prompt: string): MockShape {
   return 'torus';
 }
 
+function rand(min: number, max: number): number {
+  return min + Math.random() * (max - min);
+}
+
+/** Slightly randomized primitive so repeated generation (REGENERATE) yields variants. */
 function geometryFor(shape: MockShape): THREE.BufferGeometry {
   switch (shape) {
     case 'box':
-      return new THREE.BoxGeometry(40, 30, 20);
+      return new THREE.BoxGeometry(rand(30, 50), rand(24, 40), rand(15, 25));
     case 'sphere':
-      return new THREE.SphereGeometry(12, 32, 24);
+      return new THREE.SphereGeometry(rand(9, 14), 32, 24);
     case 'cylinder':
-      return new THREE.CylinderGeometry(8, 8, 30, 32);
+      return new THREE.CylinderGeometry(rand(7, 10), rand(7, 10), rand(24, 36), 32);
     case 'torus':
     default:
-      return new THREE.TorusGeometry(12, 4, 16, 32);
+      return new THREE.TorusGeometry(rand(10, 14), rand(3, 5), 16, 32);
   }
 }
 
