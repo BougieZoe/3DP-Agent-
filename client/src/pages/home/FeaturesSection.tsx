@@ -1,9 +1,13 @@
+import { useEffect, useRef, useState } from 'react';
 import { Box, Bot, FileText, MessageCircle, Wand2, type LucideIcon } from 'lucide-react';
 import type { translations } from '@/lib/i18n';
+import { FEATURE_DESTINATIONS, type FeatureDestination, type FeatureId } from './featuresNavigation';
+import './features.css';
 
 type TKey = keyof (typeof translations)['en'];
 
 interface FeatureItem {
+  id: FeatureId;
   icon: LucideIcon;
   titleKey: TKey;
   descKey: TKey;
@@ -11,15 +15,15 @@ interface FeatureItem {
 
 // Included / runs-locally features (teal/primary accent).
 const LOCAL_FEATURES: FeatureItem[] = [
-  { icon: Box, titleKey: 'featuresGeometryTitle', descKey: 'featuresGeometryDesc' },
-  { icon: FileText, titleKey: 'featuresReportTitle', descKey: 'featuresReportDesc' },
-  { icon: MessageCircle, titleKey: 'featuresQaTitle', descKey: 'featuresQaDesc' },
+  { id: 'geometry', icon: Box, titleKey: 'featuresGeometryTitle', descKey: 'featuresGeometryDesc' },
+  { id: 'quickReport', icon: FileText, titleKey: 'featuresReportTitle', descKey: 'featuresReportDesc' },
+  { id: 'qa', icon: MessageCircle, titleKey: 'featuresQaTitle', descKey: 'featuresQaDesc' },
 ];
 
 // Requires-AI-key features (warm/orange accent — existing warning token).
 const AI_FEATURES: FeatureItem[] = [
-  { icon: Bot, titleKey: 'featuresChatTitle', descKey: 'featuresChatDesc' },
-  { icon: Wand2, titleKey: 'featuresOptimizeTitle', descKey: 'featuresOptimizeDesc' },
+  { id: 'deepChat', icon: Bot, titleKey: 'featuresChatTitle', descKey: 'featuresChatDesc' },
+  { id: 'optimize', icon: Wand2, titleKey: 'featuresOptimizeTitle', descKey: 'featuresOptimizeDesc' },
 ];
 
 function FeatureGroup({
@@ -30,6 +34,8 @@ function FeatureGroup({
   items,
   t,
   keyTag = false,
+  shakingId,
+  onItemClick,
 }: {
   title: string;
   subtitle?: string;
@@ -38,6 +44,8 @@ function FeatureGroup({
   items: FeatureItem[];
   t: (key: TKey) => string;
   keyTag?: boolean;
+  shakingId: FeatureId | null;
+  onItemClick: (id: FeatureId) => void;
 }) {
   return (
     <div className={`rounded-sm border-l-2 bg-card grid-bg p-3.5 space-y-3 ${accentBorder}`}>
@@ -49,9 +57,13 @@ function FeatureGroup({
       </div>
       <div className="space-y-2.5">
         {items.map((item) => (
-          <div key={item.titleKey} className="flex items-start gap-2.5">
+          <div
+            key={item.id}
+            onClick={() => onItemClick(item.id)}
+            className="flex items-start gap-2.5 cursor-pointer select-none rounded-sm transition-colors hover:bg-foreground/5"
+          >
             <item.icon className={`mt-0.5 h-4 w-4 shrink-0 ${iconColor}`} />
-            <div className="min-w-0 flex-1">
+            <div className={`min-w-0 flex-1 ${shakingId === item.id ? 'feature-shake' : ''}`}>
               <div className="text-sm font-medium text-muted-foreground leading-tight">
                 {t(item.titleKey)}
               </div>
@@ -74,8 +86,33 @@ function FeatureGroup({
  * Group 1 = included / runs locally (teal). Group 2 = requires an AI key
  * (warm orange, existing warning token). Presentation-only — the free-vs-key
  * split mirrors existing logic; all text flows through the i18n `t` function.
+ *
+ * Item clicks: always fire a subtle shake (tactile acknowledgement, honoring
+ * prefers-reduced-motion), then dispatch the item's destination from
+ * FEATURE_DESTINATIONS to `onNavigate` — the caller resolves real navigation.
  */
-export function FeaturesSection({ t }: { t: (key: TKey) => string }) {
+export function FeaturesSection({
+  t,
+  onNavigate,
+}: {
+  t: (key: TKey) => string;
+  onNavigate: (dest: FeatureDestination) => void;
+}) {
+  const [shakingId, setShakingId] = useState<FeatureId | null>(null);
+  const shakeTimer = useRef<number | null>(null);
+
+  const handleItemClick = (id: FeatureId) => {
+    // Tactile feedback always fires, before any navigation is resolved.
+    if (shakeTimer.current) window.clearTimeout(shakeTimer.current);
+    setShakingId(id);
+    shakeTimer.current = window.setTimeout(() => setShakingId(null), 200);
+    onNavigate(FEATURE_DESTINATIONS[id]);
+  };
+
+  useEffect(() => () => {
+    if (shakeTimer.current) window.clearTimeout(shakeTimer.current);
+  }, []);
+
   return (
     <div className="space-y-3">
       <FeatureGroup
@@ -84,6 +121,8 @@ export function FeaturesSection({ t }: { t: (key: TKey) => string }) {
         iconColor="text-muted-foreground"
         items={LOCAL_FEATURES}
         t={t}
+        shakingId={shakingId}
+        onItemClick={handleItemClick}
       />
       <FeatureGroup
         title={t('featuresAiTitle')}
@@ -92,6 +131,8 @@ export function FeaturesSection({ t }: { t: (key: TKey) => string }) {
         items={AI_FEATURES}
         t={t}
         keyTag
+        shakingId={shakingId}
+        onItemClick={handleItemClick}
       />
     </div>
   );
