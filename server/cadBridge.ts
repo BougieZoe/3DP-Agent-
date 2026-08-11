@@ -453,6 +453,7 @@ export function createCadBridgeRouter(): Router {
       createdAt: new Date(startedAt).toISOString(),
       durationMs: Date.now() - startedAt,
       warnings,
+      source,
     };
 
     const totalServerMs = Date.now() - startedAt;
