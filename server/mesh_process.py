@@ -22,6 +22,11 @@ def main() -> None:
     if not isinstance(loaded, trimesh.Trimesh):
         loaded = trimesh.util.concatenate(list(loaded.dump()))
 
+    # Place the model on the build plate: center X/Y, sit Z at 0.
+    if loaded.bounds is not None:
+        lo, hi = loaded.bounds
+        loaded.apply_translation([-(lo[0] + hi[0]) / 2, -(lo[1] + hi[1]) / 2, -lo[2]])
+
     diag: dict = {
         "triangleCount": int(len(loaded.faces)),
         "watertight": bool(loaded.is_watertight),
