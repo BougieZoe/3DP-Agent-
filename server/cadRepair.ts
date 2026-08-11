@@ -7,6 +7,31 @@
 
 export type RepairType = 'fillet' | 'boolean' | 'builder' | 'none';
 
+/**
+ * Wrap every `name = fillet(...)` line in try/except so a fillet with too
+ * large a radius (or on an invalid edge) degrades to the un-filleted shape
+ * instead of crashing the whole run. A cosmetic rounded-corner failure should
+ * never discard the model.
+ */
+function wrapFilletsInTry(source: string): string {
+  const lines = source.split('\n');
+  const out: string[] = [];
+  for (const line of lines) {
+    if (/^\s*[\w.]+\s*=\s*fillet\(/.test(line)) {
+      const indent = (line.match(/^\s*/) ?? [''])[0];
+      out.push(
+        `${indent}try:`,
+        `${indent}    ${line.trimStart()}`,
+        `${indent}except Exception:`,
+        `${indent}    pass`,
+      );
+    } else {
+      out.push(line);
+    }
+  }
+  return out.join('\n');
+}
+
 export interface RepairResult {
   source: string;
   type: RepairType;
@@ -52,13 +77,11 @@ export function repairCadSource(
     return { source: repaired, type: 'boolean' };
   }
 
-  // Rule B — max_fillet hint: use smallest radius.
+  // Rule B — max_fillet hint: chosen radius is too large. Wrapping the fillet
+  // in try/except always succeeds, unlike shrinking the radius (which can
+  // still fail on thin geometry).
   if (combined.includes('max_fillet')) {
-    const repaired = source.replace(
-      /(fillet\s*\([^,)]*,\s*radius\s*=\s*)[\d.]+/gi,
-      '$10.5',
-    );
-    return { source: repaired, type: 'fillet' };
+    return { source: wrapFilletsInTry(source), type: 'fillet' };
   }
 
   // Rule E — build123d operator order: shape * Pos → Pos * shape
@@ -70,13 +93,10 @@ export function repairCadSource(
     return { source: repaired, type: 'boolean' };
   }
 
-  // Rule A — Failed creating a fillet: downgrade radius to 1.
+  // Rule A — Failed creating a fillet: wrap in try/except so the run still
+  // produces a valid shape (without rounded corners) instead of exiting 1.
   if (combined.includes('failed creating a fillet')) {
-    const repaired = source.replace(
-      /(fillet\s*\([^,)]*,\s*radius\s*=\s*)[\d.]+/gi,
-      '$11',
-    );
-    return { source: repaired, type: 'fillet' };
+    return { source: wrapFilletsInTry(source), type: 'fillet' };
   }
 
   // Rule F — Builder pattern (BuildPart/Locations): extract simple return or fallback.
