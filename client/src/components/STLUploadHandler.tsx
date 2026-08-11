@@ -2,10 +2,12 @@ import { useRef, useState, useCallback } from 'react';
 import { loadSTLFile, createMeshFromGeometry } from '@/lib/stlLoader';
 import { Language } from '@/lib/i18n';
 import { runAnalysisPipeline, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
-import { LENGTH_UNIT_TO_MM, type LengthUnit } from '@shared/domain/geometry';
+import { normalizeModelGeometry } from '@/lib/modelNormalization';
+import type { LengthUnit } from '@shared/domain/geometry';
 import * as THREE from 'three';
 
 export interface UploadedModel {
+  /** Render/analysis geometry: scaled to mm and centered on the build plate. */
   geometry: THREE.BufferGeometry;
   mesh: THREE.Mesh;
   unifiedAnalysis: UnifiedAnalysis;
@@ -13,12 +15,17 @@ export interface UploadedModel {
   fileSizeBytes?: number;
   /** Declared units of the source file; geometry is normalized to mm before analysis. */
   units: LengthUnit;
+  /** Pristine clone of the source geometry — the basis for re-processing on unit change. */
+  rawGeometry: THREE.BufferGeometry;
 }
 
 interface STLUploadHandlerProps {
   onModelLoaded: (model: UploadedModel) => void;
   onError: (error: string) => void;
   language?: Language;
+  /** Declared source units, owned by the parent so a unit change re-processes the model. */
+  units: LengthUnit;
+  onUnitsChange: (units: LengthUnit) => void;
 }
 
 const labels = {
@@ -78,12 +85,11 @@ const labels = {
   },
 };
 
-export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: STLUploadHandlerProps) {
+export function STLUploadHandler({ onModelLoaded, onError, language = 'en', units, onUnitsChange }: STLUploadHandlerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [progress, setProgress] = useState<string[]>([]);
-  const [units, setUnits] = useState<LengthUnit>('mm');
   const t = labels[language];
 
   const log = (msg: string) => setProgress(p => [...p, msg]);
@@ -100,15 +106,13 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
 
     try {
       log(`> ${t.parsing}`);
-      const geometry = await loadSTLFile(file);
-      // Explicit unit contract: a non-mm STL is scaled to millimeters here so
-      // every downstream metric (dimensions, volume, weight, bed fit) is in mm.
-      // The declared source units are recorded on the model for provenance.
-      if (units !== 'mm') {
-        const f = LENGTH_UNIT_TO_MM[units];
-        geometry.scale(f, f, f);
-      }
+      // loadSTLFile returns the pristine geometry; normalization clones it.
+      const raw = await loadSTLFile(file);
+      // Explicit unit contract + viewport centering: scale non-mm STLs to
+      // millimeters, center on the build plate (minZ = 0, XY center = 0), and
+      // recompute bounding box / bounding sphere so the camera can frame it.
       log(`> ${t.computing}`);
+      const { geometry, rawGeometry } = normalizeModelGeometry(raw, units);
       const model = fromThreeBufferGeometry(geometry);
       const unifiedAnalysis = runAnalysisPipeline(model, { fileName: file.name });
       log(`> ${t.analyzing}`);
@@ -116,7 +120,7 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
       log(`> ${t.complete}`);
 
       setTimeout(() => {
-        onModelLoaded({ geometry, mesh, unifiedAnalysis, fileName: file.name, fileSizeBytes: file.size, units });
+        onModelLoaded({ geometry, mesh, unifiedAnalysis, fileName: file.name, fileSizeBytes: file.size, units, rawGeometry });
         setIsLoading(false);
       }, 400);
     } catch (error) {
@@ -182,15 +186,16 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
           {t.supported}
         </div>
 
-        {/* Declared source units — STL carries no unit metadata; non-mm models
-            are scaled to mm before analysis instead of being silently misread. */}
+        {/* Declared source units — STL carries no unit metadata; changing the
+            unit re-processes the model from its raw geometry (no stacked scales)
+            and re-runs the analysis. */}
         <div className="flex items-center justify-center gap-1.5 text-xs font-mono">
           <span className="text-muted-foreground/40">{t.units}</span>
           {(['mm', 'cm', 'inch'] as const).map((u) => (
             <button
               key={u}
               type="button"
-              onClick={(e) => { e.stopPropagation(); setUnits(u); }}
+              onClick={(e) => { e.stopPropagation(); onUnitsChange(u); }}
               className={`px-2 py-0.5 border rounded-sm transition-all ${
                 units === u
                   ? 'border-primary text-primary'
