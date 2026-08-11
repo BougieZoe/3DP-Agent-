@@ -40,7 +40,7 @@ function FeatureGroup({
   keyTag?: boolean;
 }) {
   return (
-    <div className={`rounded-sm border-l-2 bg-card p-3.5 space-y-3 ${accentBorder}`}>
+    <div className={`rounded-sm border-l-2 bg-card grid-bg p-3.5 space-y-3 ${accentBorder}`}>
       <div className="space-y-0.5">
         <div className="text-[11px] font-mono tracking-widest text-muted-foreground">{title}</div>
         {subtitle && (
