@@ -24,6 +24,7 @@ import { parseSTL } from "@/lib/stlParser";
 import { fromThreeBufferGeometry, runAnalysisPipeline, type UnifiedAnalysis } from "@/analysis";
 import { getAPIKeys, getActiveProvider } from "@/lib/apiKeys";
 import { useMaterial } from "@/contexts/MaterialContext";
+import type { Material } from "@/lib/materialState";
 import type { Language } from "@/lib/i18n";
 import { runConfidenceGate, type CADConfidenceReport, type CADRunRecord, type ImprovementResult, type Issue as ConfidenceIssue, type RepairSuggestion, type GenerationQuality } from "@/cad-confidence";
 import { CAD_MATERIALS, getCADMaterialPreset, createCADMaterial, type CADMaterialPreset } from "@/lib/cadMaterials";
@@ -496,6 +497,31 @@ function difficultyRank(d: string): number {
   return DIFFICULTY_RANK[d] ?? 0;
 }
 
+/* ─── Shared CAD analysis pipeline ───
+   Deduplicates the repeated "parse → analyze → confidence gate" sequence
+   across generate / regenerate / improve / auto-optimize paths. */
+function runCadAnalysis(
+  geometry: THREE.BufferGeometry,
+  opts: {
+    fileName: string;
+    prompt: string;
+    material: Material;
+    quality?: GenerationQuality;
+    language: Language;
+  },
+): { geometry: THREE.BufferGeometry; unified: UnifiedAnalysis; gate: CADConfidenceReport; issues: ConfidenceIssue[] } {
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  const model = fromThreeBufferGeometry(geometry);
+  const unified = runAnalysisPipeline(model, {
+    fileName: opts.fileName,
+    material: opts.material,
+    printerId: 'bambu_x1c',
+  });
+  const gate = runConfidenceGate(unified, opts.prompt, opts.quality ?? 'SUCCESS', opts.language);
+  return { geometry, unified, gate: gate.report, issues: gate.issues };
+}
+
 /* ─── Main Component ─── */
 
 interface CADWorkspaceProps {
@@ -679,35 +705,33 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
       mark('parse', 'running');
       const geo = parseSTL(outcome.result.stlBytes);
-      geo.computeVertexNormals();
-      geo.computeBoundingBox();
       const triCount = geo.index?.count ? geo.index.count / 3 : geo.attributes.position.count / 3;
       console.log(`[CADStudio] STL parsed: ${triCount} triangles`);
       mark('parse', 'done');
 
       mark('analysis', 'running');
-      const model = fromThreeBufferGeometry(geo);
-      const unified = runAnalysisPipeline(model, {
+      const { geometry: geom, unified, gate, issues } = runCadAnalysis(geo, {
         fileName: `${p}.stl`,
+        prompt: p,
         material,
-        printerId: 'bambu_x1c',
+        quality,
+        language,
       });
       console.log(`[CADStudio] Analysis complete`);
       mark('analysis', 'done');
 
-      setGeometry(geo);
+      setGeometry(geom);
       setAnalysis(unified);
-      const gateResult = runConfidenceGate(unified, p, quality, language);
-      setConfidenceReport(gateResult.report);
-      setGateIssues(gateResult.issues);
+      setConfidenceReport(gate);
+      setGateIssues(issues);
       setCadRunHistory(prev => [...prev, {
         id: outcome.result.model.id,
         prompt: p,
         timestamp: new Date().toISOString(),
-        confidence: gateResult.report.overallScore,
-        verdict: gateResult.report.verdict,
-        issues: gateResult.issues.map(i => ({ severity: i.severity, message: i.message })),
-        risks: gateResult.report.risks,
+        confidence: gate.overallScore,
+        verdict: gate.verdict,
+        issues: issues.map(i => ({ severity: i.severity, message: i.message })),
+        risks: gate.risks,
       }]);
       if (baseModel) {
         const newBbox = unified.metrics?.result?.boundingBoxDimensionsMm;
@@ -749,22 +773,17 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       stlBytesRef.current = outcome.result.stlBytes;
 
       const geo = parseSTL(outcome.result.stlBytes);
-      geo.computeVertexNormals();
-      geo.computeBoundingBox();
-
-      const model = fromThreeBufferGeometry(geo);
-      const unified = runAnalysisPipeline(model, {
+      const { geometry: geom, unified, gate, issues } = runCadAnalysis(geo, {
         fileName: `${prompt || 'parametric'}.stl`,
+        prompt: prompt || 'parametric plate',
         material,
-        printerId: 'bambu_x1c',
+        language,
       });
 
-      setGeometry(geo);
+      setGeometry(geom);
       setAnalysis(unified);
-
-      const gateResult = runConfidenceGate(unified, prompt || 'parametric plate', 'SUCCESS', language);
-      setConfidenceReport(gateResult.report);
-      setGateIssues(gateResult.issues);
+      setConfidenceReport(gate);
+      setGateIssues(issues);
       setRepairInfo({
         repaired: outcome.result.repaired ?? false,
         repairType: outcome.result.repairType ?? 'none',
@@ -776,8 +795,8 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         if (updated.length > 0) {
           updated[updated.length - 1] = {
             ...updated[updated.length - 1],
-            confidence: gateResult.report.overallScore,
-            verdict: gateResult.report.verdict,
+            confidence: gate.overallScore,
+            verdict: gate.verdict,
           };
         }
         return updated;
@@ -830,27 +849,26 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       return;
     }
 
-    const model = fromThreeBufferGeometry(modifiedGeo);
-    const unified = runAnalysisPipeline(model, {
+    const { geometry: geom, unified, gate, issues } = runCadAnalysis(modifiedGeo, {
       fileName: `improved_${prompt}.stl`,
+      prompt,
       material,
-      printerId: 'bambu_x1c',
+      language,
     });
-    const gateResult = runConfidenceGate(unified, prompt, 'SUCCESS', language);
 
-    setGeometry(modifiedGeo);
+    setGeometry(geom);
     setAnalysis(unified);
-    setConfidenceReport(gateResult.report);
-    setGateIssues(gateResult.issues);
+    setConfidenceReport(gate);
+    setGateIssues(issues);
 
-    const afterConfidence = gateResult.report.overallScore;
-    const afterIssues = gateResult.issues.length;
+    const afterConfidence = gate.overallScore;
+    const afterIssues = issues.length;
     const changed = afterConfidence !== beforeConfidence || afterIssues !== beforeIssues;
     const improved = afterConfidence > beforeConfidence || afterIssues < beforeIssues;
 
     const result: ImprovementResult = {
       before: { confidence: beforeConfidence, verdict: beforeVerdict, issues: beforeIssues },
-      after: { confidence: afterConfidence, verdict: gateResult.report.verdict, issues: afterIssues },
+      after: { confidence: afterConfidence, verdict: gate.verdict, issues: afterIssues },
       action: suggestion.action,
       changed,
       message: improved ? 'Improvement detected' : 'No measurable improvement',
@@ -859,7 +877,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
     const improvedMetrics = analysis && confidenceReport ? {
       beforeMetrics: extractMetrics(analysis, confidenceReport),
-      afterMetrics: extractMetrics(unified, gateResult.report),
+      afterMetrics: extractMetrics(unified, gate),
     } : {};
 
     setOptimizationState({
@@ -878,7 +896,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       beforeIssues,
       afterIssues,
       beforeVerdict,
-      afterVerdict: gateResult.report.verdict,
+      afterVerdict: gate.verdict,
       accepted: improved,
       ...improvedMetrics,
     });
@@ -957,19 +975,18 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       return;
     }
 
-    const model = fromThreeBufferGeometry(modifiedGeo);
-    const unified = runAnalysisPipeline(model, {
+    const { geometry: geom, unified, gate, issues } = runCadAnalysis(modifiedGeo, {
       fileName: `improved_${prompt}.stl`,
+      prompt,
       material,
-      printerId: 'bambu_x1c',
+      language,
     });
-    const gateResult = runConfidenceGate(unified, prompt, 'SUCCESS', language);
 
-    const afterConfidence = gateResult.report.overallScore;
-    const afterVerdict = gateResult.report.verdict;
-    const afterIssues = gateResult.issues.length;
+    const afterConfidence = gate.overallScore;
+    const afterVerdict = gate.verdict;
+    const afterIssues = issues.length;
     const beforeMetrics = extractMetrics(originalAnalysis, originalConfidenceReport);
-    const afterMetrics = extractMetrics(unified, gateResult.report);
+    const afterMetrics = extractMetrics(unified, gate);
 
     const confidenceUp = afterConfidence > beforeConfidence;
     const issuesDown = afterIssues < beforeIssues;
@@ -996,10 +1013,10 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       return;
     }
 
-    setGeometry(modifiedGeo);
+    setGeometry(geom);
     setAnalysis(unified);
-    setConfidenceReport(gateResult.report);
-    setGateIssues(gateResult.issues);
+    setConfidenceReport(gate);
+    setGateIssues(issues);
 
     const result: ImprovementResult = {
       before: { confidence: beforeConfidence, verdict: beforeVerdict as any, issues: beforeIssues },
