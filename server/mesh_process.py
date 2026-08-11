@@ -11,7 +11,9 @@ Output: a JSON diagnostics object on stdout.
 import sys
 import json
 
+import numpy as np
 import trimesh
+import pymeshfix
 
 
 def main() -> None:
@@ -44,10 +46,23 @@ def main() -> None:
 
     if not loaded.is_watertight:
         try:
-            trimesh.repair.fill_holes(loaded)
-            diag["repaired"] = bool(loaded.is_watertight)
-            if not diag["repaired"]:
-                diag["repairNote"] = (diag["repairNote"] + " | fill_holes did not close").strip()
+            # pymeshfix needs read-only, C-contiguous numpy arrays (numpy 1.x).
+            verts = np.ascontiguousarray(loaded.vertices, dtype=np.float64)
+            verts.setflags(write=False)
+            tris = np.ascontiguousarray(loaded.faces, dtype=np.int32)
+            tris.setflags(write=False)
+            mfix = pymeshfix.MeshFix(verts, tris)
+            mfix.repair()
+            repaired = trimesh.Trimesh(
+                vertices=np.asarray(mfix.points),
+                faces=np.asarray(mfix.faces),
+                process=False,
+            )
+            if repaired.is_watertight:
+                loaded = repaired
+                diag["repaired"] = True
+            else:
+                diag["repairNote"] = (diag["repairNote"] + " | pymeshfix did not close").strip()
         except Exception as e:  # noqa: BLE001
             diag["repairNote"] = (diag["repairNote"] + f" | repair: {str(e)[:160]}").strip()
 

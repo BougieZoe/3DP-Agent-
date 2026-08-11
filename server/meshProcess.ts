@@ -1,5 +1,6 @@
 import { Router, json as expressJson } from 'express';
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +9,23 @@ import { resolvePython } from './cadBridge';
 
 const MESH_SCRIPT = path.join(import.meta.dirname, 'mesh_process.py');
 const MESH_PROCESS_TIMEOUT_MS = 30_000;
+
+/**
+ * Mesh processing runs trimesh + pymeshfix which are incompatible with the
+ * build123d venv's numpy 2.x (pymeshfix ABI, trimesh fill_holes). Prefer the
+ * dedicated .cad-bridge/mesh-venv (numpy 1.x) when present, so the two
+ * dependency sets stay isolated.
+ */
+function resolveMeshPython(): string {
+  const candidates = [
+    process.env.CAD_MESH_PYTHON,
+    path.join(process.cwd(), '.cad-bridge', 'mesh-venv', 'bin', 'python'),
+  ];
+  for (const p of candidates) {
+    if (p && existsSync(p)) return p;
+  }
+  return resolvePython();
+}
 
 interface MeshProcessDiagnostics {
   triangleCount?: number;
@@ -86,7 +104,7 @@ export function createMeshProcessRouter(): Router {
 
     try {
       const { stdout, stderr, code } = await runMeshProcess(
-        resolvePython(),
+        resolveMeshPython(),
         dir,
         inPath,
         outPath,
