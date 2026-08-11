@@ -2,44 +2,30 @@ import type { CADGenerationOutcome, CADGenerationRequest } from '../cadGeneratio
 import type { CADGenerationTransport } from './types';
 import { postGeneration } from './fetchGeneration';
 
-/**
- * Local bridge transport — POSTs generation requests to the local Express
- * CAD bridge (server/cadBridge.ts, mounted at /api/cad/generate), which
- * shells out to this machine's Python + CAD skill install. Dev only.
- *
- * The transport owns: request mapping, timeout/cancel handling, and inbound
- * contract validation (STL artifact present, mm units, non-empty bytes).
- */
-
-export interface LocalBridgeLlm {
-  /** OpenAI-compatible endpoint base, e.g. 'https://api.deepseek.com/v1'. */
+export interface RemoteProxyOptions {
+  /** Absolute base URL of the hosted CAD service, e.g. 'https://cad.example.com'. */
   baseUrl: string;
+  /** Optional bearer token the hosted service requires. */
   apiKey?: string;
-  model: string;
-}
-
-export interface LocalBridgeTransportOptions {
-  /** Default '/api/cad/generate' (same-origin, vite dev proxy → Express :3001). */
-  endpoint?: string;
-  /** LLM used by the bridge to author build123d source. Resolved client-side (BYO key). */
-  llm?: LocalBridgeLlm;
-  /** Dev/test escape hatch: skip the LLM and send explicit gen_step() source. */
-  generatorSource?: string;
   fetchImpl?: typeof fetch;
   defaultTimeoutMs?: number;
 }
 
-const DEFAULT_ENDPOINT = '/api/cad/generate';
 const DEFAULT_TIMEOUT_MS = 180_000;
 
-export function createLocalBridgeTransport(
-  options: LocalBridgeTransportOptions = {},
-): CADGenerationTransport {
-  const endpoint = options.endpoint ?? DEFAULT_ENDPOINT;
+/**
+ * Remote proxy transport — POSTs generation requests to a hosted CAD service
+ * that runs the build123d skill server-side. The client sends only the request
+ * (prompt / constraints / edit lineage); the service owns its own LLM config
+ * and generation worker. This is the production path
+ * (CADGenerationTransport.id 'remote-proxy').
+ */
+export function createRemoteProxyTransport(options: RemoteProxyOptions): CADGenerationTransport {
   const fetchImpl = options.fetchImpl ?? fetch;
+  const endpoint = `${options.baseUrl.replace(/\/+$/, '')}/api/cad/generate`;
 
   return {
-    id: 'local-bridge',
+    id: 'remote-proxy',
 
     async isAvailable(): Promise<boolean> {
       try {
@@ -54,12 +40,14 @@ export function createLocalBridgeTransport(
 
     async generate(request: CADGenerationRequest): Promise<CADGenerationOutcome> {
       const timeoutMs = request.timeoutMs ?? options.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (options.apiKey) headers.Authorization = `Bearer ${options.apiKey}`;
 
-      // Request mapping + timeout/cancel + inbound STL validation all live in
-      // the shared postGeneration helper (same contract for every transport).
+      // The hosted service provides generation config (LLM keys / worker), so
+      // the client never sends llm/generatorSource to a remote endpoint.
       return postGeneration({
         endpoint,
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: {
           prompt: request.prompt,
           locale: request.locale,
@@ -71,8 +59,6 @@ export function createLocalBridgeTransport(
               }
             : undefined,
           baseModel: request.baseModel,
-          llm: options.llm,
-          generatorSource: options.generatorSource,
           timeoutMs,
         },
         timeoutMs,
