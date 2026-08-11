@@ -1334,31 +1334,10 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   }, []);
 
   const hasGeometry = geometry != null;
-  const spanCols = hasGeometry ? 'col-span-3' : 'col-span-2';
   const bridgeState = useCADBridgeHealth();
 
   return (
-    <div className={`grid grid-rows-[72px_1fr] h-[calc(100vh-3.5rem)] mt-14 ${hasGeometry ? 'grid-cols-[280px_1fr_380px]' : 'grid-cols-[280px_1fr]'}`}>
-      {/* ── HEADER ── */}
-      <header className={`${spanCols} flex items-center justify-between px-6 pt-5 border-b border-border/15 bg-card/30`}>
-        <div className="flex items-center gap-6">
-          <div>
-            <h1 className="text-lg font-mono font-bold tracking-tight text-foreground">3DP AGENT</h1>
-            <p className="text-sm font-mono text-muted-foreground/40 tracking-wider">{t('cadStudio')}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2" title={t('cadBridgeOnline')}>
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-            bridgeState === 'online' ? 'bg-emerald-400' :
-            bridgeState === 'offline' ? 'bg-red-400' : 'bg-amber-400 animate-pulse'
-          }`} />
-          <span className="text-[10px] font-mono text-muted-foreground/40">
-            {bridgeState === 'online' ? t('cadBridgeOnline') :
-             bridgeState === 'offline' ? t('cadBridgeOffline') : t('cadBridgeChecking')}
-          </span>
-        </div>
-      </header>
-
+    <div className={`grid grid-rows-[1fr] h-[calc(100vh-3.5rem)] mt-14 ${hasGeometry ? 'grid-cols-[280px_1fr_380px]' : 'grid-cols-[280px_1fr]'}`}>
       {/* ── LEFT PANEL (always visible) ── */}
       <div className="flex flex-col border-r border-border/15 bg-card/30 overflow-y-auto">
         {/* Prompt input */}
@@ -1468,6 +1447,17 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
       {/* ── CENTER: Viewport ── */}
       <section className="relative overflow-hidden bg-card/20">
+        {/* Engine health (top-left, subtle) */}
+        <div className="absolute top-3 left-4 z-10 flex items-center gap-1.5">
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+            bridgeState === 'online' ? 'bg-emerald-400' :
+            bridgeState === 'offline' ? 'bg-red-400' : 'bg-amber-400 animate-pulse'
+          }`} />
+          <span className="text-[10px] font-mono text-muted-foreground/40">
+            {bridgeState === 'online' ? t('cadBridgeOnline') :
+             bridgeState === 'offline' ? t('cadBridgeOffline') : t('cadBridgeChecking')}
+          </span>
+        </div>
         {/* Verdict overlay (STATE 3 only) */}
         <VerdictOverlay verdict={verdict} score={score} visible={analysis != null} />
 
