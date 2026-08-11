@@ -218,6 +218,42 @@ Open http://localhost:3000.
 > (`earthtojake/text-to-cad`) at `~/.agents/skills/cad` plus a Python venv at
 > `.cad-bridge/.venv` — verify with
 > `curl http://localhost:3001/api/cad/generate/health` (expect `ready: true`).
+>
+> **Mesh Studio** works fully in the browser in mock mode (procedural
+> primitives, no API server). Its optional "REPAIR & PROCESS" step needs the
+> API server (trimesh-based mesh diagnostics/decimate/place-on-plate).
+
+---
+
+## Features
+
+Three studios share one manufacturing-analysis pipeline (`runAnalysisPipeline`
++ confidence gate) and one export story (STL / STEP / 3MF):
+
+- **ANALYZE** — upload an STL and get a full printability report.
+- **CAD** — text → LLM → parametric build123d (STEP). Parametric sliders,
+  STEP/STL/3MF export, live engine-health indicator.
+- **MESH** — text → mesh. Local mock (keyword → primitive) by default; real
+  text→3D when `VITE_TRIPO_API_KEY` is set. Server-side repair / decimate /
+  place-on-plate, STL/3MF export, and print-outcome feedback that seeds the
+  confidence-gate calibration.
+
+API endpoints (dev, all proxied to the server on :3001):
+- `POST /api/cad/generate` — text → build123d → STEP + STL (sandboxed).
+- `GET  /api/cad/generate/:id/step` — exact STEP file (CNC / machining).
+- `POST /api/mesh/process` — STL diagnostics, best-effort watertight repair,
+  decimation, and placement on the build plate.
+
+Optional env: `VITE_TRIPO_API_KEY` (hosted Tripo text→3D in Mesh Studio).
+
+---
+
+## Tests
+
+```bash
+pnpm check   # tsc --noEmit
+pnpm test    # vitest
+```
 
 ---
 

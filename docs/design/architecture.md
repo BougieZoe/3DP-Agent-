@@ -145,22 +145,39 @@ param sliders.
 
 ## 5. Phased roadmap
 
-### Phase 0 — Foundation (in progress)
-- **Sandbox untrusted build123d execution**: isolated interpreter (`-I`),
-  sanitized env, confined cwd, resource/time limits, reject dangerous imports.
-- **Telemetry hook**: record print outcome (success/fail) to feed back into the
-  confidence gate and auto-repair rules.
+**Status (2026-08):** Phase 0 and Phase 1 are shipped. Remaining work is Phase 2
+(deployment-dependent) and Phase 3 (long-term moat).
 
-### Phase 1 — Mesh mode
-- `MeshGenerationProvider` + one hosted provider (recommend Tripo: STL export +
-  fast) → Mesh Studio UI → shared analysis.
+### Phase 0 — Foundation ✅
+- **Sandbox untrusted build123d execution** ✅ — `server/cadSandbox.ts`:
+  isolated interpreter (`-I`), sanitized env, ulimits, and a denylist that
+  rejects dangerous imports/calls before execution. End-to-end verified.
+- **Telemetry hook** ✅ (partial) — `client/src/lib/printFeedback.ts` records
+  per-model print outcomes in localStorage (the confidence-gate calibration
+  seed). A hosted analytics endpoint can replace localStorage later.
 
-### Phase 2 — Commercialization
-- Cloud slicing/print, tenancy, billing, usage metering.
+### Phase 1 — Mesh mode ✅
+- `MeshGenerationProvider` (async submit + poll) + Tripo provider (mock-tested)
+  + local mock provider (keyword → primitive, real STL). Factory picks Tripo
+  when `VITE_TRIPO_API_KEY` is set, else the mock.
+- **Mesh Studio** UI — examples, REGENERATE, STL/3MF export, printability
+  report, print feedback.
+- **Server mesh processing** — `POST /api/mesh/process` runs trimesh in a
+  sandboxed interpreter: diagnostics, best-effort watertight repair, decimate,
+  place-on-plate.
+  - Caveat: watertight **repair is best-effort** — `trimesh.fill_holes` /
+    `pymeshfix` are incompatible with the venv's numpy 2.x, so repair degrades
+    to diagnostics + decimation. A controlled environment (or pinned numpy) in
+    a hosted deployment enables full repair.
 
-### Phase 3 — Moat
-- Print-outcome telemetry flywheel; mesh→CAD reverse (fit AI meshes back to
-  parametric CAD).
+### Phase 2 — Commercialization ⬜
+- Cloud slicing/print, tenancy, billing, usage metering. The `remoteProxy`
+  transport already exists (`client/src/design/transport/remoteProxy.ts`) and
+  is ready to target a hosted CAD/mesh backend.
+
+### Phase 3 — Moat ⬜
+- Print-outcome telemetry flywheel (Phase 0 seed → hosted analytics → confidence
+  gate calibration); mesh→CAD reverse (fit AI meshes back to parametric CAD).
 
 ---
 
