@@ -42,7 +42,7 @@ function FeatureGroup({
   return (
     <div className={`rounded-sm border-l-2 bg-card p-3.5 space-y-3 ${accentBorder}`}>
       <div className="space-y-0.5">
-        <div className={`text-[11px] font-mono tracking-widest ${iconColor}`}>{title}</div>
+        <div className="text-[11px] font-mono tracking-widest text-muted-foreground">{title}</div>
         <div className="text-[11px] text-muted-foreground/60">{subtitle}</div>
       </div>
       <div className="space-y-2.5">
@@ -50,7 +50,7 @@ function FeatureGroup({
           <div key={item.titleKey} className="flex items-start gap-2.5">
             <item.icon className={`mt-0.5 h-4 w-4 shrink-0 ${iconColor}`} />
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-foreground leading-tight">
+              <div className="text-sm font-medium text-muted-foreground leading-tight">
                 {t(item.titleKey)}
               </div>
               <div className="text-xs text-muted-foreground leading-snug">{t(item.descKey)}</div>
@@ -75,7 +75,7 @@ function FeatureGroup({
  */
 export function FeaturesSection({ t }: { t: (key: TKey) => string }) {
   return (
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className="space-y-3">
       <FeatureGroup
         title={t('featuresIncludedTitle')}
         subtitle={t('featuresIncludedSub')}
