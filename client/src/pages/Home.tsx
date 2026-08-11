@@ -12,6 +12,9 @@ import { APIKeyModal } from '@/components/APIKeyModal';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 import { fromThreeBufferGeometry, runAnalysisPipeline } from '@/analysis';
+import { normalizeModelGeometry, fitCameraToGeometry } from '@/lib/modelNormalization';
+import { createMeshFromGeometry } from '@/lib/stlLoader';
+import { LENGTH_UNIT_TO_MM, type LengthUnit } from '@shared/domain/geometry';
 import { CONTENT, translate, SUPPORTED_LANGUAGES } from '@shared/i18n/content';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
 import { Language, getTranslation } from '@/lib/i18n';
@@ -164,29 +167,6 @@ function FloatingParticles() {
 }
 
 function ModelDisplay({ model }: { model: UploadedModel | null }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const { camera } = useThree();
-  const autoRotate = useRef(true);
-
-  useEffect(() => {
-    if (!model?.geometry?.boundingBox) return;
-    const box = model.geometry.boundingBox;
-    const size = new THREE.Vector3(); box.getSize(size);
-    const center = new THREE.Vector3(); box.getCenter(center);
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const dist = maxDim * 2.5;
-    camera.position.set(dist * 0.7, dist * 0.5, dist);
-    camera.lookAt(center);
-    autoRotate.current = false;
-    setTimeout(() => { autoRotate.current = true; }, 100);
-  }, [model, camera]);
-
-  useFrame(({ clock }) => {
-    if (meshRef.current && autoRotate.current) {
-      meshRef.current.rotation.y = clock.getElapsedTime() * 0.25;
-    }
-  });
-
   if (!model) {
     return (
       <group>
@@ -207,7 +187,7 @@ function ModelDisplay({ model }: { model: UploadedModel | null }) {
     specular: new THREE.Color(0x00ffcc),
   });
 
-  return <mesh ref={meshRef} geometry={model.geometry} material={mat} />;
+  return <mesh geometry={model.geometry} material={mat} />;
 }
 
 function SceneContent({ model }: { model: UploadedModel | null }) {
@@ -224,6 +204,30 @@ function SceneContent({ model }: { model: UploadedModel | null }) {
         fadeDistance={28} fadeStrength={1} position={[0, -7, 0]} />
     </>
   );
+}
+
+/**
+ * Auto-fits the camera + OrbitControls target to the current model whenever
+ * its geometry changes (model load OR unit change). Recomputes the bounding
+ * box / sphere defensively so a stale bbox can never leave the model
+ * off-center or out of frame.
+ */
+function ViewportCameraFit({ geometry, controlsRef }: {
+  geometry: THREE.BufferGeometry | null;
+  controlsRef: { current: { target: THREE.Vector3; update: () => void } | null };
+}) {
+  const { camera } = useThree();
+
+  useEffect(() => {
+    if (!geometry) return;
+    // Defer one frame so the mesh is mounted and the controls exist.
+    const raf = requestAnimationFrame(() => {
+      fitCameraToGeometry(camera, controlsRef.current, geometry);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [geometry, camera, controlsRef]);
+
+  return null;
 }
 
 // ─── Metric Row ────────────────────────────────────────────────────────────────
@@ -276,6 +280,10 @@ export default function Home() {
   const [overlayOpacity, setOverlayOpacity] = useState(0.7);
   const [materialLoading, setMaterialLoading] = useState(false);
   const materialRequestSeq = useRef(0);
+  const [units, setUnits] = useState<LengthUnit>('mm');
+  const unitRequestSeq = useRef(0);
+  // Shared ref into the drei OrbitControls instance (has .target/.update()).
+  const controlsRef = useRef<any>(null);
   const orchestratorRef = useRef<AgentOrchestrator | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -284,6 +292,7 @@ export default function Home() {
   }
 
   const handleModelLoaded = (model: UploadedModel) => {
+    setUnits(model.units);
     setUploadedModel(model);
     setTab('geometry');
     setQuickReport('');
@@ -356,6 +365,44 @@ export default function Home() {
     setMaterialLoading(false);
   }, [uploadedModel, language, setMaterialName]);
 
+  const handleUnitsChange = useCallback(async (newUnits: LengthUnit) => {
+    setUnits(newUnits);
+    if (!uploadedModel?.rawGeometry) return;
+
+    unitRequestSeq.current += 1;
+    const currentSeq = unitRequestSeq.current;
+
+    setAgentRun(null);
+    setQuickReport('');
+
+    // Re-process the ORIGINAL raw geometry (no stacked scales), re-center on
+    // the build plate, recompute bounds, then re-run the analysis pipeline.
+    const { geometry } = normalizeModelGeometry(uploadedModel.rawGeometry, newUnits);
+    const geometryModel = fromThreeBufferGeometry(geometry);
+    const newUnified = runAnalysisPipeline(geometryModel, { fileName: uploadedModel.fileName, material });
+
+    if (currentSeq !== unitRequestSeq.current) return;
+
+    const mesh = createMeshFromGeometry(geometry);
+    const updatedModel: UploadedModel = { ...uploadedModel, geometry, mesh, unifiedAnalysis: newUnified, units: newUnits };
+    setUploadedModel(updatedModel);
+
+    if (currentSeq !== unitRequestSeq.current || !orchestratorRef.current) return;
+    try {
+      const summary = await orchestratorRef.current.runFullAnalysis(
+        updatedModel.geometry, newUnified, updatedModel.fileName, undefined, language, material,
+      );
+      if (currentSeq !== unitRequestSeq.current) return;
+      setAgentRun(summary);
+    } catch (err) {
+      console.error('Agent analysis failed:', err);
+    }
+
+    if (currentSeq !== unitRequestSeq.current) return;
+    const md = unifiedToModelData(newUnified, updatedModel.fileName, material.overhangThreshold);
+    setQuickReport(generateQuickReport(md, language, material));
+  }, [uploadedModel, material, language]);
+
   const getModelData = (): ModelData | null => {
     if (!uploadedModel) return null;
     return unifiedToModelData(uploadedModel.unifiedAnalysis, uploadedModel.fileName, material.overhangThreshold);
@@ -376,6 +423,14 @@ export default function Home() {
   const modelData = getModelData();
   const providerLabel = getActiveProvider() ? AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel : null;
   const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
+  // Metric display in the selected unit (analysis is always computed in mm).
+  const mmPerUnit = LENGTH_UNIT_TO_MM[units];
+  const unitSuffix = units === 'inch' ? 'in' : units;
+  const volumeUnit = `${unitSuffix}³`; // cubic — volume is length³ (cm³ / in³)
+  const areaUnit = `${unitSuffix}²`;   // square — area is length² (cm² / in²)
+  const toUnit = (mm: number) => mm / mmPerUnit;
+  const toUnit2 = (mm2: number) => mm2 / (mmPerUnit ** 2);
+  const toUnit3 = (mm3: number) => mm3 / (mmPerUnit ** 3);
   const agentMarkers = agentRun?.results.flatMap(r => r.markers ?? []) ?? [];
   const supportDecision = unifiedAnalysis?.support?.result
     ? deriveSupportStatus(unifiedAnalysis.support.result)
@@ -491,6 +546,7 @@ export default function Home() {
           <Canvas gl={{ antialias: true, alpha: true }} style={{ background: 'transparent' }}>
             <PerspectiveCamera makeDefault position={[0, 3, 10]} fov={60} />
             <SceneContent model={uploadedModel} />
+            <ViewportCameraFit geometry={uploadedModel?.geometry ?? null} controlsRef={controlsRef} />
             <PlaybackUpdater />
             {uploadedModel?.geometry && <CognitiveScan geometry={uploadedModel.geometry} visible />}
             {uploadedModel?.geometry && agentMarkers.length > 0 && (
@@ -527,7 +583,7 @@ export default function Home() {
                 visible
               />
             )}
-            <OrbitControls enablePan={false} autoRotate={!uploadedModel} autoRotateSpeed={0.4} />
+            <OrbitControls ref={controlsRef} enablePan={false} autoRotate={!uploadedModel} autoRotateSpeed={0.4} />
           </Canvas>
           {uploadedModel && (
             <div className="hidden lg:block">
@@ -568,7 +624,13 @@ export default function Home() {
             {/* Upload */}
             <div>
               <div className="text-xs text-muted-foreground/50 mb-2 font-mono tracking-widest">// {t('input')}</div>
-              <STLUploadHandler onModelLoaded={handleModelLoaded} onError={e => toast.error(e)} language={language} />
+              <STLUploadHandler
+                onModelLoaded={handleModelLoaded}
+                onError={e => toast.error(e)}
+                language={language}
+                units={units}
+                onUnitsChange={handleUnitsChange}
+              />
             </div>
 
             {/* Analysis tabs */}
@@ -610,15 +672,15 @@ export default function Home() {
                     </div>
                     <div className="border border-border rounded-sm bg-card p-4">
                       <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">GEOMETRY DATA</div>
-                      <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness != null ? analysis.wallThickness.minThickness.toFixed(3) : '—'} unit="mm" highlight />
+                      <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness != null ? toUnit(analysis.wallThickness.minThickness).toFixed(3) : '—'} unit={unitSuffix} highlight />
                       {unifiedAnalysis?.metrics.result?.minWallThicknessMm != null && (
-                        <MetricRow label="Min (abs)" value={unifiedAnalysis.metrics.result.minWallThicknessMm.toFixed(3)} unit="mm" />
+                        <MetricRow label="Min (abs)" value={toUnit(unifiedAnalysis.metrics.result.minWallThicknessMm).toFixed(3)} unit={unitSuffix} />
                       )}
-                      <MetricRow label={t('volume')} value={analysis.volume.toFixed(1)} unit="mm³" />
-                      <MetricRow label={t('surfaceArea')} value={analysis.surfaceArea.toFixed(1)} unit="mm²" />
-                      <MetricRow label={t('dimX')} value={modelData.dims.x.toFixed(2)} unit="mm" />
-                      <MetricRow label={t('dimY')} value={modelData.dims.y.toFixed(2)} unit="mm" />
-                      <MetricRow label={t('dimZ')} value={modelData.dims.z.toFixed(2)} unit="mm" />
+                      <MetricRow label={t('volume')} value={toUnit3(analysis.volume).toFixed(1)} unit={volumeUnit} />
+                      <MetricRow label={t('surfaceArea')} value={toUnit2(analysis.surfaceArea).toFixed(1)} unit={areaUnit} />
+                      <MetricRow label={t('dimX')} value={toUnit(modelData.dims.x).toFixed(2)} unit={unitSuffix} />
+                      <MetricRow label={t('dimY')} value={toUnit(modelData.dims.y).toFixed(2)} unit={unitSuffix} />
+                      <MetricRow label={t('dimZ')} value={toUnit(modelData.dims.z).toFixed(2)} unit={unitSuffix} />
                       <MetricRow label={t('overhangFaces')} value={analysis.overhang.areas} />
                     </div>
                     <button onClick={() => setTab('report')}
