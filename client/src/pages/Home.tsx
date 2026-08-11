@@ -18,6 +18,7 @@ import { createMeshFromGeometry } from '@/lib/stlLoader';
 import { parseSTL } from '@/lib/stlParser';
 import { processMesh } from '@/lib/meshProcessClient';
 import { geometryToStl } from '@/lib/meshOps';
+import { geometryToThreeMf } from '@/lib/threeMf';
 import { LENGTH_UNIT_TO_MM, type LengthUnit } from '@shared/domain/geometry';
 import { CONTENT, translate, SUPPORTED_LANGUAGES } from '@shared/i18n/content';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
@@ -52,6 +53,15 @@ import { LayerHeightLabel } from '@/components/decorative/LayerHeightLabel';
 import { FeaturesSection } from '@/pages/home/FeaturesSection';
 import type { FeatureDestination } from '@/pages/home/featuresNavigation';
 import { toast } from 'sonner';
+
+function downloadBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function unifiedToModelData(
   unifiedAnalysis: import('@/analysis').UnifiedAnalysis,
@@ -466,6 +476,23 @@ export default function Home() {
     }
   }, [uploadedModel, material]);
 
+  const handleDownloadStl = () => {
+    if (!uploadedModel) return;
+    downloadBlob(
+      `${uploadedModel.fileName.replace(/\.stl$/i, '')}_processed.stl`,
+      new Blob([geometryToStl(uploadedModel.geometry)], { type: 'model/stl' }),
+    );
+  };
+  const handleDownload3mf = () => {
+    if (!uploadedModel) return;
+    downloadBlob(
+      `${uploadedModel.fileName.replace(/\.stl$/i, '')}_processed.3mf`,
+      new Blob([geometryToThreeMf(uploadedModel.geometry)], {
+        type: 'application/vnd.ms-package.3dmanufacturing-3dmodel',
+      }),
+    );
+  };
+
   // Feature-section navigation. Destinations come from FEATURE_DESTINATIONS
   // (FeaturesSection); this handler resolves them against current state.
   const handleFeatureNavigate = useCallback((dest: FeatureDestination) => {
@@ -759,6 +786,16 @@ export default function Home() {
                       className="w-full py-2.5 text-xs font-mono border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all disabled:opacity-50">
                       {repairing ? '▋ ' + t('analyze') : t('analyzeRepair')}
                     </button>
+                    <div className="flex items-stretch gap-2">
+                      <button onClick={handleDownloadStl} title={t('cadDownloadStl')}
+                        className="flex-1 h-9 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm text-xs font-mono transition-all">
+                        STL
+                      </button>
+                      <button onClick={handleDownload3mf} title={t('meshDownload3mf')}
+                        className="flex-1 h-9 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm text-xs font-mono transition-all">
+                        3MF
+                      </button>
+                    </div>
                   </div>
                 )}
 
