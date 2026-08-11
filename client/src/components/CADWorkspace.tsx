@@ -1329,7 +1329,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const bridgeState = useCADBridgeHealth();
 
   return (
-    <div className={`grid grid-rows-[72px_1fr] h-[calc(100vh-7rem)] ${hasGeometry ? 'grid-cols-[280px_1fr_380px]' : 'grid-cols-[280px_1fr]'}`}>
+    <div className={`grid grid-rows-[72px_1fr] h-[calc(100vh-3.5rem)] mt-14 ${hasGeometry ? 'grid-cols-[280px_1fr_380px]' : 'grid-cols-[280px_1fr]'}`}>
       {/* ── HEADER ── */}
       <header className={`${spanCols} flex items-center justify-between px-6 pt-5 border-b border-border/15 bg-card/30`}>
         <div className="flex items-center gap-6">

@@ -206,29 +206,10 @@ export function MeshStudio({ language }: { language: Language }) {
   const hasResult = gate != null;
 
   return (
-    <div className={`grid grid-rows-[72px_1fr] h-[calc(100vh-7rem)] grid-cols-[280px_1fr] ${hasResult ? 'lg:grid-cols-[280px_1fr_380px]' : ''}`}>
-      {/* ── HEADER ── */}
-      <header className="col-span-full flex items-center justify-between px-6 pt-5 border-b border-border/15 bg-card/30">
-        <div className="flex items-center gap-6">
-          <div>
-            <h1 className="text-lg font-mono font-bold tracking-tight text-foreground">3DP AGENT</h1>
-            <p className="text-sm font-mono text-muted-foreground/40 tracking-wider">{t('meshStudio')}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-sm border ${
-            provider.id === 'tripo'
-              ? 'text-primary border-primary/30 bg-primary/5'
-              : 'text-amber-400 border-amber-400/30 bg-amber-400/5'
-          }`}>
-            {provider.id === 'tripo' ? t('meshProviderTripo') : t('meshProviderMock')}
-          </span>
-        </div>
-      </header>
-
+    <div className={`grid grid-rows-[1fr] h-[calc(100vh-3.5rem)] mt-14 grid-cols-[280px_1fr] ${hasResult ? 'lg:grid-cols-[280px_1fr_380px]' : ''}`}>
       {/* ── LEFT PANEL ── */}
       <div className="flex flex-col border-r border-border/15 bg-card/30 overflow-y-auto">
-        <div className="px-4 pt-5 pb-3 space-y-4">
+        <div className="px-4 pt-6 pb-3 space-y-4">
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
