@@ -157,25 +157,6 @@ def gen_step():
   }
 };
 
-const FALLBACK_SOURCE_DEFAULT: FallbackEntry = {
-  source: `from build123d import *
-# PARAM plate_w "Plate Width" mm 20 200 1
-# PARAM plate_d "Plate Depth" mm 20 200 1
-# PARAM plate_h "Plate Thickness" mm 2 50 1
-# PARAM hole_r "Hole Radius" mm 1 10 0.5
-# PARAM hole_spacing_x "Hole Spacing X" mm 10 100 1
-# PARAM hole_spacing_y "Hole Spacing Y" mm 10 100 1
-def gen_step():
-    plate_w = 80; plate_d = 60; plate_h = 20; hole_r = 3; hole_spacing_x = 25; hole_spacing_y = 15
-    body = Box(plate_w, plate_d, plate_h, align=(Align.CENTER, Align.CENTER, Align.MIN))
-    for x in [-hole_spacing_x, hole_spacing_x]:
-        for y in [-hole_spacing_y, hole_spacing_y]:
-            h = Pos(x, y, 0) * Cylinder(radius=hole_r, height=plate_h, align=(Align.CENTER, Align.CENTER, Align.MIN))
-            body -= h
-    return body`,
-  summary: 'Generic mounting plate (fallback)'
-};
-
 const STARTER_EXAMPLES: Record<Language, string[]> = {
   en: [
     "Create a 60mm x 45mm mounting plate with four 5mm holes and rounded corners",
@@ -537,7 +518,6 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const [gateIssues, setGateIssues] = useState<ConfidenceIssue[]>([]);
   const [cadMaterialId, setCadMaterialId] = useState(CAD_MATERIALS[0].id);
   const [cadRunHistory, setCadRunHistory] = useState<CADRunRecord[]>([]);
-  const [editSelectorOpen, setEditSelectorOpen] = useState(false);
   const [editWarning, setEditWarning] = useState<string | null>(null);
   const [improvementResult, setImprovementResult] = useState<ImprovementResult | null>(null);
   const [optimizationState, setOptimizationState] = useState<{
@@ -554,12 +534,10 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   } | null>(null);
   const [generationQuality, setGenerationQuality] = useState<GenerationQuality>('SUCCESS');
   const [repairInfo, setRepairInfo] = useState<{ repaired: boolean; repairType: string; attempts: number } | null>(null);
-  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
   const lastBboxRef = useRef<string | null>(null);
   const startTs = useRef(0);
   const stageTs = useRef<Record<string, number>>({});
   const stlBytesRef = useRef<ArrayBuffer | null>(null);
-  const modelSummaryRef = useRef<string | null>(null);
   const templateSourceRef = useRef<string | null>(null);
 
   const cadPreset = useMemo(() => getCADMaterialPreset(cadMaterialId), [cadMaterialId]);
@@ -590,7 +568,6 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     setRequestId(null);
     setTotalTime(0);
     stlBytesRef.current = null;
-    modelSummaryRef.current = null;
     startTs.current = performance.now();
     stageTs.current = {};
 
@@ -691,7 +668,6 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       setGenerationQuality(quality);
 
       setRequestId(outcome.result.model.id);
-      modelSummaryRef.current = outcome.result.model.summary;
       stlBytesRef.current = outcome.result.stlBytes;
       setRepairInfo({
         repaired: outcome.result.repaired ?? false,
@@ -1380,7 +1356,6 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     setError(null);
     setStages([]);
     stlBytesRef.current = null;
-    modelSummaryRef.current = null;
     templateSourceRef.current = null;
     setLlmInfo('');
     setImprovementResult(null);
