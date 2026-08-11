@@ -132,7 +132,8 @@ function extractPythonSource(text: string): string {
   return source;
 }
 
-async function generateSourceViaLlm(llm: BridgeLlmConfig, userMessage: string): Promise<string> {
+/** Single OpenAI-compatible chat call to author build123d source. */
+async function llmChatOnce(llm: BridgeLlmConfig, userMessage: string): Promise<string> {
   const res = await fetch(`${llm.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -159,6 +160,28 @@ async function generateSourceViaLlm(llm: BridgeLlmConfig, userMessage: string): 
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new Error('LLM returned empty content');
   return extractPythonSource(content);
+}
+
+/**
+ * Author build123d source, retrying once on transient failures (network
+ * blips, HTTP 5xx/429, empty or invalid output). Full timeouts are NOT
+ * retried — the model is simply slow, and a second attempt would exceed the
+ * client's request budget.
+ */
+async function generateSourceViaLlm(llm: BridgeLlmConfig, userMessage: string): Promise<string> {
+  const attempts = 2;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await llmChatOnce(llm, userMessage);
+    } catch (err) {
+      lastError = err;
+      const timedOut = err instanceof Error && err.name === 'TimeoutError';
+      if (timedOut || attempt === attempts) throw err;
+      console.warn(`[cadBridge] LLM attempt ${attempt}/${attempts} failed (${String(err)}); retrying`);
+    }
+  }
+  throw lastError;
 }
 
 function composeUserMessage(body: BridgeGenerateBody, priorSource: string | null): string {
