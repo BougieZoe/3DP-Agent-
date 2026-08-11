@@ -70,7 +70,7 @@ function FeatureGroup({
               <div className="text-xs text-muted-foreground leading-snug">{t(item.descKey)}</div>
             </div>
             {keyTag && (
-              <span className="mt-0.5 shrink-0 text-[9px] font-mono px-1.5 py-0.5 border rounded-sm text-orange-400 border-orange-400/30 bg-orange-400/5">
+              <span className="mt-0.5 shrink-0 text-[9px] font-mono px-1.5 py-0.5 border rounded-sm text-emerald-400 border-emerald-400/30 bg-emerald-400/5">
                 {t('featureAiKey')}
               </span>
             )}
