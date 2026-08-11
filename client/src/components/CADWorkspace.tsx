@@ -596,6 +596,9 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const stageTs = useRef<Record<string, number>>({});
   const stlBytesRef = useRef<ArrayBuffer | null>(null);
   const templateSourceRef = useRef<string | null>(null);
+  // Generation sequence — bumped by every generate/regen entry point. Stale
+  // async responses compare their captured seq and bail before writing state.
+  const runSeqRef = useRef(0);
   // Bumped whenever the active build123d source changes, so the param
   // extraction memo (keyed on this) recomputes after each generation/regen.
   const [sourceVersion, setSourceVersion] = useState(0);
@@ -611,6 +614,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   }, [language]);
 
   const handleGenerate = useCallback(async (customPrompt?: string, baseModel?: { generatedModelId: string; editInstruction: string }) => {
+    const seq = ++runSeqRef.current;
     const p = (customPrompt ?? prompt).trim();
     if (!p) return;
 
@@ -726,6 +730,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         throw new Error(`Generation failed: ${detail}`);
       }
 
+      if (seq !== runSeqRef.current) return; // superseded by a newer run
       setGenerationQuality(quality);
 
       setRequestId(outcome.result.model.id);
@@ -788,16 +793,18 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
       setTotalTime(Math.round(performance.now() - startTs.current));
     } catch (err) {
+      if (seq !== runSeqRef.current) return; // superseded — don't surface a stale error
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[CADStudio] Error:', msg);
       setError(msg);
     } finally {
-      setLoading(false);
+      if (seq === runSeqRef.current) setLoading(false);
     }
   }, [prompt, material, updateStage, language]);
 
   /* ─── Parametric regeneration from source ─── */
   const handleRegenerateFromSource = useCallback(async (source: string) => {
+    const seq = ++runSeqRef.current;
     if (!prompt.trim() && !geometry) return;
     setLoading(true);
     setError(null);
@@ -818,6 +825,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         language,
       });
 
+      if (seq !== runSeqRef.current) return; // superseded by a newer run
       setGeometry(geom);
       setAnalysis(unified);
       setConfidenceReport(gate);
@@ -844,7 +852,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       console.error('[CADStudio] Slider regen failed:', msg);
       // Don't set error for slider regen — too disruptive. Log only.
     } finally {
-      setLoading(false);
+      if (seq === runSeqRef.current) setLoading(false);
     }
   }, [prompt, material, geometry]);
 
@@ -857,7 +865,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     const opType = typeMap[suggestion.category];
 
     if (!opType || !geometry) {
-      handleGenerate(prompt, { generatedModelId: requestId!, editInstruction });
+      handleGenerate(prompt, requestId ? { generatedModelId: requestId, editInstruction } : undefined);
       return;
     }
 
@@ -883,7 +891,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       modifiedGeo = applySuggestions(geometry, [{ type: opType, priority: suggestion.impact }], markers);
     } catch (e) {
       console.error('geometryEditor failed, falling back to LLM:', e);
-      handleGenerate(prompt, { generatedModelId: requestId!, editInstruction });
+      handleGenerate(prompt, requestId ? { generatedModelId: requestId, editInstruction } : undefined);
       return;
     }
 
