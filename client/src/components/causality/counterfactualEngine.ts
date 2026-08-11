@@ -138,7 +138,7 @@ export function evaluateCounterfactuals(
   patternMatches: PatternMatch[],
   language: ContentLang = 'en',
 ): GeometrySuggestion[] {
-  const baseline = buildCausalityGraph(markers);
+  const baseline = buildCausalityGraph(markers, undefined, language);
   const suggestions: GeometrySuggestion[] = [];
   let counter = 0;
 
@@ -151,7 +151,7 @@ export function evaluateCounterfactuals(
       affectedIdx.includes(i) ? { ...m, severity: Math.max(0.01, m.severity * meta.factor) } : m,
     );
 
-    const counterfactual = buildCausalityGraph(modified);
+    const counterfactual = buildCausalityGraph(modified, undefined, language);
     const affectedPositions = affectedIdx.map(i => markers[i].position);
     const riskReduction = computeRiskReduction(baseline, counterfactual);
     const thermalImprovement = computeThermalImprovement(baseline, counterfactual);
