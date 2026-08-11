@@ -32,7 +32,8 @@ const VOLUMETRIC_RATES: Record<number, number> = {
   0.32: 768,   // Fast draft
 };
 
-const DEFAULT_LAYER_HEIGHT = 0.2;
+/** Default layer height (mm). Exported so UI readouts can reference the real default. */
+export const DEFAULT_LAYER_HEIGHT = 0.2;
 
 /**
  * Estimate print time and cost.
