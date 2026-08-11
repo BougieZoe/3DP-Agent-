@@ -6,6 +6,7 @@ import { Sparkles } from 'lucide-react';
 import { parseSTL } from '@/lib/stlParser';
 import { fitCameraToGeometry } from '@/lib/modelNormalization';
 import { countTriangles, decimateGeometry } from '@/lib/meshOps';
+import { processMesh, type MeshProcessDiagnostics } from '@/lib/meshProcessClient';
 import { runCadAnalysis } from '@/lib/cadAnalysis';
 import { createMeshProvider } from '@/design/mesh';
 import { useMaterial } from '@/contexts/MaterialContext';
@@ -86,6 +87,7 @@ export function MeshStudio({ language }: { language: Language }) {
   const [status, setStatus] = useState<'idle' | 'submitting' | 'generating' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [stlBytes, setStlBytes] = useState<ArrayBuffer | null>(null);
+  const [serverDiag, setServerDiag] = useState<MeshProcessDiagnostics | null>(null);
   const controlsRef = useRef<any>(null);
 
   const generate = useCallback(async (overridePrompt?: string) => {
@@ -123,6 +125,7 @@ export function MeshStudio({ language }: { language: Language }) {
       setGate(result.gate);
       setIssues(result.issues);
       setStlBytes(state.stlBytes);
+      setServerDiag(null);
       setStatus('done');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -155,6 +158,30 @@ export function MeshStudio({ language }: { language: Language }) {
     setUnified(result.unified);
     setGate(result.gate);
     setIssues(result.issues);
+  };
+
+  const handleProcess = async () => {
+    if (!stlBytes) return;
+    try {
+      const result = await processMesh(stlBytes, { decimateTo: 0 });
+      setServerDiag(result.diagnostics);
+      if (result.stlBytes.byteLength > 84) {
+        const geo = parseSTL(result.stlBytes);
+        const analysis = runCadAnalysis(geo, {
+          fileName: `${(prompt || 'mesh').slice(0, 40).replace(/[^a-z0-9_-]/gi, '_')}.stl`,
+          prompt,
+          material,
+          language,
+        });
+        setGeometry(analysis.geometry);
+        setUnified(analysis.unified);
+        setGate(analysis.gate);
+        setIssues(analysis.issues);
+        setStlBytes(result.stlBytes);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
   };
 
   const m = unified?.metrics?.result;
@@ -371,6 +398,36 @@ export function MeshStudio({ language }: { language: Language }) {
                   >
                     {t('meshDecimate')}
                   </button>
+                )}
+                {stlBytes && (
+                  <button
+                    onClick={handleProcess}
+                    className="w-full h-8 inline-flex items-center justify-center gap-1.5 border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm text-[11px] font-mono transition-all"
+                  >
+                    {t('meshProcess')}
+                  </button>
+                )}
+                {serverDiag && (
+                  <>
+                    <div className="flex justify-between text-[13px]">
+                      <span className="text-muted-foreground/50 uppercase tracking-wider">{t('cadVolume')}</span>
+                      <span className="text-muted-foreground/70 tabular-nums">
+                        {serverDiag.volumeMm3 != null ? `${Math.round(serverDiag.volumeMm3)} mm³` : '—'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[13px]">
+                      <span className="text-muted-foreground/50 uppercase tracking-wider">{t('meshBodies')}</span>
+                      <span className="text-muted-foreground/70 tabular-nums">{serverDiag.bodyCount ?? '—'}</span>
+                    </div>
+                    {serverDiag.repaired && (
+                      <div className="text-[11px] font-mono text-emerald-400/80">REPAIRED ✓</div>
+                    )}
+                    {serverDiag.repairNote && (
+                      <div className="text-[11px] font-mono text-amber-400/70 break-words leading-relaxed">
+                        {serverDiag.repairNote}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

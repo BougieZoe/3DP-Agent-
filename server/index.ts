@@ -3,6 +3,7 @@ import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createCadBridgeRouter } from "./cadBridge";
+import { createMeshProcessRouter } from "./meshProcess";
 import { createSlicerRouter } from "./slicerRouter";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -39,6 +40,10 @@ async function startServer() {
   // CAD generation bridge (local dev only): natural language → build123d →
   // STL. Executes Python on the host — do not expose publicly as-is.
   app.use("/api/cad/generate", createCadBridgeRouter());
+
+  // Mesh post-processing (local dev only): STL → diagnostics / repair / decimate.
+  // Runs trimesh in a sandboxed interpreter; do not expose publicly as-is.
+  app.use("/api/mesh/process", createMeshProcessRouter());
 
   // Slicer bridge (local dev only): STL → G-code via a local slicer CLI.
   // Auto-discovers PrusaSlicer / BambuStudio; do not expose publicly as-is.
