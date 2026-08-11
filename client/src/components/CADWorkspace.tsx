@@ -603,6 +603,30 @@ function buildGenerationError(
   }
 }
 
+/* ─── Bridge health poller ───
+   Surfaces whether the generation engine is reachable, so a missing local
+   server (or unreachable hosted service) is visible before the user clicks
+   Generate instead of failing mid-flight. */
+function useCADBridgeHealth(intervalMs = 15_000) {
+  const [state, setState] = useState<'checking' | 'online' | 'offline'>('checking');
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await fetch('/api/cad/generate/health', { method: 'GET' });
+        const body = (await res.json()) as { ready?: boolean };
+        if (!cancelled) setState(res.ok && body.ready === true ? 'online' : 'offline');
+      } catch {
+        if (!cancelled) setState('offline');
+      }
+    };
+    check();
+    const id = setInterval(check, intervalMs);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [intervalMs]);
+  return state;
+}
+
 /* ─── Main Component ─── */
 
 interface CADWorkspaceProps {
@@ -1308,6 +1332,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
   const hasGeometry = geometry != null;
   const spanCols = hasGeometry ? 'col-span-3' : 'col-span-2';
+  const bridgeState = useCADBridgeHealth();
 
   return (
     <div className={`grid grid-rows-[72px_1fr] h-[calc(100vh-7rem)] ${hasGeometry ? 'grid-cols-[280px_1fr_380px]' : 'grid-cols-[280px_1fr]'}`}>
@@ -1318,6 +1343,16 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
             <h1 className="text-lg font-mono font-bold tracking-tight text-foreground">3DP AGENT</h1>
             <p className="text-sm font-mono text-muted-foreground/40 tracking-wider">{t('cadStudio')}</p>
           </div>
+        </div>
+        <div className="flex items-center gap-2" title={t('cadBridgeOnline')}>
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+            bridgeState === 'online' ? 'bg-emerald-400' :
+            bridgeState === 'offline' ? 'bg-red-400' : 'bg-amber-400 animate-pulse'
+          }`} />
+          <span className="text-[10px] font-mono text-muted-foreground/40">
+            {bridgeState === 'online' ? t('cadBridgeOnline') :
+             bridgeState === 'offline' ? t('cadBridgeOffline') : t('cadBridgeChecking')}
+          </span>
         </div>
       </header>
 
