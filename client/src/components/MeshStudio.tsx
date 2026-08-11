@@ -23,6 +23,8 @@ function scoreColor(score: number): string {
   return '#ef4444';
 }
 
+const EXAMPLE_PROMPTS = ['a gear', 'a cube', 'a cylinder', 'a marble'];
+
 function verdictClass(verdict: string): string {
   if (verdict === 'PASS') return 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10';
   if (verdict === 'WARN') return 'border-amber-500/30 text-amber-400 bg-amber-500/10';
@@ -82,13 +84,15 @@ export function MeshStudio({ language }: { language: Language }) {
   const [issues, setIssues] = useState<ConfidenceIssue[]>([]);
   const [status, setStatus] = useState<'idle' | 'submitting' | 'generating' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [stlBytes, setStlBytes] = useState<ArrayBuffer | null>(null);
   const controlsRef = useRef<any>(null);
 
-  const generate = useCallback(async () => {
-    const p = prompt.trim();
+  const generate = useCallback(async (overridePrompt?: string) => {
+    const p = (overridePrompt ?? prompt).trim();
     if (!p || !provider) return;
     setStatus('submitting');
     setError(null);
+    setStlBytes(null);
     setGeometry(null);
     setUnified(null);
     setGate(null);
@@ -117,12 +121,24 @@ export function MeshStudio({ language }: { language: Language }) {
       setUnified(result.unified);
       setGate(result.gate);
       setIssues(result.issues);
+      setStlBytes(state.stlBytes);
       setStatus('done');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus('idle');
     }
   }, [prompt, material, language, provider, t]);
+
+  const downloadSTL = () => {
+    if (!stlBytes) return;
+    const blob = new Blob([stlBytes], { type: 'model/stl' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(prompt || 'mesh').slice(0, 40).replace(/[^a-z0-9_-]/gi, '_')}.stl`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const m = unified?.metrics?.result;
   const sp = unified?.support?.result;
@@ -135,6 +151,13 @@ export function MeshStudio({ language }: { language: Language }) {
   if (pt) rows.push({ label: t('cadPrintTime'), value: `${pt.estimatedPrintTimeHours.toFixed(1)} h` });
   if (pt) rows.push({ label: t('cadMaterialWt'), value: `${pt.materialWeightGrams.toFixed(1)} g` });
   if (pt) rows.push({ label: t('cadCost'), value: `$${pt.materialCostUsd.toFixed(2)}` });
+
+  const triCount = geometry
+    ? geometry.index?.count
+      ? geometry.index.count / 3
+      : geometry.attributes.position.count / 3
+    : 0;
+  const isWatertight = unified?.validation?.result?.isWatertight === true;
 
   const hasResult = gate != null;
 
@@ -175,19 +198,55 @@ export function MeshStudio({ language }: { language: Language }) {
             placeholder={t('meshPlaceholder')}
           />
           <button
-            onClick={generate}
+            onClick={() => generate()}
             disabled={status === 'submitting' || status === 'generating' || !prompt.trim()}
             className="w-full h-11 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm px-5 text-sm font-mono font-bold hover:bg-foreground/90 disabled:opacity-30 transition-all"
           >
             <Sparkles className="w-4 h-4" />
             {status === 'generating' || status === 'submitting' ? t('meshGenerating') : t('meshGenerate')}
           </button>
+          {hasResult && (
+            <div className="flex items-stretch gap-3">
+              <button
+                onClick={() => generate()}
+                disabled={status === 'submitting' || status === 'generating'}
+                className="flex-1 h-9 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm text-sm font-mono transition-all"
+              >
+                {t('meshRegenerate')}
+              </button>
+              {stlBytes && (
+                <button
+                  onClick={downloadSTL}
+                  className="flex-1 h-9 inline-flex items-center justify-center gap-1.5 bg-primary/10 text-primary rounded-sm text-sm font-mono hover:bg-primary/20 transition-all"
+                >
+                  {t('meshDownloadStl')}
+                </button>
+              )}
+            </div>
+          )}
           {status === 'generating' && (
             <div className="text-xs font-mono text-primary animate-pulse">{t('meshGenerating')}</div>
           )}
           {error && <div className="text-sm text-red-400/80 font-mono whitespace-pre-wrap">{error}</div>}
           {status === 'idle' && !error && (
-            <div className="text-xs text-muted-foreground/40 font-mono leading-relaxed">{t('meshEmptyHint')}</div>
+            <div className="space-y-2">
+              <div className="text-xs text-muted-foreground/40 font-mono tracking-[0.2em]">{t('meshExamplesLabel')}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {EXAMPLE_PROMPTS.map((ex) => (
+                  <button
+                    key={ex}
+                    onClick={() => {
+                      setPrompt(ex);
+                      generate(ex);
+                    }}
+                    className="text-[11px] font-mono px-2 py-1 border border-border/30 rounded-sm text-muted-foreground/60 hover:text-primary hover:border-primary/40 transition-colors"
+                  >
+                    {ex}
+                  </button>
+                ))}
+              </div>
+              <div className="text-xs text-muted-foreground/40 font-mono leading-relaxed pt-1">{t('meshEmptyHint')}</div>
+            </div>
           )}
         </div>
       </div>
@@ -275,6 +334,21 @@ export function MeshStudio({ language }: { language: Language }) {
                 </div>
               </div>
             )}
+
+            {/* Printable readiness */}
+            <div className="space-y-1">
+              <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em]">{t('cadReadiness')}</div>
+              <div className="p-2.5 border border-border/15 rounded-sm space-y-1">
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-muted-foreground/50 uppercase tracking-wider">{t('cadTri')}</span>
+                  <span className="text-muted-foreground/70 tabular-nums">{triCount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-[13px]">
+                  <span className="text-muted-foreground/50 uppercase tracking-wider">{t('cadWatertight')}</span>
+                  <span className={isWatertight ? 'text-emerald-400' : 'text-red-400'}>✓</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
