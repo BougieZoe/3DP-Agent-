@@ -552,6 +552,57 @@ function runCadAnalysis(
   return { geometry, unified, gate: gate.report, issues: gate.issues };
 }
 
+/* ─── Friendly CAD generation errors ───
+   Maps the bridge's outcome error to an actionable message so a failed
+   generation tells the user what actually went wrong and what to do. */
+function buildGenerationError(
+  outcome: { ok: false; error: { code: string; detail?: string; timeoutMs?: number } } | null,
+): Error {
+  if (!outcome) {
+    return new Error(
+      `No AI provider configured.\n\n` +
+      `Configure an API key for one of:\n- OpenAI\n- DeepSeek\n- Kimi\n- Fireworks`,
+    );
+  }
+  const { code, detail } = outcome.error;
+  const d = detail ?? '';
+  switch (code) {
+    case 'transport-unavailable':
+      return new Error(
+        `CAD engine not reachable.\n\n` +
+        `The server that runs the 3D engine isn't responding. ` +
+        `Start it with:\n\n  pnpm dev:server\n\nand retry.`,
+      );
+    case 'generation-timeout':
+      return new Error(
+        `The AI took too long to respond.\n\n` +
+        `The model may be busy — try again in a moment, or use one of the Design Starters.`,
+      );
+    case 'invalid-artifact':
+      return new Error(
+        `Generation didn't produce a usable 3D model.\n\n` +
+        `Try a different description or one of the Design Starters.`,
+      );
+    default: {
+      const llmSourceFailed = /LLM source generation failed/i.test(d);
+      const timedOut = /timeout|timed out|aborted due to timeout/i.test(d);
+      if (timedOut) {
+        return new Error(
+          `The AI took too long to respond.\n\n${d}\n\n` +
+          `Try again in a moment, or use one of the Design Starters.`,
+        );
+      }
+      return new Error(
+        llmSourceFailed
+          ? `The AI couldn't write valid CAD code.\n\n${d}\n\n` +
+            `Try a simpler description or use one of the Design Starters.`
+          : `The 3D engine couldn't build the generated shape.\n\n${d}\n\n` +
+            `Try simplifying the prompt or use one of the Design Starters.`,
+      );
+    }
+  }
+}
+
 /* ─── Main Component ─── */
 
 interface CADWorkspaceProps {
@@ -688,30 +739,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         }
 
         if (!outcome || !outcome.ok) {
-          const err = outcome && !outcome.ok ? (outcome as { ok: false; error: { code: string; detail?: string } }).error : null;
           mark('llm', 'error');
           quality = 'FAILED';
           setGenerationQuality('FAILED');
-
-          if (!outcome) {
-            // No API key configured — LLM was never called.
-            throw new Error(
-              `No AI provider configured.\n\n` +
-              `Configure an API key for one of:\n` +
-              `- OpenAI\n` +
-              `- DeepSeek\n` +
-              `- Kimi\n` +
-              `- Fireworks`,
-            );
-          }
-
-          // LLM generated code but build123d execution failed.
-          const detail = err?.detail ?? 'unknown error';
-          throw new Error(
-            `CAD generation failed.\n\n` +
-            `${detail}\n\n` +
-            `The AI generated a design but the CAD engine could not build it.\n` +
-            `Try simplifying your prompt or use one of the Design Starters.`,
+          throw buildGenerationError(
+            outcome as { ok: false; error: { code: string; detail?: string; timeoutMs?: number } } | null,
           );
         }
         if (outcome && outcome.ok) {
@@ -723,11 +755,9 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         mark('llm', 'error');
         quality = 'FAILED';
         setGenerationQuality('FAILED');
-        const detail = (outcome && !outcome.ok)
-          ? ((outcome as { ok: false; error: { code: string; detail?: string; timeoutMs?: number } }).error.detail
-            ?? `timed out after ${(outcome as any).error.timeoutMs ?? '?'}ms`)
-          : 'unknown error';
-        throw new Error(`Generation failed: ${detail}`);
+        throw buildGenerationError(
+          outcome as { ok: false; error: { code: string; detail?: string; timeoutMs?: number } } | null,
+        );
       }
 
       if (seq !== runSeqRef.current) return; // superseded by a newer run
