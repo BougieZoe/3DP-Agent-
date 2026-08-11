@@ -54,18 +54,22 @@ function MeshPreview({ geometry }: { geometry: THREE.BufferGeometry | null }) {
 /** Frame the camera to the current mesh so it never fills the viewport. */
 function CameraFit({
   geometry,
+  fitKey,
   controlsRef,
 }: {
   geometry: THREE.BufferGeometry | null;
+  fitKey: number;
   controlsRef: { current: any };
 }) {
   const { camera } = useThree();
   useEffect(() => {
-    if (!geometry) return;
-    // Defer a frame so the mesh/controls exist before framing.
+    if (fitKey === 0 || !geometry) return;
+    // Defer a frame so the mesh/controls exist before framing. Fires only on a
+    // NEW generation (fitKey bump), not on decimate/process tweaks, so the view
+    // stays where the user left it.
     const raf = requestAnimationFrame(() => fitCameraToGeometry(camera, controlsRef.current, geometry));
     return () => cancelAnimationFrame(raf);
-  }, [geometry, camera, controlsRef]);
+  }, [fitKey]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 
@@ -88,6 +92,7 @@ export function MeshStudio({ language }: { language: Language }) {
   const [error, setError] = useState<string | null>(null);
   const [stlBytes, setStlBytes] = useState<ArrayBuffer | null>(null);
   const [serverDiag, setServerDiag] = useState<MeshProcessDiagnostics | null>(null);
+  const [fitKey, setFitKey] = useState(0);
   const controlsRef = useRef<any>(null);
 
   const generate = useCallback(async (overridePrompt?: string) => {
@@ -126,6 +131,7 @@ export function MeshStudio({ language }: { language: Language }) {
       setIssues(result.issues);
       setStlBytes(state.stlBytes);
       setServerDiag(null);
+      setFitKey((k) => k + 1); // re-frame camera on the new model
       setStatus('done');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -295,7 +301,7 @@ export function MeshStudio({ language }: { language: Language }) {
             fadeStrength={1}
           />
           <MeshPreview geometry={geometry} />
-          <CameraFit geometry={geometry} controlsRef={controlsRef} />
+          <CameraFit geometry={geometry} fitKey={fitKey} controlsRef={controlsRef} />
           <OrbitControls ref={controlsRef} enableDamping dampingFactor={0.05} />
         </Canvas>
       </section>

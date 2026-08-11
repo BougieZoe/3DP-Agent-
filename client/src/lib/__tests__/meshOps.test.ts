@@ -27,4 +27,11 @@ describe('meshOps', () => {
     const out = decimateGeometry(g, 100);
     expect(countTriangles(out)).toBeLessThan(countTriangles(g));
   });
+
+  it('never returns an empty mesh, even under aggressive decimation', () => {
+    const g = new THREE.TorusGeometry(10, 3, 16, 32); // 2048 tris
+    const out = decimateGeometry(g, 50);
+    expect(countTriangles(out)).toBeGreaterThan(0);
+    expect(out.attributes.position.count).toBeGreaterThan(0);
+  });
 });

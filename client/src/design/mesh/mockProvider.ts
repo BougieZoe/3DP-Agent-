@@ -11,14 +11,27 @@ export interface MockMeshProviderOptions {
   shape?: MockShape | 'auto';
 }
 
-/** Pick a procedural shape from natural-language keywords. */
-export function shapeForPrompt(prompt: string): MockShape {
+const SHAPE_KEYWORDS: Array<[MockShape, RegExp]> = [
+  ['torus', /gear|wheel|washer|donut|ring|tire|torus|toroid/],
+  ['box', /box|cube|block|brick|crate|plate/],
+  ['cylinder', /cylinder|tube|pipe|can|column|pillar|pen/],
+  ['sphere', /sphere|ball|globe|orb|marble|head/],
+];
+
+const ALL_SHAPES: MockShape[] = ['torus', 'box', 'sphere', 'cylinder'];
+
+/** Match a prompt keyword to a shape, or null when nothing matches. */
+export function matchShape(prompt: string): MockShape | null {
   const p = prompt.toLowerCase();
-  if (/gear|wheel|washer|donut|ring|tire|torus|toroid/.test(p)) return 'torus';
-  if (/box|cube|block|brick|crate|plate/.test(p)) return 'box';
-  if (/cylinder|tube|pipe|can|column|pillar|pen/.test(p)) return 'cylinder';
-  if (/sphere|ball|globe|orb|marble|head/.test(p)) return 'sphere';
-  return 'torus';
+  for (const [shape, re] of SHAPE_KEYWORDS) {
+    if (re.test(p)) return shape;
+  }
+  return null;
+}
+
+/** Deterministic keyword pick, defaulting to torus. */
+export function shapeForPrompt(prompt: string): MockShape {
+  return matchShape(prompt) ?? 'torus';
 }
 
 function rand(min: number, max: number): number {
@@ -61,7 +74,14 @@ export function createMockMeshProvider(options: MockMeshProviderOptions = {}): M
 
     async generate(request: MeshGenerationRequest): Promise<MeshJobHandle> {
       const id = `mock-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-      shapeByHandle.set(id, fixed === 'auto' ? shapeForPrompt(request.prompt) : fixed);
+      // Keyword match → that shape; otherwise a random primitive so a custom
+      // prompt always produces a visibly-new result instead of a silent default.
+      const matched = matchShape(request.prompt);
+      const shape =
+        fixed === 'auto'
+          ? matched ?? ALL_SHAPES[Math.floor(Math.random() * ALL_SHAPES.length)]
+          : fixed;
+      shapeByHandle.set(id, shape);
       return { id, provider: 'mock' };
     },
 
