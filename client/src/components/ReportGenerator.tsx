@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { CONTENT, translate, type ContentLang } from "@shared/i18n/content";
 import type { UnifiedAnalysis } from "../analysis/types";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
+import { preparePdfFonts } from "@/lib/pdfFont";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -327,6 +328,11 @@ const C = {
 
 const kern = (s: string): string => s.split("").join(" ");
 
+// Active PDF font — set to a CJK font (via preparePdfFonts) when lang is ja/zh,
+// since jsPDF's helvetica cannot render CJK. Also avoid letter-spacing CJK.
+let pdfFont = "helvetica";
+const kernText = (s: string): string => (/[぀-ヿ一-鿿]/.test(s) ? s : kern(s));
+
 // ─── Shared PDF Helpers ────────────────────────────────────────────────────────
 
 const PAGE_W = 210;
@@ -347,7 +353,7 @@ function drawHeader(
   doc.rect(0, 0, PAGE_W, 60, "F");
 
   // Overline — left
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(7);
   doc.setTextColor(...C.muted);
   doc.text(
@@ -357,18 +363,18 @@ function drawHeader(
   );
 
   // Version label — right
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfFont, "bold");
   doc.setTextColor(...C.faint);
   doc.text(kern(versionLabel.toUpperCase()), PAGE_W - PAGE_M, 28, { align: "right" });
 
   // Title
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(20);
   doc.setTextColor(...C.ink);
   doc.text(translate(CONTENT, 'pdf.title', lang), PAGE_M, 36);
 
   // File name + date
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(9);
   doc.setTextColor(...C.muted);
   doc.text(`${fileName} · ${dateStr}`, PAGE_M, 45);
@@ -387,11 +393,11 @@ function drawFooter(
     doc.setPage(i);
     doc.setFillColor(...C.footerBg);
     doc.rect(0, PAGE_H - 15, PAGE_W, 15, "F");
-    doc.setFont("helvetica", "normal");
+    doc.setFont(pdfFont, "normal");
     doc.setFontSize(7);
     doc.setTextColor(...C.muted);
     doc.text("3DP AGENT · 3dp-agent.vercel.app", PAGE_M, PAGE_H - 5);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(pdfFont, "normal");
     doc.setTextColor(...C.faint);
     if (extraRight) {
       doc.text(`${extraRight} · ${score} / 100`, PAGE_W - PAGE_M, PAGE_H - 5, { align: "right" });
@@ -422,19 +428,19 @@ function drawVerdictCard(
   doc.rect(PAGE_M, cardY, 4, cardH, "F");
 
   // Label (12pt)
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfFont, "bold");
   doc.setFontSize(12);
   doc.setTextColor(...C.ink);
   doc.text(label, PAGE_M + 12, cardY + 16);
 
   // Description (8pt)
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(8);
   doc.setTextColor(...C.muted);
   doc.text(desc, PAGE_M + 12, cardY + 26);
 
   // Score right (28pt)
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfFont, "bold");
   doc.setFontSize(28);
   doc.setTextColor(...accent);
   doc.text(`${score}`, PAGE_W - PAGE_M, cardY + cardH / 2 + 1, { align: "right" });
@@ -452,10 +458,10 @@ function drawSectionLine(doc: JsPDF, y: number): number {
 
 function drawSectionHeader(doc: JsPDF, label: string, y: number): number {
   y = drawSectionLine(doc, y);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfFont, "bold");
   doc.setFontSize(7);
   doc.setTextColor(...C.faint);
-  doc.text(kern(label), PAGE_M, y);
+  doc.text(kernText(label), PAGE_M, y);
   return y + 7;
 }
 
@@ -466,11 +472,11 @@ function drawDataRow(
   y: number,
   warn = false
 ): number {
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(9);
   doc.setTextColor(...C.muted);
   doc.text(label, PAGE_M, y);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfFont, "bold");
   doc.setTextColor(...(warn ? C.red : C.ink));
   doc.text(value, PAGE_W - PAGE_M, y, { align: "right" });
   return y + 7;
@@ -488,12 +494,12 @@ function drawIssueBadge(
   doc.setFillColor(...color);
   doc.circle(cx, cy, 2.5, "F");
 
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfFont, "bold");
   doc.setFontSize(7);
   doc.setTextColor(...C.white);
   doc.text(`${num}`, cx, cy + 0.5, { align: "center" });
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(9);
   doc.setTextColor(...C.ink);
   const lines = doc.splitTextToSize(text, PAGE_CW - 14);
@@ -511,6 +517,7 @@ async function generateClientPDF(
 ): Promise<void> {
   const { jsPDF } = await import("jspdf" as never) as { jsPDF: new (o?: object) => JsPDF };
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  pdfFont = await preparePdfFonts(doc as never, lang);
 
   const { light, score } = getTrafficLight(analysis);
   const metrics = analysis.metrics?.result;
@@ -589,7 +596,7 @@ async function generateClientPDF(
       }
     }
   } else {
-    doc.setFont("helvetica", "normal");
+    doc.setFont(pdfFont, "normal");
     doc.setFontSize(9);
     doc.setTextColor(...C.muted);
     doc.text(
@@ -601,7 +608,7 @@ async function generateClientPDF(
 
   // ── Next step ──
   y += 6;
-  doc.setFont("helvetica", "italic");
+  doc.setFont(pdfFont, "italic");
   doc.setFontSize(7.5);
   doc.setTextColor(...C.faint);
   const nextStep = translate(CONTENT, 'pdf.nextStep', lang);
@@ -629,6 +636,7 @@ async function generateDesignerPDF(
 ): Promise<void> {
   const { jsPDF } = await import("jspdf" as never) as { jsPDF: new (o?: object) => JsPDF };
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  pdfFont = await preparePdfFonts(doc as never, lang);
 
   const { light, score } = getTrafficLight(analysis);
   const metrics = analysis.metrics?.result;
@@ -779,7 +787,7 @@ async function generateDesignerPDF(
     }
     y = issueY;
   } else {
-    doc.setFont("helvetica", "normal");
+    doc.setFont(pdfFont, "normal");
     doc.setFontSize(9);
     doc.setTextColor(...C.muted);
     doc.text(
@@ -811,7 +819,7 @@ async function generateDesignerPDF(
       : (lang === "ja" ? "問題点を確認して調整してください" : "Review issues and adjust");
   }
 
-  doc.setFont("helvetica", "italic");
+  doc.setFont(pdfFont, "italic");
   doc.setFontSize(8);
   doc.setTextColor(...C.muted);
   const sugLines = doc.splitTextToSize(suggestion, PAGE_CW);
@@ -837,6 +845,7 @@ async function generateFactoryPDF(
 ): Promise<void> {
   const { jsPDF } = await import("jspdf" as never) as { jsPDF: new (o?: object) => JsPDF };
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  pdfFont = await preparePdfFonts(doc as never, lang);
 
   const { light, score } = getTrafficLight(analysis);
   const metrics = analysis.metrics?.result;
@@ -993,7 +1002,7 @@ async function generateFactoryPDF(
     y = PAGE_M + 6;
   }
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfFont, "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...C.faint);
   doc.text(dLines, PAGE_M, y);
