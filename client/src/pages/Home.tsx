@@ -15,6 +15,9 @@ import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 import { fromThreeBufferGeometry, runAnalysisPipeline } from '@/analysis';
 import { normalizeModelGeometry, fitCameraToGeometry } from '@/lib/modelNormalization';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
+import { parseSTL } from '@/lib/stlParser';
+import { processMesh } from '@/lib/meshProcessClient';
+import { geometryToStl } from '@/lib/meshOps';
 import { LENGTH_UNIT_TO_MM, type LengthUnit } from '@shared/domain/geometry';
 import { CONTENT, translate, SUPPORTED_LANGUAGES } from '@shared/i18n/content';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
@@ -425,6 +428,44 @@ export default function Home() {
     }, 600);
   };
 
+  // Repair & process the uploaded mesh via the shared /api/mesh/process endpoint
+  // (diagnostics, best-effort watertight repair, place on plate), then re-run
+  // the analysis so the report reflects the processed model.
+  const [repairing, setRepairing] = useState(false);
+  const handleRepairProcess = useCallback(async () => {
+    if (!uploadedModel) return;
+    setRepairing(true);
+    try {
+      const result = await processMesh(geometryToStl(uploadedModel.geometry), {});
+      const processed = parseSTL(result.stlBytes);
+      processed.computeVertexNormals();
+      processed.computeBoundingBox();
+      const newUnified = runAnalysisPipeline(fromThreeBufferGeometry(processed), {
+        fileName: uploadedModel.fileName,
+        material,
+      });
+      setUploadedModel({
+        ...uploadedModel,
+        geometry: processed,
+        mesh: createMeshFromGeometry(processed),
+        unifiedAnalysis: newUnified,
+        rawGeometry: processed.clone(),
+      });
+      const d = result.diagnostics;
+      toast.success(
+        d.repaired
+          ? `repaired to watertight · ${d.bodyCount ?? 1} bodies`
+          : d.watertight
+            ? `mesh OK · ${d.bodyCount ?? 1} bodies`
+            : 'processed · repair unavailable',
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRepairing(false);
+    }
+  }, [uploadedModel, material]);
+
   // Feature-section navigation. Destinations come from FEATURE_DESTINATIONS
   // (FeaturesSection); this handler resolves them against current state.
   const handleFeatureNavigate = useCallback((dest: FeatureDestination) => {
@@ -713,6 +754,10 @@ export default function Home() {
                     <button onClick={() => setTab('report')}
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
                       {t('generateReport')}
+                    </button>
+                    <button onClick={handleRepairProcess} disabled={repairing}
+                      className="w-full py-2.5 text-xs font-mono border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all disabled:opacity-50">
+                      {repairing ? '▋ ' + t('analyze') : t('analyzeRepair')}
                     </button>
                   </div>
                 )}

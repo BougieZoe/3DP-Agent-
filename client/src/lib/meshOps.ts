@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SimplifyModifier, mergeVertices } from 'three-stdlib';
+import { SimplifyModifier, mergeVertices, STLExporter } from 'three-stdlib';
 
 export function countTriangles(geometry: THREE.BufferGeometry): number {
   return geometry.index ? geometry.index.count / 3 : geometry.attributes.position.count / 3;
@@ -44,4 +44,12 @@ export function decimateGeometry(
   const out = result.index ? result : mergeVertices(result);
   out.computeVertexNormals();
   return out;
+}
+
+/** Export a BufferGeometry to a binary STL ArrayBuffer. */
+export function geometryToStl(geometry: THREE.BufferGeometry): ArrayBuffer {
+  const out = new STLExporter().parse(new THREE.Mesh(geometry), { binary: true });
+  return out instanceof DataView
+    ? out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength)
+    : new TextEncoder().encode(String(out)).buffer;
 }
