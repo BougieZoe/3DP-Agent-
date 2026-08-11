@@ -64,15 +64,15 @@ function SuggestionCard({ suggestion, selected, onSelect, language }: {
 
       <div className="grid grid-cols-3 gap-2 mb-2">
         <div className={`${PANEL.borderSubtle} ${PANEL.roundedInner} p-1.5`}>
-          <div className={`${PANEL.fontTiny} text-muted-foreground/40`}>Risk</div>
+          <div className={`${PANEL.fontTiny} text-muted-foreground/40`}>{translate(CONTENT, 'causality.metric.risk', language)}</div>
           <Delta value={suggestion.riskReduction} suffix="%" />
         </div>
         <div className={`${PANEL.borderSubtle} ${PANEL.roundedInner} p-1.5`}>
-          <div className={`${PANEL.fontTiny} text-muted-foreground/40`}>Thermal</div>
+          <div className={`${PANEL.fontTiny} text-muted-foreground/40`}>{translate(CONTENT, 'causality.metric.thermal', language)}</div>
           <Delta value={suggestion.thermalImprovement} suffix="%" />
         </div>
         <div className={`${PANEL.borderSubtle} ${PANEL.roundedInner} p-1.5`}>
-          <div className={`${PANEL.fontTiny} text-muted-foreground/40`}>Support</div>
+          <div className={`${PANEL.fontTiny} text-muted-foreground/40`}>{translate(CONTENT, 'causality.metric.support', language)}</div>
           <Delta value={suggestion.supportChange} suffix="%" />
         </div>
       </div>

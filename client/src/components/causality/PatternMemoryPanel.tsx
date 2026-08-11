@@ -14,14 +14,15 @@ interface PatternMemoryPanelProps {
  * Shared consequence-chain renderer — the chain is a property of the pattern
  * template, so it is rendered once per pattern group instead of on every card.
  */
-export function ConsequenceChain({ steps }: { steps: string[] }) {
+export function ConsequenceChain({ steps, language = 'en' }: { steps: string[]; language?: ContentLang }) {
   if (steps.length === 0) return null;
   return (
     <div className="flex items-center gap-1 mt-1.5">
       <span className={`${PANEL.fontTiny} text-muted-foreground/30`}>{'→'}</span>
       {steps.map((step, i) => (
         <span key={step} className={`${PANEL.fontTiny} text-muted-foreground/40`}>
-          {step.replace(/_/g, ' ')}{i < steps.length - 1 && (
+          {translate(CONTENT, `causality.event.${step}`, language)}
+          {i < steps.length - 1 && (
             <span className="text-muted-foreground/20 mx-0.5">{'→'}</span>
           )}
         </span>
@@ -170,7 +171,7 @@ function PatternGroupCard({ group, selectedPatternId, onSelectPattern, open, onT
             })}
           </div>
 
-          <ConsequenceChain steps={group.pattern.consequenceChain} />
+          <ConsequenceChain steps={group.pattern.consequenceChain} language={language} />
         </div>
       )}
     </div>
