@@ -44,9 +44,17 @@ function labelFromVar(name: string): string {
     || (p.charAt(0).toUpperCase() + p.slice(1))).join(' ');
 }
 
+const DIMENSION_TOKENS = new Set([
+  'w', 'width', 'h', 'height', 'd', 'depth', 'l', 'length',
+  'thick', 'outer', 'inner', 'size', 'plate', 'house', 'base',
+  'overall', 'seat', 'leg', 'body',
+]);
+
 function sectionFromName(name: string): string {
   const l = name.toLowerCase();
-  if (/^(?:w(?:idth)?|h(?:eight)?|d(?:epth)?|l(?:ength)?|thick|outer|inner|size|plate|house|base_|overall|seat_|leg_|body_)/.test(l)) return 'dimensions';
+  // Match the whole first token exactly — prefix regexes like `w(?:idth)?`
+  // used to swallow any word starting with w/h (wall, holes → dimensions).
+  if (DIMENSION_TOKENS.has(l.split('_')[0])) return 'dimensions';
   if (/hole|bolt/.test(l)) return 'holes';
   if (/radius|fillet|corner|angle|spacing|back|roof|spire|tower|cabin|head|arm|tire|wheelbase|window|door|count|num/.test(l)) return 'details';
   if (/wall/.test(l)) return 'manufacturing';
