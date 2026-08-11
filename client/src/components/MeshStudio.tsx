@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Sparkles } from 'lucide-react';
 import { parseSTL } from '@/lib/stlParser';
 import { fitCameraToGeometry } from '@/lib/modelNormalization';
+import { countTriangles, decimateGeometry } from '@/lib/meshOps';
 import { runCadAnalysis } from '@/lib/cadAnalysis';
 import { createMeshProvider } from '@/design/mesh';
 import { useMaterial } from '@/contexts/MaterialContext';
@@ -138,6 +139,22 @@ export function MeshStudio({ language }: { language: Language }) {
     a.download = `${(prompt || 'mesh').slice(0, 40).replace(/[^a-z0-9_-]/gi, '_')}.stl`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDecimate = () => {
+    if (!geometry) return;
+    const target = Math.max(200, Math.floor(countTriangles(geometry) / 2));
+    const decimated = decimateGeometry(geometry, target);
+    const result = runCadAnalysis(decimated, {
+      fileName: `${(prompt || 'mesh').slice(0, 40).replace(/[^a-z0-9_-]/gi, '_')}.stl`,
+      prompt,
+      material,
+      language,
+    });
+    setGeometry(result.geometry);
+    setUnified(result.unified);
+    setGate(result.gate);
+    setIssues(result.issues);
   };
 
   const m = unified?.metrics?.result;
@@ -347,6 +364,14 @@ export function MeshStudio({ language }: { language: Language }) {
                   <span className="text-muted-foreground/50 uppercase tracking-wider">{t('cadWatertight')}</span>
                   <span className={isWatertight ? 'text-emerald-400' : 'text-red-400'}>✓</span>
                 </div>
+                {triCount > 200 && (
+                  <button
+                    onClick={handleDecimate}
+                    className="w-full h-8 inline-flex items-center justify-center gap-1.5 border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm text-[11px] font-mono transition-all"
+                  >
+                    {t('meshDecimate')}
+                  </button>
+                )}
               </div>
             </div>
           </div>
