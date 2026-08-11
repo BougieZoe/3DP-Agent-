@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { createMeshProvider, createMockMeshProvider, createTripoMeshProvider } from '../mesh';
+import { shapeForPrompt } from '../mesh/mockProvider';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
+
+describe('mock shape keywords', () => {
+  it('maps prompt keywords to primitives', () => {
+    expect(shapeForPrompt('a gear')).toBe('torus');
+    expect(shapeForPrompt('a bicycle wheel')).toBe('torus');
+    expect(shapeForPrompt('a cube')).toBe('box');
+    expect(shapeForPrompt('a cylinder')).toBe('cylinder');
+    expect(shapeForPrompt('a marble')).toBe('sphere');
+    expect(shapeForPrompt('a mysterious thing')).toBe('torus'); // default
+  });
+});
 
 describe('mock mesh provider', () => {
   it('is available and returns a valid binary STL on success', async () => {
