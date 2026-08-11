@@ -1139,6 +1139,17 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     }
   };
 
+  const downloadSTEP = () => {
+    if (!requestId) return;
+    fetch(`/api/cad/generate/${requestId}/step`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`STEP download failed (HTTP ${res.status})`);
+        return res.blob();
+      })
+      .then((blob) => downloadBlob(`cad-model.step`, blob))
+      .catch((err) => console.error('[CADStudio] STEP download failed:', err));
+  };
+
   const score = confidenceReport?.overallScore ?? 0;
   const verdict = confidenceReport?.verdict ?? 'FAIL';
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -1366,6 +1377,12 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
               <button onClick={downloadSTL} title={t('cadDownloadStl')}
                 className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0">
                 <Download className="w-4 h-4" />
+              </button>
+            )}
+            {requestId && (
+              <button onClick={downloadSTEP} title={t('cadDownloadStep')}
+                className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0">
+                <FileText className="w-4 h-4" />
               </button>
             )}
           </div>
