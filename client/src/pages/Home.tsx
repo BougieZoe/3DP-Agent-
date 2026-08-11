@@ -492,7 +492,6 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
           <span className="text-sm font-mono text-primary tracking-widest">3DP AGENT</span>
-          <span className="text-xs text-muted-foreground/50 hidden sm:block">v2.0 // {mode === 'analyze' ? 'STL Analysis' : 'CAD Studio'}</span>
         </div>
         <div className="flex items-center gap-2">
           {/* Mode toggle */}
