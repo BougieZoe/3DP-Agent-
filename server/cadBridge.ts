@@ -7,6 +7,13 @@ import path from 'node:path';
 import express, { Router, type Request, type Response } from 'express';
 import type { GeneratedArtifact, GeneratedModel } from '../shared/domain/generatedModel';
 import { repairCadSource, type RepairType } from './cadRepair';
+import {
+  SANDBOX_ENV,
+  SANDBOX_MEM_KB,
+  SANDBOX_CPU_S,
+  SANDBOX_FILE_KB,
+  scanSourceSafety,
+} from './cadSandbox';
 
 const SKILL_DIR =
   process.env.CAD_SKILL_DIR ?? path.join(os.homedir(), '.agents', 'skills', 'cad');
@@ -225,7 +232,17 @@ function runStepCli(
   timeoutMs: number,
 ): Promise<StepRunResult> {
   return new Promise((resolvePromise) => {
-    const child = spawn(python, args, { cwd, env: process.env });
+    // Sandboxed execution: isolated interpreter (-I), sanitized env (no host
+    // secrets), and best-effort resource limits applied before exec.
+    const ulimitCmd =
+      `ulimit -v ${SANDBOX_MEM_KB} 2>/dev/null; ` +
+      `ulimit -t ${SANDBOX_CPU_S} 2>/dev/null; ` +
+      `ulimit -f ${SANDBOX_FILE_KB} 2>/dev/null; ` +
+      `exec "$0" "$@"`;
+    const child = spawn('/bin/sh', ['-c', ulimitCmd, python, '-I', ...args], {
+      cwd,
+      env: SANDBOX_ENV,
+    });
     let stdout = '';
     let stderr = '';
     let timedOut = false;
@@ -343,7 +360,19 @@ export function createCadBridgeRouter(): Router {
         sendError(res, 502, 'generation-failed', `LLM source generation failed: ${String(err)}`);
         return;
       }
-      warnings.push('LLM-authored build123d source executed without sandbox — local dev bridge');
+      warnings.push('LLM-authored build123d source executed in a sandboxed interpreter');
+    }
+
+    const safety = scanSourceSafety(source);
+    if (!safety.safe) {
+      console.warn(`[cadBridge:${id.slice(0, 8)}] REJECT — unsafe source: ${safety.reason}`);
+      sendError(
+        res,
+        502,
+        'generation-failed',
+        `Generated code contained a forbidden operation (${safety.reason}). Try a different description.`,
+      );
+      return;
     }
 
     await mkdir(runDir, { recursive: true });
