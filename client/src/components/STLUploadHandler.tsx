@@ -44,7 +44,6 @@ const labels = {
     stl: '[  STL  ]',
     releaseToUpload: '— RELEASE TO UPLOAD —',
     dragOrClick: 'DRAG FILE HERE OR CLICK TO BROWSE',
-    supported: 'Binary & ASCII STL supported',
     units: 'UNITS',
   },
   ja: {
@@ -62,7 +61,6 @@ const labels = {
     stl: '[  STL  ]',
     releaseToUpload: '— リリースしてアップロード —',
     dragOrClick: 'ファイルをドラッグするか、クリックして参照',
-    supported: 'バイナリ＆ASCII STL対応',
     units: '単位',
   },
   zh: {
@@ -80,7 +78,6 @@ const labels = {
     stl: '[  STL  ]',
     releaseToUpload: '— 释放以上传 —',
     dragOrClick: '拖放文件到此处或点击浏览',
-    supported: '支持二进制和 ASCII STL',
     units: '单位',
   },
 };
@@ -181,9 +178,6 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en', unit
 
         <div className="text-xs font-mono text-muted-foreground">
           {isDragging ? t.releaseToUpload : t.dragOrClick}
-        </div>
-        <div className="text-xs text-muted-foreground/40">
-          {t.supported}
         </div>
 
         {/* Declared source units — STL carries no unit metadata; changing the

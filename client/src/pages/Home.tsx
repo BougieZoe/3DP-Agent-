@@ -901,7 +901,7 @@ export default function Home() {
             )}
 
             <div className="pt-2 border-t border-border/30 text-xs text-muted-foreground/20 font-mono text-center">
-              3DP AGENT \u00a9 2026 \u2014 Open Source
+              {'\u00a9 2026'}
             </div>
           </div>
         </div>

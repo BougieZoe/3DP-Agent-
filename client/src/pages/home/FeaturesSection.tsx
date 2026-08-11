@@ -32,7 +32,7 @@ function FeatureGroup({
   keyTag = false,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   accentBorder: string;
   iconColor: string;
   items: FeatureItem[];
@@ -43,7 +43,9 @@ function FeatureGroup({
     <div className={`rounded-sm border-l-2 bg-card p-3.5 space-y-3 ${accentBorder}`}>
       <div className="space-y-0.5">
         <div className="text-[11px] font-mono tracking-widest text-muted-foreground">{title}</div>
-        <div className="text-[11px] text-muted-foreground/60">{subtitle}</div>
+        {subtitle && (
+          <div className="text-[11px] text-muted-foreground/60">{subtitle}</div>
+        )}
       </div>
       <div className="space-y-2.5">
         {items.map((item) => (
@@ -78,7 +80,6 @@ export function FeaturesSection({ t }: { t: (key: TKey) => string }) {
     <div className="space-y-3">
       <FeatureGroup
         title={t('featuresIncludedTitle')}
-        subtitle={t('featuresIncludedSub')}
         accentBorder="border-primary"
         iconColor="text-primary"
         items={LOCAL_FEATURES}
