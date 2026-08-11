@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { Grid, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Download, Box } from 'lucide-react';
 import { parseSTL } from '@/lib/stlParser';
 import { fitCameraToGeometry } from '@/lib/modelNormalization';
 import { countTriangles, decimateGeometry } from '@/lib/meshOps';
 import { processMesh, type MeshProcessDiagnostics } from '@/lib/meshProcessClient';
 import { runCadAnalysis } from '@/lib/cadAnalysis';
+import { geometryToThreeMf } from '@/lib/threeMf';
 import { createMeshProvider } from '@/design/mesh';
 import { useMaterial } from '@/contexts/MaterialContext';
 import { getTranslation, translations } from '@/lib/i18n';
@@ -150,6 +151,18 @@ export function MeshStudio({ language }: { language: Language }) {
     URL.revokeObjectURL(url);
   };
 
+  const download3MF = () => {
+    if (!geometry) return;
+    const bytes = geometryToThreeMf(geometry);
+    const blob = new Blob([bytes], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(prompt || 'mesh').slice(0, 40).replace(/[^a-z0-9_-]/gi, '_')}.3mf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleDecimate = () => {
     if (!geometry) return;
     const target = Math.max(200, Math.floor(countTriangles(geometry) / 2));
@@ -237,7 +250,7 @@ export function MeshStudio({ language }: { language: Language }) {
             {status === 'generating' || status === 'submitting' ? t('meshGenerating') : t('meshGenerate')}
           </button>
           {hasResult && (
-            <div className="flex items-stretch gap-3">
+            <div className="flex items-stretch gap-2">
               <button
                 onClick={() => generate()}
                 disabled={status === 'submitting' || status === 'generating'}
@@ -248,9 +261,19 @@ export function MeshStudio({ language }: { language: Language }) {
               {stlBytes && (
                 <button
                   onClick={downloadSTL}
-                  className="flex-1 h-9 inline-flex items-center justify-center gap-1.5 bg-primary/10 text-primary rounded-sm text-sm font-mono hover:bg-primary/20 transition-all"
+                  title={t('meshDownloadStl')}
+                  className="h-9 w-9 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-primary hover:border-primary/40 rounded-sm transition-all shrink-0"
                 >
-                  {t('meshDownloadStl')}
+                  <Download className="w-4 h-4" />
+                </button>
+              )}
+              {geometry && (
+                <button
+                  onClick={download3MF}
+                  title={t('meshDownload3mf')}
+                  className="h-9 w-9 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-primary hover:border-primary/40 rounded-sm transition-all shrink-0"
+                >
+                  <Box className="w-4 h-4" />
                 </button>
               )}
             </div>
