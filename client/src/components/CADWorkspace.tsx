@@ -21,20 +21,20 @@ import {
 } from "lucide-react";
 import { createLocalBridgeTransport } from "@/design/transport/localBridge";
 import { parseSTL } from "@/lib/stlParser";
-import { fromThreeBufferGeometry, runAnalysisPipeline, type UnifiedAnalysis } from "@/analysis";
+import type { UnifiedAnalysis } from "@/analysis";
 import { getAPIKeys, getActiveProvider } from "@/lib/apiKeys";
 import { useMaterial } from "@/contexts/MaterialContext";
-import type { Material } from "@/lib/materialState";
 import { getTranslation, translations } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n";
 
 type TKey = keyof (typeof translations)['en'];
-import { runConfidenceGate, type CADConfidenceReport, type CADRunRecord, type ImprovementResult, type Issue as ConfidenceIssue, type RepairSuggestion, type GenerationQuality } from "@/cad-confidence";
+import type { CADConfidenceReport, CADRunRecord, ImprovementResult, Issue as ConfidenceIssue, RepairSuggestion, GenerationQuality } from "@/cad-confidence";
 import { CAD_MATERIALS, getCADMaterialPreset, createCADMaterial, type CADMaterialPreset } from "@/lib/cadMaterials";
 import { applySuggestions } from "@/lib/geometryEditor";
 import { optimizeDesign, type OptimizationDecision } from "@/agents/designOptimizer";
 import { DynamicParamsPanel } from "./cad/DynamicParamsPanel";
 import { parseParamsFromSource, sliderBounds } from "@/lib/cadParams";
+import { runCadAnalysis } from "@/lib/cadAnalysis";
 
 const LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
   openai:   { baseUrl: 'https://api.openai.com/v1',            model: 'gpt-4o' },
@@ -529,31 +529,6 @@ function extractMetrics(analysis: UnifiedAnalysis, report: CADConfidenceReport):
 
 function difficultyRank(d: string): number {
   return DIFFICULTY_RANK[d] ?? 0;
-}
-
-/* ─── Shared CAD analysis pipeline ───
-   Deduplicates the repeated "parse → analyze → confidence gate" sequence
-   across generate / regenerate / improve / auto-optimize paths. */
-function runCadAnalysis(
-  geometry: THREE.BufferGeometry,
-  opts: {
-    fileName: string;
-    prompt: string;
-    material: Material;
-    quality?: GenerationQuality;
-    language: Language;
-  },
-): { geometry: THREE.BufferGeometry; unified: UnifiedAnalysis; gate: CADConfidenceReport; issues: ConfidenceIssue[] } {
-  geometry.computeVertexNormals();
-  geometry.computeBoundingBox();
-  const model = fromThreeBufferGeometry(geometry);
-  const unified = runAnalysisPipeline(model, {
-    fileName: opts.fileName,
-    material: opts.material,
-    printerId: 'bambu_x1c',
-  });
-  const gate = runConfidenceGate(unified, opts.prompt, opts.quality ?? 'SUCCESS', opts.language);
-  return { geometry, unified, gate: gate.report, issues: gate.issues };
 }
 
 /* ─── Friendly CAD generation errors ───
