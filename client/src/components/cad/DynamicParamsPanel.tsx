@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 import { ChevronDown, ChevronRight, Minus, Plus, Redo2, Undo2 } from 'lucide-react';
-import { SECTION_LABELS, type DynamicParam } from '@/lib/cadParams';
+import type { translations } from '@/lib/i18n';
+import type { DynamicParam } from '@/lib/cadParams';
+
+type TKey = keyof (typeof translations)['en'];
 
 interface DynamicParamsPanelProps {
   params: DynamicParam[];
@@ -13,9 +16,17 @@ interface DynamicParamsPanelProps {
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  t: (key: TKey) => string;
 }
 
 const SECTION_ORDER = ['dimensions', 'holes', 'details', 'manufacturing'];
+
+const SECTION_TKEY: Record<string, TKey> = {
+  dimensions: 'cadSectionDimensions',
+  holes: 'cadSectionHoles',
+  details: 'cadSectionDetails',
+  manufacturing: 'cadSectionManufacturing',
+};
 
 /**
  * Edits the parameters extracted from the current model's build123d source
@@ -33,6 +44,7 @@ export function DynamicParamsPanel({
   canRedo,
   onUndo,
   onRedo,
+  t,
 }: DynamicParamsPanelProps) {
   const bySection = useMemo(() => {
     const map: Record<string, DynamicParam[]> = {};
@@ -45,14 +57,14 @@ export function DynamicParamsPanel({
       {/* Header + undo/redo */}
       <div className="px-4 py-3 border-b border-border/15 flex items-center justify-between">
         <div className="text-[10px] tracking-[0.3em] text-muted-foreground/50 uppercase">
-          Parametric Control
+          {t('cadParametricControl')}
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl+Z)"
+          <button onClick={onUndo} disabled={!canUndo} title={t('cadUndo')}
             className="w-7 h-7 inline-flex items-center justify-center border border-border/40 rounded-sm text-muted-foreground/60 hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:pointer-events-none transition-all">
             <Undo2 className="w-3 h-3" />
           </button>
-          <button onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Y)"
+          <button onClick={onRedo} disabled={!canRedo} title={t('cadRedo')}
             className="w-7 h-7 inline-flex items-center justify-center border border-border/40 rounded-sm text-muted-foreground/60 hover:text-foreground hover:border-foreground/30 disabled:opacity-30 disabled:pointer-events-none transition-all">
             <Redo2 className="w-3 h-3" />
           </button>
@@ -68,7 +80,7 @@ export function DynamicParamsPanel({
               <button onClick={() => onToggleSection(section)}
                 className="w-full flex items-center gap-1.5 text-[10px] tracking-[0.2em] uppercase text-muted-foreground/60 hover:text-muted-foreground transition-colors">
                 {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                {SECTION_LABELS[section] ?? section.toUpperCase()}
+                {t(SECTION_TKEY[section])}
               </button>
               {open && (
                 <div className="space-y-3">

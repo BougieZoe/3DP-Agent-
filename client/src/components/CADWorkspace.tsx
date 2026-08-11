@@ -25,7 +25,10 @@ import { fromThreeBufferGeometry, runAnalysisPipeline, type UnifiedAnalysis } fr
 import { getAPIKeys, getActiveProvider } from "@/lib/apiKeys";
 import { useMaterial } from "@/contexts/MaterialContext";
 import type { Material } from "@/lib/materialState";
+import { getTranslation, translations } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n";
+
+type TKey = keyof (typeof translations)['en'];
 import { runConfidenceGate, type CADConfidenceReport, type CADRunRecord, type ImprovementResult, type Issue as ConfidenceIssue, type RepairSuggestion, type GenerationQuality } from "@/cad-confidence";
 import { CAD_MATERIALS, getCADMaterialPreset, createCADMaterial, type CADMaterialPreset } from "@/lib/cadMaterials";
 import { applySuggestions } from "@/lib/geometryEditor";
@@ -359,11 +362,11 @@ function MaterialSelector({ current, onChange }: { current: string; onChange: (i
   );
 }
 
-function FitViewButton({ onFit }: { onFit: () => void }) {
+function FitViewButton({ onFit, title }: { onFit: () => void; title: string }) {
   return (
     <button onClick={onFit}
       className="w-7 h-7 flex items-center justify-center bg-background/70 backdrop-blur border border-border/50 rounded-sm text-muted-foreground/50 hover:text-primary hover:border-primary/30 transition-all"
-      title="Fit View">
+      title={title}>
       <Maximize2 className="w-3 h-3" />
     </button>
   );
@@ -395,6 +398,28 @@ const DESIGN_STARTERS: Record<string, DesignStarter[]> = {
     { name: 'Recycled Panel', prompt: 'recycled material building panel with interlocking edges and ribbed core' },
     { name: 'Bio Composite Product', prompt: 'biodegradable composite product with organic surface texture and minimal material usage' },
   ],
+};
+
+// Starter category + name labels are localized; the prompts (sent to the LLM)
+// stay English for best generation quality.
+const CATEGORY_LABEL: Record<string, TKey> = {
+  Architecture: 'cadCatArchitecture',
+  Furniture: 'cadCatFurniture',
+  Automotive: 'cadCatAutomotive',
+  Sustainable: 'cadCatSustainable',
+};
+
+const STARTER_LABEL: Record<string, TKey> = {
+  'House Wall': 'cadStarterHouseWall',
+  'Architectural Facade': 'cadStarterArchFacade',
+  'Bridge': 'cadStarterBridge',
+  'Chair': 'cadStarterChair',
+  'Table': 'cadStarterTable',
+  'Lamp': 'cadStarterLamp',
+  'Car Part': 'cadStarterCarPart',
+  'Drone Frame': 'cadStarterDroneFrame',
+  'Recycled Panel': 'cadStarterRecycledPanel',
+  'Bio Composite Product': 'cadStarterBioComposite',
 };
 
 const CATEGORY_GLYPH: Record<string, string> = {
@@ -535,6 +560,7 @@ interface CADWorkspaceProps {
 
 export function CADWorkspace({ language }: CADWorkspaceProps) {
   const { material, materialName } = useMaterial();
+  const t = (key: TKey) => getTranslation(language, key);
   const [prompt, setPrompt] = useState(STARTER_EXAMPLES[language][0]);
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
   const [analysis, setAnalysis] = useState<UnifiedAnalysis | null>(null);
@@ -606,10 +632,10 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     stageTs.current = {};
 
     const stageDefs: Stage[] = [
-      { id: 'bridge',  label: 'Connect to CAD bridge',           status: 'pending', elapsedMs: 0 },
-      { id: 'llm',     label: 'Generate CAD (build123d / LLM)',  status: 'pending', elapsedMs: 0 },
-      { id: 'parse',   label: 'Parse STL mesh',                  status: 'pending', elapsedMs: 0 },
-      { id: 'analysis',label: 'Run analysis pipeline',           status: 'pending', elapsedMs: 0 },
+      { id: 'bridge',  label: t('cadStageBridge'),  status: 'pending', elapsedMs: 0 },
+      { id: 'llm',     label: t('cadStageLlm'),     status: 'pending', elapsedMs: 0 },
+      { id: 'parse',   label: t('cadStageParse'),   status: 'pending', elapsedMs: 0 },
+      { id: 'analysis',label: t('cadStageAnalysis'),status: 'pending', elapsedMs: 0 },
     ];
     setStages(stageDefs);
 
@@ -768,7 +794,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     } finally {
       setLoading(false);
     }
-  }, [prompt, material, updateStage]);
+  }, [prompt, material, updateStage, language]);
 
   /* ─── Parametric regeneration from source ─── */
   const handleRegenerateFromSource = useCallback(async (source: string) => {
@@ -1080,7 +1106,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const paramValuesRef = useRef<Record<string, string>>({});
 
   const m = analysis?.metrics?.result;
-  const t = analysis?.topology?.result;
+  const topo = analysis?.topology?.result;
   const v = analysis?.validation?.result;
   const sp = analysis?.support?.result;
   const pt = analysis?.printTime?.result;
@@ -1252,7 +1278,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         <div className="flex items-center gap-6">
           <div>
             <h1 className="text-lg font-mono font-bold tracking-tight text-foreground">3DP AGENT</h1>
-            <p className="text-sm font-mono text-muted-foreground/40 tracking-wider">CAD Studio</p>
+            <p className="text-sm font-mono text-muted-foreground/40 tracking-wider">{t('cadStudio')}</p>
           </div>
         </div>
       </header>
@@ -1266,7 +1292,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
             onChange={e => setPrompt(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !loading) { e.preventDefault(); handleGenerate(); }}}
             className="w-full h-[130px] resize-none bg-background border border-border/25 rounded-sm px-4 py-3 text-sm font-mono leading-relaxed text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/50 transition-colors"
-            placeholder="Describe your object..."
+            placeholder={t('cadDescribePlaceholder')}
           />
 
           {/* GENERATE + NEW DESIGN + DOWNLOAD */}
@@ -1274,14 +1300,14 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
             <button onClick={() => handleGenerate()} disabled={loading}
               className="flex-1 h-11 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm px-5 text-sm font-mono font-bold hover:bg-foreground/90 disabled:opacity-30 transition-all">
               {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              GENERATE
+              {t('cadGenerate')}
             </button>
-            <button onClick={handleNewDesign} disabled={loading} title="New Design"
+            <button onClick={handleNewDesign} disabled={loading} title={t('cadNewDesign')}
               className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0">
               <RotateCcw className="w-4 h-4" />
             </button>
             {stlBytesRef.current && (
-              <button onClick={downloadSTL} title="Download STL"
+              <button onClick={downloadSTL} title={t('cadDownloadStl')}
                 className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0">
                 <Download className="w-4 h-4" />
               </button>
@@ -1304,15 +1330,15 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
         {/* DESIGN STARTERS (always visible) */}
         <div className="px-4 mt-5 space-y-5">
-          <div className="text-[13px] text-muted-foreground/30 font-mono tracking-[0.2em]">DESIGN STARTERS</div>
+          <div className="text-[13px] text-muted-foreground/30 font-mono tracking-[0.2em]">{t('cadDesignStarters')}</div>
           {Object.entries(DESIGN_STARTERS).map(([category, items]) => (
             <div key={category} className="space-y-1.5">
-              <div className="text-[15px] text-muted-foreground/50 font-mono tracking-wide">{CATEGORY_GLYPH[category]} {category}</div>
+              <div className="text-[15px] text-muted-foreground/50 font-mono tracking-wide">{CATEGORY_GLYPH[category]} {t(CATEGORY_LABEL[category])}</div>
               <div className="space-y-0.5">
                 {items.map(item => (
                   <button key={item.name} onClick={() => { setPrompt(item.prompt); handleGenerate(item.prompt); }}
                     className="block w-full text-left text-[13px] font-mono text-muted-foreground/50 hover:text-primary transition-colors py-1 px-2 rounded-sm hover:bg-card/40">
-                    {item.name}
+                    {t(STARTER_LABEL[item.name])}
                   </button>
                 ))}
               </div>
@@ -1323,7 +1349,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         {/* Recent Designs */}
         {cadRunHistory.length > 0 && (
           <div className="px-4 mt-5">
-            <div className="text-sm text-muted-foreground/40 font-mono tracking-[0.2em] mb-2">RECENT DESIGNS</div>
+            <div className="text-sm text-muted-foreground/40 font-mono tracking-[0.2em] mb-2">{t('cadRecentDesigns')}</div>
             <div className="space-y-0.5">
               {cadRunHistory.slice(-5).reverse().map(r => (
                 <div key={r.id} className="flex items-center gap-2 px-2 py-1.5 text-[13px] font-mono text-muted-foreground/50 hover:text-foreground hover:bg-card/30 rounded-sm transition-colors cursor-pointer"
@@ -1342,11 +1368,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
           <div className="mt-auto px-4 py-3 border-t border-border/15 flex items-center gap-2">
             <button onClick={handleImproveDesign} disabled={loading || !geometry}
               className="flex-1 h-9 inline-flex items-center justify-center gap-1.5 bg-primary/10 text-primary rounded-sm text-sm font-mono hover:bg-primary/20 disabled:opacity-30 transition-all">
-              <RefreshCw className="w-3.5 h-3.5" /> IMPROVE DESIGN
+              <RefreshCw className="w-3.5 h-3.5" /> {t('cadImproveDesign')}
             </button>
             <button onClick={handleNewDesign}
               className="h-9 px-2.5 inline-flex items-center justify-center gap-1 border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm text-sm font-mono transition-all">
-              <RotateCcw className="w-3.5 h-3.5" /> RESET
+              <RotateCcw className="w-3.5 h-3.5" /> {t('cadReset')}
             </button>
           </div>
         )}
@@ -1361,7 +1387,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         {loading && stages.length > 0 && !hasGeometry && (
           <div className="absolute inset-0 z-10 flex items-center justify-center">
             <div className="flex flex-col gap-3 px-5 py-4 bg-background/70 backdrop-blur border border-border/15 rounded-sm min-w-[300px]">
-              <div className="text-sm text-muted-foreground/40 font-mono tracking-[0.2em] mb-1">GENERATING</div>
+              <div className="text-sm text-muted-foreground/40 font-mono tracking-[0.2em] mb-1">{t('cadGenerating')}</div>
               {stages.map(s => (
                 <div key={s.id} className="flex items-center gap-2 text-sm font-mono text-muted-foreground/60">
                   <span className={`w-2 h-2 rounded-full shrink-0 ${
@@ -1374,7 +1400,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                   {s.elapsedMs > 0 && <span className="text-muted-foreground/40 tabular-nums ml-auto">{s.elapsedMs}ms</span>}
                 </div>
               ))}
-              {totalTime > 0 && <span className="text-sm text-emerald-400/60 font-mono tabular-nums mt-1">Total: {totalTime}ms</span>}
+              {totalTime > 0 && <span className="text-sm text-emerald-400/60 font-mono tabular-nums mt-1">{t('cadTotal')}: {totalTime}ms</span>}
             </div>
           </div>
         )}
@@ -1383,7 +1409,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         <div className="absolute bottom-4 left-5 right-5 z-10 flex items-center gap-2">
           <MaterialSelector current={cadMaterialId} onChange={setCadMaterialId} />
           <div className="ml-auto" />
-          <FitViewButton onFit={() => setFitKey(k => k + 1)} />
+          <FitViewButton onFit={() => setFitKey(k => k + 1)} title={t('cadFitView')} />
         </div>
 
         {/* Three.js Canvas */}
@@ -1411,13 +1437,13 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                 rightTab === 'cad'
                   ? 'text-foreground border-b-2 border-foreground/40 bg-card/40'
                   : 'text-muted-foreground/40 hover:text-muted-foreground/70'
-              }`}>CAD</button>
+              }`}>{t('cadTabCad')}</button>
             <button onClick={() => setRightTab('analysis')}
               className={`flex-1 h-10 text-[12px] font-mono tracking-[0.15em] transition-colors ${
                 rightTab === 'analysis'
                   ? 'text-foreground border-b-2 border-foreground/40 bg-card/40'
                   : 'text-muted-foreground/40 hover:text-muted-foreground/70'
-              }`}>ANALYSIS</button>
+              }`}>{t('cadTabAnalysis')}</button>
           </div>
 
           {/* ── CAD TAB ── */}
@@ -1434,10 +1460,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                 canRedo={historyIndex < paramHistory.length - 1}
                 onUndo={handleUndo}
                 onRedo={handleRedo}
+                t={t}
               />
             ) : (
               <div className="p-5 text-[12px] font-mono text-muted-foreground/40 leading-relaxed">
-                No editable parameters detected for this design.
+                {t('cadNoParams')}
               </div>
             )
           )}
@@ -1448,7 +1475,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
               {/* Manufacturing Confidence */}
               <div className="text-center">
-                <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em] mb-1.5">MANUFACTURING CONFIDENCE</div>
+                <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em] mb-1.5">{t('cadMfgConfidence')}</div>
                 <span className="text-4xl font-bold font-mono tabular-nums tracking-tight" style={{ color: scoreColor(score) }}>
                   {score}%
                 </span>
@@ -1472,7 +1499,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                       ? 'text-amber-400/60 border-amber-400/20 bg-amber-400/5'
                       : 'text-primary/60 border-primary/20 bg-primary/5'
                   }`}>
-                    {llmInfo.startsWith('Template:') ? 'TEMPLATE' : 'AI GENERATED'}
+                    {llmInfo.startsWith('Template:') ? t('cadTemplate') : t('cadAiGenerated')}
                   </span>
                 </div>
               )}
@@ -1488,29 +1515,29 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                       : 'text-muted-foreground/30 border-muted-foreground/10'
                   }`}>
                     {repairInfo.repaired
-                      ? `AUTO REPAIR · ${repairInfo.repairType.toUpperCase()} · ${repairInfo.attempts} ATTEMPT${repairInfo.attempts !== 1 ? 'S' : ''}`
-                      : 'AUTO REPAIR · NOT NEEDED'}
+                      ? `${t('cadAutoRepair')} · ${repairInfo.repairType.toUpperCase()} · ${repairInfo.attempts}`
+                      : t('cadAutoRepairNotNeeded')}
                   </span>
                 </div>
               )}
 
               {/* Print Check */}
               <div className="space-y-1.5">
-                <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em]">PRINT CHECK</div>
+                <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em]">{t('cadPrintCheck')}</div>
                 <div className="p-2.5 border border-border/15 rounded-sm space-y-1">
-                  <TechRow label="Bed fit" value={bf ? (bf.fits ? `✓ ${bf.printerProfile.name}` : `✗ ${bf.printerProfile.name}`) : '—'} badge={bf?.fits ? 'pass' : bf?.fits === false ? 'fail' : undefined} />
-                  <TechRow label="Material" value={materialName || '—'} />
-                  <TechRow label="Support" value={sp?.totalSupportVolumeMm3 != null ? `${Math.round(sp.totalSupportVolumeMm3)} mm³` : '—'} />
-                  <TechRow label="Print time" value={pt ? `${pt.estimatedPrintTimeHours.toFixed(1)} h` : '—'} />
-                  <TechRow label="Material wt" value={pt ? `${pt.materialWeightGrams.toFixed(1)} g` : '—'} />
-                  <TechRow label="Cost" value={pt ? `$${pt.materialCostUsd.toFixed(2)}` : '—'} />
+                  <TechRow label={t('cadBedFit')} value={bf ? (bf.fits ? `✓ ${bf.printerProfile.name}` : `✗ ${bf.printerProfile.name}`) : '—'} badge={bf?.fits ? 'pass' : bf?.fits === false ? 'fail' : undefined} />
+                  <TechRow label={t('cadMaterial')} value={materialName || '—'} />
+                  <TechRow label={t('cadSupport')} value={sp?.totalSupportVolumeMm3 != null ? `${Math.round(sp.totalSupportVolumeMm3)} mm³` : '—'} />
+                  <TechRow label={t('cadPrintTime')} value={pt ? `${pt.estimatedPrintTimeHours.toFixed(1)} h` : '—'} />
+                  <TechRow label={t('cadMaterialWt')} value={pt ? `${pt.materialWeightGrams.toFixed(1)} g` : '—'} />
+                  <TechRow label={t('cadCost')} value={pt ? `$${pt.materialCostUsd.toFixed(2)}` : '—'} />
                 </div>
               </div>
 
               {/* Key Issues */}
               {gateIssues.length > 0 && (
                 <div className="space-y-1">
-                  <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em]">KEY ISSUES</div>
+                  <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em]">{t('cadKeyIssues')}</div>
                   {gateIssues.slice(0, 3).map((issue, i) => (
                     <div key={i} className="flex items-start gap-2 text-[12px] font-mono leading-relaxed">
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1 ${
@@ -1527,34 +1554,34 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
               {confidenceReport?.repairSuggestions && confidenceReport.repairSuggestions.length > 0 && (
                 <button onClick={handleImproveDesign} disabled={loading}
                   className="w-full h-9 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm text-sm font-mono font-bold hover:bg-foreground/90 disabled:opacity-30 transition-all">
-                  <RefreshCw className="w-4 h-4" /> IMPROVE DESIGN
+                  <RefreshCw className="w-4 h-4" /> {t('cadImproveDesign')}
                 </button>
               )}
 
               {/* AI Optimization + Design Evolution (only after IMPROVE DESIGN click) */}
               {optimizationState && (
                 <div className="space-y-3 p-3 border border-primary/15 bg-primary/5 rounded-sm">
-                  <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">AI OPTIMIZATION PLAN</div>
+                  <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">{t('cadOptimizationPlan')}</div>
                   <div className="space-y-1">
-                    <div className="text-[13px] text-muted-foreground/50">Detected:</div>
+                    <div className="text-[13px] text-muted-foreground/50">{t('cadDetected')}</div>
                     <div className="text-[13px] text-foreground/80 font-mono">{optimizationState.plan.detected}</div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-[13px] text-muted-foreground/50">Action:</div>
+                    <div className="text-[13px] text-muted-foreground/50">{t('cadAction')}</div>
                     <div className="text-[13px] text-primary/90 font-mono">
-                      {optimizationState.plan.action === 'wall_thickening' ? 'Thicken walls' :
-                       optimizationState.plan.action === 'orientation_change' ? 'Rotate orientation' :
-                       'No action needed'}
+                      {optimizationState.plan.action === 'wall_thickening' ? t('cadThickenWalls') :
+                       optimizationState.plan.action === 'orientation_change' ? t('cadRotateOrientation') :
+                       t('cadNoAction')}
                     </div>
                   </div>
                   <div className="border-t border-border/10 pt-3">
-                    <div className="text-sm text-muted-foreground/50 font-mono mb-2">DESIGN EVOLUTION</div>
+                    <div className="text-sm text-muted-foreground/50 font-mono mb-2">{t('cadDesignEvolution')}</div>
                     <div className="space-y-1">
-                      <MetricDeltaRow label="Confidence" before={optimizationState.beforeConfidence} after={optimizationState.afterConfidence} beforeDisplay={`${optimizationState.beforeConfidence}%`} afterDisplay={`${optimizationState.afterConfidence}%`} higherBetter />
-                      <MetricDeltaRow label="Issues" before={optimizationState.beforeIssues} after={optimizationState.afterIssues} beforeDisplay={`${optimizationState.beforeIssues}`} afterDisplay={`${optimizationState.afterIssues}`} higherBetter={false} />
-                      <MetricDeltaRow label="Overhang area" before={optimizationState.beforeMetrics?.overhangAreaPercent ?? 0} after={optimizationState.afterMetrics?.overhangAreaPercent ?? 0} beforeDisplay={`${optimizationState.beforeMetrics?.overhangAreaPercent ?? 0}%`} afterDisplay={`${optimizationState.afterMetrics?.overhangAreaPercent ?? 0}%`} higherBetter={false} />
-                      <MetricDeltaRow label="Support vol" before={optimizationState.beforeMetrics?.supportVolumeMm3 ?? 0} after={optimizationState.afterMetrics?.supportVolumeMm3 ?? 0} beforeDisplay={`${optimizationState.beforeMetrics?.supportVolumeMm3 ?? 0} mm³`} afterDisplay={`${optimizationState.afterMetrics?.supportVolumeMm3 ?? 0} mm³`} higherBetter={false} />
-                      <MetricDeltaRow label="Mfg risk" before={optimizationState.beforeMetrics?.manufacturingRisk ?? 0} after={optimizationState.afterMetrics?.manufacturingRisk ?? 0} beforeDisplay={`${optimizationState.beforeMetrics?.manufacturingRisk ?? 0}`} afterDisplay={`${optimizationState.afterMetrics?.manufacturingRisk ?? 0}`} higherBetter={false} />
+                      <MetricDeltaRow label={t('cadConfidence')} before={optimizationState.beforeConfidence} after={optimizationState.afterConfidence} beforeDisplay={`${optimizationState.beforeConfidence}%`} afterDisplay={`${optimizationState.afterConfidence}%`} higherBetter />
+                      <MetricDeltaRow label={t('cadIssues')} before={optimizationState.beforeIssues} after={optimizationState.afterIssues} beforeDisplay={`${optimizationState.beforeIssues}`} afterDisplay={`${optimizationState.afterIssues}`} higherBetter={false} />
+                      <MetricDeltaRow label={t('cadOverhangArea')} before={optimizationState.beforeMetrics?.overhangAreaPercent ?? 0} after={optimizationState.afterMetrics?.overhangAreaPercent ?? 0} beforeDisplay={`${optimizationState.beforeMetrics?.overhangAreaPercent ?? 0}%`} afterDisplay={`${optimizationState.afterMetrics?.overhangAreaPercent ?? 0}%`} higherBetter={false} />
+                      <MetricDeltaRow label={t('cadSupportVol')} before={optimizationState.beforeMetrics?.supportVolumeMm3 ?? 0} after={optimizationState.afterMetrics?.supportVolumeMm3 ?? 0} beforeDisplay={`${optimizationState.beforeMetrics?.supportVolumeMm3 ?? 0} mm³`} afterDisplay={`${optimizationState.afterMetrics?.supportVolumeMm3 ?? 0} mm³`} higherBetter={false} />
+                      <MetricDeltaRow label={t('cadMfgRisk')} before={optimizationState.beforeMetrics?.manufacturingRisk ?? 0} after={optimizationState.afterMetrics?.manufacturingRisk ?? 0} beforeDisplay={`${optimizationState.beforeMetrics?.manufacturingRisk ?? 0}`} afterDisplay={`${optimizationState.afterMetrics?.manufacturingRisk ?? 0}`} higherBetter={false} />
                     </div>
                   </div>
                 </div>
@@ -1563,7 +1590,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
               {/* VIEW FULL REPORT toggle */}
               <button onClick={() => setDetailsOpen(v => !v)}
                 className="w-full h-9 inline-flex items-center justify-center gap-2 border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm text-[12px] font-mono transition-all">
-                {detailsOpen ? '— HIDE FULL REPORT' : '+ VIEW FULL REPORT'}
+                {detailsOpen ? t('cadHideFullReport') : t('cadViewFullReport')}
               </button>
 
               {detailsOpen && <>
@@ -1572,11 +1599,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                 {/* Readiness */}
                 {confidenceReport?.risks && (
                   <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">READINESS</div>
+                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">{t('cadReadiness')}</div>
                     <div className="grid grid-cols-3 gap-2">
-                      <CompactRiskCard title="STRUCTURAL" risk={confidenceReport.risks.structural} />
-                      <CompactRiskCard title="PRINT" risk={confidenceReport.risks.print} />
-                      <CompactRiskCard title="MFG" risk={confidenceReport.risks.manufacturing} />
+                      <CompactRiskCard title={t('cadStructural')} risk={confidenceReport.risks.structural} />
+                      <CompactRiskCard title={t('cadPrint')} risk={confidenceReport.risks.print} />
+                      <CompactRiskCard title={t('cadMfg')} risk={confidenceReport.risks.manufacturing} />
                     </div>
                   </div>
                 )}
@@ -1584,7 +1611,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                 {/* Confidence Breakdown */}
                 {confidenceReport?.categories && confidenceReport.categories.length > 0 && (
                   <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">CONFIDENCE BREAKDOWN</div>
+                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">{t('cadConfidenceBreakdown')}</div>
                     {confidenceReport.categories.map(cat => (
                       <div key={cat.id}>
                         <div className="flex items-center justify-between text-[13px] font-mono mb-1">
@@ -1602,7 +1629,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                 {/* Repair Suggestions */}
                 {confidenceReport?.repairSuggestions && confidenceReport.repairSuggestions.length > 0 && (
                   <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">REPAIR SUGGESTIONS</div>
+                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">{t('cadRepairSuggestions')}</div>
                     {confidenceReport.repairSuggestions.map((s, i) => (
                       <div key={i} className="border border-border/15 rounded-sm p-3">
                         <div className="flex items-start gap-2.5">
@@ -1624,7 +1651,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                 {/* Risk Analysis */}
                 {confidenceReport?.explanation?.topRisks && confidenceReport.explanation.topRisks.length > 0 && (
                   <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">RISK ANALYSIS</div>
+                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">{t('cadRiskAnalysis')}</div>
                     {confidenceReport.explanation.topRisks.map((risk, i) => (
                       <div key={i} className="flex items-center gap-2 text-[13px]">
                         <span className={`w-2 h-2 rounded-full shrink-0 ${risk.impact === 'high' ? 'bg-red-400' : risk.impact === 'medium' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
@@ -1636,39 +1663,39 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
                 {/* Technical Metrics */}
                 <div className="space-y-3">
-                  <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">TECHNICAL METRICS</div>
+                  <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">{t('cadTechnicalMetrics')}</div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="p-3 border border-border/15 rounded-sm">
-                      <div className="text-sm text-muted-foreground/50 font-mono mb-2">TOPOLOGY</div>
+                      <div className="text-sm text-muted-foreground/50 font-mono mb-2">{t('cadTopology')}</div>
                       <div className="space-y-1.5">
-                        <TechRow label="Tri" value={t?.triangleCount} />
-                        <TechRow label="Verts" value={t?.vertexCount} />
-                        <TechRow label="Shells" value={t?.shellCount} />
-                        <TechRow label="Manifold" value={t?.isManifold ? '✓' : '✗'} badge={t?.isManifold ? 'pass' : 'fail'} />
-                        <TechRow label="Watertight" value={v?.isWatertight ? '✓' : '✗'} badge={v?.isWatertight ? 'pass' : 'fail'} />
-                        <TechRow label="Holes" value={v?.holeCount} />
+                        <TechRow label={t('cadTri')} value={topo?.triangleCount} />
+                        <TechRow label={t('cadVerts')} value={topo?.vertexCount} />
+                        <TechRow label={t('cadShells')} value={topo?.shellCount} />
+                        <TechRow label={t('cadManifold')} value={topo?.isManifold ? '✓' : '✗'} badge={topo?.isManifold ? 'pass' : 'fail'} />
+                        <TechRow label={t('cadWatertight')} value={v?.isWatertight ? '✓' : '✗'} badge={v?.isWatertight ? 'pass' : 'fail'} />
+                        <TechRow label={t('cadHoles')} value={v?.holeCount} />
                       </div>
                     </div>
                     <div className="p-3 border border-border/15 rounded-sm">
-                      <div className="text-sm text-muted-foreground/50 font-mono mb-2">GEOMETRY</div>
+                      <div className="text-sm text-muted-foreground/50 font-mono mb-2">{t('cadGeometry')}</div>
                       <div className="space-y-1.5">
-                        <TechRow label="Volume" value={m?.meshVolumeMm3 != null ? `${Math.round(m.meshVolumeMm3)} mm³` : '—'} />
-                        <TechRow label="Surface" value={m?.surfaceAreaMm2 != null ? `${Math.round(m.surfaceAreaMm2)} mm²` : '—'} />
-                        {bb && <TechRow label="BBox" value={`${bb.x.toFixed(0)} × ${bb.y.toFixed(0)} × ${bb.z.toFixed(0)} mm`} />}
-                        <TechRow label="Avg wall" value={m?.avgWallThicknessMm != null ? `${m.avgWallThicknessMm.toFixed(1)} mm` : '—'} />
-                        <TechRow label="Min wall" value={m?.minWallThicknessMm != null ? `${m.minWallThicknessMm.toFixed(1)} mm` : '—'} />
-                        <TechRow label="Overhang" value={m?.overhang?.severity ?? '—'} badge={m?.overhang?.severity} />
+                        <TechRow label={t('cadVolume')} value={m?.meshVolumeMm3 != null ? `${Math.round(m.meshVolumeMm3)} mm³` : '—'} />
+                        <TechRow label={t('cadSurface')} value={m?.surfaceAreaMm2 != null ? `${Math.round(m.surfaceAreaMm2)} mm²` : '—'} />
+                        {bb && <TechRow label={t('cadBBox')} value={`${bb.x.toFixed(0)} × ${bb.y.toFixed(0)} × ${bb.z.toFixed(0)} mm`} />}
+                        <TechRow label={t('cadAvgWall')} value={m?.avgWallThicknessMm != null ? `${m.avgWallThicknessMm.toFixed(1)} mm` : '—'} />
+                        <TechRow label={t('cadMinWall')} value={m?.minWallThicknessMm != null ? `${m.minWallThicknessMm.toFixed(1)} mm` : '—'} />
+                        <TechRow label={t('cadOverhang')} value={m?.overhang?.severity ?? '—'} badge={m?.overhang?.severity} />
                       </div>
                     </div>
                     <div className="col-span-2 p-3 border border-border/15 rounded-sm">
-                      <div className="text-sm text-muted-foreground/50 font-mono mb-2">PRINTABILITY</div>
+                      <div className="text-sm text-muted-foreground/50 font-mono mb-2">{t('cadPrintability')}</div>
                       <div className="grid grid-cols-2 gap-1.5">
-                        {sp && <TechRow label="Support" value={sp.totalSupportVolumeMm3 != null ? `${Math.round(sp.totalSupportVolumeMm3)} mm³` : '—'} />}
-                        {sp && <TechRow label="Difficulty" value={sp.difficulty ?? '—'} badge={sp.difficulty} />}
-                        {bf && <TechRow label="Bed" value={bf.fits ? `✓ ${bf.printerProfile.name}` : `✗ ${bf.printerProfile.name}`} badge={bf.fits ? 'pass' : 'fail'} />}
-                        {pt && <TechRow label="Time" value={`${pt.estimatedPrintTimeHours.toFixed(1)} h`} />}
-                        {pt && <TechRow label="Material" value={`${pt.materialWeightGrams.toFixed(1)} g`} />}
-                        {pt && <TechRow label="Cost" value={`$${pt.materialCostUsd.toFixed(2)}`} />}
+                        {sp && <TechRow label={t('cadSupport')} value={sp.totalSupportVolumeMm3 != null ? `${Math.round(sp.totalSupportVolumeMm3)} mm³` : '—'} />}
+                        {sp && <TechRow label={t('cadDifficulty')} value={sp.difficulty ?? '—'} badge={sp.difficulty} />}
+                        {bf && <TechRow label={t('cadBed')} value={bf.fits ? `✓ ${bf.printerProfile.name}` : `✗ ${bf.printerProfile.name}`} badge={bf.fits ? 'pass' : 'fail'} />}
+                        {pt && <TechRow label={t('cadTime')} value={`${pt.estimatedPrintTimeHours.toFixed(1)} h`} />}
+                        {pt && <TechRow label={t('cadMaterial')} value={`${pt.materialWeightGrams.toFixed(1)} g`} />}
+                        {pt && <TechRow label={t('cadCost')} value={`$${pt.materialCostUsd.toFixed(2)}`} />}
                       </div>
                     </div>
                   </div>
@@ -1676,7 +1703,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
                 {/* Mesh Details */}
                 <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">MESH DETAILS</div>
+                  <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">{t('cadMeshDetails')}</div>
                   {gateIssues.length > 0 && gateIssues.map((issue, i) => (
                     <div key={i} className="flex items-start gap-2 text-[13px] leading-relaxed p-2 rounded-sm border border-border/10">
                       {issue.severity === 'error' ? <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" /> :
@@ -1690,7 +1717,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                 {/* Error Logs */}
                 {errorDetails && (
                   <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">ERROR LOGS</div>
+                    <div className="text-sm text-muted-foreground/50 font-mono tracking-wider">{t('cadErrorLogs')}</div>
                     <div className="p-3 border border-border/15 rounded-sm text-[12px] font-mono text-muted-foreground/40 leading-relaxed whitespace-pre-wrap">
                       {errorDetails}
                     </div>
