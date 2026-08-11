@@ -78,4 +78,10 @@ export interface GeneratedModel {
   createdAt: string; // ISO 8601
   durationMs: number;
   warnings: string[];
+  /**
+   * Exact build123d source authored/executed for this model, when the
+   * generator can provide it. Returned by the bridge so the client can
+   * re-edit parameters without regenerating from scratch.
+   */
+  source?: string;
 }

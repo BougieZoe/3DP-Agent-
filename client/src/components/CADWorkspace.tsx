@@ -30,7 +30,8 @@ import { runConfidenceGate, type CADConfidenceReport, type CADRunRecord, type Im
 import { CAD_MATERIALS, getCADMaterialPreset, createCADMaterial, type CADMaterialPreset } from "@/lib/cadMaterials";
 import { applySuggestions } from "@/lib/geometryEditor";
 import { optimizeDesign, type OptimizationDecision } from "@/agents/designOptimizer";
-import { ParametricCADPanel } from "./cad/ParametricCADPanel";
+import { DynamicParamsPanel } from "./cad/DynamicParamsPanel";
+import { parseParamsFromSource, sliderBounds } from "@/lib/cadParams";
 
 const LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
   openai:   { baseUrl: 'https://api.openai.com/v1',            model: 'gpt-4o' },
@@ -565,6 +566,9 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const stageTs = useRef<Record<string, number>>({});
   const stlBytesRef = useRef<ArrayBuffer | null>(null);
   const templateSourceRef = useRef<string | null>(null);
+  // Bumped whenever the active build123d source changes, so the param
+  // extraction memo (keyed on this) recomputes after each generation/regen.
+  const [sourceVersion, setSourceVersion] = useState(0);
 
   const cadPreset = useMemo(() => getCADMaterialPreset(cadMaterialId), [cadMaterialId]);
 
@@ -631,6 +635,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       if (fallback.matched) {
         mark('llm', 'running', `cached template`);
         templateSourceRef.current = fallback.source;
+        setSourceVersion(v => v + 1);
         const transport = createLocalBridgeTransport({ generatorSource: fallback.source });
         outcome = await transport.generate({ prompt: p, timeoutMs: 60_000, baseModel });
         if (outcome.ok) setLlmInfo(`Template: ${fallback.matched}`);
@@ -694,6 +699,8 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       setGenerationQuality(quality);
 
       setRequestId(outcome.result.model.id);
+      templateSourceRef.current = outcome.result.model.source ?? null;
+      setSourceVersion(v => v + 1);
       stlBytesRef.current = outcome.result.stlBytes;
       setRepairInfo({
         repaired: outcome.result.repaired ?? false,
@@ -770,6 +777,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       if (!outcome || !outcome.ok) throw new Error('Regeneration failed');
 
       templateSourceRef.current = source;
+      setSourceVersion(v => v + 1);
       stlBytesRef.current = outcome.result.stlBytes;
 
       const geo = parseSTL(outcome.result.stlBytes);
@@ -1061,7 +1069,6 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [rightTab, setRightTab] = useState<'cad' | 'analysis'>('cad');
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
-  const [hasParams, setHasParams] = useState(false);
   const [sectionsOpen, setSectionsOpen] = useState<Record<string, boolean>>({
     dimensions: true, holes: false, details: false, manufacturing: false,
   });
@@ -1077,151 +1084,6 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const bb = m?.boundingBoxDimensionsMm;
   const errorCount = gateIssues.filter(i => i.severity === 'error').length;
 
-  /* ─── Dynamic Parameter Schema ─── */
-
-  interface DynamicParam {
-    name: string;
-    label: string;
-    value: number;
-    unit: string;
-    min: number;
-    max: number;
-    step: number;
-    section: string;
-  }
-
-  const _PL: Record<string, string> = {
-    w:'Width',h:'Height',d:'Depth',l:'Length',r:'Radius',
-    thick:'Thickness',outer:'Outer',inner:'Inner',bolt:'Bolt',
-    hole:'Hole',holes:'Holes',num:'Count',count:'Count',
-    corner:'Corner',fillet:'Fillet',spacing:'Spacing',
-    seat:'Seat',leg:'Leg',back:'Back',tire:'Tire',
-    body:'Body',window:'Window',door:'Door',wall:'Wall',
-    width:'Width',height:'Height',depth:'Depth',length:'Length',
-    radius:'Radius',diameter:'Diameter',angle:'Angle',
-    wheelbase:'Wheelbase',roof:'Roof',spire:'Spire',
-    tower:'Tower',cabin:'Cabin',plate:'Plate',
-    head:'Head',arm:'Arm',house:'House',base:'Base',
-    overall:'Overall',
-  };
-
-  function labelFromVar(name: string): string {
-    return name.split('_').map(p => _PL[p.toLowerCase()]
-      || (p.charAt(0).toUpperCase() + p.slice(1))).join(' ');
-  }
-
-  function sectionFromName(name: string): string {
-    const l = name.toLowerCase();
-    if (/^(?:w(?:idth)?|h(?:eight)?|d(?:epth)?|l(?:ength)?|thick|outer|inner|size|plate|house|base_|overall|seat_|leg_|body_)/.test(l)) return 'dimensions';
-    if (/hole|bolt/.test(l)) return 'holes';
-    if (/radius|fillet|corner|angle|spacing|back|roof|spire|tower|cabin|head|arm|tire|wheelbase|window|door|count|num/.test(l)) return 'details';
-    if (/wall/.test(l)) return 'manufacturing';
-    return 'dimensions';
-  }
-
-  function unitFromName(name: string): string {
-    const l = name.toLowerCase();
-    if (/angle/.test(l)) return '°';
-    if (/count|num|holes$/.test(l)) return '';
-    if (name.length <= 2 && /[whdlr]/.test(name)) return 'mm';
-    return 'mm';
-  }
-
-  function sliderBounds(name: string, current: string): { min: number; max: number; step: number } {
-    const v = parseFloat(current) || 10;
-    if (/hole/i.test(name) && /count|holes/i.test(name)) return { min: 0, max: 50, step: 1 };
-    if (v <= 1) return { min: 0.1, max: 10, step: 0.1 };
-    if (v <= 5) return { min: 0.5, max: 50, step: 0.5 };
-    if (v <= 20) return { min: 1, max: 100, step: 1 };
-    if (v <= 100) return { min: 1, max: 500, step: 1 };
-    return { min: 1, max: 1000, step: 1 };
-  }
-
-  function parseParamsFromSource(source: string): DynamicParam[] {
-    const aRe = /#\s*PARAM\s+(\w+)\s+"([^"]*)"\s+(\w+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/g;
-    let m; const annotated: DynamicParam[] = [];
-    while ((m = aRe.exec(source)) !== null) {
-      const vm = source.match(new RegExp(`\\b${m[1]}\\s*=\\s*(\\d+(?:\\.\\d+)?)`));
-      if (vm) annotated.push({
-        name: m[1], label: m[2], value: parseFloat(vm[1]),
-        unit: m[3], min: parseFloat(m[4]), max: parseFloat(m[5]),
-        step: parseFloat(m[6]), section: sectionFromName(m[1]),
-      });
-    }
-    if (annotated.length > 0) return annotated;
-
-    const vRe = /(?:^|;)\s*(\w+)\s*=\s*(\d+(?:\.\d+)?)/gm;
-    const seen = new Set<string>(); const auto: DynamicParam[] = [];
-    const SKIP = new Set(['from','import','def','return','gen_step',
-      'body','ring','cabin','wheels','spoiler','base','tower','mid','spire',
-      'windows','torso','head','arm1','arm2','leg1','leg2',
-      'walls','roof_base','roof','door','window1','window2','chimney',
-      'tmp','result','part1','part2','hole','h','i','j','k','x','y','z',
-      'a','whe','cabin_h2','roof_h','arm','leg','door_h']);
-    while ((m = vRe.exec(source)) !== null) {
-      const name = m[1]; if (seen.has(name) || SKIP.has(name)) continue;
-      seen.add(name); const val = parseFloat(m[2]);
-      const b = sliderBounds(name, m[2]);
-      auto.push({ name, label: labelFromVar(name), value: val,
-        unit: unitFromName(name), section: sectionFromName(name), ...b });
-    }
-    if (auto.length >= 2) return auto;
-
-    const bxRe = /Box\((\d+)\s*,\s*(\d+)(?:\s*,\s*(\d+))?/g;
-    const bx = bxRe.exec(source);
-    if (bx) {
-      const r: DynamicParam[] = [];
-      if (bx[1]) r.push({ name:'box_w', label:'Width', value:parseFloat(bx[1]), unit:'mm', min:1, max:1000, step:1, section:'dimensions' });
-      if (bx[2]) r.push({ name:'box_d', label:'Depth', value:parseFloat(bx[2]), unit:'mm', min:1, max:1000, step:1, section:'dimensions' });
-      if (bx[3]) r.push({ name:'box_h', label:'Height', value:parseFloat(bx[3]), unit:'mm', min:1, max:1000, step:1, section:'dimensions' });
-      return r;
-    }
-    return [];
-  }
-
-  /* ─── Feature Tree ─── */
-  interface CADFeatureNode {
-    id: string;
-    type: string;
-    label: string;
-    params: Record<string, number | string>;
-  }
-
-  function parseFeatureTree(source: string): CADFeatureNode[] {
-    const features: CADFeatureNode[] = [];
-    const boxRe = /(\w+)\s*=\s*Box\((\d+)\s*,\s*(\d+)(?:\s*,\s*(\d+))?/g; let bm;
-    while ((bm = boxRe.exec(source)) !== null) {
-      const p: Record<string, number | string> = { width: parseInt(bm[2]), depth: parseInt(bm[3]) };
-      if (bm[4]) p.height = parseInt(bm[4]);
-      features.push({ id: bm[1], type: 'box', label: `Box(${bm[2]}, ${bm[3]}${bm[4] ? ', ' + bm[4] : ''})`, params: p });
-    }
-    const cylRe = /(\w+)\s*=\s*Cylinder\(radius\s*=\s*(\d+(?:\.\d+)?)\s*,\s*height\s*=\s*(\d+(?:\.\d+)?)/g; let cm;
-    while ((cm = cylRe.exec(source)) !== null) {
-      features.push({ id: cm[1], type: 'cylinder', label: `Cylinder(r=${cm[2]})`, params: { radius: parseFloat(cm[2]), height: parseFloat(cm[3]) } });
-    }
-    const filletRe = /fillet\([^,]+,\s*radius\s*=\s*(\d+(?:\.\d+)?)/g; let fm;
-    while ((fm = filletRe.exec(source)) !== null) {
-      features.push({ id: 'fillet', type: 'fillet', label: 'Fillet', params: { radius: parseFloat(fm[1]) } });
-    }
-    const coneRe = /(\w+)\s*=\s*Cone\((\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)/g; let com;
-    while ((com = coneRe.exec(source)) !== null) {
-      features.push({ id: com[1], type: 'cone', label: `Cone(${com[2]})`, params: { r1: parseFloat(com[2]), r2: parseFloat(com[3]), height: parseFloat(com[4]) } });
-    }
-    const sphereRe = /(\w+)\s*=\s*Sphere\((\d+(?:\.\d+)?)/g; let sm;
-    while ((sm = sphereRe.exec(source)) !== null) {
-      features.push({ id: sm[1], type: 'sphere', label: `Sphere(r=${sm[2]})`, params: { radius: parseFloat(sm[2]) } });
-    }
-    const extrudeRe = /(\w+)\s*=\s*extrude\((\w+)\s*,\s*(\d+(?:\.\d+)?)/g; let em;
-    while ((em = extrudeRe.exec(source)) !== null) {
-      features.push({ id: em[1], type: 'extrude', label: `Extrude(${em[2]})`, params: { height: parseFloat(em[3]) } });
-    }
-    return features;
-  }
-
-  const SECTION_LABELS: Record<string, string> = {
-    dimensions: 'DIMENSIONS', holes: 'HOLES', details: 'DETAILS', manufacturing: 'MANUFACTURING',
-  };
-
   /* ─── Parameter History ─── */
   interface ParamHistoryEntry {
     paramValues: Record<string, string>;
@@ -1232,7 +1094,6 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const [paramHistory, setParamHistory] = useState<ParamHistoryEntry[]>([]);
   const historyIndexRef = useRef(-1);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [editingParam, setEditingParam] = useState<string | null>(null);
 
   function pushHistory(after: Record<string, string>, before: Record<string, string>) {
     const diffs: ParamHistoryEntry['diffs'] = [];
@@ -1328,30 +1189,20 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, [handleUndo, handleRedo]);
 
-  /** Feature tree from source */
-  const featureTree = useMemo(() => {
-    if (!templateSourceRef.current) return [];
-    return parseFeatureTree(templateSourceRef.current);
-  }, [m]);
-
-  /** Param entries parsed from template source */
+  /** Param entries parsed from the active source */
   const paramEntries = useMemo(() => {
     if (!templateSourceRef.current) return null;
     const parsed = parseParamsFromSource(templateSourceRef.current);
     return parsed.length > 0 ? parsed : null;
-  }, [m]);
+  }, [sourceVersion]);
 
   /** Populate editable paramValues from source after each generation */
   useEffect(() => {
-    if (paramEntries) {
-      const vals: Record<string, string> = {};
-      for (const e of paramEntries) vals[e.name] = String(e.value);
-      setParamValues(vals);
-      paramValuesRef.current = vals;
-      setHasParams(true);
-    } else {
-      setHasParams(false);
-    }
+    if (!paramEntries) return;
+    const vals: Record<string, string> = {};
+    for (const e of paramEntries) vals[e.name] = String(e.value);
+    setParamValues(vals);
+    paramValuesRef.current = vals;
   }, [paramEntries]);
 
   /* ─── Parameter History ─── */
@@ -1374,12 +1225,12 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     setStages([]);
     stlBytesRef.current = null;
     templateSourceRef.current = null;
+    setSourceVersion(v => v + 1);
     setLlmInfo('');
     setImprovementResult(null);
     setOptimizationState(null);
     setParamValues({});
     paramValuesRef.current = {};
-    setHasParams(false);
     setRightTab('cad');
     setParamHistory([]);
     historyIndexRef.current = -1;
@@ -1567,9 +1418,24 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
           {/* ── CAD TAB ── */}
           {rightTab === 'cad' && (
-            <ParametricCADPanel
-              onRegenerate={handleRegenerateFromSource}
-            />
+            paramEntries ? (
+              <DynamicParamsPanel
+                params={paramEntries}
+                values={paramValues}
+                sectionsOpen={sectionsOpen}
+                onToggleSection={(s) => setSectionsOpen(prev => ({ ...prev, [s]: !prev[s] }))}
+                onChange={handleParamChange}
+                onStep={handleStep}
+                canUndo={historyIndex > 0}
+                canRedo={historyIndex < paramHistory.length - 1}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+              />
+            ) : (
+              <div className="p-5 text-[12px] font-mono text-muted-foreground/40 leading-relaxed">
+                No editable parameters detected for this design.
+              </div>
+            )
           )}
 
           {/* ── ANALYSIS TAB ── */}
