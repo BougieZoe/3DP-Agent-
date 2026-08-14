@@ -18,22 +18,13 @@
 import { moduleResult, PRINTER_PROFILES, type AnalysisModuleResult, type Confidence, type PrintTimeResult, type PrinterProfileId } from './types';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { MetricsResult } from './types';
+import { getThresholds, DEFAULT_ANALYSIS_THRESHOLDS, type AnalysisThresholds } from './thresholds';
 
-const MACHINE_RATE_PER_HOUR_USD = 2;
-
-// Default volumetric print rates (mm³/min) for various layer heights
-// Assumes 0.4mm nozzle, moderate quality settings
-const VOLUMETRIC_RATES: Record<number, number> = {
-  0.05: 120,   // SLA-like resolution
-  0.1: 240,    // Fine detail
-  0.16: 384,   // Standard quality
-  0.2: 480,    // Standard
-  0.28: 672,   // Draft
-  0.32: 768,   // Fast draft
-};
-
-/** Default layer height (mm). Exported so UI readouts can reference the real default. */
-export const DEFAULT_LAYER_HEIGHT = 0.2;
+/**
+ * Default layer height (mm). Exported so UI readouts can reference the real
+ * default; the value lives in DEFAULT_ANALYSIS_THRESHOLDS.printTime.defaultLayerHeightMm.
+ */
+export const DEFAULT_LAYER_HEIGHT = DEFAULT_ANALYSIS_THRESHOLDS.printTime.defaultLayerHeightMm;
 
 /**
  * Estimate print time and cost.
@@ -46,11 +37,13 @@ export const DEFAULT_LAYER_HEIGHT = 0.2;
 export function estimatePrintTime(
   metricsResult: MetricsResult,
   printerId: PrinterProfileId = 'bambu_x1c',
-  layerHeightMm: number = DEFAULT_LAYER_HEIGHT,
-  densityGPerCm3: number = 1.24,
-  pricePerKgUsd: number = 22,
+  layerHeightMm?: number,
+  densityGPerCm3?: number,
+  pricePerKgUsd?: number,
   language: ContentLang = 'en',
+  thresholds: AnalysisThresholds = getThresholds(),
 ): AnalysisModuleResult<PrintTimeResult> {
+  const pt = thresholds.printTime;
   const startTime = performance.now();
 
   const volume = metricsResult.meshVolumeMm3;
@@ -65,44 +58,46 @@ export function estimatePrintTime(
     }, translate(CONTENT, 'printTime.zeroVolume', language));
   }
 
+  const effectiveLayerHeight = layerHeightMm ?? pt.defaultLayerHeightMm;
+
   // Pick closest layer height rate
-  const layerHeights = Object.keys(VOLUMETRIC_RATES).map(Number);
+  const layerHeights = Object.keys(pt.volumetricRates).map(Number);
   const closestLh = layerHeights.reduce((prev, curr) =>
-    Math.abs(curr - layerHeightMm) < Math.abs(prev - layerHeightMm) ? curr : prev
+    Math.abs(curr - effectiveLayerHeight) < Math.abs(prev - effectiveLayerHeight) ? curr : prev
   );
-  const volumetricRate = VOLUMETRIC_RATES[closestLh];
+  const volumetricRate = pt.volumetricRates[closestLh];
 
   // Base print time from volume
   const baseTimeMinutes = volume / volumetricRate;
 
   // Overhang penalty: steep overhangs need slower printing
   // Adds up to 50% more time for severe overhangs
-  const overhangPenalty = overhangRatio > 0.3 ? 1.5 : overhangRatio > 0.15 ? 1.25 : 1.0;
+  const overhangPenalty = overhangRatio > pt.overhangPenalty.severeRatio ? pt.overhangPenalty.severeMultiplier : overhangRatio > pt.overhangPenalty.moderateRatio ? pt.overhangPenalty.moderateMultiplier : 1.0;
 
   // Fixed overhead: bed heating, homing, purge line
-  const overheadMinutes = 5;
+  const overheadMinutes = pt.overheadMinutes;
 
   const totalMinutes = Math.round(baseTimeMinutes * overhangPenalty + overheadMinutes);
   const totalHours = parseFloat((totalMinutes / 60).toFixed(1));
 
   // Layer count
   const maxDim = Math.max(metricsResult.boundingBoxDimensionsMm.x, metricsResult.boundingBoxDimensionsMm.y, metricsResult.boundingBoxDimensionsMm.z);
-  const layerCount = Math.ceil(maxDim / layerHeightMm);
+  const layerCount = Math.ceil(maxDim / effectiveLayerHeight);
 
   // Material weight
   const volumeCm3 = volume / 1000;
-  const weightGrams = volumeCm3 * densityGPerCm3;
+  const weightGrams = volumeCm3 * (densityGPerCm3 ?? 1.24);
 
   // Cost
-  const materialCost = weightGrams / 1000 * pricePerKgUsd;
-  const machineCost = totalHours * MACHINE_RATE_PER_HOUR_USD;
+  const materialCost = weightGrams / 1000 * (pricePerKgUsd ?? 22);
+  const machineCost = totalHours * pt.machineRatePerHourUsd;
   const totalCost = materialCost + machineCost;
 
   // Confidence: higher for medium volumes, lower for extreme values
   let confidence: Confidence;
-  if (volume < 100 || volume > 10000000) confidence = 0.3 as Confidence;
-  else if (volume < 1000 || volume > 1000000) confidence = 0.5 as Confidence;
-  else confidence = 0.6 as Confidence;
+  if (volume < pt.confidence.tinyVolumeMm3 || volume > pt.confidence.hugeVolumeMm3) confidence = pt.confidence.low as Confidence;
+  else if (volume < pt.confidence.smallVolumeMm3 || volume > pt.confidence.largeVolumeMm3) confidence = pt.confidence.medium as Confidence;
+  else confidence = pt.confidence.high as Confidence;
 
   const result: PrintTimeResult = {
     estimatedPrintTimeMinutes: totalMinutes,
@@ -117,7 +112,7 @@ export function estimatePrintTime(
   const explanation = translate(CONTENT, 'printTime.estimate', language, {
     minutes: totalMinutes,
     hours: totalHours,
-    layerHeight: layerHeightMm,
+    layerHeight: effectiveLayerHeight,
     weight: weightGrams.toFixed(1),
     materialCost: materialCost.toFixed(2),
     totalCost: totalCost.toFixed(2),

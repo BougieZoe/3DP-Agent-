@@ -2,14 +2,15 @@ import { moduleResult, type AnalysisModuleResult, type Confidence, type Validati
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
-
-const DEGENERATE_AREA_THRESHOLD = 1e-12;
+import { getThresholds, type AnalysisThresholds } from './thresholds';
 
 export function validateMesh(
   model: GeometryModel,
   graph?: GeometryGraph | null,
   language: ContentLang = 'en',
+  thresholds: AnalysisThresholds = getThresholds(),
 ): AnalysisModuleResult<ValidationResult> {
+  const validationConfig = thresholds.validation;
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
 
@@ -64,7 +65,7 @@ export function validateMesh(
     ? Math.max(1, Math.round(boundaryPerimeter / avgEdgeLength / 3))
     : 0;
 
-  const { flippedCount, orientation } = detectFlippedNormals(g);
+  const { flippedCount, orientation } = detectFlippedNormals(g, thresholds);
 
   let degenerateCount = 0;
   for (let i = 0; i < indices.length; i += 3) {
@@ -80,7 +81,7 @@ export function validateMesh(
     const crossZ = ux * vy - uy * vx;
     const area = 0.5 * Math.sqrt(crossX * crossX + crossY * crossY + crossZ * crossZ);
 
-    if (area < DEGENERATE_AREA_THRESHOLD) {
+    if (area < validationConfig.degenerateAreaThreshold) {
       degenerateCount++;
     }
   }
@@ -88,12 +89,12 @@ export function validateMesh(
   const flippedNormalRatio = totalFaceCount > 0 ? flippedCount / totalFaceCount : 0;
 
   let confidence: Confidence;
-  if (degenerateCount > totalFaceCount * 0.5) {
-    confidence = 0.2;
-  } else if (flippedNormalRatio > 0.1 || degenerateCount > 0) {
-    confidence = 0.7;
+  if (degenerateCount > totalFaceCount * validationConfig.degenerateFaceRatioCritical) {
+    confidence = validationConfig.confidence.degenerate as Confidence;
+  } else if (flippedNormalRatio > validationConfig.flippedNormalRatioWarning || degenerateCount > 0) {
+    confidence = validationConfig.confidence.warning as Confidence;
   } else {
-    confidence = 0.9;
+    confidence = validationConfig.confidence.good as Confidence;
   }
 
   const result: ValidationResult = {
@@ -119,7 +120,9 @@ export function validateMesh(
 
 function detectFlippedNormals(
   graph: GeometryGraph,
+  thresholds: AnalysisThresholds = getThresholds(),
 ): { flippedCount: number; orientation: NormalOrientation } {
+  const flipRatio = thresholds.validation.flippedNormalRatioFlipOrientation;
   const { positions, indices, triangleCount } = graph;
   if (triangleCount === 0) return { flippedCount: 0, orientation: 'unknown' };
 
@@ -184,7 +187,7 @@ function detectFlippedNormals(
     flippedCount = outwardCount;
   }
 
-  if (flippedCount > triangleCount * 0.8) {
+  if (flippedCount > triangleCount * flipRatio) {
     orientation = orientation === 'consistent_outward' ? 'consistent_inward' : 'consistent_outward';
     flippedCount = triangleCount - flippedCount;
   }

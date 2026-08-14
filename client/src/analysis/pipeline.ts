@@ -7,6 +7,7 @@ import { checkBedFit } from './bedFit';
 import { estimateSupportVolume } from './support';
 import { estimatePrintTime } from './printTime';
 import { buildGeometryGraph } from './geometryGraph';
+import { getThresholds, type ThresholdsOverride } from './thresholds';
 import { type GeometryModel } from './geometryModel';
 import type { PrinterProfileId } from './types';
 import type { Material } from '@/lib/materialState';
@@ -18,6 +19,11 @@ export interface PipelineOptions {
   material?: Material;
   /** UI language — module explanations/reasons are localized. */
   language?: ContentLang;
+  /**
+   * Threshold overrides (deep-merged over DEFAULT_ANALYSIS_THRESHOLDS).
+   * Intended for tests and calibration runs; production callers omit it.
+   */
+  thresholds?: ThresholdsOverride;
   /**
    * When true, each module (and the wall-thickness sub-modules) records its
    * own wall-clock duration in the result's `profiling` map. This is the
@@ -34,6 +40,7 @@ export function runAnalysisPipeline(
   const fileName = options.fileName ?? 'unknown.stl';
   const mat = options.material;
   const lang = options.language ?? 'en';
+  const thresholds = getThresholds(options.thresholds);
 
   const profiling = options.enableProfiling ? ({} as Record<string, number>) : undefined;
   const time = <T>(key: string, fn: () => T): T => {
@@ -48,7 +55,7 @@ export function runAnalysisPipeline(
 
   const emptyTopology: TopologyResult = { triangleCount: 0, vertexCount: 0, edgeCount: 0, manifoldEdgeCount: 0, boundaryEdgeCount: 0, nonManifoldEdgeCount: 0, shellCount: 0, isManifold: false, problemEdges: [] };
   const emptyValidation: ValidationResult = { isWatertight: false, holeCount: 0, boundaryEdgeCount: 0, flippedNormalFaceCount: 0, totalFaceCount: 0, flippedNormalRatio: 0, normalOrientation: 'unknown', degenerateFaceCount: 0 };
-  const emptyMetrics: MetricsResult = { meshVolumeMm3: 0, surfaceAreaMm2: 0, boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 }, minWallThicknessMm: null, avgWallThicknessMm: null, p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null, thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, lowConfidenceSampleCount: 0, wallThicknessSamples: [], overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 } };
+  const emptyMetrics: MetricsResult = { meshVolumeMm3: 0, surfaceAreaMm2: 0, boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 }, minWallThicknessMm: null, avgWallThicknessMm: null, p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null, thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, wallThicknessSamples: [], overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 } };
 
   const failResult = <T>(moduleName: string, error: unknown, defaultValue: T): AnalysisModuleResult<T> => {
     const message = error instanceof Error
@@ -69,12 +76,12 @@ export function runAnalysisPipeline(
   });
 
   const validation = time('validation', () => {
-    try { return validateMesh(model, graph, lang); }
+    try { return validateMesh(model, graph, lang, thresholds); }
     catch (e) { return failResult('validation', e, emptyValidation); }
   });
 
   const metrics = time('metrics', () => {
-    try { return computeMetrics(model, graph, mat?.overhangThreshold, profiling, lang); }
+    try { return computeMetrics(model, graph, mat?.overhangThreshold, profiling, lang, thresholds); }
     catch (e) { return failResult('metrics', e, emptyMetrics); }
   });
 
@@ -88,14 +95,14 @@ export function runAnalysisPipeline(
   const support = time('support', () => {
     try {
       if (metrics.result.meshVolumeMm3 <= 0) return null;
-      return estimateSupportVolume(model, graph, mat?.overhangThreshold, mat ? mat.densityGPerCm3 / 1000 : undefined, lang);
+      return estimateSupportVolume(model, graph, mat?.overhangThreshold, mat ? mat.densityGPerCm3 / 1000 : undefined, lang, thresholds);
     } catch (e) { return null; }
   });
 
   const printTime = time('printTime', () => {
     try {
       if (metrics.result.meshVolumeMm3 <= 0) return null;
-      return estimatePrintTime(metrics.result, options.printerId ?? 'bambu_x1c', options.layerHeightMm ?? 0.2, mat?.densityGPerCm3, mat?.pricePerKgUsd, lang);
+      return estimatePrintTime(metrics.result, options.printerId ?? 'bambu_x1c', options.layerHeightMm ?? 0.2, mat?.densityGPerCm3, mat?.pricePerKgUsd, lang, thresholds);
     } catch (e) { return null; }
   });
 

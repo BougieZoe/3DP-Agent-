@@ -9,24 +9,16 @@ import {
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
+import { getThresholds, type AnalysisThresholds } from './thresholds';
 import {
   computeWallConfidence,
   deriveWtStatus,
   sampleWallThickness,
-  MAX_RAY_DIST_DIAGONAL_FACTOR,
 } from './wallThickness';
 
 // Re-export so existing importers of '@/analysis/metrics' keep working while the
 // implementation lives in the canonical wallThickness module.
 export { deriveWtStatus, sampleWallThickness } from './wallThickness';
-
-const OVERHANG_ANGLE_BUCKETS = [
-  { minAngle: 0, maxAngle: 30 },
-  { minAngle: 30, maxAngle: 45 },
-  { minAngle: 45, maxAngle: 60 },
-  { minAngle: 60, maxAngle: 75 },
-  { minAngle: 75, maxAngle: 90 },
-];
 
 export function computeMeshVolume(
   positions: Float32Array,
@@ -108,10 +100,14 @@ export function isOnBuildPlate(centroidZ: number, minZ: number, modelHeight: num
 export function analyzeOverhang(
   positions: Float32Array,
   indices: Uint16Array | Uint32Array,
-  overhangThresholdDeg: number = 50,
+  overhangThresholdDeg?: number,
+  thresholds: AnalysisThresholds = getThresholds(),
 ): OverhangMetrics {
+  const overhangConfig = thresholds.overhang;
+  const thresholdDeg = overhangThresholdDeg ?? thresholds.overhangThresholdDeg;
+  const buckets = overhangConfig.bucketsDeg;
   const totalFaceCount = Math.floor(indices.length / 3);
-  const bucketCounts = OVERHANG_ANGLE_BUCKETS.map(() => 0);
+  const bucketCounts = buckets.map(() => 0);
   let overhangCount = 0;
   let overhangAreaMm2 = 0;
   let totalAreaMm2 = 0;
@@ -153,15 +149,15 @@ export function analyzeOverhang(
     const centroidZ = (az + bz + cz) / 3;
     if (isOnBuildPlate(centroidZ, minZ, modelHeight)) continue;
 
-    for (let b = 0; b < OVERHANG_ANGLE_BUCKETS.length; b++) {
-      const bucket = OVERHANG_ANGLE_BUCKETS[b];
+    for (let b = 0; b < buckets.length; b++) {
+      const bucket = buckets[b];
       if (tiltDeg >= bucket.minAngle && tiltDeg < bucket.maxAngle) {
         bucketCounts[b]++;
         break;
       }
     }
 
-    if (tiltDeg > overhangThresholdDeg) {
+    if (tiltDeg > thresholdDeg) {
       overhangCount++;
       overhangAreaMm2 += area;
     }
@@ -174,9 +170,9 @@ export function analyzeOverhang(
 
   const severity: OverhangMetrics['severity'] =
     overhangCount === 0 ? 'none' :
-    ratio > 0.3 ? 'severe' : 'moderate';
+    ratio > overhangConfig.severitySevereRatio ? 'severe' : 'moderate';
 
-  const breakdownByAngle = OVERHANG_ANGLE_BUCKETS.map((bucket, idx) => ({
+  const breakdownByAngle = buckets.map((bucket, idx) => ({
     minAngle: bucket.minAngle,
     maxAngle: bucket.maxAngle,
     faceCount: bucketCounts[idx],
@@ -199,9 +195,10 @@ export function analyzeOverhang(
  * (none/moderate/severe at 0.3) because they represent manufacturing risk,
  * not just geometric measurement.
  */
-export function deriveOhStatus(ratio: number): 'good' | 'warning' | 'critical' {
-  if (ratio > 0.15) return 'critical';
-  if (ratio > 0.05) return 'warning';
+export function deriveOhStatus(ratio: number, thresholds: AnalysisThresholds = getThresholds()): 'good' | 'warning' | 'critical' {
+  const status = thresholds.overhang;
+  if (ratio > status.statusCriticalRatio) return 'critical';
+  if (ratio > status.statusWarningRatio) return 'warning';
   return 'good';
 }
 
@@ -227,11 +224,16 @@ export interface SupportStatusResult {
  * Good:
  *   Everything else.
  */
-export function deriveSupportStatus(result: SupportResult, language: ContentLang = 'en'): SupportStatusResult {
+export function deriveSupportStatus(
+  result: SupportResult,
+  language: ContentLang = 'en',
+  thresholds: AnalysisThresholds = getThresholds(),
+): SupportStatusResult {
+  const derive = thresholds.support.deriveStatus;
   const reasons: string[] = [];
 
   if (result.difficulty === 'none' || result.supportRegions.length === 0) {
-    return { status: 'good', reasons: [translate(CONTENT, 'support.noSupport', language)], confidence: 1 };
+    return { status: 'good', reasons: [translate(CONTENT, 'support.noSupport', language)], confidence: derive.noSupportConfidence };
   }
 
   // ── Critical evaluation ───────────────────────────────────────────────────
@@ -242,13 +244,13 @@ export function deriveSupportStatus(result: SupportResult, language: ContentLang
     isCritical = true;
   }
 
-  if (result.largestRegionRatio > 0.5 && result.tallSupportRatio > 0.3) {
+  if (result.largestRegionRatio > derive.criticalLargestRegionRatio && result.tallSupportRatio > derive.criticalTallSupportRatio) {
     reasons.push(translate(CONTENT, 'support.largeIslandRemoval', language));
     isCritical = true;
   }
 
   if (isCritical) {
-    return { status: 'critical', reasons, confidence: 0.85 };
+    return { status: 'critical', reasons, confidence: derive.criticalConfidence };
   }
 
   // ── Warning evaluation ────────────────────────────────────────────────────
@@ -258,32 +260,33 @@ export function deriveSupportStatus(result: SupportResult, language: ContentLang
   if (result.difficulty === 'moderate') {
     reasons.push(translate(CONTENT, 'support.moderate', language));
   }
-  if (result.supportRegions.length > 3) {
+  if (result.supportRegions.length > derive.warningIslands) {
     reasons.push(translate(CONTENT, 'support.islands', language, { count: result.supportRegions.length }));
   }
-  if (result.tallSupportRatio > 0.3) {
+  if (result.tallSupportRatio > derive.warningTallSupportRatio) {
     reasons.push(translate(CONTENT, 'support.tallSupports', language, { pct: (result.tallSupportRatio * 100).toFixed(0) }));
   }
-  if (result.directionality > 0.7) {
+  if (result.directionality > derive.warningDirectionality) {
     reasons.push(translate(CONTENT, 'support.directional', language));
   }
 
   if (reasons.length > 0) {
-    const confidence = Math.min(0.55 + reasons.length * 0.08, 0.85);
+    const confidence = Math.min(derive.warningConfidenceBase + reasons.length * derive.warningConfidencePerReason, derive.warningConfidenceCap);
     return { status: 'warning', reasons, confidence };
   }
 
   // ── Good ──────────────────────────────────────────────────────────────────
   reasons.push(translate(CONTENT, 'support.isolated', language));
-  return { status: 'good', reasons, confidence: 0.9 };
+  return { status: 'good', reasons, confidence: derive.goodConfidence };
 }
 
 export function computeMetrics(
   model: GeometryModel,
   graph?: GeometryGraph | null,
-  overhangThresholdDeg: number = 50,
+  overhangThresholdDeg?: number,
   profiling?: Record<string, number>,
   language: ContentLang = 'en',
+  thresholds: AnalysisThresholds = getThresholds(),
 ): AnalysisModuleResult<MetricsResult> {
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
@@ -294,7 +297,7 @@ export function computeMetrics(
       boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 },
       minWallThicknessMm: null, avgWallThicknessMm: null,
       p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null,
-      thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, lowConfidenceSampleCount: 0,
+      thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0,
       wallThicknessSamples: [],
       overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 },
     }, translate(CONTENT, 'metrics.noPositionData', language));
@@ -306,7 +309,7 @@ export function computeMetrics(
       boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 },
       minWallThicknessMm: null, avgWallThicknessMm: null,
       p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null,
-      thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, lowConfidenceSampleCount: 0,
+      thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0,
       wallThicknessSamples: [],
       overhang: { faceCount: 0, totalFaceCount: g.triangleCount, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 },
     }, translate(CONTENT, 'metrics.nonIndexed', language));
@@ -331,18 +334,18 @@ export function computeMetrics(
 
   const meshVolume = time('computeMeshVolume', () => computeMeshVolume(positions, indices));
   const surfaceArea = time('computeSurfaceArea', () => computeSurfaceArea(positions, indices));
-  const overhang = time('analyzeOverhang', () => analyzeOverhang(positions, indices, overhangThresholdDeg));
+  const overhang = time('analyzeOverhang', () => analyzeOverhang(positions, indices, overhangThresholdDeg, thresholds));
   // Scale-aware ray budget derived from the model's own bounding box: large
   // parts are measured rather than silently failing the raycast (which used to
   // trigger the report layer's bounding-box substitution).
   const wallThickness = time('sampleWallThickness', () => sampleWallThickness(
-    positions, indices, 200, bboxDiagonal * MAX_RAY_DIST_DIAGONAL_FACTOR,
+    positions, indices, thresholds.wallThickness.maxSamples, bboxDiagonal * thresholds.wallThickness.rayDistanceDiagonalFactor, thresholds,
   ));
-  const { samples, minThickness, avgThickness, p1Thickness, p5Thickness, p10Thickness, medianThickness, thinWallCount, thinWallRatio, thinWallPercentage, averageConfidence, lowConfidenceSampleCount } = wallThickness;
+  const { samples, minThickness, avgThickness, p1Thickness, p5Thickness, p10Thickness, medianThickness, thinWallCount, thinWallRatio, thinWallPercentage, averageConfidence } = wallThickness;
 
   const wallConfidence = computeWallConfidence(
     minThickness, p5Thickness, thinWallCount, thinWallRatio,
-    averageConfidence, lowConfidenceSampleCount, samples.length,
+    averageConfidence, samples.length, thresholds,
   );
   const overallConfidence = wallConfidence as Confidence;
 
@@ -361,7 +364,6 @@ export function computeMetrics(
     thinWallPercentage,
     thinWallRatio,
     averageConfidence,
-    lowConfidenceSampleCount,
     wallThicknessSamples: samples,
     overhang,
   };

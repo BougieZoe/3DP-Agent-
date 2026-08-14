@@ -167,9 +167,6 @@ export interface MetricsResult {
   /** Average confidence across all valid samples (0.0–1.0) */
   averageConfidence: number;
 
-  /** Number of valid samples with confidence < 0.3 */
-  lowConfidenceSampleCount: number;
-
   wallThicknessSamples: WallThicknessSample[];
 
   thinnestWallSample?: WallThicknessSample | null;
