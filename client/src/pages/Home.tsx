@@ -36,6 +36,7 @@ import { PrintPathPreview } from '@/components/3D/PrintPathPreview';
 import { LayerReveal } from '@/components/3D/LayerReveal';
 import { FailureEmergence } from '@/components/3D/FailureEmergence';
 import { ThermalField } from '@/components/3D/ThermalField';
+import { WallThicknessHeatmap } from '@/components/3D/WallThicknessHeatmap';
 import { CausalityHighlight } from '@/components/3D/CausalityHighlight';
 import { deriveSupportStatus } from '@/analysis/metrics';
 import { buildCausalityGraph, CausalityGraph } from '@/components/causality/causalityEngine';
@@ -298,6 +299,7 @@ export default function Home() {
   const [showLayerReveal, setShowLayerReveal] = useState(false);
   const [showFailure, setShowFailure] = useState(false);
   const [showThermal, setShowThermal] = useState(false);
+  const [showWallThickness, setShowWallThickness] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
@@ -331,6 +333,7 @@ export default function Home() {
     setShowLayerReveal(false);
     setShowFailure(false);
     setShowThermal(false);
+    setShowWallThickness(false);
     setSelectedEventId(null);
     setSelectedPatternId(null);
     setSelectedSuggestionId(null);
@@ -729,6 +732,14 @@ deepAnalysisSeq.current += 1;
             {uploadedModel?.geometry && showThermal && (
               <ThermalField markers={agentMarkers} geometry={uploadedModel.geometry} visible />
             )}
+            {uploadedModel?.geometry && showWallThickness && (
+              <WallThicknessHeatmap
+                geometry={uploadedModel.geometry}
+                samples={unifiedAnalysis?.metrics.result?.wallThicknessSamples ?? null}
+                visible
+                opacity={overlayOpacity}
+              />
+            )}
             {(selectedEventPositions.length > 0 || selectedPatternPositions.length > 0 || selectedSuggestionPositions.length > 0) && (
               <CausalityHighlight
                 positions={
@@ -760,6 +771,7 @@ deepAnalysisSeq.current += 1;
               showLayerReveal={showLayerReveal}
               showFailure={showFailure}
               showThermal={showThermal}
+              showWallThickness={showWallThickness}
               overlayOpacity={overlayOpacity}
               onToggleHeatmap={() => setShowHeatmap(v => !v)}
               onToggleGhosts={() => setShowGhosts(v => !v)}
@@ -768,6 +780,7 @@ deepAnalysisSeq.current += 1;
               onToggleLayerReveal={() => setShowLayerReveal(v => !v)}
               onToggleFailure={() => setShowFailure(v => !v)}
               onToggleThermal={() => setShowThermal(v => !v)}
+              onToggleWallThickness={() => setShowWallThickness(v => !v)}
               onOpacityChange={setOverlayOpacity}
               t={t}
             />

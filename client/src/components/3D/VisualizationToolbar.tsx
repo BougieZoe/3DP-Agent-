@@ -13,6 +13,7 @@ interface VisualizationToolbarProps {
   showLayerReveal: boolean;
   showFailure: boolean;
   showThermal: boolean;
+  showWallThickness: boolean;
   overlayOpacity: number;
   onToggleHeatmap: () => void;
   onToggleGhosts: () => void;
@@ -21,6 +22,7 @@ interface VisualizationToolbarProps {
   onToggleLayerReveal: () => void;
   onToggleFailure: () => void;
   onToggleThermal: () => void;
+  onToggleWallThickness: () => void;
   onOpacityChange: (value: number) => void;
   t: (key: TKey) => string;
 }
@@ -29,6 +31,7 @@ const OVERLAY_ITEMS = [
   { icon: '\uD83C\uDF21', labelKey: 'toolbarHeatmap' as const, key: 'heatmap' as const },
   { icon: '\u25C8', labelKey: 'toolbarSupports' as const, key: 'supports' as const },
   { icon: '\u25C9', labelKey: 'toolbarRisks' as const, key: 'risks' as const },
+  { icon: '\u2593', labelKey: 'toolbarWallThickness' as const, key: 'wallThickness' as const },
   { icon: '\u2307', labelKey: 'toolbarPrintPath' as const, key: 'printPath' as const },
   { icon: '\u2261', labelKey: 'toolbarLayerReveal' as const, key: 'layerReveal' as const },
   { icon: '\u26A0', labelKey: 'toolbarFailure' as const, key: 'failure' as const },
@@ -43,6 +46,7 @@ export function VisualizationToolbar({
   showLayerReveal,
   showFailure,
   showThermal,
+  showWallThickness,
   overlayOpacity,
   onToggleHeatmap,
   onToggleGhosts,
@@ -51,6 +55,7 @@ export function VisualizationToolbar({
   onToggleLayerReveal,
   onToggleFailure,
   onToggleThermal,
+  onToggleWallThickness,
   onOpacityChange,
   t,
 }: VisualizationToolbarProps) {
@@ -61,6 +66,7 @@ export function VisualizationToolbar({
     heatmap: showHeatmap,
     supports: showGhosts,
     risks: showRisks,
+    wallThickness: showWallThickness,
     printPath: showPrintPath,
     layerReveal: showLayerReveal,
     failure: showFailure,
@@ -71,6 +77,7 @@ export function VisualizationToolbar({
     heatmap: onToggleHeatmap,
     supports: onToggleGhosts,
     risks: onToggleRisks,
+    wallThickness: onToggleWallThickness,
     printPath: onTogglePrintPath,
     layerReveal: onToggleLayerReveal,
     failure: onToggleFailure,
@@ -130,6 +137,12 @@ export function VisualizationToolbar({
         active={showThermal}
         color={SEMANTIC.overlay.thermal}
         onClick={onToggleThermal}
+      />
+      <ToggleChip
+        label={t('toolbarWallThickness')}
+        active={showWallThickness}
+        color={SEMANTIC.overlay.wallThickness}
+        onClick={onToggleWallThickness}
       />
 
       <button
