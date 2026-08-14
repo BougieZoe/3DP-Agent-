@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { PANEL, SEMANTIC } from '@/lib/visualLanguage';
 import { useTheme } from '@/lib/ThemeContext';
+import type { translations } from '@/lib/i18n';
+
+type TKey = keyof (typeof translations)['en'];
 
 interface VisualizationToolbarProps {
   showHeatmap: boolean;
@@ -19,16 +22,17 @@ interface VisualizationToolbarProps {
   onToggleFailure: () => void;
   onToggleThermal: () => void;
   onOpacityChange: (value: number) => void;
+  t: (key: TKey) => string;
 }
 
 const OVERLAY_ITEMS = [
-  { icon: '\uD83C\uDF21', label: 'Heatmap', key: 'heatmap' as const },
-  { icon: '\u25C8', label: 'Supports', key: 'supports' as const },
-  { icon: '\u25C9', label: 'Risks', key: 'risks' as const },
-  { icon: '\u2307', label: 'Print Path', key: 'printPath' as const },
-  { icon: '\u2261', label: 'Layer Reveal', key: 'layerReveal' as const },
-  { icon: '\u26A0', label: 'Failure', key: 'failure' as const },
-  { icon: '\u25CC', label: 'Thermal', key: 'thermal' as const },
+  { icon: '\uD83C\uDF21', labelKey: 'toolbarHeatmap' as const, key: 'heatmap' as const },
+  { icon: '\u25C8', labelKey: 'toolbarSupports' as const, key: 'supports' as const },
+  { icon: '\u25C9', labelKey: 'toolbarRisks' as const, key: 'risks' as const },
+  { icon: '\u2307', labelKey: 'toolbarPrintPath' as const, key: 'printPath' as const },
+  { icon: '\u2261', labelKey: 'toolbarLayerReveal' as const, key: 'layerReveal' as const },
+  { icon: '\u26A0', labelKey: 'toolbarFailure' as const, key: 'failure' as const },
+  { icon: '\u25CC', labelKey: 'toolbarThermal' as const, key: 'thermal' as const },
 ];
 
 export function VisualizationToolbar({
@@ -48,6 +52,7 @@ export function VisualizationToolbar({
   onToggleFailure,
   onToggleThermal,
   onOpacityChange,
+  t,
 }: VisualizationToolbarProps) {
   const { themeKey, SEMANTIC, toggleTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
@@ -79,19 +84,19 @@ export function VisualizationToolbar({
       <div className={`${PANEL.fontLabel} mb-1`}>OVERLAYS</div>
 
       <ToggleChip
-        label="Heatmap"
+        label={t('toolbarHeatmap')}
         active={showHeatmap}
         color={SEMANTIC.overlay.heatmap}
         onClick={onToggleHeatmap}
       />
       <ToggleChip
-        label="Supports"
+        label={t('toolbarSupports')}
         active={showGhosts}
         color={SEMANTIC.overlay.supports}
         onClick={onToggleGhosts}
       />
       <ToggleChip
-        label="Risks"
+        label={t('toolbarRisks')}
         active={showRisks}
         color={SEMANTIC.overlay.risks}
         onClick={onToggleRisks}
@@ -100,13 +105,13 @@ export function VisualizationToolbar({
       <div className={`${SEMANTIC.overlay.separator}`} />
 
       <ToggleChip
-        label="Print Path"
+        label={t('toolbarPrintPath')}
         active={showPrintPath}
         color={SEMANTIC.overlay.printPath}
         onClick={onTogglePrintPath}
       />
       <ToggleChip
-        label="Layer Reveal"
+        label={t('toolbarLayerReveal')}
         active={showLayerReveal}
         color={SEMANTIC.overlay.layerReveal}
         onClick={onToggleLayerReveal}
@@ -115,13 +120,13 @@ export function VisualizationToolbar({
       <div className={`${SEMANTIC.overlay.separator}`} />
 
       <ToggleChip
-        label="Failure"
+        label={t('toolbarFailure')}
         active={showFailure}
         color={SEMANTIC.overlay.failure}
         onClick={onToggleFailure}
       />
       <ToggleChip
-        label="Thermal"
+        label={t('toolbarThermal')}
         active={showThermal}
         color={SEMANTIC.overlay.thermal}
         onClick={onToggleThermal}
@@ -135,7 +140,7 @@ export function VisualizationToolbar({
         <span className="text-base leading-none">
           {themeKey === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19'}
         </span>
-        <span>{themeKey === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+        <span>{themeKey === 'dark' ? t('toolbarLightMode') : t('toolbarDarkMode')}</span>
       </button>
 
       <div className="mt-2 pt-2 border-t border-border/30">
@@ -159,11 +164,11 @@ export function VisualizationToolbar({
       <div className={`hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 z-20
         flex-col items-center gap-1.5 w-10 py-2.5
         backdrop-blur-sm bg-background/30 border-l border-border/20 rounded-l-xl`}>
-        {OVERLAY_ITEMS.map(({ icon, label, key }) => (
+        {OVERLAY_ITEMS.map(({ icon, labelKey, key }) => (
           <IconButton
             key={key}
             icon={icon}
-            label={label}
+            label={t(labelKey)}
             active={activeMap[key]}
             color={colorMap[key]}
             onClick={toggleMap[key]}
@@ -196,7 +201,7 @@ export function VisualizationToolbar({
           <span className="absolute right-full top-1/2 -translate-y-1/2 mr-2 px-2 py-0.5
             rounded-sm bg-foreground/10 backdrop-blur-sm text-[10px] font-mono text-foreground/70
             whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-            {themeKey === 'dark' ? 'Light Mode' : 'Dark Mode'}
+            {themeKey === 'dark' ? t('toolbarLightMode') : t('toolbarDarkMode')}
           </span>
         </button>
       </div>

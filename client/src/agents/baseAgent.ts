@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { AgentId, AgentOutput, AgentVerdict, RiskMarker } from '@shared/domain/agent';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
+import type { VisionIssue } from './visionProvider';
 import type { AgentResultWithExplanation } from './types';
 import type { UnifiedAnalysis } from '@/analysis';
 import type { Material } from '@/lib/materialState';
@@ -14,6 +15,12 @@ export interface AgentContext {
   vertexNormals: Float32Array;
   modelSize: { x: number; y: number; z: number };
   visionAnalysis?: string;
+  /** Structured LLM vision verdict (qualitative assessment + observed issues). */
+  visionResult?: {
+    qualitativeAssessment: string;
+    observedIssues: VisionIssue[];
+    confidence: number;
+  };
   previousOutputs: Map<AgentId, AgentOutput>;
   fileName: string;
   material: Material;

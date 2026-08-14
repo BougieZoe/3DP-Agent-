@@ -47,6 +47,8 @@ export interface AgentRunSummary {
   votingRecords: VotingRecord[];
   totalDurationMs: number;
   usedVision: boolean;
+  /** Which analysis path produced this summary: deterministic rules or deep LLM. */
+  analysisSource?: 'rules' | 'llm';
 }
 
 export function getAgentLabel(agentId: AgentId, lang: ContentLang = 'en'): string {

@@ -214,6 +214,11 @@ const failurePredictor = {
     ja: '薄肉 — p5肉厚 {t}mm',
     zh: '薄壁 — p5壁厚 {t}mm',
   },
+  'failurePredictor.visionRec': {
+    en: 'Visually confirmed anomaly — inspect the model closely before printing; consider manual inspection or re-exporting the source geometry',
+    ja: '視覚的に確認された異常 — 印刷前にモデルをよく点検し、ソースジオメトリの再エクスポートを検討',
+    zh: '视觉确认异常 — 打印前仔细检查模型，考虑手工检验或重新导出几何源文件',
+  },
 };
 
 // ─── Printability Scorer ───────────────────────────────────────────────────────
@@ -1327,6 +1332,10 @@ const pdf = {
   'pdf.label.vertices': { en: 'Vertices', ja: '頂点', zh: '顶点' },
   'pdf.label.manifoldEdges': { en: 'Manifold edges', ja: 'マニフォールド辺', zh: '流形边' },
   'pdf.label.nonManifoldEdges': { en: 'Non-manifold edges', ja: '非マニフォールド辺', zh: '非流形边' },
+  'pdf.label.manifold': { en: 'Manifold', ja: '多様体', zh: '流形' },
+  'pdf.label.shells': { en: 'Shells', ja: 'シェル', zh: '壳体' },
+  'pdf.label.boundaryEdges': { en: 'Boundary edges', ja: '境界辺', zh: '边界边' },
+  'pdf.label.normalOrientation': { en: 'Normal orientation', ja: '法線方向', zh: '法线方向' },
   'pdf.label.holes': { en: 'Holes', ja: '穴', zh: '孔洞' },
   'pdf.label.flippedNormalRatio': { en: 'Flipped normal ratio', ja: '法線反転率', zh: '法线翻转率' },
   'pdf.label.degenerateFaces': { en: 'Degenerate faces', ja: '退化面', zh: '退化面' },

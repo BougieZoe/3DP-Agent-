@@ -84,7 +84,23 @@ export class GeometryAnalyst extends BaseAgent {
       issues.push(translate(CONTENT, 'geometryAnalyst.lowTriangles', lang));
     }
 
-    const score = this.computeScore(wtStatus, ohStatus, overhangRatio, aspectRatio, triCount);
+    // Vision layer: the LLM looks at the actual rendering and may spot things
+    // the raycasts cannot (visible asymmetry, surface artifacts, orientation
+    // problems). Only issues that do NOT duplicate the deterministic checks
+    // above are surfaced, prefixed so users know the source.
+    const vision = ctx.visionResult;
+    let visionScorePenalty = 0;
+    if (vision && vision.confidence > 0.3 && vision.observedIssues.length > 0) {
+      for (const issue of vision.observedIssues) {
+        const duplicatesRule = issue.category === 'thin_wall' || issue.category === 'overhang';
+        if (!duplicatesRule) {
+          issues.push(`[Vision] ${issue.description}`);
+          visionScorePenalty += 3;
+        }
+      }
+    }
+
+    const score = Math.max(0, this.computeScore(wtStatus, ohStatus, overhangRatio, aspectRatio, triCount) - visionScorePenalty);
     const confidence = Math.min(1, triCount / 10000 + 0.3);
 
     const details: GeometryAnalystDetails = {
@@ -107,9 +123,13 @@ export class GeometryAnalyst extends BaseAgent {
       isManifold,
     };
 
-    const explanation = issues.length > 0
+    let explanation = issues.length > 0
       ? `${translate(CONTENT, 'geometryAnalyst.concernsFound', lang, { count: issues.length })}\n${issues.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}`
       : translate(CONTENT, 'geometryAnalyst.passed', lang);
+
+    if (vision && vision.confidence > 0.3 && vision.qualitativeAssessment) {
+      explanation += `\n\n[Vision] ${vision.qualitativeAssessment}`;
+    }
 
     return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details as unknown as Record<string, unknown>, markers);
   }

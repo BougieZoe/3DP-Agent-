@@ -10,3 +10,9 @@
 // you personally spin up and tear down.
 
 export const AMD_CLOUD_ENDPOINT = '/api/amd-proxy';
+
+// Same-origin relay for ALL keyed LLM providers (claude/openai/gemini/
+// deepseek/kimi/fireworks). Browser-origin calls to Anthropic/Moonshot/Gemini
+// are blocked by CORS, so every provider call goes through our server, which
+// forwards with the user's key attached per-request (never stored).
+export const LLM_PROXY_ENDPOINT = '/api/llm';
