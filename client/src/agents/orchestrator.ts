@@ -3,6 +3,7 @@ import type { AgentId, AgentOutput, AgentConsensus, DebateRound } from '@shared/
 import { calculateAgreementDelta, computeConsensusVerdict } from '@shared/domain/agent';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { UnifiedAnalysis } from '@/analysis';
+import type { MetricsResult } from '@/analysis/types';
 import type { Material } from '@/lib/materialState';
 import { DEFAULT_MATERIAL } from '@/lib/materialState';
 import { fromThreeBufferGeometry } from '@/analysis/geometryConversion';
@@ -12,7 +13,7 @@ import { GeometryAnalyst } from './geometryAnalyst';
 import { PrintabilityScorer } from './printabilityScorer';
 import { FailurePredictor } from './failurePredictor';
 import { OptimizationAdvisor } from './optimizationAdvisor';
-import { visionProvider } from './visionProvider';
+import { visionProvider, type VisionAnalysisResult } from './visionProvider';
 import {
   getAgentLabel,
   DEFAULT_AGENT_CONFIGS,
@@ -21,8 +22,34 @@ import {
   type VotingRecord,
   type AgentStageConfig,
 } from './types';
-import { getActiveProvider } from '@/lib/apiKeys';
-import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
+import { getActiveProvider, getKey } from '@/lib/apiKeys';
+
+/**
+ * Time budget for the optional vision capture step, aligned with the
+ * vision-capable agents' default timeoutMs (geometry_analyst / failure_predictor).
+ */
+const VISION_TIMEOUT_MS = 15_000;
+
+/**
+ * Build the geometry summary handed to the vision LLM from the rule-engine
+ * mesh metrics — the single authoritative source. The eye sees the render,
+ * the text carries the SAME numbers the rest of the stack shows: exact
+ * signed-tetrahedron volume and exact surface area. No bounding-box
+ * multiplication that could silently disagree with the analysis panels.
+ */
+function buildVisionGeometrySummary(
+  metrics: MetricsResult,
+  triangleCount: number,
+  fileName: string,
+  language: ContentLang = 'en',
+): string {
+  return translate(CONTENT, 'vision.geometrySummary', language, {
+    file: fileName,
+    triangles: triangleCount,
+    area: metrics.surfaceAreaMm2.toFixed(1),
+    volume: metrics.meshVolumeMm3.toFixed(1),
+  });
+}
 
 export class AgentOrchestrator {
   private agents: Map<AgentId, BaseAgent> = new Map();
@@ -80,7 +107,11 @@ export class AgentOrchestrator {
     }
 
     if (visionCanvas) {
-      ctx.visionAnalysis = await this.captureVisionAnalysis(vertexData, fileName, language);
+      const vision = await this.captureVisionAnalysis(vertexData, unifiedAnalysis.metrics.result, fileName, language);
+      if (vision) {
+        ctx.visionAnalysis = vision.raw;
+        ctx.visionResult = vision;
+      }
     }
 
     const enabledAgents = Array.from(this.agents.values())
@@ -102,19 +133,23 @@ export class AgentOrchestrator {
       });
     }
 
-    const debateResults = await this.runDebatePhase(ctx, enabledAgents, initialResults);
-    const finalResults = this.applyDebateAdjustments(initialResults, debateResults);
+    const initialScores = new Map<AgentId, number>(
+      initialResults.map(result => [result.agentId, result.score]),
+    );
 
-    const consensus = this.computeConsensus(finalResults, debateResults, language ?? 'en');
-    const votingRecords = this.buildVotingRecords(finalResults, debateResults);
+    const debateResults = await this.runDebatePhase(ctx, enabledAgents, initialResults);
+
+    const consensus = this.computeConsensus(initialResults, debateResults, language ?? 'en');
+    const votingRecords = this.buildVotingRecords(initialResults, debateResults, initialScores);
     const totalDurationMs = Math.round(performance.now() - startTime);
 
     return {
-      results: finalResults,
+      results: initialResults,
       consensus,
       votingRecords,
       totalDurationMs,
       usedVision: !!ctx.visionAnalysis,
+      analysisSource: 'rules',
     };
   }
 
@@ -183,13 +218,6 @@ export class AgentOrchestrator {
     }
 
     return rounds;
-  }
-
-  private applyDebateAdjustments(
-    results: AgentResultWithExplanation[],
-    _debateRounds: DebateRound[],
-  ): AgentResultWithExplanation[] {
-    return results;
   }
 
   private computeConsensus(
@@ -283,15 +311,17 @@ export class AgentOrchestrator {
   private buildVotingRecords(
     results: AgentResultWithExplanation[],
     debateRounds: DebateRound[],
+    initialScores: Map<AgentId, number>,
   ): VotingRecord[] {
     return results.map(result => {
       const config = this.configs.get(result.agentId);
       const lastRound = debateRounds[debateRounds.length - 1];
+      const initialScore = initialScores.get(result.agentId) ?? result.score;
       const adjustedScore = lastRound?.adjustedScores[result.agentId] ?? result.score;
 
       return {
         agentId: result.agentId,
-        initialScore: result.score,
+        initialScore,
         adjustedScore,
         weight: config?.weight ?? 0.25,
         confidence: result.confidence,
@@ -300,35 +330,42 @@ export class AgentOrchestrator {
   }
 
   private async captureVisionAnalysis(
-    vertexData: { triangleCount: number; size: { x: number; y: number; z: number } },
+    vertexData: { triangleCount: number },
+    metrics: MetricsResult,
     fileName: string,
     language?: ContentLang,
-  ): Promise<string | undefined> {
+  ): Promise<(Pick<VisionAnalysisResult, 'qualitativeAssessment' | 'observedIssues' | 'confidence'> & { raw: string }) | undefined> {
     const activeProvider = getActiveProvider();
     if (!activeProvider) return undefined;
+    const apiKey = getKey(activeProvider);
+    if (!apiKey) return undefined;
 
-    const metadata = AI_PROVIDER_METADATA[activeProvider];
     const screenshot = await visionProvider.captureScene();
     if (!screenshot) return undefined;
 
-    const surfaceArea = vertexData.size.x * vertexData.size.y * 2
-      + vertexData.size.x * vertexData.size.z * 2
-      + vertexData.size.y * vertexData.size.z * 2;
-    const volume = vertexData.size.x * vertexData.size.y * vertexData.size.z;
+    // A hung vision provider must not block the whole rule analysis. Abort
+    // after the same time budget the vision-capable agents use (15s), and
+    // actually terminate the in-flight request so we don't leak connections
+    // or keep burning tokens in the background.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), VISION_TIMEOUT_MS);
+    try {
+      const summary = buildVisionGeometrySummary(metrics, vertexData.triangleCount, fileName, language ?? 'en');
 
-    const summary = translate(CONTENT, 'vision.geometrySummary', language ?? 'en', {
-      file: fileName,
-      triangles: vertexData.triangleCount,
-      area: surfaceArea.toFixed(1),
-      volume: volume.toFixed(1),
-    });
+      const result = await visionProvider.analyzeWithAI(screenshot, summary, {
+        provider: activeProvider,
+        apiKey,
+      }, language, controller.signal);
 
-    const result = await visionProvider.analyzeWithAI(screenshot, summary, {
-      provider: activeProvider,
-      apiKey: 'configured',
-    }, language);
-
-    return result.rawResponse;
+      return {
+        raw: result.rawResponse,
+        qualitativeAssessment: result.qualitativeAssessment,
+        observedIssues: result.observedIssues,
+        confidence: result.confidence,
+      };
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private timeout(

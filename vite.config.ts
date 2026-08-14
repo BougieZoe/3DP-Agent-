@@ -239,17 +239,29 @@ export default defineConfig({
     },
     proxy: {
       // Dev: forward CAD bridge calls to the local Express server
-      // (run with PORT=3001, since vite dev owns :3000).
+      // (run with PORT=3001, since vite dev owns :3000). `xfwd: true` stamps the
+      // real client address into x-forwarded-for so server/loopbackGuard.ts can
+      // tell a local browser from a LAN peer riding this proxy — the bridges are
+      // token-gated for everyone except loopback callers.
       "/api/cad": {
-        target: "http://localhost:3001",
+        target: "http://127.0.0.1:3001",
         changeOrigin: true,
+        xfwd: true,
       },
       "/api/slice": {
-        target: "http://localhost:3001",
+        target: "http://127.0.0.1:3001",
         changeOrigin: true,
+        xfwd: true,
       },
       "/api/mesh": {
-        target: "http://localhost:3001",
+        target: "http://127.0.0.1:3001",
+        changeOrigin: true,
+        xfwd: true,
+      },
+      // Dev: LLM relay (same origin in prod, forwarded to the Express server here).
+      // Deliberately no xfwd — the relay is key-per-request, never host-gated.
+      "/api/llm": {
+        target: "http://127.0.0.1:3001",
         changeOrigin: true,
       },
     },

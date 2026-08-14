@@ -22,9 +22,11 @@ import { geometryToThreeMf } from '@/lib/threeMf';
 import { LENGTH_UNIT_TO_MM, type LengthUnit } from '@shared/domain/geometry';
 import { CONTENT, translate, SUPPORTED_LANGUAGES } from '@shared/i18n/content';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
+import { isWallConfidenceTrusted } from '@/lib/lowConfidence';
 import { Language, getTranslation } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
-import { AgentOrchestrator, AgentRunSummary, getAgentLabel, getAgentDescription } from '@/agents';
+import { AgentOrchestrator, AgentRunSummary, getAgentLabel, getAgentDescription, runDeepAnalysis } from '@/agents';
+import type { AgentId } from '@shared/domain/agent';
 import { OverhangHeatmap } from '@/components/3D/OverhangHeatmap';
 import { SupportGhosts } from '@/components/3D/SupportGhosts';
 import { RiskAnimation } from '@/components/3D/RiskAnimation';
@@ -284,7 +286,11 @@ export default function Home() {
   const [quickReport, setQuickReport] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
   const [agentRun, setAgentRun] = useState<AgentRunSummary | null>(null);
+  const [deepAgentRun, setDeepAgentRun] = useState<AgentRunSummary | null>(null);
   const [agentLoading, setAgentLoading] = useState(false);
+  const [deepAnalysisLoading, setDeepAnalysisLoading] = useState(false);
+  const [deepSteps, setDeepSteps] = useState<Array<{ index: number; label: string; raw: string }>>([]);
+  const [deepError, setDeepError] = useState<string | null>(null);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showGhosts, setShowGhosts] = useState(false);
   const [showRisks, setShowRisks] = useState(false);
@@ -304,6 +310,7 @@ export default function Home() {
   const controlsRef = useRef<any>(null);
   const orchestratorRef = useRef<AgentOrchestrator | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const deepAnalysisSeq = useRef(0);
 
   if (!orchestratorRef.current) {
     orchestratorRef.current = new AgentOrchestrator();
@@ -315,6 +322,8 @@ export default function Home() {
     setTab('geometry');
     setQuickReport('');
     setAgentRun(null);
+    deepAnalysisSeq.current += 1;
+    setDeepAgentRun(null);
     setShowHeatmap(false);
     setShowGhosts(false);
     setShowRisks(false);
@@ -334,19 +343,56 @@ export default function Home() {
     if (!orchestratorRef.current) return;
     setAgentLoading(true);
     try {
-      const summary = await orchestratorRef.current.runFullAnalysis(
+      // 1) Deterministic rule engine first — instant, free, always available.
+      const ruleSummary = await orchestratorRef.current.runFullAnalysis(
         model.geometry,
         model.unifiedAnalysis,
         model.fileName,
-        undefined,
+        canvasRef.current,
         language,
         mat,
       );
-      setAgentRun(summary);
+      setAgentRun(ruleSummary);
+
     } catch (err) {
-      console.error('Agent analysis failed:', err);
+      console.error('Rule analysis failed:', err);
     } finally {
       setAgentLoading(false);
+    }
+  };
+
+  // The LLM is a user-requested second opinion. It is intentionally kept
+  // separate from deterministic mesh results and can never overwrite them.
+  const DEEP_STEP_AGENTS: AgentId[] = ['geometry_analyst', 'failure_predictor', 'optimization_advisor', 'printability_scorer'];
+
+  const runDeepAnalysisIfConfigured = async (model: UploadedModel, mat: Material) => {
+    const seq = ++deepAnalysisSeq.current;
+    setDeepAnalysisLoading(true);
+    setDeepAgentRun(null);
+    setDeepSteps([]);
+    setDeepError(null);
+    const md = unifiedToModelData(model.unifiedAnalysis, model.fileName, mat.overhangThreshold);
+    try {
+      const result = await runDeepAnalysis(md, language, (step, index) => {
+        if (seq !== deepAnalysisSeq.current) return;
+        const agentId = DEEP_STEP_AGENTS[index];
+        setDeepSteps((prev) => [...prev, {
+          index,
+          label: agentId ? getAgentLabel(agentId, language as 'en' | 'ja' | 'zh') : t('deepAnalysis'),
+          raw: step.raw,
+        }]);
+      }, mat);
+      if (seq !== deepAnalysisSeq.current) return;
+      if (result) {
+        setDeepAgentRun(result);
+      } else {
+        setDeepError(t('deepAnalysisError'));
+      }
+    } catch (err) {
+      console.error('Deep LLM analysis failed:', err);
+      if (seq === deepAnalysisSeq.current) setDeepError(t('deepAnalysisError'));
+    } finally {
+      if (seq === deepAnalysisSeq.current) setDeepAnalysisLoading(false);
     }
   };
 
@@ -361,6 +407,8 @@ export default function Home() {
     setMaterialLoading(true);
     setQuickReport('');
     setAgentRun(null);
+    deepAnalysisSeq.current += 1;
+    setDeepAgentRun(null);
 
     const model = fromThreeBufferGeometry(uploadedModel.geometry);
     const newUnified = runAnalysisPipeline(model, { fileName: uploadedModel.fileName, material: newMat });
@@ -372,7 +420,7 @@ export default function Home() {
 
     if (currentSeq !== materialRequestSeq.current || !orchestratorRef.current) return;
     const summary = await orchestratorRef.current.runFullAnalysis(
-      updatedModel.geometry, newUnified, updatedModel.fileName, undefined, language, newMat,
+      updatedModel.geometry, newUnified, updatedModel.fileName, canvasRef.current, language, newMat,
     );
 
     if (currentSeq !== materialRequestSeq.current) return;
@@ -392,6 +440,8 @@ export default function Home() {
 
     setAgentRun(null);
     setQuickReport('');
+    deepAnalysisSeq.current += 1;
+    setDeepAgentRun(null);
 
     // Re-process the ORIGINAL raw geometry (no stacked scales), re-center on
     // the build plate, recompute bounds, then re-run the analysis pipeline.
@@ -408,7 +458,7 @@ export default function Home() {
     if (currentSeq !== unitRequestSeq.current || !orchestratorRef.current) return;
     try {
       const summary = await orchestratorRef.current.runFullAnalysis(
-        updatedModel.geometry, newUnified, updatedModel.fileName, undefined, language, material,
+        updatedModel.geometry, newUnified, updatedModel.fileName, canvasRef.current, language, material,
       );
       if (currentSeq !== unitRequestSeq.current) return;
       setAgentRun(summary);
@@ -459,6 +509,10 @@ export default function Home() {
         unifiedAnalysis: newUnified,
         rawGeometry: processed.clone(),
       });
+deepAnalysisSeq.current += 1;
+    setDeepAgentRun(null);
+    setDeepSteps([]);
+    setDeepError(null);
       const d = result.diagnostics;
       toast.success(
         d.repaired
@@ -517,6 +571,8 @@ export default function Home() {
 
   const unifiedAnalysis = uploadedModel?.unifiedAnalysis;
   const analysis = unifiedAnalysis ? unifiedToAnalysisSummary(unifiedAnalysis) : null;
+  const topo = unifiedAnalysis?.topology.result;
+  const valid = unifiedAnalysis?.validation.result;
   const modelData = getModelData();
   const providerLabel = getActiveProvider() ? AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel : null;
   const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
@@ -639,7 +695,11 @@ export default function Home() {
             <div>// {t('viewport')}</div>
             <div>// {t('viewportHint')}</div>
           </div>
-          <Canvas gl={{ antialias: true, alpha: true }} style={{ background: 'transparent' }}>
+          <Canvas
+            gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
+            style={{ background: 'transparent' }}
+            onCreated={(state) => { canvasRef.current = state.gl.domElement; }}
+          >
             <PerspectiveCamera makeDefault position={[0, 3, 10]} fov={60} />
             <SceneContent model={uploadedModel} />
             <ViewportCameraFit geometry={uploadedModel?.geometry ?? null} controlsRef={controlsRef} />
@@ -709,6 +769,7 @@ export default function Home() {
               onToggleFailure={() => setShowFailure(v => !v)}
               onToggleThermal={() => setShowThermal(v => !v)}
               onOpacityChange={setOverlayOpacity}
+              t={t}
             />
           )}
         </div>
@@ -748,8 +809,8 @@ export default function Home() {
                       }`}>
                       {tabKey === 'geometry' ? t('geometry').toUpperCase()
                         : tabKey === 'report' ? t('report').toUpperCase()
-                        : tabKey === 'agents' ? 'AGENTS'
-                        : tabKey === 'causality' ? 'CAUSALITY'
+                        : tabKey === 'agents' ? t('agents').toUpperCase()
+                        : tabKey === 'causality' ? t('causality').toUpperCase()
                         : t('chatAI').toUpperCase()}
                     </button>
                   ))}
@@ -772,9 +833,17 @@ export default function Home() {
                         <div className="text-xs text-muted-foreground mb-2 font-mono">{t('overhangLabel')}</div>
                         <StatusChip status={analysis.overhang.status} label={t(analysis.overhang.status)} />
                       </div>
+                      <div className="p-3 border border-border rounded-sm bg-card">
+                        <div className="text-xs text-muted-foreground mb-2 font-mono">{t('cadManifold')}</div>
+                        <StatusChip status={topo?.isManifold ? 'good' : 'critical'} label={topo ? (topo.isManifold ? '✓' : '✗') : '—'} />
+                      </div>
+                      <div className="p-3 border border-border rounded-sm bg-card">
+                        <div className="text-xs text-muted-foreground mb-2 font-mono">{t('cadWatertight')}</div>
+                        <StatusChip status={valid?.isWatertight ? 'good' : 'critical'} label={valid ? (valid.isWatertight ? '✓' : '✗') : '—'} />
+                      </div>
                     </div>
                     <div className="border border-border rounded-sm bg-card p-4">
-                      <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">GEOMETRY DATA</div>
+                      <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">{t('geometryDataLabel')}</div>
                       <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness != null ? toUnit(analysis.wallThickness.minThickness).toFixed(3) : '—'} unit={unitSuffix} highlight />
                       {unifiedAnalysis?.metrics.result?.minWallThicknessMm != null && (
                         <MetricRow label="Min (abs)" value={toUnit(unifiedAnalysis.metrics.result.minWallThicknessMm).toFixed(3)} unit={unitSuffix} />
@@ -785,6 +854,22 @@ export default function Home() {
                       <MetricRow label={t('dimY')} value={toUnit(modelData.dims.y).toFixed(2)} unit={unitSuffix} />
                       <MetricRow label={t('dimZ')} value={toUnit(modelData.dims.z).toFixed(2)} unit={unitSuffix} />
                       <MetricRow label={t('overhangFaces')} value={analysis.overhang.areas} />
+                      {topo && (
+                        <>
+                          <MetricRow label={t('cadTri')} value={topo.triangleCount} />
+                          <MetricRow label={t('cadVerts')} value={topo.vertexCount} />
+                          <MetricRow label={t('cadShells')} value={topo.shellCount} />
+                          <MetricRow label={t('cadBoundaryEdges')} value={topo.boundaryEdgeCount} />
+                          <MetricRow label={t('cadNonManifoldEdges')} value={topo.nonManifoldEdgeCount} />
+                        </>
+                      )}
+                      {valid && (
+                        <>
+                          <MetricRow label={t('cadHoles')} value={valid.holeCount} />
+                          <MetricRow label={t('cadNormalOrientation')} value={valid.normalOrientation} />
+                          <MetricRow label={t('cadFlippedFaces')} value={valid.flippedNormalFaceCount} />
+                        </>
+                      )}
                     </div>
                     <button onClick={() => setTab('report')}
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
@@ -827,6 +912,11 @@ export default function Home() {
                           <span className="text-xs font-mono text-primary tracking-widest">{t('analysisReport')}</span>
                           <span className="text-xs font-mono text-muted-foreground/40">{t('localEngine')}</span>
                         </div>
+                        {unifiedAnalysis && !isWallConfidenceTrusted(unifiedAnalysis.metrics.confidence) && (
+                          <div className="mb-3 border border-amber-500/40 bg-amber-500/5 text-amber-400/90 rounded-sm px-3 py-2 text-xs font-mono">
+                            {t('lowConfidenceBanner')}
+                          </div>
+                        )}
                         <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap leading-relaxed">
                           {quickReport}
                         </pre>
@@ -890,8 +980,12 @@ export default function Home() {
                             {agentRun.consensus.verdict}
                           </div>
                           <div className="mt-2 text-xs text-muted-foreground/50">
-                            {agentRun.usedVision && <span className="text-primary">Vision-enhanced</span>}
-                            {agentRun.usedVision ? ' \u2022 ' : ''}
+                            {agentRun.analysisSource === 'llm' ? (
+                              <span className="text-cyan-400">Deep Agent \u2022 LLM</span>
+                            ) : (
+                              <><span className="text-primary">Deterministic Engine</span>{' \u2022 '}</>
+                            )}
+                            {agentRun.usedVision && <><span className="text-primary">Vision</span>{' \u2022 '}</>}
                             {agentRun.consensus.agreementDelta < 10 ? 'Strong agreement' : 'Moderate agreement'}
                             {' \u2022 '}{agentRun.totalDurationMs}ms
                           </div>
@@ -937,7 +1031,7 @@ export default function Home() {
                             {agentRun.votingRecords.map(record => (
                               <div key={record.agentId} className="flex justify-between text-xs font-mono text-muted-foreground/70">
                                 <span>{getAgentLabel(record.agentId, language)}</span>
-                                <span>{translate(CONTENT, 'agent.weight', language)}: {(record.weight * 100).toFixed(0)}% | {translate(CONTENT, 'agent.score', language)}: {Math.round(record.adjustedScore)} | {translate(CONTENT, 'agent.confidence', language)}: {(record.confidence * 100).toFixed(0)}%</span>
+                                <span>{translate(CONTENT, 'agent.weight', language)}: {(record.weight * 100).toFixed(0)}% | {translate(CONTENT, 'agent.score', language)}: {record.adjustedScore !== record.initialScore ? `${Math.round(record.initialScore)} → ${Math.round(record.adjustedScore)}` : Math.round(record.adjustedScore)} | {translate(CONTENT, 'agent.confidence', language)}: {(record.confidence * 100).toFixed(0)}%</span>
                               </div>
                             ))}
                           </div>
@@ -952,6 +1046,56 @@ export default function Home() {
                             originalFileName={uploadedModel.fileName}
                           />
                         )}
+
+                        <div className="border border-dashed border-border/50 rounded-sm p-4 space-y-3">
+                          <div>
+                            <div className="text-xs font-mono text-muted-foreground">{t('deepAnalysis')}</div>
+                            <div className="mt-1 text-xs text-muted-foreground/60">{t('deepAnalysisAdvisory')}</div>
+                          </div>
+                          {!deepAgentRun && (
+                            deepAnalysisLoading ? (
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2 text-xs font-mono text-cyan-400/80">
+                                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
+                                  {deepSteps.length === 0
+                                    ? t('deepAnalysisDesc')
+                                    : t('deepAnalysisStep').replace('{n}', String(Math.min(deepSteps.length + 1, 5)))}
+                                </div>
+                                {deepSteps.map((step) => (
+                                  <div key={step.index} className="text-xs">
+                                    <div className="font-mono text-cyan-400/70">
+                                      {t('deepAnalysisStep').replace('{n}', String(step.index + 1))} · {step.label}
+                                    </div>
+                                    <pre className="mt-0.5 whitespace-pre-wrap font-mono leading-relaxed text-muted-foreground/50 line-clamp-3">
+                                      {step.raw.length > 600 ? `${step.raw.slice(0, 600)}…` : step.raw}
+                                    </pre>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {deepError && <div className="text-xs font-mono text-red-400">{deepError}</div>}
+                                <button
+                                  onClick={() => uploadedModel && void runDeepAnalysisIfConfigured(uploadedModel, material)}
+                                  disabled={deepAnalysisLoading || !hasAnyKey()}
+                                  className="text-xs font-mono px-4 py-2 border border-primary/30 text-primary hover:bg-primary/10 rounded-sm transition-all disabled:opacity-40"
+                                >
+                                  {t('deepAnalysisRun')}
+                                </button>
+                              </div>
+                            )
+                          )}
+                          {deepAgentRun && (
+                            <details className="text-xs text-muted-foreground" open>
+                              <summary className="cursor-pointer font-mono text-cyan-400">
+                                {t('deepAnalysisScore')}: {deepAgentRun.consensus.overallScore}/100
+                              </summary>
+                              <pre className="mt-3 whitespace-pre-wrap font-mono leading-relaxed text-muted-foreground/80">
+                                {deepAgentRun.consensus.summary}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
                       </>
                     )}
                   </div>

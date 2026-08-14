@@ -11,7 +11,7 @@ interface APIKeyModalProps {
 const labels = {
   en: {
     header: 'API CONFIG',
-    desc1: 'Keys stored locally in your browser. Never sent to our servers.',
+    desc1: 'Keys stored locally in your browser. Relayed through our server per request — never stored server-side.',
     desc2: 'Add at least one key to unlock AI analysis.',
     hide: 'HIDE',
     show: 'SHOW',

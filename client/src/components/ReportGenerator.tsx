@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { CONTENT, translate, type ContentLang } from "@shared/i18n/content";
-import type { UnifiedAnalysis } from "../analysis/types";
+import type { UnifiedAnalysis, NormalOrientation } from "../analysis/types";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
 import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
 
@@ -122,6 +122,15 @@ function computeTimeRange(minutes: number, lang: Language): string {
 }
 
 // ─── Issue Builders ────────────────────────────────────────────────────────────
+
+function formatNormalOrientation(o: NormalOrientation): string {
+  switch (o) {
+    case 'consistent_outward': return 'outward';
+    case 'consistent_inward': return 'inward';
+    case 'mixed': return 'mixed';
+    default: return 'unknown';
+  }
+}
 
 function buildClientIssues(analysis: UnifiedAnalysis, lang: Language): string[] {
   const issues: string[] = [];
@@ -529,6 +538,7 @@ async function generateClientPDF(
   const metrics = analysis.metrics?.result;
   const dims = metrics?.boundingBoxDimensionsMm;
   const pt = analysis.printTime?.result;
+  const v = analysis.validation?.result;
   const now = new Date();
   const dateStr = now.toLocaleDateString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US", {
     year: "numeric", month: "long", day: "numeric",
@@ -594,6 +604,21 @@ async function generateClientPDF(
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.volume', lang), `${(metrics.meshVolumeMm3 / 1000).toFixed(2)} cm³`, y);
   }
 
+  if (v) {
+    y = drawDataRow(doc,
+      translate(CONTENT, 'pdf.label.watertight', lang),
+      v.isWatertight ? (lang === "ja" ? "〇" : "Yes") : (lang === "ja" ? "×" : "No"),
+      y,
+      !v.isWatertight
+    );
+    y = drawDataRow(doc,
+      translate(CONTENT, 'pdf.label.holes', lang),
+      `${v.holeCount}`,
+      y,
+      v.holeCount > 0
+    );
+  }
+
   // ── Section: ISSUES FOUND ──
   y += 4;
   y = drawSectionHeader(doc, translate(CONTENT, 'pdf.section.issuesFound', lang), y);
@@ -653,6 +678,7 @@ async function generateDesignerPDF(
   const dims = metrics?.boundingBoxDimensionsMm;
   const pt = analysis.printTime?.result;
   const v = analysis.validation?.result;
+  const t = analysis.topology?.result;
   const s = analysis.support?.result;
   const issues = buildDesignerIssues(analysis, tone, lang);
   const now = new Date();
@@ -772,6 +798,34 @@ async function generateDesignerPDF(
       v.isWatertight ? (lang === "ja" ? "〇" : "Yes") : (lang === "ja" ? "×" : "No"),
       y,
       !v.isWatertight
+    );
+  }
+  if (t) {
+    y = drawDataRow(doc,
+      translate(CONTENT, 'pdf.label.manifold', lang),
+      t.isManifold ? (lang === "ja" ? "〇" : "Yes") : (lang === "ja" ? "×" : "No"),
+      y,
+      !t.isManifold
+    );
+    y = drawDataRow(doc,
+      translate(CONTENT, 'pdf.label.shells', lang),
+      `${t.shellCount}`,
+      y,
+      t.shellCount > 1
+    );
+    y = drawDataRow(doc,
+      translate(CONTENT, 'pdf.label.boundaryEdges', lang),
+      `${t.boundaryEdgeCount}`,
+      y,
+      t.boundaryEdgeCount > 0
+    );
+  }
+  if (v) {
+    y = drawDataRow(doc,
+      translate(CONTENT, 'pdf.label.normalOrientation', lang),
+      formatNormalOrientation(v.normalOrientation),
+      y,
+      v.normalOrientation !== 'consistent_outward'
     );
   }
 
@@ -911,6 +965,9 @@ async function generateFactoryPDF(
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.vertices', lang), `${t.vertexCount}`, y);
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.manifoldEdges', lang), `${t.manifoldEdgeCount}`, y);
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.nonManifoldEdges', lang), `${t.nonManifoldEdgeCount}`, y);
+    y = drawDataRow(doc, translate(CONTENT, 'pdf.label.manifold', lang), `${t.isManifold}`, y, !t.isManifold);
+    y = drawDataRow(doc, translate(CONTENT, 'pdf.label.shells', lang), `${t.shellCount}`, y, t.shellCount > 1);
+    y = drawDataRow(doc, translate(CONTENT, 'pdf.label.boundaryEdges', lang), `${t.boundaryEdgeCount}`, y, t.boundaryEdgeCount > 0);
   }
 
   // ── Section: VALIDATION ──
@@ -920,6 +977,7 @@ async function generateFactoryPDF(
   if (v) {
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.watertight', lang), v.isWatertight ? "true" : "false", y, !v.isWatertight);
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.holes', lang), `${v.holeCount}`, y, v.holeCount > 0);
+    y = drawDataRow(doc, translate(CONTENT, 'pdf.label.normalOrientation', lang), formatNormalOrientation(v.normalOrientation), y, v.normalOrientation !== 'consistent_outward');
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.flippedNormalRatio', lang), `${(v.flippedNormalRatio * 100).toFixed(2)}%`, y, v.flippedNormalRatio > 0.05);
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.degenerateFaces', lang), `${v.degenerateFaceCount}`, y, v.degenerateFaceCount > 10);
   }

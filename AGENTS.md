@@ -55,6 +55,10 @@ React 19 + Three.js 0.184 + @react-three/fiber 9.6.1 + Vite 7.1.9 + TypeScript s
 4. Cognition effects (risk, failure, thermal, scan, pulses, causality)
 5. UI (toolbar, timeline, panels)
 
+## Bridge Routes & REPAIR & PROCESS
+- **Positioning (deliberate, not debt):** `REPAIR & PROCESS` (the browser button that calls `/api/mesh/process`) is an **internal / dev-only debugging feature**. It is NOT a production browser path: a browser SPA cannot safely hold `BRIDGE_TOKEN` (it would ship the secret to end users), so production keeps the bridges unmounted unless `BRIDGE_TOKEN` is explicitly set, and browser clients never send an Authorization header.
+- **Dev auth gate:** in dev, bridge routes (`/api/cad`, `/api/slice`, `/api/mesh`) skip `BRIDGE_TOKEN` ONLY for genuinely-loopback callers. The decision lives in `server/loopbackGuard.ts` and is made from the request-source chain (the real client IP in `x-forwarded-for`, trusted only when the direct socket peer is loopback) — **never from the Express bind host**, because the LAN-exposed Vite dev proxy (with `xfwd: true` on the bridge prefixes) forwards LAN peers with a loopback socket address. A dev server published on `0.0.0.0` keeps the bridges token-gated. Keep `vite.config.ts` `xfwd: true` and `server/loopbackGuard.ts` in sync if bridge proxies are added/removed.
+
 ## Important Conventions
 - `progressRef.current` ranges 0.0–1.0, ~8.7s full cycle at speed=1
 - `delta * speed * 0.12` increment per frame

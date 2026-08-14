@@ -62,6 +62,11 @@ export class FailurePredictor extends BaseAgent {
     const risks: PredictedRisk[] = [];
     const markers: RiskMarker[] = [];
 
+    // Vision is advisory evidence only: a render cannot validate hidden mesh
+    // geometry, so it may never create a critical production verdict by itself.
+    const visionRisks = this.predictVisionRisks(ctx);
+    risks.push(...visionRisks);
+
     const overhangRisk = this.predictOverhangFailure(analysisInput, metricsInput, material.overhangThreshold, ctx.language);
     if (overhangRisk) {
       risks.push(overhangRisk);
@@ -104,6 +109,32 @@ export class FailurePredictor extends BaseAgent {
     const explanation = this.buildExplanation(risks, overallRiskLevel, ctx.language);
 
     return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details as unknown as Record<string, unknown>, markers);
+  }
+
+  private predictVisionRisks(ctx: AgentContext): PredictedRisk[] {
+    const vision = ctx.visionResult;
+    if (!vision || vision.confidence < 0.4 || vision.observedIssues.length === 0) return [];
+
+    const risks: PredictedRisk[] = [];
+    const HIGH_SIGNAL_CATEGORIES = new Set([
+      'structural_damage', 'deformation', 'asymmetry', 'missing_feature', 'hole_or_void',
+    ]);
+
+    for (const issue of vision.observedIssues) {
+      if (!HIGH_SIGNAL_CATEGORIES.has(issue.category)) continue;
+
+      const severity: PredictedRisk['severity'] = vision.confidence > 0.7 ? 'high' : 'medium';
+      risks.push({
+        type: 'vision_anomaly',
+        severity,
+        confidence: vision.confidence,
+        description: `[Vision] ${issue.description}`,
+        affectedFaces: 0,
+        recommendation: translate(CONTENT, 'failurePredictor.visionRec', ctx.language),
+      });
+    }
+
+    return risks;
   }
 
   private predictOverhangFailure(

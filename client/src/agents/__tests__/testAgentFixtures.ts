@@ -270,6 +270,7 @@ export function buildAgentContext(overrides?: {
   vertexNormals?: Float32Array;
   material?: Material;
   fileName?: string;
+  visionResult?: NonNullable<AgentContext['visionResult']> & { raw?: string };
 }): AgentContext {
   const geo = overrides?.geometry ?? mockGeometry();
   const norms = geo.getAttribute('normal')?.array as Float32Array ?? new Float32Array(9);
@@ -282,7 +283,8 @@ export function buildAgentContext(overrides?: {
     previousOutputs: new Map(),
     fileName: overrides?.fileName ?? 'test.stl',
     material: overrides?.material ?? mockMaterial(),
-    visionAnalysis: undefined,
+    visionAnalysis: (overrides?.visionResult as { raw?: string } | undefined)?.raw ?? undefined,
+    visionResult: overrides?.visionResult ?? undefined,
     language: 'en',
   };
 }
