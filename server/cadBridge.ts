@@ -14,6 +14,7 @@ import {
   SANDBOX_FILE_KB,
   scanSourceSafety,
 } from './cadSandbox';
+import { runFailoverSequence, type LlmCandidate } from './llmFailover';
 
 const SKILL_DIR =
   process.env.CAD_SKILL_DIR ?? path.join(os.homedir(), '.agents', 'skills', 'cad');
@@ -38,6 +39,9 @@ interface BridgeLlmConfig {
   model: string;
 }
 
+/** Ordered LLM candidates for source authoring: [primary, ...fallbacks]. */
+type BridgeLlmCandidates = BridgeLlmConfig[];
+
 interface BridgeGenerateBody {
   prompt?: string;
   locale?: string;
@@ -47,7 +51,10 @@ interface BridgeGenerateBody {
     maxDimensionMm?: number;
   };
   baseModel?: { generatedModelId: string; editInstruction: string };
+  /** Legacy single-provider field — keep for compatibility. */
   llm?: BridgeLlmConfig;
+  /** Ordered [primary, ...fallbacks]; used when llmCandidates is absent. */
+  llmCandidates?: BridgeLlmCandidates;
   generatorSource?: string;
   meshTolerance?: { linear?: number; angular?: number };
   timeoutMs?: number;
@@ -173,25 +180,62 @@ async function llmChatOnce(llm: BridgeLlmConfig, userMessage: string): Promise<s
 }
 
 /**
- * Author build123d source, retrying once on transient failures (network
- * blips, HTTP 5xx/429, empty or invalid output). Full timeouts are NOT
- * retried — the model is simply slow, and a second attempt would exceed the
- * client's request budget.
+ * Retry a single provider with transient-failure backoff (5xx / 429, honoring
+ * Retry-After) up to its own attempt budget. Full timeouts are NOT retried —
+ * the model is simply slow, and a second attempt would exceed the budget.
  */
-async function generateSourceViaLlm(llm: BridgeLlmConfig, userMessage: string): Promise<string> {
-  const attempts = 2;
+async function llmChatWithBackoff(
+  llm: BridgeLlmConfig,
+  userMessage: string,
+  onLog: (msg: string) => void,
+): Promise<string> {
+  const attempts = 3;
+  let backoffMs = 1_000;
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       return await llmChatOnce(llm, userMessage);
     } catch (err) {
       lastError = err;
+      const message = String(err);
       const timedOut = err instanceof Error && err.name === 'TimeoutError';
-      if (timedOut || attempt === attempts) throw err;
-      console.warn(`[cadBridge] LLM attempt ${attempt}/${attempts} failed (${String(err)}); retrying`);
+      const rateLimited = message.includes('429');
+      const transient = rateLimited || /HTTP 5\d\d/.test(message);
+      if (timedOut || attempt === attempts || !transient) throw err;
+      const wait = Math.min(backoffMs, 5_000);
+      onLog(`[cadBridge] LLM attempt ${attempt}/${attempts} (${message}); retrying in ${wait}ms`);
+      await new Promise((r) => setTimeout(r, wait));
+      backoffMs *= 2;
     }
   }
   throw lastError;
+}
+
+/** Author build123d source, failing over across ordered providers with a
+ * circuit breaker so one quota-limited provider can't kill the pipeline. */
+async function generateSourceViaLlm(
+  candidates: BridgeLlmCandidates,
+  userMessage: string,
+): Promise<string> {
+  let content = '';
+  const candidate: LlmCandidate[] = candidates.map((llm) => ({
+    id: `${llm.baseUrl}|${llm.model}`,
+    label: `${new URL(llm.baseUrl).hostname}/${llm.model}`,
+    send: async () => {
+      content = await llmChatWithBackoff(llm, userMessage, () => {});
+      return { ok: true };
+    },
+  }));
+  const result = await runFailoverSequence(candidate, {
+    failureThreshold: 2,
+    cooldownMs: 30_000,
+    budgetMs: 150_000,
+    onLog: (msg) => console.log(`[cadBridge] failover: ${msg}`),
+  });
+  if (!result.ok) {
+    throw new Error(result.error ?? 'LLM source generation failed');
+  }
+  return content;
 }
 
 function composeUserMessage(body: BridgeGenerateBody, priorSource: string | null): string {
@@ -329,7 +373,11 @@ export function createCadBridgeRouter(): Router {
       sendError(res, 400, 'generation-failed', 'prompt must be a non-empty string');
       return;
     }
-    if (!body.generatorSource && !body.llm) {
+    if (
+      !body.generatorSource &&
+      !body.llm &&
+      !(body.llmCandidates && body.llmCandidates.length > 0)
+    ) {
       console.log(`[cadBridge:${id.slice(0, 8)}] REJECT — no LLM config or generatorSource`);
       sendError(
         res,
@@ -376,10 +424,24 @@ export function createCadBridgeRouter(): Router {
       source = body.generatorSource;
       console.log(`[cadBridge:${id.slice(0, 8)}] Using generatorSource (${source.length} chars)`);
     } else {
+      const candidates: BridgeLlmCandidates =
+        body.llmCandidates && body.llmCandidates.length > 0
+          ? body.llmCandidates
+          : body.llm
+            ? [body.llm]
+            : [];
+      if (candidates.length === 0) {
+        sendError(res, 502, 'generation-failed', 'LLM source generation failed: no LLM provider configured');
+        return;
+      }
       const llmStart = Date.now();
       try {
-        console.log(`[cadBridge:${id.slice(0, 8)}] Calling LLM: ${body.llm!.model} at ${body.llm!.baseUrl}`);
-        source = await generateSourceViaLlm(body.llm!, composeUserMessage(body, priorSource));
+        console.log(
+          `[cadBridge:${id.slice(0, 8)}] Calling LLM: ${candidates
+            .map((c) => `${new URL(c.baseUrl).hostname}/${c.model}`)
+            .join(' → ')}`,
+        );
+        source = await generateSourceViaLlm(candidates, composeUserMessage(body, priorSource));
         console.log(`[cadBridge:${id.slice(0, 8)}] LLM responded in ${Date.now() - llmStart}ms (${source.length} chars)`);
       } catch (err) {
         console.log(`[cadBridge:${id.slice(0, 8)}] LLM failed after ${Date.now() - llmStart}ms: ${String(err)}`);
@@ -418,7 +480,8 @@ export function createCadBridgeRouter(): Router {
     let run = await runStepCli(ready.python, args, runDir, timeoutMs);
     let repairAttempts = 0;
     let repairType: RepairType | null = null;
-    const providerLabel = body.llm?.model ?? 'template';
+    const providerLabel =
+      (body.llmCandidates?.[0]?.model ?? body.llm?.model) || 'template';
 
     while (run.code !== 0 && !run.timedOut && repairAttempts < MAX_REPAIR_ATTEMPTS) {
       const combined = run.stdout + run.stderr;

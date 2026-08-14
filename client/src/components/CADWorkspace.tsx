@@ -24,6 +24,7 @@ import { createLocalBridgeAdapter, generateDesign } from "@/design/generator";
 import { parseSTL } from "@/lib/stlParser";
 import type { UnifiedAnalysis } from "@/analysis";
 import { getAPIKeys, getActiveProvider } from "@/lib/apiKeys";
+import type { AIProvider } from "@/lib/apiKeys";
 import { useMaterial } from "@/contexts/MaterialContext";
 import { getTranslation, translations } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n";
@@ -44,6 +45,28 @@ const LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
   kimi:     { baseUrl: 'https://api.moonshot.cn/v1',           model: 'kimi-k3' },
   fireworks:{ baseUrl: 'https://api.fireworks.ai/inference/v1', model: 'accounts/fireworks/models/deepseek-v4-pro' },
 };
+
+/**
+ * Build the ordered LLM candidate list for source authoring: the active
+ * provider first, then every other configured OpenAI-compatible provider with
+ * a saved key. The bridge walks this list with a circuit breaker, so a
+ * quota-limited provider fails over instead of failing the whole generation.
+ */
+function buildLlmCandidates(): Array<{ baseUrl: string; apiKey: string; model: string }> {
+  const keys = getAPIKeys();
+  const active = getActiveProvider();
+  const order = active ? [active, ...Object.keys(LLM_CONFIGS).filter((p) => p !== active)] 
+    : Object.keys(LLM_CONFIGS);
+  const candidates: Array<{ baseUrl: string; apiKey: string; model: string }> = [];
+  for (const provider of order) {
+    const key = keys[provider as AIProvider];
+    const cfg = LLM_CONFIGS[provider];
+    if (key && cfg) {
+      candidates.push({ baseUrl: cfg.baseUrl, apiKey: key, model: cfg.model });
+    }
+  }
+  return candidates;
+}
 
 // Whole-request budget (LLM source authoring + build123d execution). Must be
 // ≥ the bridge's LLM_TIMEOUT_MS (90s) so the client never aborts first.
@@ -730,13 +753,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         outcome = await generateDesign({ prompt: p, timeoutMs: CAD_GENERATE_TIMEOUT_MS, baseModel }, adapter);
         if (outcome.ok) setLlmInfo(`Template: ${fallback.matched}`);
       } else {
-        const llmProvider = getActiveProvider();
-        const llmKey = llmProvider ? getAPIKeys()[llmProvider] : undefined;
-        const llmCfg = llmProvider ? LLM_CONFIGS[llmProvider] : undefined;
-        if (llmProvider && llmKey && llmCfg) {
-          mark('llm', 'running', `calling ${llmProvider}/${llmCfg.model}`);
+        const llmCandidates = buildLlmCandidates();
+        if (llmCandidates.length > 0) {
+          mark('llm', 'running', `calling ${llmCandidates.map((c) => c.model).join(' → ')}`);
           const adapter = createLocalBridgeAdapter({
-            llm: { baseUrl: llmCfg.baseUrl, apiKey: llmKey, model: llmCfg.model },
+            llmCandidates,
           });
           outcome = await generateDesign({ prompt: p, timeoutMs: CAD_GENERATE_TIMEOUT_MS, baseModel }, adapter);
         } else {

@@ -154,6 +154,82 @@ var SANDBOX_MEM_KB = 2e6;
 var SANDBOX_CPU_S = 120;
 var SANDBOX_FILE_KB = 102400;
 
+// server/llmFailover.ts
+var state = /* @__PURE__ */ new Map();
+function isCircuitOpen(id, now = Date.now()) {
+  const s = state.get(id);
+  if (!s) return false;
+  if (s.openUntil <= 0) return false;
+  return now < s.openUntil;
+}
+function recordAttempt(id, ok, opts, now = Date.now()) {
+  if (ok) {
+    state.delete(id);
+    return;
+  }
+  const prev = state.get(id);
+  if (prev && prev.openUntil > 0 && now >= prev.openUntil) {
+    prev.failures = 0;
+    prev.openUntil = 0;
+  }
+  const s = prev ?? { failures: 0, openUntil: 0 };
+  s.failures += 1;
+  if (s.failures >= opts.failureThreshold) {
+    s.openUntil = now + opts.cooldownMs;
+  }
+  state.set(id, s);
+}
+async function runFailoverSequence(candidates, opts = {}) {
+  const failureThreshold = opts.failureThreshold ?? 3;
+  const cooldownMs = opts.cooldownMs ?? 3e4;
+  const budgetMs = opts.budgetMs ?? 3e4;
+  const onLog = opts.onLog ?? (() => {
+  });
+  const deadline = Date.now() + budgetMs;
+  const failures = [];
+  let lastError;
+  for (const candidate of candidates) {
+    if (Date.now() >= deadline) {
+      failures.push(`budget exceeded before trying ${candidate.label}`);
+      break;
+    }
+    if (isCircuitOpen(candidate.id)) {
+      onLog(`skip ${candidate.label}: circuit open`);
+      failures.push(`${candidate.label}: circuit open`);
+      continue;
+    }
+    onLog(`trying ${candidate.label}`);
+    let result;
+    try {
+      result = await candidate.send();
+    } catch (err) {
+      lastError = String(err);
+      recordAttempt(candidate.id, false, { failureThreshold, cooldownMs });
+      onLog(`${candidate.label} threw: ${lastError}`);
+      failures.push(`${candidate.label}: ${lastError}`);
+      continue;
+    }
+    if (result.ok) {
+      recordAttempt(candidate.id, true, { failureThreshold, cooldownMs });
+      return { ok: true, provider: candidate.label };
+    }
+    lastError = result.message ?? (result.status ? `HTTP ${result.status}` : "unknown failure");
+    if (result.retryAfterSeconds && result.status === 429) {
+      const wait = Math.min(result.retryAfterSeconds * 1e3, deadline - Date.now());
+      if (wait > 0) {
+        onLog(`${candidate.label}: 429 retry-after ${result.retryAfterSeconds}s`);
+        await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+    recordAttempt(candidate.id, false, { failureThreshold, cooldownMs });
+    onLog(`${candidate.label} returned: ${lastError}`);
+    failures.push(`${candidate.label}: ${lastError}`);
+  }
+  const message = failures.length > 0 ? failures.join("; ") : "all LLM candidates failed";
+  onLog(`failover exhausted: ${message}`);
+  return { ok: false, error: lastError ? `${message} (last: ${lastError})` : message };
+}
+
 // server/cadBridge.ts
 var SKILL_DIR = process.env.CAD_SKILL_DIR ?? path.join(os.homedir(), ".agents", "skills", "cad");
 var STEP_CLI_DIR = path.join(SKILL_DIR, "scripts", "step");
@@ -279,20 +355,49 @@ async function llmChatOnce(llm, userMessage) {
   if (!content) throw new Error("LLM returned empty content");
   return extractPythonSource(content);
 }
-async function generateSourceViaLlm(llm, userMessage) {
-  const attempts = 2;
+async function llmChatWithBackoff(llm, userMessage, onLog) {
+  const attempts = 3;
+  let backoffMs = 1e3;
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       return await llmChatOnce(llm, userMessage);
     } catch (err) {
       lastError = err;
+      const message = String(err);
       const timedOut = err instanceof Error && err.name === "TimeoutError";
-      if (timedOut || attempt === attempts) throw err;
-      console.warn(`[cadBridge] LLM attempt ${attempt}/${attempts} failed (${String(err)}); retrying`);
+      const rateLimited = message.includes("429");
+      const transient = rateLimited || /HTTP 5\d\d/.test(message);
+      if (timedOut || attempt === attempts || !transient) throw err;
+      const wait = Math.min(backoffMs, 5e3);
+      onLog(`[cadBridge] LLM attempt ${attempt}/${attempts} (${message}); retrying in ${wait}ms`);
+      await new Promise((r) => setTimeout(r, wait));
+      backoffMs *= 2;
     }
   }
   throw lastError;
+}
+async function generateSourceViaLlm(candidates, userMessage) {
+  let content = "";
+  const candidate = candidates.map((llm) => ({
+    id: `${llm.baseUrl}|${llm.model}`,
+    label: `${new URL(llm.baseUrl).hostname}/${llm.model}`,
+    send: async () => {
+      content = await llmChatWithBackoff(llm, userMessage, () => {
+      });
+      return { ok: true };
+    }
+  }));
+  const result = await runFailoverSequence(candidate, {
+    failureThreshold: 2,
+    cooldownMs: 3e4,
+    budgetMs: 15e4,
+    onLog: (msg) => console.log(`[cadBridge] failover: ${msg}`)
+  });
+  if (!result.ok) {
+    throw new Error(result.error ?? "LLM source generation failed");
+  }
+  return content;
 }
 function composeUserMessage(body, priorSource) {
   const lines = [];
@@ -392,7 +497,7 @@ function createCadBridgeRouter() {
       sendError(res, 400, "generation-failed", "prompt must be a non-empty string");
       return;
     }
-    if (!body.generatorSource && !body.llm) {
+    if (!body.generatorSource && !body.llm && !(body.llmCandidates && body.llmCandidates.length > 0)) {
       console.log(`[cadBridge:${id.slice(0, 8)}] REJECT \u2014 no LLM config or generatorSource`);
       sendError(
         res,
@@ -433,10 +538,17 @@ function createCadBridgeRouter() {
       source = body.generatorSource;
       console.log(`[cadBridge:${id.slice(0, 8)}] Using generatorSource (${source.length} chars)`);
     } else {
+      const candidates = body.llmCandidates && body.llmCandidates.length > 0 ? body.llmCandidates : body.llm ? [body.llm] : [];
+      if (candidates.length === 0) {
+        sendError(res, 502, "generation-failed", "LLM source generation failed: no LLM provider configured");
+        return;
+      }
       const llmStart = Date.now();
       try {
-        console.log(`[cadBridge:${id.slice(0, 8)}] Calling LLM: ${body.llm.model} at ${body.llm.baseUrl}`);
-        source = await generateSourceViaLlm(body.llm, composeUserMessage(body, priorSource));
+        console.log(
+          `[cadBridge:${id.slice(0, 8)}] Calling LLM: ${candidates.map((c) => `${new URL(c.baseUrl).hostname}/${c.model}`).join(" \u2192 ")}`
+        );
+        source = await generateSourceViaLlm(candidates, composeUserMessage(body, priorSource));
         console.log(`[cadBridge:${id.slice(0, 8)}] LLM responded in ${Date.now() - llmStart}ms (${source.length} chars)`);
       } catch (err) {
         console.log(`[cadBridge:${id.slice(0, 8)}] LLM failed after ${Date.now() - llmStart}ms: ${String(err)}`);
@@ -469,7 +581,7 @@ function createCadBridgeRouter() {
     let run = await runStepCli(ready.python, args, runDir, timeoutMs);
     let repairAttempts = 0;
     let repairType = null;
-    const providerLabel = body.llm?.model ?? "template";
+    const providerLabel = (body.llmCandidates?.[0]?.model ?? body.llm?.model) || "template";
     while (run.code !== 0 && !run.timedOut && repairAttempts < MAX_REPAIR_ATTEMPTS) {
       const combined = run.stdout + run.stderr;
       console.log(`[cadBridge:${id.slice(0, 8)}] Attempt ${repairAttempts + 1} failed \u2014 inspecting traceback`);
