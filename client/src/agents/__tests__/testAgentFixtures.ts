@@ -43,7 +43,6 @@ export function normalMetrics(): MetricsResult {
     thinWallPercentage: 0,
     thinWallRatio: 0,
     averageConfidence: 0.85,
-    lowConfidenceSampleCount: 0,
     wallThicknessSamples: sample(50),
     overhang: {
       faceCount: 5,
@@ -57,6 +56,8 @@ export function normalMetrics(): MetricsResult {
         { minAngle: 60, maxAngle: 75, faceCount: 2 },
         { minAngle: 75, maxAngle: 90, faceCount: 0 },
       ],
+      overhangAreaMm2: 5,
+      totalAreaMm2: 100,
     },
   };
 }
@@ -73,7 +74,6 @@ export function thinWallMetrics(): MetricsResult {
     thinWallPercentage: 60,
     thinWallRatio: 0.6,
     averageConfidence: 0.5,
-    lowConfidenceSampleCount: 15,
     wallThicknessSamples: sample(50).map(s => ({ ...s, thickness: 0.5 })),
   };
 }
@@ -94,6 +94,8 @@ export function overhangMetrics(): MetricsResult {
         { minAngle: 60, maxAngle: 75, faceCount: 20 },
         { minAngle: 75, maxAngle: 90, faceCount: 5 },
       ],
+      overhangAreaMm2: 60,
+      totalAreaMm2: 100,
     },
     wallThicknessSamples: sample(50),
   };
@@ -120,6 +122,8 @@ export function criticalBothMetrics(): MetricsResult {
         { minAngle: 60, maxAngle: 75, faceCount: 35 },
         { minAngle: 75, maxAngle: 90, faceCount: 15 },
       ],
+      overhangAreaMm2: 80,
+      totalAreaMm2: 100,
     },
   };
 }
@@ -266,6 +270,7 @@ export function buildAgentContext(overrides?: {
   vertexNormals?: Float32Array;
   material?: Material;
   fileName?: string;
+  visionResult?: NonNullable<AgentContext['visionResult']> & { raw?: string };
 }): AgentContext {
   const geo = overrides?.geometry ?? mockGeometry();
   const norms = geo.getAttribute('normal')?.array as Float32Array ?? new Float32Array(9);
@@ -278,6 +283,8 @@ export function buildAgentContext(overrides?: {
     previousOutputs: new Map(),
     fileName: overrides?.fileName ?? 'test.stl',
     material: overrides?.material ?? mockMaterial(),
-    visionAnalysis: undefined,
+    visionAnalysis: (overrides?.visionResult as { raw?: string } | undefined)?.raw ?? undefined,
+    visionResult: overrides?.visionResult ?? undefined,
+    language: 'en',
   };
 }

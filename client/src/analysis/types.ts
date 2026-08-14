@@ -107,12 +107,21 @@ export interface WallThicknessSample {
 export type OverhangSeverity = 'none' | 'moderate' | 'severe';
 
 export interface OverhangMetrics {
-  /** Faces where normal angle from vertical exceeds 45° */
+  /** Faces whose downward tilt exceeds the overhang threshold */
   faceCount: number;
   totalFaceCount: number;
+  /**
+   * Area-weighted overhang fraction: sum of overhang triangle areas divided
+   * by the total surface area. Physically meaningful — a large overhang face
+   * weighs more than a tiny one (unlike a pure face-count ratio).
+   */
   ratio: number;
   severity: OverhangSeverity;
   breakdownByAngleDeg: Array<{ minAngle: number; maxAngle: number; faceCount: number }>;
+  /** Sum of the areas of overhang faces. */
+  overhangAreaMm2: number;
+  /** Total surface area. */
+  totalAreaMm2: number;
 }
 
 export interface MetricsResult {
@@ -157,9 +166,6 @@ export interface MetricsResult {
 
   /** Average confidence across all valid samples (0.0–1.0) */
   averageConfidence: number;
-
-  /** Number of valid samples with confidence < 0.3 */
-  lowConfidenceSampleCount: number;
 
   wallThicknessSamples: WallThicknessSample[];
 
@@ -268,4 +274,9 @@ export interface UnifiedAnalysis {
   modelFileName: string;
   /** Minimum confidence across all modules that ran successfully */
   overallConfidence: Confidence;
+  /**
+   * Per-module (and wall-thickness sub-module) wall-clock durations, populated
+   * only when the pipeline is run with `enableProfiling: true`.
+   */
+  profiling?: Record<string, number>;
 }

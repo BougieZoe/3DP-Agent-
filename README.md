@@ -194,17 +194,74 @@ The product functions without AMD infrastructure.
 
 ## Run Locally
 
+The app needs **two processes**: the Vite web app and the Express API server
+(the CAD bridge + slicer live on the API side, the web app proxies `/api/*`
+to it).
+
 ```bash
 git clone https://github.com/BougieZoe/3DP-Agent-
 cd 3DP-Agent-
 
 pnpm install
+
+# Terminal 1 — web app → http://localhost:3000
 pnpm dev
+
+# Terminal 2 — API / CAD bridge → http://localhost:3001
+pnpm dev:server
 ```
 
-Open:
+Open http://localhost:3000.
 
-http://localhost:3000
+> **CAD Studio "Generate"** requires the API server (terminal 2) to be
+> running. It also depends on the local `cad` skill
+> (`earthtojake/text-to-cad`) at `~/.agents/skills/cad` plus a Python venv at
+> `.cad-bridge/.venv` — verify with
+> `curl http://localhost:3001/api/cad/generate/health` (expect `ready: true`).
+>
+> **Mesh Studio** works fully in the browser in mock mode (procedural
+> primitives, no API server). Its optional "REPAIR & PROCESS" step needs the
+> API server (mesh diagnostics/decimate/place-on-plate) and, for watertight
+> repair, an isolated mesh venv (numpy 1.x + pymeshfix, separate from the
+> build123d venv which needs numpy 2.x):
+>
+> ```bash
+> .cad-bridge/.venv/bin/python -m venv .cad-bridge/mesh-venv
+> .cad-bridge/mesh-venv/bin/pip install "numpy<2" trimesh pymeshfix \
+>   fast-simplification networkx manifold3d
+> ```
+
+---
+
+## Features
+
+Three studios share one manufacturing-analysis pipeline (`runAnalysisPipeline`
++ confidence gate) and one export story (STL / STEP / 3MF):
+
+- **ANALYZE** — upload an STL and get a full printability report.
+- **CAD** — text → LLM → parametric build123d (STEP). Parametric sliders,
+  STEP/STL/3MF export, live engine-health indicator.
+- **MESH** — text → mesh. Local mock (keyword → primitive) by default; real
+  text→3D when `VITE_TRIPO_API_KEY` is set. Server-side repair / decimate /
+  place-on-plate, STL/3MF export, and print-outcome feedback that seeds the
+  confidence-gate calibration.
+
+API endpoints (dev, all proxied to the server on :3001):
+- `POST /api/cad/generate` — text → build123d → STEP + STL (sandboxed).
+- `GET  /api/cad/generate/:id/step` — exact STEP file (CNC / machining).
+- `POST /api/mesh/process` — STL diagnostics, best-effort watertight repair,
+  decimation, and placement on the build plate.
+
+Optional env: `VITE_TRIPO_API_KEY` (hosted Tripo text→3D in Mesh Studio).
+
+---
+
+## Tests
+
+```bash
+pnpm check   # tsc --noEmit
+pnpm test    # vitest
+```
 
 ---
 

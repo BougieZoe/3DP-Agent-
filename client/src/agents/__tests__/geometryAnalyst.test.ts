@@ -121,4 +121,57 @@ describe('GeometryAnalyst', () => {
     expect(output.verdict).toBe('inconclusive');
     expect(output.score).toBe(0);
   });
+
+  it('surfaces vision observations as [Vision] issues', async () => {
+    const ctx = buildAgentContext({
+      unifiedAnalysis: buildMockUnifiedAnalysis(),
+      visionResult: {
+        qualitativeAssessment: 'Visible asymmetry on the left side of the model',
+        observedIssues: [
+          { category: 'asymmetry', description: 'Visible asymmetry on the left side' },
+          { category: 'surface_artifact', description: 'Surface blemish near the top edge' },
+        ],
+        confidence: 0.8,
+        raw: '{"qualitativeAssessment":"...","observedIssues":[]}',
+      },
+    });
+    const output = await analyst.execute(ctx);
+    expect(output.explanation).toContain('[Vision] Visible asymmetry on the left side');
+    expect(output.explanation).toContain('[Vision] Surface blemish near the top edge');
+    expect(output.explanation).toContain('left side of the model');
+  });
+
+  it('deduplicates vision issues that mirror deterministic findings', async () => {
+    // vision flags a thin-wall issue → rules already report it; it must not be
+    // surfaced twice and must not inflate issue count.
+    const ctx = buildAgentContext({
+      unifiedAnalysis: buildMockUnifiedAnalysis({ metrics: thinWallMetrics() }),
+      visionResult: {
+        qualitativeAssessment: 'Thin walls everywhere',
+        observedIssues: [
+          { category: 'thin_wall', description: 'Wall thickness too thin' },
+          { category: 'overhang', description: 'extreme overhang angle' },
+        ],
+        confidence: 0.9,
+        raw: '{}',
+      },
+    });
+    const output = await analyst.execute(ctx);
+    const visionLines = output.explanation.match(/\[Vision\]/g) ?? [];
+    expect(visionLines.length).toBe(1); // qualitativeAssessment always appended; observedIssues deduped
+  });
+
+  it('ignores low-confidence vision results', async () => {
+    const ctx = buildAgentContext({
+      unifiedAnalysis: buildMockUnifiedAnalysis(),
+      visionResult: {
+        qualitativeAssessment: 'Weird',
+        observedIssues: [{ category: 'structural_damage', description: 'Visible crack' }],
+        confidence: 0.1,
+        raw: '{}',
+      },
+    });
+    const output = await analyst.execute(ctx);
+    expect(output.explanation).not.toContain('[Vision]');
+  });
 });

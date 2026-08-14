@@ -1,13 +1,16 @@
 import { moduleResult, type AnalysisModuleResult, type Confidence, type ValidationResult, type NormalOrientation } from './types';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
-
-const DEGENERATE_AREA_THRESHOLD = 1e-12;
+import { getThresholds, type AnalysisThresholds } from './thresholds';
 
 export function validateMesh(
   model: GeometryModel,
   graph?: GeometryGraph | null,
+  language: ContentLang = 'en',
+  thresholds: AnalysisThresholds = getThresholds(),
 ): AnalysisModuleResult<ValidationResult> {
+  const validationConfig = thresholds.validation;
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
 
@@ -16,7 +19,7 @@ export function validateMesh(
       isWatertight: false, holeCount: 0, boundaryEdgeCount: 0,
       flippedNormalFaceCount: 0, totalFaceCount: 0, flippedNormalRatio: 0,
       normalOrientation: 'unknown', degenerateFaceCount: 0,
-    }, 'No position data');
+    }, translate(CONTENT, 'validation.noPositionData', language));
   }
 
   if (g.indices.length === 0) {
@@ -24,7 +27,7 @@ export function validateMesh(
       isWatertight: false, holeCount: 0, boundaryEdgeCount: 0,
       flippedNormalFaceCount: 0, totalFaceCount: g.triangleCount,
       flippedNormalRatio: 0, normalOrientation: 'unknown', degenerateFaceCount: 0,
-    }, 'Cannot validate non-indexed geometry');
+    }, translate(CONTENT, 'validation.nonIndexed', language));
   }
 
   const positions = g.positions;
@@ -62,7 +65,7 @@ export function validateMesh(
     ? Math.max(1, Math.round(boundaryPerimeter / avgEdgeLength / 3))
     : 0;
 
-  const { flippedCount, orientation } = detectFlippedNormals(g);
+  const { flippedCount, orientation } = detectFlippedNormals(g, thresholds);
 
   let degenerateCount = 0;
   for (let i = 0; i < indices.length; i += 3) {
@@ -78,7 +81,7 @@ export function validateMesh(
     const crossZ = ux * vy - uy * vx;
     const area = 0.5 * Math.sqrt(crossX * crossX + crossY * crossY + crossZ * crossZ);
 
-    if (area < DEGENERATE_AREA_THRESHOLD) {
+    if (area < validationConfig.degenerateAreaThreshold) {
       degenerateCount++;
     }
   }
@@ -86,12 +89,12 @@ export function validateMesh(
   const flippedNormalRatio = totalFaceCount > 0 ? flippedCount / totalFaceCount : 0;
 
   let confidence: Confidence;
-  if (degenerateCount > totalFaceCount * 0.5) {
-    confidence = 0.2;
-  } else if (flippedNormalRatio > 0.1 || degenerateCount > 0) {
-    confidence = 0.7;
+  if (degenerateCount > totalFaceCount * validationConfig.degenerateFaceRatioCritical) {
+    confidence = validationConfig.confidence.degenerate as Confidence;
+  } else if (flippedNormalRatio > validationConfig.flippedNormalRatioWarning || degenerateCount > 0) {
+    confidence = validationConfig.confidence.warning as Confidence;
   } else {
-    confidence = 0.9;
+    confidence = validationConfig.confidence.good as Confidence;
   }
 
   const result: ValidationResult = {
@@ -106,18 +109,20 @@ export function validateMesh(
   };
 
   const parts: string[] = [];
-  if (isWatertight) parts.push('Mesh is watertight');
-  else parts.push(`Mesh is NOT watertight — ${holeCount} hole(s), ${boundaryCount} boundary edge(s)`);
-  if (flippedCount > 0) parts.push(`${flippedCount} face(s) (${(flippedNormalRatio * 100).toFixed(1)}%) have flipped normals`);
-  if (degenerateCount > 0) parts.push(`${degenerateCount} degenerate face(s)`);
-  parts.push(`Normal orientation: ${orientation}`);
+  if (isWatertight) parts.push(translate(CONTENT, 'validation.watertight', language));
+  else parts.push(translate(CONTENT, 'validation.notWatertight', language, { holes: holeCount, boundary: boundaryCount }));
+  if (flippedCount > 0) parts.push(translate(CONTENT, 'validation.flippedNormals', language, { count: flippedCount, pct: (flippedNormalRatio * 100).toFixed(1) }));
+  if (degenerateCount > 0) parts.push(translate(CONTENT, 'validation.degenerateFaces', language, { count: degenerateCount }));
+  parts.push(translate(CONTENT, 'validation.normalOrientation', language, { orientation }));
 
   return moduleResult('validation', confidence, Math.round(performance.now() - startTime), result, parts.join('. '));
 }
 
 function detectFlippedNormals(
   graph: GeometryGraph,
+  thresholds: AnalysisThresholds = getThresholds(),
 ): { flippedCount: number; orientation: NormalOrientation } {
+  const flipRatio = thresholds.validation.flippedNormalRatioFlipOrientation;
   const { positions, indices, triangleCount } = graph;
   if (triangleCount === 0) return { flippedCount: 0, orientation: 'unknown' };
 
@@ -182,7 +187,7 @@ function detectFlippedNormals(
     flippedCount = outwardCount;
   }
 
-  if (flippedCount > triangleCount * 0.8) {
+  if (flippedCount > triangleCount * flipRatio) {
     orientation = orientation === 'consistent_outward' ? 'consistent_inward' : 'consistent_outward';
     flippedCount = triangleCount - flippedCount;
   }

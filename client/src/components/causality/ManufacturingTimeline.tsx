@@ -1,20 +1,22 @@
 import { CausalityGraph } from './causalityEngine';
 import { usePrintPlayback } from '@/components/playback/PrintPlaybackContext';
 import { PANEL, PHASE_COLORS_CSS, EVENT_COLORS_CSS } from '@/lib/visualLanguage';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 
 interface ManufacturingTimelineProps {
   graph: CausalityGraph | null;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  language?: ContentLang;
 }
 
 const PHASES = [
-  { label: 'BASE', range: [0, 0.1] as [number, number] },
-  { label: 'SUPPORT', range: [0.1, 0.25] as [number, number] },
-  { label: 'BRIDGE', range: [0.25, 0.4] as [number, number] },
-  { label: 'THERMAL', range: [0.4, 0.6] as [number, number] },
-  { label: 'OVERHANG', range: [0.6, 0.75] as [number, number] },
-  { label: 'FAILURE ZONE', range: [0.75, 1] as [number, number] },
+  { key: 'base', range: [0, 0.1] as [number, number] },
+  { key: 'support', range: [0.1, 0.25] as [number, number] },
+  { key: 'bridge', range: [0.25, 0.4] as [number, number] },
+  { key: 'thermal', range: [0.4, 0.6] as [number, number] },
+  { key: 'overhang', range: [0.6, 0.75] as [number, number] },
+  { key: 'failure', range: [0.75, 1] as [number, number] },
 ];
 
 const TYPE_LABELS: Record<string, string> = {
@@ -28,7 +30,7 @@ const TYPE_LABELS: Record<string, string> = {
   failure_spike: 'FX',
 };
 
-export function ManufacturingTimeline({ graph, selectedId, onSelect }: ManufacturingTimelineProps) {
+export function ManufacturingTimeline({ graph, selectedId, onSelect, language = 'en' }: ManufacturingTimelineProps) {
   const { state, setProgress, togglePlay } = usePrintPlayback();
 
   if (!graph || graph.events.length === 0) return null;
@@ -44,7 +46,7 @@ export function ManufacturingTimeline({ graph, selectedId, onSelect }: Manufactu
             className={`absolute h-full ${PHASE_COLORS_CSS[i].color} rounded-[1px]`}
             style={{ left: `${phase.range[0] * 100}%`, width: `${(phase.range[1] - phase.range[0]) * 100}%` }}
           >
-            <span className="text-[7px] font-mono text-muted-foreground/40 ml-0.5 leading-none">{phase.label}</span>
+            <span className="text-[7px] font-mono text-muted-foreground/40 ml-0.5 leading-none">{translate(CONTENT, `causality.phase.${phase.key}`, language)}</span>
           </div>
         ))}
       </div>

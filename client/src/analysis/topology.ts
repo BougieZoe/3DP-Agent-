@@ -1,4 +1,5 @@
 import { moduleResult, type AnalysisModuleResult, type Confidence, type TopologyResult } from './types';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
 
@@ -48,6 +49,7 @@ export function analyzeTopology(
   model: GeometryModel,
   _fileName?: string,
   graph?: GeometryGraph | null,
+  language: ContentLang = 'en',
 ): AnalysisModuleResult<TopologyResult> {
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
@@ -57,7 +59,7 @@ export function analyzeTopology(
       triangleCount: 0, vertexCount: 0, edgeCount: 0,
       manifoldEdgeCount: 0, boundaryEdgeCount: 0, nonManifoldEdgeCount: 0,
       shellCount: 0, isManifold: false, problemEdges: [],
-    }, 'No position data');
+    }, translate(CONTENT, 'topology.noPositionData', language));
   }
 
   if (g.indices.length === 0) {
@@ -71,7 +73,7 @@ export function analyzeTopology(
       shellCount: g.triangleCount,
       isManifold: false,
       problemEdges: [],
-    }, 'Geometry is not indexed — each triangle is treated as an independent shell.');
+    }, translate(CONTENT, 'topology.nonIndexed', language));
   }
 
   const edgeCount = g.edgeMap.size;
@@ -111,10 +113,14 @@ export function analyzeTopology(
   };
 
   const parts: string[] = [];
-  if (isManifold) parts.push('Mesh is manifold');
-  else parts.push(`${nonManifoldCount} non-manifold edge(s) detected`);
-  parts.push(`${shellCount} shell(s), ${g.triangleCount} triangles, ${g.vertexCount} vertices`);
-  if (boundaryCount > 0) parts.push(`${boundaryCount} boundary edge(s) — mesh has holes`);
+  if (isManifold) parts.push(translate(CONTENT, 'topology.manifold', language));
+  else parts.push(translate(CONTENT, 'topology.nonManifoldEdges', language, { count: nonManifoldCount }));
+  parts.push(translate(CONTENT, 'topology.shellSummary', language, {
+    shells: shellCount,
+    triangles: g.triangleCount,
+    vertices: g.vertexCount,
+  }));
+  if (boundaryCount > 0) parts.push(translate(CONTENT, 'topology.boundaryEdges', language, { count: boundaryCount }));
 
   return moduleResult('topology', confidence, Math.round(performance.now() - startTime), result, parts.join('. '));
 }
