@@ -10,7 +10,7 @@ import { processMesh, type MeshProcessDiagnostics } from '@/lib/meshProcessClien
 import { runCadAnalysis } from '@/lib/cadAnalysis';
 import { geometryToThreeMf } from '@/lib/threeMf';
 import { recordPrintOutcome, getPrintStats, type PrintOutcome } from '@/lib/printFeedback';
-import { createMeshProvider } from '@/design/mesh';
+import { createMeshGenerator, generateDesign, type GeneratorAdapter } from '@/design/generator';
 import { useMaterial } from '@/contexts/MaterialContext';
 import { getTranslation, translations } from '@/lib/i18n';
 import type { Language } from '@/lib/i18n';
@@ -18,8 +18,6 @@ import type { UnifiedAnalysis } from '@/analysis';
 import type { CADConfidenceReport, Issue as ConfidenceIssue } from '@/cad-confidence';
 
 type TKey = keyof (typeof translations)['en'];
-
-const TRIPO_KEY = (import.meta.env.VITE_TRIPO_API_KEY as string | undefined) ?? '';
 
 function scoreColor(score: number): string {
   if (score >= 80) return '#22c55e';
@@ -83,7 +81,7 @@ interface PrintRow {
 export function MeshStudio({ language }: { language: Language }) {
   const { material } = useMaterial();
   const t = (key: TKey) => getTranslation(language, key);
-  const provider = useMemo(() => createMeshProvider({ tripoApiKey: TRIPO_KEY }), []);
+  const meshGeneratorRef = useRef<GeneratorAdapter | null>(null);
 
   const [prompt, setPrompt] = useState('');
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
@@ -100,7 +98,7 @@ export function MeshStudio({ language }: { language: Language }) {
 
   const generate = useCallback(async (overridePrompt?: string) => {
     const p = (overridePrompt ?? prompt).trim();
-    if (!p || !provider) return;
+    if (!p) return;
     setStatus('submitting');
     setError(null);
     setStlBytes(null);
@@ -109,30 +107,35 @@ export function MeshStudio({ language }: { language: Language }) {
     setGate(null);
     setIssues([]);
     try {
-      const handle = await provider.generate({ prompt: p });
-      setStatus('generating');
-      let state = await provider.poll(handle);
-      while (state.status === 'queued' || state.status === 'running') {
-        await new Promise((r) => setTimeout(r, 2000));
-        state = await provider.poll(handle);
+      if (!meshGeneratorRef.current) {
+        meshGeneratorRef.current = await createMeshGenerator();
       }
-      if (state.status === 'failed') {
-        setError(state.reason);
+      setStatus('generating');
+      const outcome = await generateDesign({ prompt: p }, meshGeneratorRef.current);
+      if (!outcome.ok) {
+        if (outcome.error.code === 'generation-timeout') {
+          setError(`Generation timed out after ${Math.round(outcome.error.timeoutMs / 1000)}s`);
+        } else if (outcome.error.code === 'cancelled') {
+          setError('Generation cancelled');
+        } else {
+          setError(outcome.error.detail);
+        }
         setStatus('idle');
         return;
       }
-      if (state.stlBytes.byteLength <= 84) {
+      const stl = outcome.result.stlBytes;
+      if (stl.byteLength <= 84) {
         setError(t('meshNoMesh'));
         setStatus('idle');
         return;
       }
-      const geo = parseSTL(state.stlBytes);
+      const geo = parseSTL(stl);
       const result = runCadAnalysis(geo, { fileName: `${p}.stl`, prompt: p, material, language });
       setGeometry(result.geometry);
       setUnified(result.unified);
       setGate(result.gate);
       setIssues(result.issues);
-      setStlBytes(state.stlBytes);
+      setStlBytes(stl);
       setServerDiag(null);
       setFitKey((k) => k + 1); // re-frame camera on the new model
       setStatus('done');
@@ -140,7 +143,7 @@ export function MeshStudio({ language }: { language: Language }) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus('idle');
     }
-  }, [prompt, material, language, provider, t]);
+  }, [prompt, material, language, t]);
 
   const downloadSTL = () => {
     if (!stlBytes) return;

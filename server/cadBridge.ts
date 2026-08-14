@@ -352,14 +352,21 @@ export function createCadBridgeRouter(): Router {
 
     let priorSource: string | null = null;
     if (body.baseModel) {
+      // Same allowlist as the /step download route — a malformed
+      // generatedModelId must never reach path.join(RUNS_ROOT, ...).
+      const parentId = body.baseModel.generatedModelId ?? '';
+      if (!/^[0-9a-f-]{20,}$/i.test(parentId)) {
+        sendError(res, 400, 'invalid-artifact', 'baseModel.generatedModelId has an invalid format');
+        return;
+      }
       try {
         priorSource = await readFile(
-          path.join(RUNS_ROOT, body.baseModel.generatedModelId, 'model.py'),
+          path.join(RUNS_ROOT, parentId, 'model.py'),
           'utf-8',
         );
       } catch {
         warnings.push(
-          `parent model ${body.baseModel.generatedModelId} source not found; generating fresh`,
+          `parent model ${parentId} source not found; generating fresh`,
         );
       }
     }
