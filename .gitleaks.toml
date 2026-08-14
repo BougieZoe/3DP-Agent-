@@ -1,0 +1,11 @@
+title = "gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Legacy commits 5012ef74 (band-agents/agent_config.yaml with 5 API keys) and b1cbfea4 (client/src/lib/supabase.ts anon key). Both secret-bearing files were later deleted from the working tree and the keys rotated/inert. Allowed at commit scope so a full-history CI scan is stable; new commits hitting similar secrets are still blocked."
+commits = [
+  "5012ef74ef87d6bf6c49f8e9eae54e5720339828",
+  "b1cbfea4e1678f65e5d992a5215a8f43dee8ce81",
+]
