@@ -10,7 +10,9 @@ describe('AI provider metadata', () => {
       'openai',
       'gemini',
       'deepseek',
+      'kimi',
       'amd-cloud',
+      'fireworks',
     ];
 
     expect(ids).toEqual(expectedIds);

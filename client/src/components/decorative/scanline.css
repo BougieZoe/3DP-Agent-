@@ -1,0 +1,26 @@
+/* Decorative scanline sweep for the STL upload dropzone.
+   Self-contained keyframes — remove this file together with ScanlineSweep.tsx.
+
+   The runner spans the full dropzone height, so translateY(100%) equals the
+   container height without any JS measurement. The line rides at the runner's
+   top edge and is clipped by the overflow-hidden parent. */
+
+.decorative-scanline-runner {
+  animation: decorative-scanline-sweep 3.5s linear infinite;
+}
+
+@keyframes decorative-scanline-sweep {
+  0%   { transform: translateY(0);    opacity: 0; }
+  8%   { transform: translateY(8%);   opacity: 1; }
+  88%  { transform: translateY(88%);  opacity: 1; }
+  100% { transform: translateY(105%); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .decorative-scanline-runner {
+    animation: none;
+  }
+  .decorative-scanline-line {
+    display: none;
+  }
+}

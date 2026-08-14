@@ -29,7 +29,9 @@ describe('analyzeOverhang', () => {
   it('reports no overhangs for watertight cube sides', () => {
     const model = createWatertightCubeModel();
     const result = analyzeOverhang(model.positions, model.indices);
-    expect(result.faceCount).toBeGreaterThan(0);
+    // Physically true: bottom rests on the build plate; sides/top are not
+    // downward-facing. (The old Y-axis metric flagged every vertical face.)
+    expect(result.faceCount).toBe(0);
     expect(result.totalFaceCount).toBe(12);
   });
 });

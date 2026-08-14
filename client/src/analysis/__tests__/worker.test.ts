@@ -66,11 +66,13 @@ describe('runAnalysisPipeline (direct call, Worker unavailable path)', () => {
   it('overallConfidence is minimum of all module confidences', () => {
     const model = createTerrainGridModel(10, 10, 10);
     const result = runAnalysisPipeline(model);
+    // Mirror the pipeline exactly: every non-null module, zeros included.
+    // (Open surfaces legitimately yield wall-thickness confidence 0; the min
+    // must include those, not filter them away.)
     const confidences = [
-      result.topology.confidence,
-      result.validation.confidence,
-      result.metrics.confidence,
-    ].filter(c => c > 0);
+      result.topology, result.validation, result.metrics,
+      result.bedFit, result.support, result.printTime,
+    ].filter(m => m !== null).map(m => m.confidence);
     const minConfidence = Math.min(...confidences);
     expect(result.overallConfidence).toBe(minConfidence);
   });

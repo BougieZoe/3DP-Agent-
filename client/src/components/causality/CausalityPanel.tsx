@@ -1,3 +1,5 @@
+import { Fragment } from 'react';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { CausalityGraph, CausalityEvent, CausalEdge } from './causalityEngine';
 import { PANEL, EVENT_COLORS_CSS } from '@/lib/visualLanguage';
 
@@ -5,17 +7,18 @@ interface CausalityPanelProps {
   graph: CausalityGraph | null;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  language?: ContentLang;
 }
 
 const TYPE_ICONS: Record<string, string> = {
-  thermal_accumulation: '\u29D7',
-  cooling_imbalance: '\u2193\u2191',
-  support_instability: '\u22A5',
-  bridge_oscillation: '\u223F',
-  wall_vibration: '\u223C',
-  overhang_sag: '\u2193',
-  delamination_risk: '\u2550',
-  failure_spike: '\u26A0',
+  thermal_accumulation: '⧗',
+  cooling_imbalance: '↓↑',
+  support_instability: '⊥',
+  bridge_oscillation: '∿',
+  wall_vibration: '∼',
+  overhang_sag: '↓',
+  delamination_risk: '═',
+  failure_spike: '⚠',
 };
 
 function EventNode({ event, selected, onSelect }: { event: CausalityEvent; selected: boolean; onSelect: () => void }) {
@@ -30,7 +33,7 @@ function EventNode({ event, selected, onSelect }: { event: CausalityEvent; selec
       }`}
     >
       <div className="flex items-center gap-2">
-        <span className={`text-xs ${colorClass}`}>{TYPE_ICONS[event.type] ?? '\u25CF'}</span>
+        <span className={`text-xs ${colorClass}`}>{TYPE_ICONS[event.type] ?? '●'}</span>
         <span className={`${PANEL.fontSmall} ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>
           {event.label}
         </span>
@@ -45,12 +48,12 @@ function EventNode({ event, selected, onSelect }: { event: CausalityEvent; selec
   );
 }
 
-export function CausalityPanel({ graph, selectedId, onSelect }: CausalityPanelProps) {
+export function CausalityPanel({ graph, selectedId, onSelect, language = 'en' }: CausalityPanelProps) {
   if (!graph || graph.events.length === 0) {
     return (
       <div className="pt-4 space-y-4">
         <div className={`${PANEL.fontTiny} text-muted-foreground/40 text-center py-12`}>
-          No causal data available.
+          {translate(CONTENT, 'causality.noData', language)}
         </div>
       </div>
     );
@@ -69,59 +72,66 @@ export function CausalityPanel({ graph, selectedId, onSelect }: CausalityPanelPr
 
   const selectedEvent = graph.events.find(e => e.id === selectedId);
 
+  // Build the events to render: the full chronological list, or — when a
+  // selection is active — the causal chain upstream → selected → downstream.
+  let events: CausalityEvent[] = sorted;
+  let chainActive = false;
+  if (selectedId && selectedEvent) {
+    chainActive = true;
+    const chain: CausalityEvent[] = [];
+    const visited = new Set<string>();
+    const walk = (id: string, dir: 'up' | 'down') => {
+      if (visited.has(id)) return;
+      visited.add(id);
+      const ev = graph.events.find(e => e.id === id);
+      if (ev && id !== selectedId) chain.push(ev);
+      const edges = dir === 'up' ? incomingEdges.get(id) : outgoingEdges.get(id);
+      for (const e of edges ?? []) {
+        walk(dir === 'up' ? e.sourceId : e.targetId, dir);
+      }
+    };
+    walk(selectedId, 'up');
+    chain.reverse();
+    chain.push(selectedEvent);
+    walk(selectedId, 'down');
+    events = chain;
+  }
+
   return (
     <div className="pt-4 space-y-4">
-      <div className={PANEL.fontLabel}>CAUSAL CHAIN</div>
+      <div className="flex items-center justify-between">
+        <span className={PANEL.fontLabel}>{translate(CONTENT, 'causality.chainHeader', language)}</span>
+        {chainActive && (
+          <button
+            onClick={() => onSelect(null)}
+            className={`${PANEL.fontTiny} text-muted-foreground/40 hover:text-muted-foreground transition-colors`}
+          >
+            {translate(CONTENT, 'causality.clearSelection', language)}
+          </button>
+        )}
+      </div>
 
-      {selectedId && selectedEvent ? (
+      {/* Distinct presentation vs. the patterns list below: a faint panel with a
+          left accent, and vertical connectors between events when a causal
+          chain is being traced. */}
+      <div className={`${PANEL.borderSubtle} ${PANEL.roundedInner} ${PANEL.padding} border-l-2`}>
         <div className={PANEL.gapItems}>
-          {(() => {
-            const chain: CausalityEvent[] = [];
-            const visited = new Set<string>();
-            const walk = (id: string, dir: 'up' | 'down') => {
-              if (visited.has(id)) return;
-              visited.add(id);
-              const ev = graph.events.find(e => e.id === id);
-              if (ev && id !== selectedId) chain.push(ev);
-              const edges = dir === 'up' ? incomingEdges.get(id) : outgoingEdges.get(id);
-              for (const e of edges ?? []) {
-                walk(dir === 'up' ? e.sourceId : e.targetId, dir);
-              }
-            };
-            walk(selectedId, 'up');
-            chain.reverse();
-            chain.push(selectedEvent);
-            walk(selectedId, 'down');
-
-            return chain.map(event => (
+          {events.map((event, i) => (
+            <Fragment key={event.id}>
+              {chainActive && i > 0 && (
+                <div className="flex justify-center py-0.5">
+                  <span className={`${PANEL.fontTiny} text-muted-foreground/20`}>{'↓'}</span>
+                </div>
+              )}
               <EventNode
-                key={event.id}
                 event={event}
                 selected={event.id === selectedId}
                 onSelect={() => onSelect(event.id === selectedId ? null : event.id)}
               />
-            ));
-          })()}
-
-          <button
-            onClick={() => onSelect(null)}
-            className={`${PANEL.fontTiny} text-muted-foreground/40 hover:text-muted-foreground transition-colors mt-1`}
-          >
-            {'\u2190'} Clear selection
-          </button>
-        </div>
-      ) : (
-        <div className={PANEL.gapItems}>
-          {sorted.map(event => (
-            <EventNode
-              key={event.id}
-              event={event}
-              selected={false}
-              onSelect={() => onSelect(event.id)}
-            />
+            </Fragment>
           ))}
         </div>
-      )}
+      </div>
     </div>
   );
 }

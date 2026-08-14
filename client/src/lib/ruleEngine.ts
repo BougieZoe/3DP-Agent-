@@ -3,13 +3,16 @@
  * Handles common 3D printing questions with deterministic answers
  */
 
+import { CONTENT, translate } from '@shared/i18n/content';
 import type { Material } from '@/lib/materialState';
 import { DEFAULT_MATERIAL } from '@/lib/materialState';
+import { getThresholds, type AnalysisThresholds } from '@/analysis/thresholds';
 
 export interface ModelData {
   fileName: string;
   wallThickness: {
-    minThickness: number;
+    /** null when the raycast could not produce a measurement — never a bbox estimate. */
+    minThickness: number | null;
     p1Thickness: number | null;
     p5Thickness: number | null;
     p10Thickness: number | null;
@@ -19,7 +22,6 @@ export interface ModelData {
     thinWallPercentage: number;
     thinWallRatio: number;
     averageConfidence: number;
-    lowConfidenceSampleCount: number;
     areas: number;
     status: 'good' | 'warning' | 'critical';
   };
@@ -36,8 +38,21 @@ export interface RuleResult {
   category: string;
 }
 
+// Format a wall-thickness value for display; an unmeasured (null) value is
+// reported honestly instead of substituting a fabricated number.
+function formatMinThickness(v: number | null, lang: 'en' | 'ja' | 'zh'): string {
+  if (v === null) return translate(CONTENT, 'notMeasured', lang);
+  return `${v.toFixed(2)}mm`;
+}
+
 // Quick local analysis report — no API
-export function generateQuickReport(model: ModelData, lang: 'en' | 'ja' | 'zh', material: Material = DEFAULT_MATERIAL): string {
+export function generateQuickReport(
+  model: ModelData,
+  lang: 'en' | 'ja' | 'zh',
+  material: Material = DEFAULT_MATERIAL,
+  thresholds: AnalysisThresholds = getThresholds(),
+): string {
+  const reportConfig = thresholds.report;
   const issues: string[] = [];
   const tips: string[] = [];
 
@@ -46,64 +61,58 @@ export function generateQuickReport(model: ModelData, lang: 'en' | 'ja' | 'zh', 
     : model.wallThickness.thinWallPercentage;
   const pct = ((twr ?? 0) * 100).toFixed(1);
   const conf = model.wallThickness.averageConfidence;
-  const confLabel = conf < 0.4 ? 'Low' : conf < 0.7 ? 'Moderate' : 'High';
+  const confLabel = conf < reportConfig.confidenceLowBelow
+    ? translate(CONTENT, 'report.confidence.low', lang)
+    : conf < reportConfig.confidenceModerateBelow
+      ? translate(CONTENT, 'report.confidence.moderate', lang)
+      : translate(CONTENT, 'report.confidence.high', lang);
 
   if (model.wallThickness.status === 'critical') {
-    if ((twr ?? 0) > 0.15) {
-      issues.push(lang === 'zh' ? `壁厚过薄: ${pct}% 采样区域低于FDM阈值。最小测量值: ${model.wallThickness.minThickness.toFixed(2)}mm。置信度: ${confLabel}` :
-        lang === 'ja' ? `壁厚過小: サンプルの${pct}%がFDM閾値未満。最小測定: ${model.wallThickness.minThickness.toFixed(2)}mm。信頼度: ${confLabel}` :
-        `Widespread thin walls: ${pct}% of sampled regions below FDM threshold. Minimum measured: ${model.wallThickness.minThickness.toFixed(2)}mm. Confidence: ${confLabel}`);
+    if ((twr ?? 0) > reportConfig.wallCriticalThinRatio) {
+      issues.push(translate(CONTENT, 'rule.wallCritical', lang, { pct, t: formatMinThickness(model.wallThickness.minThickness, lang), conf: confLabel }));
     } else {
-      issues.push(lang === 'zh' ? `检测到孤立薄壁异常。最小测量值: ${model.wallThickness.minThickness.toFixed(2)}mm，但仅${pct}%采样区域低于阈值。置信度: ${confLabel}` :
-        lang === 'ja' ? `孤立した薄壁異常を検出。最小測定: ${model.wallThickness.minThickness.toFixed(2)}mm、ただしサンプルの${pct}%のみが閾値未満。信頼度: ${confLabel}` :
-        `Isolated thin wall anomaly. Minimum measured: ${model.wallThickness.minThickness.toFixed(2)}mm, but only ${pct}% of sampled regions below threshold. Confidence: ${confLabel}`);
+      issues.push(translate(CONTENT, 'rule.wallCriticalIsolated', lang, { pct, t: formatMinThickness(model.wallThickness.minThickness, lang), conf: confLabel }));
     }
   } else if (model.wallThickness.status === 'warning') {
-    issues.push(lang === 'zh' ? `${pct}% 采样区域壁厚偏薄 (p5=${model.wallThickness.minThickness.toFixed(2)}mm)。建议加厚至2mm以上` :
-      lang === 'ja' ? `サンプルの${pct}%が薄い壁 (p5=${model.wallThickness.minThickness.toFixed(2)}mm)。2mm以上を推奨` :
-      `${pct}% of sampled walls are thin (p5=${model.wallThickness.minThickness.toFixed(2)}mm). Consider thickening to 2mm+`);
+    issues.push(translate(CONTENT, 'rule.wallWarning', lang, { pct, t: formatMinThickness(model.wallThickness.minThickness, lang) }));
   }
 
   if (model.overhang.status === 'warning' || model.overhang.status === 'critical') {
-    issues.push(lang === 'zh' ? `${model.overhang.areas} 个悬垂面超过${material.overhangThreshold}°，需要支撑` :
-      lang === 'ja' ? `${model.overhang.areas}面が${material.overhangThreshold}°超 — サポート必要` :
-      `${model.overhang.areas} faces exceed ${material.overhangThreshold}° — support structures required`);
+    issues.push(translate(CONTENT, 'rule.overhang', lang, { areas: model.overhang.areas, threshold: material.overhangThreshold }));
   }
 
   const maxDim = Math.max(model.dims.x, model.dims.y, model.dims.z);
-  if (maxDim < 1 || maxDim > 1000) {
-    issues.push(lang === 'zh' ? `尺寸看起来不寻常 (最长边=${maxDim.toFixed(1)}mm) —— 这个模型是用英寸建模的吗？` :
-      lang === 'ja' ? `サイズが不自然です (最大辺=${maxDim.toFixed(1)}mm) —— インチでモデリングされていませんか？` :
-      `This size looks unusual for millimeters (longest side=${maxDim.toFixed(1)}mm) — was this modeled in inches?`);
+  if (maxDim < reportConfig.sizeUnusualMinMm || maxDim > reportConfig.sizeUnusualMaxMm) {
+    issues.push(translate(CONTENT, 'rule.sizeUnusual', lang, { max: maxDim.toFixed(1) }));
   }
 
   const volume = model.volume;
-  const process = volume > 500000 ? (lang === 'zh' ? 'FDM (大型件)' : lang === 'ja' ? 'FDM（大型）' : 'FDM (large part)') :
-    volume > 50000 ? (lang === 'zh' ? 'FDM / SLA' : 'FDM / SLA') :
-    (lang === 'zh' ? 'SLA / SLS (精细件)' : lang === 'ja' ? 'SLA / SLS（精細）' : 'SLA / SLS (fine detail)');
+  const process = volume > reportConfig.processLargeVolumeMm3
+    ? translate(CONTENT, 'rule.processLarge', lang)
+    : volume > reportConfig.processMidVolumeMm3
+      ? translate(CONTENT, 'rule.processMid', lang)
+      : translate(CONTENT, 'rule.processSmall', lang);
 
   const verdict = issues.length === 0
-    ? (lang === 'zh' ? '✓ 可直接打印' : lang === 'ja' ? '✓ 印刷可能' : '✓ Print-ready')
-    : (lang === 'zh' ? '⚠ 需要修复后打印' : lang === 'ja' ? '⚠ 修正が必要' : '⚠ Needs fixes before printing');
+    ? translate(CONTENT, 'rule.verdictOk', lang)
+    : translate(CONTENT, 'rule.verdictFix', lang);
 
   const lines = [
-    `VERDICT: ${verdict}`,
+    translate(CONTENT, 'report.verdict', lang, { verdict }),
     ``,
-    lang === 'zh' ? `尺寸: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm` :
-    lang === 'ja' ? `寸法: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm` :
-    `Dims: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm`,
-    lang === 'zh' ? `推荐工艺: ${process}` : lang === 'ja' ? `推奨工法: ${process}` : `Recommended: ${process}`,
-    lang === 'zh' ? `层高建议: 0.2mm  填充率: 20%` : lang === 'ja' ? `積層ピッチ: 0.2mm  充填率: 20%` : `Layer: 0.2mm  Infill: 20%`,
+    translate(CONTENT, 'rule.dims', lang, { x: model.dims.x.toFixed(1), y: model.dims.y.toFixed(1), z: model.dims.z.toFixed(1) }),
+    translate(CONTENT, 'rule.processLabel', lang, { process }),
+    translate(CONTENT, 'rule.layer', lang),
   ];
 
   if (issues.length > 0) {
     lines.push('');
-    lines.push(lang === 'zh' ? 'ISSUES:' : lang === 'ja' ? '問題点:' : 'ISSUES:');
+    lines.push(translate(CONTENT, 'report.issues', lang));
     issues.forEach((i, idx) => lines.push(`${idx + 1}. ${i}`));
   }
   if (tips.length > 0) {
     lines.push('');
-    lines.push(lang === 'zh' ? 'TIPS:' : 'TIPS:');
+    lines.push(translate(CONTENT, 'report.tips', lang));
     tips.forEach(t => lines.push(`› ${t}`));
   }
 
@@ -136,7 +145,14 @@ export function classifyQuestion(question: string): { needsAI: boolean; category
 }
 
 // Local answers for common questions
-export function answerLocally(category: string, model: ModelData, lang: 'en' | 'ja' | 'zh', material: Material = DEFAULT_MATERIAL): string {
+export function answerLocally(
+  category: string,
+  model: ModelData,
+  lang: 'en' | 'ja' | 'zh',
+  material: Material = DEFAULT_MATERIAL,
+  thresholds: AnalysisThresholds = getThresholds(),
+): string {
+  const reportConfig = thresholds.report;
   const isZh = lang === 'zh', isJa = lang === 'ja';
 
   switch (category) {
@@ -148,8 +164,8 @@ export function answerLocally(category: string, model: ModelData, lang: 'en' | '
     }
     case 'material': {
       const v = model.volume;
-      if (v > 500000) return isZh ? '推荐 FDM — 适合大型零件，成本低，速度快。材料建议：PLA / PETG / ABS。' : isJa ? 'FDM推奨 — 大型部品に最適。材料: PLA / PETG / ABS' : 'Recommend FDM — best for large parts. Materials: PLA / PETG / ABS.';
-      if (v > 50000) return isZh ? '推荐 FDM 或 SLA，取决于精度需求。精度要求高选SLA，成本优先选FDM。' : isJa ? 'FDMまたはSLAを推奨。精度重視ならSLA。' : 'FDM or SLA depending on precision needs. High detail → SLA. Cost-first → FDM.';
+      if (v > reportConfig.processLargeVolumeMm3) return isZh ? '推荐 FDM — 适合大型零件，成本低，速度快。材料建议：PLA / PETG / ABS。' : isJa ? 'FDM推奨 — 大型部品に最適。材料: PLA / PETG / ABS' : 'Recommend FDM — best for large parts. Materials: PLA / PETG / ABS.';
+      if (v > reportConfig.processMidVolumeMm3) return isZh ? '推荐 FDM 或 SLA，取决于精度需求。精度要求高选SLA，成本优先选FDM。' : isJa ? 'FDMまたはSLAを推奨。精度重視ならSLA。' : 'FDM or SLA depending on precision needs. High detail → SLA. Cost-first → FDM.';
       return isZh ? '推荐 SLA / SLS — 适合小型精细件，表面光洁度高。' : isJa ? 'SLA / SLS推奨 — 小型精細部品に最適。' : 'Recommend SLA / SLS — ideal for small detailed parts with fine surface finish.';
     }
     case 'support': {
@@ -177,9 +193,9 @@ export function answerLocally(category: string, model: ModelData, lang: 'en' | '
         `Material cost estimate: ~$${cost} (${material.name}, volume-based). Excludes machine time, labor, post-processing.`;
     }
     case 'geometry':
-      return isZh ? `模型尺寸：${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm。最小壁厚：${model.wallThickness.minThickness.toFixed(2)}mm。悬垂面：${model.overhang.areas} 个。` :
-        isJa ? `寸法: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm。最小壁厚: ${model.wallThickness.minThickness.toFixed(2)}mm。オーバーハング: ${model.overhang.areas}面。` :
-        `Dims: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm. Min wall: ${model.wallThickness.minThickness.toFixed(2)}mm. Overhangs: ${model.overhang.areas} faces.`;
+      return isZh ? `模型尺寸：${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm。最小壁厚：${formatMinThickness(model.wallThickness.minThickness, lang)}。悬垂面：${model.overhang.areas} 个。` :
+        isJa ? `寸法: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm。最小壁厚: ${formatMinThickness(model.wallThickness.minThickness, lang)}。オーバーハング: ${model.overhang.areas}面。` :
+        `Dims: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm. Min wall: ${formatMinThickness(model.wallThickness.minThickness, lang)}. Overhangs: ${model.overhang.areas} faces.`;
     default:
       return '';
   }

@@ -147,4 +147,138 @@ describe('FailurePredictor', () => {
     expect(output.score).toBe(100);
     expect(output.verdict).toBe('pass');
   });
+
+  it('surfaces high-signal vision anomalies as risks', async () => {
+    const ctx = buildAgentContext({
+      unifiedAnalysis: buildMockUnifiedAnalysis({ metrics: normalMetrics() }),
+      visionResult: {
+        qualitativeAssessment: 'Visible crack along the base plate',
+        observedIssues: [
+          { category: 'structural_damage', description: 'Visible crack along the base plate' },
+          { category: 'other', description: 'Overall shape looks fine' },
+        ],
+        confidence: 0.85,
+        raw: '{}',
+      },
+    });
+    const output = await predictor.execute(ctx);
+    const details = output.details as Record<string, unknown>;
+    const risks = details.risks as unknown[];
+    const visionRisks = risks.filter(r => (r as Record<string, unknown>).type === 'vision_anomaly');
+    expect(visionRisks.length).toBe(1);
+    expect((visionRisks[0] as Record<string, unknown>).severity).toBe('high');
+    expect((visionRisks[0] as Record<string, unknown>).description).toContain('[Vision]');
+  });
+
+  it('ignores vision issues without high-signal keywords', async () => {
+    const ctx = buildAgentContext({
+      unifiedAnalysis: buildMockUnifiedAnalysis({ metrics: normalMetrics() }),
+      visionResult: {
+        qualitativeAssessment: 'Minor surface roughness',
+        observedIssues: [{ category: 'surface_artifact', description: 'Minor surface roughness is acceptable' }],
+        confidence: 0.9,
+        raw: '{}',
+      },
+    });
+    const output = await predictor.execute(ctx);
+    const details = output.details as Record<string, unknown>;
+    const risks = details.risks as unknown[];
+    const visionRisks = risks.filter(r => (r as Record<string, unknown>).type === 'vision_anomaly');
+    expect(visionRisks.length).toBe(0);
+  });
+
+  it('ignores low-confidence vision results', async () => {
+    const ctx = buildAgentContext({
+      unifiedAnalysis: buildMockUnifiedAnalysis({ metrics: normalMetrics() }),
+      visionResult: {
+        qualitativeAssessment: 'Broken part',
+        observedIssues: [{ category: 'structural_damage', description: 'Broken part visible' }],
+        confidence: 0.2,
+        raw: '{}',
+      },
+    });
+    const output = await predictor.execute(ctx);
+    const details = output.details as Record<string, unknown>;
+    const risks = details.risks as unknown[];
+    const visionRisks = risks.filter(r => (r as Record<string, unknown>).type === 'vision_anomaly');
+    expect(visionRisks.length).toBe(0);
+  });
+
+  it('creates a distinct vision risk for every high-signal observation', async () => {
+    const ctx = buildAgentContext({
+      unifiedAnalysis: buildMockUnifiedAnalysis({ metrics: normalMetrics() }),
+      visionResult: {
+        qualitativeAssessment: 'Crack and missing feature are visible',
+        observedIssues: [
+          { category: 'structural_damage', description: 'Crack along the base' },
+          { category: 'missing_feature', description: 'Missing mounting hole' },
+          { category: 'other', description: 'Surface looks clean' },
+        ],
+        confidence: 0.6,
+        raw: '{}',
+      },
+    });
+
+    const output = await predictor.execute(ctx);
+    const risks = (output.details as Record<string, unknown>).risks as Array<Record<string, unknown>>;
+    const visionRisks = risks.filter(risk => risk.type === 'vision_anomaly');
+
+    expect(visionRisks).toHaveLength(2);
+    expect(visionRisks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        severity: 'medium',
+        confidence: 0.6,
+        description: '[Vision] Crack along the base',
+        affectedFaces: 0,
+      }),
+      expect.objectContaining({
+        severity: 'medium',
+        confidence: 0.6,
+        description: '[Vision] Missing mounting hole',
+        affectedFaces: 0,
+      }),
+    ]));
+  });
+
+  it('accepts vision confidence at the 0.4 threshold and keeps it high severity', async () => {
+    const ctx = buildAgentContext({
+      unifiedAnalysis: buildMockUnifiedAnalysis({ metrics: normalMetrics() }),
+      visionResult: {
+        qualitativeAssessment: 'Warped edge visible',
+        observedIssues: [{ category: 'deformation', description: 'Warped edge visible' }],
+        confidence: 0.4,
+        raw: '{}',
+      },
+    });
+
+    const output = await predictor.execute(ctx);
+    const risks = (output.details as Record<string, unknown>).risks as Array<Record<string, unknown>>;
+    const visionRisks = risks.filter(risk => risk.type === 'vision_anomaly');
+
+    expect(visionRisks).toHaveLength(1);
+    expect(visionRisks[0]).toMatchObject({
+      severity: 'medium',
+      confidence: 0.4,
+      description: '[Vision] Warped edge visible',
+    });
+    expect(output.verdict).toBe('pass');
+  });
+
+  it('uses structured categories for Japanese vision anomalies', async () => {
+    const ctx = buildAgentContext({
+      unifiedAnalysis: buildMockUnifiedAnalysis({ metrics: normalMetrics() }),
+      visionResult: {
+        qualitativeAssessment: '底面に亀裂が見えます',
+        observedIssues: [{ category: 'structural_damage', description: '底面に亀裂が見えます' }],
+        confidence: 0.8,
+        raw: '{}',
+      },
+    });
+
+    const output = await predictor.execute(ctx);
+    const risks = (output.details as Record<string, unknown>).risks as Array<Record<string, unknown>>;
+    expect(risks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'vision_anomaly', severity: 'high', description: '[Vision] 底面に亀裂が見えます' }),
+    ]));
+  });
 });

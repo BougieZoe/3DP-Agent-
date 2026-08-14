@@ -7,15 +7,26 @@ import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
 import { CADWorkspace } from '@/components/CADWorkspace';
+import { MeshStudio } from '@/components/MeshStudio';
 import { ChatPanel } from '@/components/ChatPanel';
 import { APIKeyModal } from '@/components/APIKeyModal';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 import { fromThreeBufferGeometry, runAnalysisPipeline } from '@/analysis';
+import { normalizeModelGeometry, fitCameraToGeometry } from '@/lib/modelNormalization';
+import { createMeshFromGeometry } from '@/lib/stlLoader';
+import { parseSTL } from '@/lib/stlParser';
+import { processMesh } from '@/lib/meshProcessClient';
+import { geometryToStl } from '@/lib/meshOps';
+import { geometryToThreeMf } from '@/lib/threeMf';
+import { LENGTH_UNIT_TO_MM, type LengthUnit } from '@shared/domain/geometry';
+import { CONTENT, translate, SUPPORTED_LANGUAGES } from '@shared/i18n/content';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
+import { isWallConfidenceTrusted } from '@/lib/lowConfidence';
 import { Language, getTranslation } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
-import { AgentOrchestrator, AgentRunSummary, getAgentLabel, getAgentDescription } from '@/agents';
+import { AgentOrchestrator, AgentRunSummary, getAgentLabel, getAgentDescription, runDeepAnalysis } from '@/agents';
+import type { AgentId } from '@shared/domain/agent';
 import { OverhangHeatmap } from '@/components/3D/OverhangHeatmap';
 import { SupportGhosts } from '@/components/3D/SupportGhosts';
 import { RiskAnimation } from '@/components/3D/RiskAnimation';
@@ -25,6 +36,7 @@ import { PrintPathPreview } from '@/components/3D/PrintPathPreview';
 import { LayerReveal } from '@/components/3D/LayerReveal';
 import { FailureEmergence } from '@/components/3D/FailureEmergence';
 import { ThermalField } from '@/components/3D/ThermalField';
+import { WallThicknessHeatmap } from '@/components/3D/WallThicknessHeatmap';
 import { CausalityHighlight } from '@/components/3D/CausalityHighlight';
 import { deriveSupportStatus } from '@/analysis/metrics';
 import { buildCausalityGraph, CausalityGraph } from '@/components/causality/causalityEngine';
@@ -37,7 +49,22 @@ import { GeometrySuggestionPanel } from '@/components/causality/GeometrySuggesti
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
 import { CognitiveScan } from '@/components/3D/CognitiveScan';
 import { AttentionPulse } from '@/components/3D/AttentionPulse';
+import { ViewfinderCorners } from '@/components/decorative/ViewfinderCorners';
+import { ScanlineSweep } from '@/components/decorative/ScanlineSweep';
+import { BedStatusTicker } from '@/components/decorative/BedStatusTicker';
+import { LayerHeightLabel } from '@/components/decorative/LayerHeightLabel';
+import { FeaturesSection } from '@/pages/home/FeaturesSection';
+import type { FeatureDestination } from '@/pages/home/featuresNavigation';
 import { toast } from 'sonner';
+
+function downloadBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function unifiedToModelData(
   unifiedAnalysis: import('@/analysis').UnifiedAnalysis,
@@ -60,7 +87,7 @@ function unifiedToModelData(
   return {
     fileName,
     wallThickness: {
-      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
+      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall,
       p1Thickness: metrics?.p1WallThicknessMm ?? null,
       p5Thickness: metrics?.p5WallThicknessMm ?? null,
       p10Thickness: metrics?.p10WallThicknessMm ?? null,
@@ -70,7 +97,6 @@ function unifiedToModelData(
       thinWallPercentage: metrics?.thinWallPercentage ?? 0,
       thinWallRatio: metrics?.thinWallRatio ?? 0,
       averageConfidence: metrics?.averageConfidence ?? 0,
-      lowConfidenceSampleCount: metrics?.lowConfidenceSampleCount ?? 0,
       areas: wtAreas,
       status: wtStatus,
     },
@@ -97,7 +123,7 @@ function unifiedToAnalysisSummary(unifiedAnalysis: import('@/analysis').UnifiedA
 
   return {
     wallThickness: {
-      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall ?? Math.min(dims.x, dims.y, dims.z) * 0.5,
+      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall,
       p1Thickness: metrics?.p1WallThicknessMm ?? null,
       p5Thickness: metrics?.p5WallThicknessMm ?? null,
       p10Thickness: metrics?.p10WallThicknessMm ?? null,
@@ -107,7 +133,6 @@ function unifiedToAnalysisSummary(unifiedAnalysis: import('@/analysis').UnifiedA
       thinWallPercentage: metrics?.thinWallPercentage ?? 0,
       thinWallRatio: metrics?.thinWallRatio ?? 0,
       averageConfidence: metrics?.averageConfidence ?? 0,
-      lowConfidenceSampleCount: metrics?.lowConfidenceSampleCount ?? 0,
       status: deriveWtStatus(thinWallRatio, p5Thickness),
     },
     overhang: {
@@ -163,29 +188,6 @@ function FloatingParticles() {
 }
 
 function ModelDisplay({ model }: { model: UploadedModel | null }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const { camera } = useThree();
-  const autoRotate = useRef(true);
-
-  useEffect(() => {
-    if (!model?.geometry?.boundingBox) return;
-    const box = model.geometry.boundingBox;
-    const size = new THREE.Vector3(); box.getSize(size);
-    const center = new THREE.Vector3(); box.getCenter(center);
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const dist = maxDim * 2.5;
-    camera.position.set(dist * 0.7, dist * 0.5, dist);
-    camera.lookAt(center);
-    autoRotate.current = false;
-    setTimeout(() => { autoRotate.current = true; }, 100);
-  }, [model, camera]);
-
-  useFrame(({ clock }) => {
-    if (meshRef.current && autoRotate.current) {
-      meshRef.current.rotation.y = clock.getElapsedTime() * 0.25;
-    }
-  });
-
   if (!model) {
     return (
       <group>
@@ -206,7 +208,7 @@ function ModelDisplay({ model }: { model: UploadedModel | null }) {
     specular: new THREE.Color(0x00ffcc),
   });
 
-  return <mesh ref={meshRef} geometry={model.geometry} material={mat} />;
+  return <mesh geometry={model.geometry} material={mat} />;
 }
 
 function SceneContent({ model }: { model: UploadedModel | null }) {
@@ -223,6 +225,30 @@ function SceneContent({ model }: { model: UploadedModel | null }) {
         fadeDistance={28} fadeStrength={1} position={[0, -7, 0]} />
     </>
   );
+}
+
+/**
+ * Auto-fits the camera + OrbitControls target to the current model whenever
+ * its geometry changes (model load OR unit change). Recomputes the bounding
+ * box / sphere defensively so a stale bbox can never leave the model
+ * off-center or out of frame.
+ */
+function ViewportCameraFit({ geometry, controlsRef }: {
+  geometry: THREE.BufferGeometry | null;
+  controlsRef: { current: { target: THREE.Vector3; update: () => void } | null };
+}) {
+  const { camera } = useThree();
+
+  useEffect(() => {
+    if (!geometry) return;
+    // Defer one frame so the mesh is mounted and the controls exist.
+    const raf = requestAnimationFrame(() => {
+      fitCameraToGeometry(camera, controlsRef.current, geometry);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [geometry, camera, controlsRef]);
+
+  return null;
 }
 
 // ─── Metric Row ────────────────────────────────────────────────────────────────
@@ -253,7 +279,7 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
 
 export default function Home() {
   const { material, materialName, setMaterialName } = useMaterial();
-  const [mode, setMode] = useState<'analyze' | 'cad'>('analyze');
+  const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
   const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality'>('geometry');
@@ -261,7 +287,11 @@ export default function Home() {
   const [quickReport, setQuickReport] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
   const [agentRun, setAgentRun] = useState<AgentRunSummary | null>(null);
+  const [deepAgentRun, setDeepAgentRun] = useState<AgentRunSummary | null>(null);
   const [agentLoading, setAgentLoading] = useState(false);
+  const [deepAnalysisLoading, setDeepAnalysisLoading] = useState(false);
+  const [deepSteps, setDeepSteps] = useState<Array<{ index: number; label: string; raw: string }>>([]);
+  const [deepError, setDeepError] = useState<string | null>(null);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showGhosts, setShowGhosts] = useState(false);
   const [showRisks, setShowRisks] = useState(false);
@@ -269,24 +299,33 @@ export default function Home() {
   const [showLayerReveal, setShowLayerReveal] = useState(false);
   const [showFailure, setShowFailure] = useState(false);
   const [showThermal, setShowThermal] = useState(false);
+  const [showWallThickness, setShowWallThickness] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
   const [overlayOpacity, setOverlayOpacity] = useState(0.7);
   const [materialLoading, setMaterialLoading] = useState(false);
   const materialRequestSeq = useRef(0);
+  const [units, setUnits] = useState<LengthUnit>('mm');
+  const unitRequestSeq = useRef(0);
+  // Shared ref into the drei OrbitControls instance (has .target/.update()).
+  const controlsRef = useRef<any>(null);
   const orchestratorRef = useRef<AgentOrchestrator | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const deepAnalysisSeq = useRef(0);
 
   if (!orchestratorRef.current) {
     orchestratorRef.current = new AgentOrchestrator();
   }
 
   const handleModelLoaded = (model: UploadedModel) => {
+    setUnits(model.units);
     setUploadedModel(model);
     setTab('geometry');
     setQuickReport('');
     setAgentRun(null);
+    deepAnalysisSeq.current += 1;
+    setDeepAgentRun(null);
     setShowHeatmap(false);
     setShowGhosts(false);
     setShowRisks(false);
@@ -294,6 +333,7 @@ export default function Home() {
     setShowLayerReveal(false);
     setShowFailure(false);
     setShowThermal(false);
+    setShowWallThickness(false);
     setSelectedEventId(null);
     setSelectedPatternId(null);
     setSelectedSuggestionId(null);
@@ -306,19 +346,56 @@ export default function Home() {
     if (!orchestratorRef.current) return;
     setAgentLoading(true);
     try {
-      const summary = await orchestratorRef.current.runFullAnalysis(
+      // 1) Deterministic rule engine first — instant, free, always available.
+      const ruleSummary = await orchestratorRef.current.runFullAnalysis(
         model.geometry,
         model.unifiedAnalysis,
         model.fileName,
-        undefined,
+        canvasRef.current,
         language,
         mat,
       );
-      setAgentRun(summary);
+      setAgentRun(ruleSummary);
+
     } catch (err) {
-      console.error('Agent analysis failed:', err);
+      console.error('Rule analysis failed:', err);
     } finally {
       setAgentLoading(false);
+    }
+  };
+
+  // The LLM is a user-requested second opinion. It is intentionally kept
+  // separate from deterministic mesh results and can never overwrite them.
+  const DEEP_STEP_AGENTS: AgentId[] = ['geometry_analyst', 'failure_predictor', 'optimization_advisor', 'printability_scorer'];
+
+  const runDeepAnalysisIfConfigured = async (model: UploadedModel, mat: Material) => {
+    const seq = ++deepAnalysisSeq.current;
+    setDeepAnalysisLoading(true);
+    setDeepAgentRun(null);
+    setDeepSteps([]);
+    setDeepError(null);
+    const md = unifiedToModelData(model.unifiedAnalysis, model.fileName, mat.overhangThreshold);
+    try {
+      const result = await runDeepAnalysis(md, language, (step, index) => {
+        if (seq !== deepAnalysisSeq.current) return;
+        const agentId = DEEP_STEP_AGENTS[index];
+        setDeepSteps((prev) => [...prev, {
+          index,
+          label: agentId ? getAgentLabel(agentId, language as 'en' | 'ja' | 'zh') : t('deepAnalysis'),
+          raw: step.raw,
+        }]);
+      }, mat);
+      if (seq !== deepAnalysisSeq.current) return;
+      if (result) {
+        setDeepAgentRun(result);
+      } else {
+        setDeepError(t('deepAnalysisError'));
+      }
+    } catch (err) {
+      console.error('Deep LLM analysis failed:', err);
+      if (seq === deepAnalysisSeq.current) setDeepError(t('deepAnalysisError'));
+    } finally {
+      if (seq === deepAnalysisSeq.current) setDeepAnalysisLoading(false);
     }
   };
 
@@ -333,6 +410,8 @@ export default function Home() {
     setMaterialLoading(true);
     setQuickReport('');
     setAgentRun(null);
+    deepAnalysisSeq.current += 1;
+    setDeepAgentRun(null);
 
     const model = fromThreeBufferGeometry(uploadedModel.geometry);
     const newUnified = runAnalysisPipeline(model, { fileName: uploadedModel.fileName, material: newMat });
@@ -344,7 +423,7 @@ export default function Home() {
 
     if (currentSeq !== materialRequestSeq.current || !orchestratorRef.current) return;
     const summary = await orchestratorRef.current.runFullAnalysis(
-      updatedModel.geometry, newUnified, updatedModel.fileName, undefined, language, newMat,
+      updatedModel.geometry, newUnified, updatedModel.fileName, canvasRef.current, language, newMat,
     );
 
     if (currentSeq !== materialRequestSeq.current) return;
@@ -354,6 +433,46 @@ export default function Home() {
     setQuickReport(generateQuickReport(md, language, newMat));
     setMaterialLoading(false);
   }, [uploadedModel, language, setMaterialName]);
+
+  const handleUnitsChange = useCallback(async (newUnits: LengthUnit) => {
+    setUnits(newUnits);
+    if (!uploadedModel?.rawGeometry) return;
+
+    unitRequestSeq.current += 1;
+    const currentSeq = unitRequestSeq.current;
+
+    setAgentRun(null);
+    setQuickReport('');
+    deepAnalysisSeq.current += 1;
+    setDeepAgentRun(null);
+
+    // Re-process the ORIGINAL raw geometry (no stacked scales), re-center on
+    // the build plate, recompute bounds, then re-run the analysis pipeline.
+    const { geometry } = normalizeModelGeometry(uploadedModel.rawGeometry, newUnits);
+    const geometryModel = fromThreeBufferGeometry(geometry);
+    const newUnified = runAnalysisPipeline(geometryModel, { fileName: uploadedModel.fileName, material });
+
+    if (currentSeq !== unitRequestSeq.current) return;
+
+    const mesh = createMeshFromGeometry(geometry);
+    const updatedModel: UploadedModel = { ...uploadedModel, geometry, mesh, unifiedAnalysis: newUnified, units: newUnits };
+    setUploadedModel(updatedModel);
+
+    if (currentSeq !== unitRequestSeq.current || !orchestratorRef.current) return;
+    try {
+      const summary = await orchestratorRef.current.runFullAnalysis(
+        updatedModel.geometry, newUnified, updatedModel.fileName, canvasRef.current, language, material,
+      );
+      if (currentSeq !== unitRequestSeq.current) return;
+      setAgentRun(summary);
+    } catch (err) {
+      console.error('Agent analysis failed:', err);
+    }
+
+    if (currentSeq !== unitRequestSeq.current) return;
+    const md = unifiedToModelData(newUnified, updatedModel.fileName, material.overhangThreshold);
+    setQuickReport(generateQuickReport(md, language, material));
+  }, [uploadedModel, material, language]);
 
   const getModelData = (): ModelData | null => {
     if (!uploadedModel) return null;
@@ -370,26 +489,119 @@ export default function Home() {
     }, 600);
   };
 
+  // Repair & process the uploaded mesh via the shared /api/mesh/process endpoint
+  // (diagnostics, best-effort watertight repair, place on plate), then re-run
+  // the analysis so the report reflects the processed model.
+  const [repairing, setRepairing] = useState(false);
+  const handleRepairProcess = useCallback(async () => {
+    if (!uploadedModel) return;
+    setRepairing(true);
+    try {
+      const result = await processMesh(geometryToStl(uploadedModel.geometry), {});
+      const processed = parseSTL(result.stlBytes);
+      processed.computeVertexNormals();
+      processed.computeBoundingBox();
+      const newUnified = runAnalysisPipeline(fromThreeBufferGeometry(processed), {
+        fileName: uploadedModel.fileName,
+        material,
+      });
+      setUploadedModel({
+        ...uploadedModel,
+        geometry: processed,
+        mesh: createMeshFromGeometry(processed),
+        unifiedAnalysis: newUnified,
+        rawGeometry: processed.clone(),
+      });
+deepAnalysisSeq.current += 1;
+    setDeepAgentRun(null);
+    setDeepSteps([]);
+    setDeepError(null);
+      const d = result.diagnostics;
+      toast.success(
+        d.repaired
+          ? `repaired to watertight · ${d.bodyCount ?? 1} bodies`
+          : d.watertight
+            ? `mesh OK · ${d.bodyCount ?? 1} bodies`
+            : 'processed · repair unavailable',
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRepairing(false);
+    }
+  }, [uploadedModel, material]);
+
+  const handleDownloadStl = () => {
+    if (!uploadedModel) return;
+    downloadBlob(
+      `${uploadedModel.fileName.replace(/\.stl$/i, '')}_processed.stl`,
+      new Blob([geometryToStl(uploadedModel.geometry)], { type: 'model/stl' }),
+    );
+  };
+  const handleDownload3mf = () => {
+    if (!uploadedModel) return;
+    downloadBlob(
+      `${uploadedModel.fileName.replace(/\.stl$/i, '')}_processed.3mf`,
+      new Blob([geometryToThreeMf(uploadedModel.geometry)], {
+        type: 'application/vnd.ms-package.3dmanufacturing-3dmodel',
+      }),
+    );
+  };
+
+  // Feature-section navigation. Destinations come from FEATURE_DESTINATIONS
+  // (FeaturesSection); this handler resolves them against current state.
+  const handleFeatureNavigate = useCallback((dest: FeatureDestination) => {
+    if (dest.needsModel && !uploadedModel) {
+      // No model loaded — tactile feedback only, no navigation.
+      return;
+    }
+    if (dest.requiresKey && !hasAnyKey()) {
+      setShowAPIModal(true);
+      return;
+    }
+    if (dest.tab) setTab(dest.tab);
+  }, [uploadedModel]);
+
+  // Re-generate the rule-based quick report in the current language whenever the
+  // language switches (instant, client-side). LLM-generated prose (agent run,
+  // chat) stays in the language it was generated in.
+  useEffect(() => {
+    if (!uploadedModel || !quickReport) return;
+    const md = getModelData();
+    if (md) setQuickReport(generateQuickReport(md, language, material));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
+
   const unifiedAnalysis = uploadedModel?.unifiedAnalysis;
   const analysis = unifiedAnalysis ? unifiedToAnalysisSummary(unifiedAnalysis) : null;
+  const topo = unifiedAnalysis?.topology.result;
+  const valid = unifiedAnalysis?.validation.result;
   const modelData = getModelData();
   const providerLabel = getActiveProvider() ? AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel : null;
   const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
+  // Metric display in the selected unit (analysis is always computed in mm).
+  const mmPerUnit = LENGTH_UNIT_TO_MM[units];
+  const unitSuffix = units === 'inch' ? 'in' : units;
+  const volumeUnit = `${unitSuffix}³`; // cubic — volume is length³ (cm³ / in³)
+  const areaUnit = `${unitSuffix}²`;   // square — area is length² (cm² / in²)
+  const toUnit = (mm: number) => mm / mmPerUnit;
+  const toUnit2 = (mm2: number) => mm2 / (mmPerUnit ** 2);
+  const toUnit3 = (mm3: number) => mm3 / (mmPerUnit ** 3);
   const agentMarkers = agentRun?.results.flatMap(r => r.markers ?? []) ?? [];
   const supportDecision = unifiedAnalysis?.support?.result
     ? deriveSupportStatus(unifiedAnalysis.support.result)
     : null;
   const causalityGraph = useMemo(() => agentMarkers.length > 0
-    ? buildCausalityGraph(agentMarkers, supportDecision?.status)
-    : null, [agentMarkers, supportDecision?.status]);
+    ? buildCausalityGraph(agentMarkers, supportDecision?.status, language)
+    : null, [agentMarkers, supportDecision?.status, language]);
   const patternMatches: PatternMatch[] = useMemo(() =>
-    agentMarkers.length > 0 ? detectPatterns(agentMarkers) : [],
-    [agentMarkers],
+    agentMarkers.length > 0 ? detectPatterns(agentMarkers, language) : [],
+    [agentMarkers, language],
   );
 
   const counterfactualSuggestions: GeometrySuggestion[] = useMemo(() =>
-    agentMarkers.length > 0 ? evaluateCounterfactuals(agentMarkers, patternMatches) : [],
-    [agentMarkers, patternMatches],
+    agentMarkers.length > 0 ? evaluateCounterfactuals(agentMarkers, patternMatches, language) : [],
+    [agentMarkers, patternMatches, language],
   );
 
   const selectedSuggestionPositions = useMemo(() => {
@@ -431,17 +643,16 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
           <span className="text-sm font-mono text-primary tracking-widest">3DP AGENT</span>
-          <span className="text-xs text-muted-foreground/50 hidden sm:block">v2.0 // {mode === 'analyze' ? 'STL Analysis' : 'CAD Studio'}</span>
         </div>
         <div className="flex items-center gap-2">
           {/* Mode toggle */}
           <div className="flex items-center gap-1">
-            {(['analyze', 'cad'] as const).map(m => (
+            {(['analyze', 'cad', 'mesh'] as const).map(m => (
               <button key={m} onClick={() => setMode(m)}
                 className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${
                   mode === m ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-primary'
                 }`}>
-                {m === 'analyze' ? 'ANALYZE' : 'CAD STUDIO'}
+                {m === 'analyze' ? 'ANALYZE' : m === 'cad' ? 'CAD' : 'MESH'}
               </button>
             ))}
           </div>
@@ -457,7 +668,7 @@ export default function Home() {
           </select>
           {/* Language */}
           <div className="flex items-center gap-0.5">
-            {(['en', 'ja', 'zh'] as Language[]).map(lang => (
+            {SUPPORTED_LANGUAGES.map(lang => (
               <button key={lang} onClick={() => setLanguage(lang)}
                 className={`text-xs font-mono px-2 py-1 rounded-sm transition-all ${
                   language === lang ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-primary'
@@ -479,7 +690,7 @@ export default function Home() {
       </header>
 
       {/* ── Main ── */}
-      {mode === 'cad' ? <CADWorkspace language={language} /> : <div className="pt-14 flex flex-col lg:flex-row min-h-screen">
+      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-14 flex flex-col lg:flex-row min-h-screen">
 
         {/* Left: 3D Viewport */}
         <div className="lg:w-1/2 h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
@@ -487,9 +698,14 @@ export default function Home() {
             <div>// {t('viewport')}</div>
             <div>// {t('viewportHint')}</div>
           </div>
-          <Canvas gl={{ antialias: true, alpha: true }} style={{ background: 'transparent' }}>
+          <Canvas
+            gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
+            style={{ background: 'transparent' }}
+            onCreated={(state) => { canvasRef.current = state.gl.domElement; }}
+          >
             <PerspectiveCamera makeDefault position={[0, 3, 10]} fov={60} />
             <SceneContent model={uploadedModel} />
+            <ViewportCameraFit geometry={uploadedModel?.geometry ?? null} controlsRef={controlsRef} />
             <PlaybackUpdater />
             {uploadedModel?.geometry && <CognitiveScan geometry={uploadedModel.geometry} visible />}
             {uploadedModel?.geometry && agentMarkers.length > 0 && (
@@ -516,6 +732,14 @@ export default function Home() {
             {uploadedModel?.geometry && showThermal && (
               <ThermalField markers={agentMarkers} geometry={uploadedModel.geometry} visible />
             )}
+            {uploadedModel?.geometry && showWallThickness && (
+              <WallThicknessHeatmap
+                geometry={uploadedModel.geometry}
+                samples={unifiedAnalysis?.metrics.result?.wallThicknessSamples ?? null}
+                visible
+                opacity={overlayOpacity}
+              />
+            )}
             {(selectedEventPositions.length > 0 || selectedPatternPositions.length > 0 || selectedSuggestionPositions.length > 0) && (
               <CausalityHighlight
                 positions={
@@ -526,11 +750,11 @@ export default function Home() {
                 visible
               />
             )}
-            <OrbitControls enablePan={false} autoRotate={!uploadedModel} autoRotateSpeed={0.4} />
+            <OrbitControls ref={controlsRef} enablePan={false} autoRotate={!uploadedModel} autoRotateSpeed={0.4} />
           </Canvas>
           {uploadedModel && (
             <div className="hidden lg:block">
-              <ManufacturingTimeline graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} />
+              <ManufacturingTimeline graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} language={language} />
             </div>
           )}
           {uploadedModel && (
@@ -547,6 +771,7 @@ export default function Home() {
               showLayerReveal={showLayerReveal}
               showFailure={showFailure}
               showThermal={showThermal}
+              showWallThickness={showWallThickness}
               overlayOpacity={overlayOpacity}
               onToggleHeatmap={() => setShowHeatmap(v => !v)}
               onToggleGhosts={() => setShowGhosts(v => !v)}
@@ -555,7 +780,9 @@ export default function Home() {
               onToggleLayerReveal={() => setShowLayerReveal(v => !v)}
               onToggleFailure={() => setShowFailure(v => !v)}
               onToggleThermal={() => setShowThermal(v => !v)}
+              onToggleWallThickness={() => setShowWallThickness(v => !v)}
               onOpacityChange={setOverlayOpacity}
+              t={t}
             />
           )}
         </div>
@@ -567,7 +794,20 @@ export default function Home() {
             {/* Upload */}
             <div>
               <div className="text-xs text-muted-foreground/50 mb-2 font-mono tracking-widest">// {t('input')}</div>
-              <STLUploadHandler onModelLoaded={handleModelLoaded} onError={e => toast.error(e)} language={language} />
+              <div className="relative">
+                <STLUploadHandler
+                  onModelLoaded={handleModelLoaded}
+                  onError={e => toast.error(e)}
+                  language={language}
+                  units={units}
+                  onUnitsChange={handleUnitsChange}
+                />
+                {/* Decorative presentation-only touches — remove any one freely */}
+                <ViewfinderCorners />
+                <ScanlineSweep />
+                <BedStatusTicker />
+                <LayerHeightLabel />
+              </div>
             </div>
 
             {/* Analysis tabs */}
@@ -582,8 +822,8 @@ export default function Home() {
                       }`}>
                       {tabKey === 'geometry' ? t('geometry').toUpperCase()
                         : tabKey === 'report' ? t('report').toUpperCase()
-                        : tabKey === 'agents' ? 'AGENTS'
-                        : tabKey === 'causality' ? 'CAUSALITY'
+                        : tabKey === 'agents' ? t('agents').toUpperCase()
+                        : tabKey === 'causality' ? t('causality').toUpperCase()
                         : t('chatAI').toUpperCase()}
                     </button>
                   ))}
@@ -606,24 +846,62 @@ export default function Home() {
                         <div className="text-xs text-muted-foreground mb-2 font-mono">{t('overhangLabel')}</div>
                         <StatusChip status={analysis.overhang.status} label={t(analysis.overhang.status)} />
                       </div>
+                      <div className="p-3 border border-border rounded-sm bg-card">
+                        <div className="text-xs text-muted-foreground mb-2 font-mono">{t('cadManifold')}</div>
+                        <StatusChip status={topo?.isManifold ? 'good' : 'critical'} label={topo ? (topo.isManifold ? '✓' : '✗') : '—'} />
+                      </div>
+                      <div className="p-3 border border-border rounded-sm bg-card">
+                        <div className="text-xs text-muted-foreground mb-2 font-mono">{t('cadWatertight')}</div>
+                        <StatusChip status={valid?.isWatertight ? 'good' : 'critical'} label={valid ? (valid.isWatertight ? '✓' : '✗') : '—'} />
+                      </div>
                     </div>
                     <div className="border border-border rounded-sm bg-card p-4">
-                      <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">GEOMETRY DATA</div>
-                      <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness.toFixed(3)} unit="mm" highlight />
+                      <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">{t('geometryDataLabel')}</div>
+                      <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness != null ? toUnit(analysis.wallThickness.minThickness).toFixed(3) : '—'} unit={unitSuffix} highlight />
                       {unifiedAnalysis?.metrics.result?.minWallThicknessMm != null && (
-                        <MetricRow label="Min (abs)" value={unifiedAnalysis.metrics.result.minWallThicknessMm.toFixed(3)} unit="mm" />
+                        <MetricRow label="Min (abs)" value={toUnit(unifiedAnalysis.metrics.result.minWallThicknessMm).toFixed(3)} unit={unitSuffix} />
                       )}
-                      <MetricRow label={t('volume')} value={analysis.volume.toFixed(1)} unit="mm³" />
-                      <MetricRow label={t('surfaceArea')} value={analysis.surfaceArea.toFixed(1)} unit="mm²" />
-                      <MetricRow label={t('dimX')} value={modelData.dims.x.toFixed(2)} unit="mm" />
-                      <MetricRow label={t('dimY')} value={modelData.dims.y.toFixed(2)} unit="mm" />
-                      <MetricRow label={t('dimZ')} value={modelData.dims.z.toFixed(2)} unit="mm" />
+                      <MetricRow label={t('volume')} value={toUnit3(analysis.volume).toFixed(1)} unit={volumeUnit} />
+                      <MetricRow label={t('surfaceArea')} value={toUnit2(analysis.surfaceArea).toFixed(1)} unit={areaUnit} />
+                      <MetricRow label={t('dimX')} value={toUnit(modelData.dims.x).toFixed(2)} unit={unitSuffix} />
+                      <MetricRow label={t('dimY')} value={toUnit(modelData.dims.y).toFixed(2)} unit={unitSuffix} />
+                      <MetricRow label={t('dimZ')} value={toUnit(modelData.dims.z).toFixed(2)} unit={unitSuffix} />
                       <MetricRow label={t('overhangFaces')} value={analysis.overhang.areas} />
+                      {topo && (
+                        <>
+                          <MetricRow label={t('cadTri')} value={topo.triangleCount} />
+                          <MetricRow label={t('cadVerts')} value={topo.vertexCount} />
+                          <MetricRow label={t('cadShells')} value={topo.shellCount} />
+                          <MetricRow label={t('cadBoundaryEdges')} value={topo.boundaryEdgeCount} />
+                          <MetricRow label={t('cadNonManifoldEdges')} value={topo.nonManifoldEdgeCount} />
+                        </>
+                      )}
+                      {valid && (
+                        <>
+                          <MetricRow label={t('cadHoles')} value={valid.holeCount} />
+                          <MetricRow label={t('cadNormalOrientation')} value={valid.normalOrientation} />
+                          <MetricRow label={t('cadFlippedFaces')} value={valid.flippedNormalFaceCount} />
+                        </>
+                      )}
                     </div>
                     <button onClick={() => setTab('report')}
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
                       {t('generateReport')}
                     </button>
+                    <button onClick={handleRepairProcess} disabled={repairing}
+                      className="w-full py-2.5 text-xs font-mono border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all disabled:opacity-50">
+                      {repairing ? '▋ ' + t('analyze') : t('analyzeRepair')}
+                    </button>
+                    <div className="flex items-stretch gap-2">
+                      <button onClick={handleDownloadStl} title={t('cadDownloadStl')}
+                        className="flex-1 h-9 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm text-xs font-mono transition-all">
+                        STL
+                      </button>
+                      <button onClick={handleDownload3mf} title={t('meshDownload3mf')}
+                        className="flex-1 h-9 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm text-xs font-mono transition-all">
+                        3MF
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -647,6 +925,11 @@ export default function Home() {
                           <span className="text-xs font-mono text-primary tracking-widest">{t('analysisReport')}</span>
                           <span className="text-xs font-mono text-muted-foreground/40">{t('localEngine')}</span>
                         </div>
+                        {unifiedAnalysis && !isWallConfidenceTrusted(unifiedAnalysis.metrics.confidence) && (
+                          <div className="mb-3 border border-amber-500/40 bg-amber-500/5 text-amber-400/90 rounded-sm px-3 py-2 text-xs font-mono">
+                            {t('lowConfidenceBanner')}
+                          </div>
+                        )}
                         <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap leading-relaxed">
                           {quickReport}
                         </pre>
@@ -658,6 +941,7 @@ export default function Home() {
   <ReportGenerator
     analysis={unifiedAnalysis}
     fileName={uploadedModel?.fileName ?? "model.stl"}
+    language={language}
   />
 )}
                       </div>
@@ -709,8 +993,12 @@ export default function Home() {
                             {agentRun.consensus.verdict}
                           </div>
                           <div className="mt-2 text-xs text-muted-foreground/50">
-                            {agentRun.usedVision && <span className="text-primary">Vision-enhanced</span>}
-                            {agentRun.usedVision ? ' \u2022 ' : ''}
+                            {agentRun.analysisSource === 'llm' ? (
+                              <span className="text-cyan-400">Deep Agent \u2022 LLM</span>
+                            ) : (
+                              <><span className="text-primary">Deterministic Engine</span>{' \u2022 '}</>
+                            )}
+                            {agentRun.usedVision && <><span className="text-primary">Vision</span>{' \u2022 '}</>}
                             {agentRun.consensus.agreementDelta < 10 ? 'Strong agreement' : 'Moderate agreement'}
                             {' \u2022 '}{agentRun.totalDurationMs}ms
                           </div>
@@ -721,8 +1009,8 @@ export default function Home() {
                           <div key={result.agentId} className="border border-border rounded-sm bg-card p-4">
                             <div className="flex items-center justify-between mb-2">
                               <div>
-                                <span className="text-xs font-mono text-primary">{getAgentLabel(result.agentId)}</span>
-                                <span className="ml-2 text-xs text-muted-foreground/50">{getAgentDescription(result.agentId)}</span>
+                                <span className="text-xs font-mono text-primary">{getAgentLabel(result.agentId, language)}</span>
+                                <span className="ml-2 text-xs text-muted-foreground/50">{getAgentDescription(result.agentId, language)}</span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className={`text-xs font-mono px-2 py-0.5 border rounded-sm ${
@@ -751,12 +1039,12 @@ export default function Home() {
 
                         {/* Voting Records */}
                         <details className="border border-border rounded-sm bg-card/50 p-3 cursor-pointer">
-                          <summary className="text-xs font-mono text-muted-foreground">Voting & Debate Record</summary>
+                          <summary className="text-xs font-mono text-muted-foreground">{translate(CONTENT, 'agent.votingRecord', language)}</summary>
                           <div className="mt-2 space-y-1">
                             {agentRun.votingRecords.map(record => (
                               <div key={record.agentId} className="flex justify-between text-xs font-mono text-muted-foreground/70">
-                                <span>{getAgentLabel(record.agentId)}</span>
-                                <span>weight: {(record.weight * 100).toFixed(0)}% | score: {Math.round(record.adjustedScore)} | confidence: {(record.confidence * 100).toFixed(0)}%</span>
+                                <span>{getAgentLabel(record.agentId, language)}</span>
+                                <span>{translate(CONTENT, 'agent.weight', language)}: {(record.weight * 100).toFixed(0)}% | {translate(CONTENT, 'agent.score', language)}: {record.adjustedScore !== record.initialScore ? `${Math.round(record.initialScore)} → ${Math.round(record.adjustedScore)}` : Math.round(record.adjustedScore)} | {translate(CONTENT, 'agent.confidence', language)}: {(record.confidence * 100).toFixed(0)}%</span>
                               </div>
                             ))}
                           </div>
@@ -771,6 +1059,56 @@ export default function Home() {
                             originalFileName={uploadedModel.fileName}
                           />
                         )}
+
+                        <div className="border border-dashed border-border/50 rounded-sm p-4 space-y-3">
+                          <div>
+                            <div className="text-xs font-mono text-muted-foreground">{t('deepAnalysis')}</div>
+                            <div className="mt-1 text-xs text-muted-foreground/60">{t('deepAnalysisAdvisory')}</div>
+                          </div>
+                          {!deepAgentRun && (
+                            deepAnalysisLoading ? (
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2 text-xs font-mono text-cyan-400/80">
+                                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
+                                  {deepSteps.length === 0
+                                    ? t('deepAnalysisDesc')
+                                    : t('deepAnalysisStep').replace('{n}', String(Math.min(deepSteps.length + 1, 5)))}
+                                </div>
+                                {deepSteps.map((step) => (
+                                  <div key={step.index} className="text-xs">
+                                    <div className="font-mono text-cyan-400/70">
+                                      {t('deepAnalysisStep').replace('{n}', String(step.index + 1))} · {step.label}
+                                    </div>
+                                    <pre className="mt-0.5 whitespace-pre-wrap font-mono leading-relaxed text-muted-foreground/50 line-clamp-3">
+                                      {step.raw.length > 600 ? `${step.raw.slice(0, 600)}…` : step.raw}
+                                    </pre>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {deepError && <div className="text-xs font-mono text-red-400">{deepError}</div>}
+                                <button
+                                  onClick={() => uploadedModel && void runDeepAnalysisIfConfigured(uploadedModel, material)}
+                                  disabled={deepAnalysisLoading || !hasAnyKey()}
+                                  className="text-xs font-mono px-4 py-2 border border-primary/30 text-primary hover:bg-primary/10 rounded-sm transition-all disabled:opacity-40"
+                                >
+                                  {t('deepAnalysisRun')}
+                                </button>
+                              </div>
+                            )
+                          )}
+                          {deepAgentRun && (
+                            <details className="text-xs text-muted-foreground" open>
+                              <summary className="cursor-pointer font-mono text-cyan-400">
+                                {t('deepAnalysisScore')}: {deepAgentRun.consensus.overallScore}/100
+                              </summary>
+                              <pre className="mt-3 whitespace-pre-wrap font-mono leading-relaxed text-muted-foreground/80">
+                                {deepAgentRun.consensus.summary}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
                       </>
                     )}
                   </div>
@@ -779,13 +1117,14 @@ export default function Home() {
                 {/* CAUSALITY TAB */}
                 {tab === 'causality' && (
                   <div className="pt-4 space-y-4">
-                    <CausalityPanel graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} />
+                    <CausalityPanel graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} language={language} />
                     <div className="border-t border-border/20 my-2" />
                     {patternMatches.length > 0 && (
                       <PatternMemoryPanel
                         matches={patternMatches}
                         selectedPatternId={selectedPatternId}
                         onSelectPattern={setSelectedPatternId}
+                        language={language}
                       />
                     )}
                     <div className="border-t border-border/20 my-2" />
@@ -793,6 +1132,7 @@ export default function Home() {
                       suggestions={counterfactualSuggestions}
                       selectedSuggestionId={selectedSuggestionId}
                       onSelectSuggestion={setSelectedSuggestionId}
+                      language={language}
                     />
                   </div>
                 )}
@@ -818,28 +1158,12 @@ export default function Home() {
                   <div className="text-muted-foreground/20 text-3xl font-mono">[ ]</div>
                   <div className="text-xs text-muted-foreground/50 font-mono">{t('uploadStlBegin')}</div>
                 </div>
-                <div className="space-y-2">
-                  <div className="text-xs text-muted-foreground/40 font-mono tracking-widest">// FEATURES</div>
-                  {[
-                    [t('featureFree'), t('feature1')],
-                    [t('featureFree'), t('feature2')],
-                    [t('featureFree'), t('feature3')],
-                    [t('featureAiKey'), t('feature4')],
-                    [t('featureAiKey'), t('feature5')],
-                  ].map(([badge, desc]) => (
-                    <div key={desc} className="flex items-center gap-3 p-2.5 border border-border/20 rounded-sm hover:border-border/50 transition-all">
-                      <span className={`text-xs font-mono px-1.5 py-0.5 rounded-sm border shrink-0 ${
-                        badge === t('featureFree') ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/5' : 'text-primary border-primary/30 bg-primary/5'
-                      }`}>{badge}</span>
-                      <span className="text-xs text-muted-foreground">{desc}</span>
-                    </div>
-                  ))}
-                </div>
+                <FeaturesSection t={t} onNavigate={handleFeatureNavigate} />
               </div>
             )}
 
             <div className="pt-2 border-t border-border/30 text-xs text-muted-foreground/20 font-mono text-center">
-              3DP AGENT \u00a9 2026 \u2014 Open Source
+              {'\u00a9 2026'}
             </div>
           </div>
         </div>

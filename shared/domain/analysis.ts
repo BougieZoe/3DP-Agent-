@@ -12,7 +12,6 @@ export interface LegacyWallThicknessSummary {
   thinWallCount: number;
   thinWallPercentage: number;
   averageConfidence: number;
-  lowConfidenceSampleCount: number;
   affectedAreas: number;
   status: LegacyPrintabilityStatus;
 }
@@ -53,6 +52,7 @@ export function normalizeModelAnalysis(modelAnalysis: ModelAnalysis): ModelAnaly
       fileName: modelAnalysis.source.fileName,
       fileSizeBytes: modelAnalysis.source.fileSizeBytes,
       fileType: modelAnalysis.source.fileType,
+      units: modelAnalysis.source.units,
     },
     metrics: {
       bounds: createGeometryBounds(
@@ -84,7 +84,6 @@ export function normalizeModelAnalysis(modelAnalysis: ModelAnalysis): ModelAnaly
         thinWallCount: modelAnalysis.legacy.wallThickness.thinWallCount,
         thinWallPercentage: modelAnalysis.legacy.wallThickness.thinWallPercentage,
         averageConfidence: modelAnalysis.legacy.wallThickness.averageConfidence,
-        lowConfidenceSampleCount: modelAnalysis.legacy.wallThickness.lowConfidenceSampleCount,
         affectedAreas: modelAnalysis.legacy.wallThickness.affectedAreas,
         status: modelAnalysis.legacy.wallThickness.status,
       },

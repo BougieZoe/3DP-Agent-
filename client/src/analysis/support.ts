@@ -1,13 +1,19 @@
 import { moduleResult, type AnalysisModuleResult, type Confidence, type SupportRegion, type SupportResult, type SupportDifficulty } from './types';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
+import { getThresholds, type AnalysisThresholds } from './thresholds';
+import { overhangTiltBelowHorizontalDeg, isOnBuildPlate } from './metrics';
 
 export function estimateSupportVolume(
   model: GeometryModel,
   graph?: GeometryGraph | null,
-  overhangThresholdDeg: number = 50,
-  densityGPerMm3: number = 0.00124,
+  overhangThresholdDeg?: number,
+  densityGPerMm3?: number,
+  language: ContentLang = 'en',
+  thresholds: AnalysisThresholds = getThresholds(),
 ): AnalysisModuleResult<SupportResult> {
+  const supportConfig = thresholds.support;
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
 
@@ -18,14 +24,17 @@ export function estimateSupportVolume(
       estimatedSupportGrams: 0, volumeByAngleDeg: [],
       supportRegions: [], largestRegionRatio: 0,
       tallSupportRatio: 0, zGradient: 0, directionality: 0,
-    }, 'Cannot estimate supports: need indexed geometry');
+    }, translate(CONTENT, 'support.noIndexedGeometry', language));
   }
 
   const positions = g.positions;
   const indices = g.indices;
   const faceCount = g.triangleCount;
   const bbox = g.boundingBox;
-  const minY = bbox.minY;
+  // Build axis is Z (slicer convention): supports grow upward from the bed at
+  // the model's lowest Z, and only downward-facing surfaces need them.
+  const minZ = bbox.minZ;
+  const modelHeight = Math.max(1e-6, bbox.maxZ - bbox.minZ);
 
   let totalSupportVolume = 0;
   let totalOverhangAngle = 0;
@@ -37,11 +46,7 @@ export function estimateSupportVolume(
   const supportFaceAngles: number[] = [];
 
   const volumeByAngle = new Map<string, { volumeMm3: number; faceCount: number }>();
-  const angleBuckets = [
-    { label: '45-60°', min: 45, max: 60, ratio: 0.3 },
-    { label: '60-75°', min: 60, max: 75, ratio: 0.5 },
-    { label: '75-90°', min: 75, max: 90, ratio: 0.8 },
-  ];
+  const angleBuckets = supportConfig.angleBuckets;
 
   for (const bucket of angleBuckets) {
     volumeByAngle.set(bucket.label, { volumeMm3: 0, faceCount: 0 });
@@ -62,36 +67,42 @@ export function estimateSupportVolume(
     const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
     if (len < 1e-12) continue;
 
-    const cosAngle = Math.abs(ny) / len;
-    const angleDeg = Math.acos(Math.max(-1, Math.min(1, cosAngle))) * (180 / Math.PI);
+    // Z-up overhang test shared with the metrics module (sign-aware, downward only).
+    const tiltDeg = overhangTiltBelowHorizontalDeg(nz, len);
+    if (tiltDeg === null) continue;
 
-    if (angleDeg <= overhangThresholdDeg) continue;
+    const fcz = (az + bz + cz) / 3;
+    const height = fcz - minZ;
+
+    // Faces resting on the build plate are supported by the bed, not by supports.
+    if (isOnBuildPlate(fcz, minZ, modelHeight)) continue;
+
+    if (tiltDeg <= (overhangThresholdDeg ?? thresholds.overhangThresholdDeg)) continue;
 
     const area = len / 2;
-    const fcy = (ay + by + cy) / 3;
-    const height = fcy - minY;
 
-    let bucketRatio = 0.3;
-    let bucketLabel = '45-60°';
+    const defaultBucket = angleBuckets[0];
+    let bucketRatio = defaultBucket?.ratio ?? 0.3;
+    let bucketLabel = defaultBucket?.label ?? '45-60°';
     for (const bucket of angleBuckets) {
-      if (angleDeg >= bucket.min && angleDeg < bucket.max) {
+      if (tiltDeg >= bucket.min && tiltDeg < bucket.max) {
         bucketRatio = bucket.ratio;
         bucketLabel = bucket.label;
         break;
       }
     }
 
-    const supportVol = area * Math.max(0.5, height) * bucketRatio;
+    const supportVol = area * Math.max(supportConfig.minHeightMm, height) * bucketRatio;
 
     totalSupportVolume += supportVol;
-    totalOverhangAngle += angleDeg;
+    totalOverhangAngle += tiltDeg;
     supportFaceCount++;
     supportFaceArea += area;
 
     const triIdx = i / 3;
     supportFaceIndices.push(triIdx);
     supportFaceVolumes.push(supportVol);
-    supportFaceAngles.push(angleDeg);
+    supportFaceAngles.push(tiltDeg);
 
     const bucketData = volumeByAngle.get(bucketLabel);
     if (bucketData) {
@@ -101,14 +112,15 @@ export function estimateSupportVolume(
   }
 
   const avgAngle = supportFaceCount > 0 ? totalOverhangAngle / supportFaceCount : 0;
-  const supportGrams = totalSupportVolume / 1000 * densityGPerMm3;
+  const supportGrams = totalSupportVolume / 1000 * (densityGPerMm3 ?? supportConfig.densityGPerMm3);
 
   let difficulty: SupportDifficulty = 'none';
   if (supportFaceCount > 0) {
     const supportRatio = faceCount > 0 ? supportFaceCount / faceCount : 0;
-    if (supportRatio > 0.3 || totalSupportVolume > 50000) difficulty = 'very_difficult';
-    else if (supportRatio > 0.15 || totalSupportVolume > 20000) difficulty = 'difficult';
-    else if (supportRatio > 0.05 || totalSupportVolume > 5000) difficulty = 'moderate';
+    const diff = supportConfig.difficulty;
+    if (supportRatio > diff.veryDifficultFaceRatio || totalSupportVolume > diff.veryDifficultVolumeMm3) difficulty = 'very_difficult';
+    else if (supportRatio > diff.difficultFaceRatio || totalSupportVolume > diff.difficultVolumeMm3) difficulty = 'difficult';
+    else if (supportRatio > diff.moderateFaceRatio || totalSupportVolume > diff.moderateVolumeMm3) difficulty = 'moderate';
     else difficulty = 'easy';
   }
 
@@ -201,13 +213,13 @@ export function estimateSupportVolume(
   // Z gradient: weighted mean Z of support faces vs model midpoint
   let tallSupportCount = 0;
   let weightedZSum = 0;
-  const zMid = (bbox.maxY + bbox.minY) / 2;
-  const zRange = Math.max(bbox.maxY - bbox.minY, 1);
+  const zMid = (bbox.maxZ + bbox.minZ) / 2;
+  const zRange = Math.max(bbox.maxZ - bbox.minZ, 1);
 
   for (let k = 0; k < supportFaceIndices.length; k++) {
     const fi = supportFaceIndices[k];
     const cz = g.faceCentroids[fi].z;
-    const relZ = (cz - bbox.minY) / zRange;  // 0–1 from bottom to top
+    const relZ = (cz - bbox.minZ) / zRange;  // 0–1 from bottom to top
     weightedZSum += relZ;
     if (cz > zMid) tallSupportCount++;
   }
@@ -232,7 +244,8 @@ export function estimateSupportVolume(
     .filter(([, data]) => data.faceCount > 0)
     .map(([range, data]) => ({ range, volumeMm3: data.volumeMm3, faceCount: data.faceCount }));
 
-  const confidence: Confidence = supportFaceCount > 10 ? 0.6 as Confidence : supportFaceCount > 0 ? 0.4 as Confidence : 0.9 as Confidence;
+  const conf = supportConfig.confidence;
+  const confidence: Confidence = supportFaceCount > conf.highConfidenceFaceCount ? conf.highConfidence as Confidence : supportFaceCount > conf.lowConfidenceFaceCount ? conf.lowConfidence as Confidence : conf.noneConfidence as Confidence;
 
   const result: SupportResult = {
     totalSupportVolumeMm3: totalSupportVolume,
@@ -250,11 +263,14 @@ export function estimateSupportVolume(
 
   const parts: string[] = [];
   if (supportFaceCount === 0) {
-    parts.push('No supports needed');
+    parts.push(translate(CONTENT, 'support.none', language));
   } else {
-    parts.push(`Estimated support volume: ${totalSupportVolume.toFixed(0)} mm³ (${supportGrams.toFixed(1)}g)`);
-    parts.push(`Difficulty: ${difficulty}`);
-    parts.push(`${supportFaceCount} overhang faces with average angle ${avgAngle.toFixed(1)}°`);
+    parts.push(translate(CONTENT, 'support.volume', language, {
+      volume: totalSupportVolume.toFixed(0),
+      grams: supportGrams.toFixed(1),
+    }));
+    parts.push(translate(CONTENT, 'support.difficultyLabel', language, { difficulty }));
+    parts.push(translate(CONTENT, 'support.overhangFaces', language, { count: supportFaceCount, angle: avgAngle.toFixed(1) }));
   }
 
   return moduleResult('support', confidence, Math.round(performance.now() - startTime), result, parts.join('. '));

@@ -1,7 +1,37 @@
 import { type Confidence, type WallThicknessSample } from './types';
+import { getThresholds, DEFAULT_ANALYSIS_THRESHOLDS, type AnalysisThresholds } from './thresholds';
 
-const THIN_WALL_THRESHOLD_MM = 0.8;
-const LOW_CONFIDENCE_THRESHOLD = 0.3;
+/**
+ * Ray budget = bounding-box diagonal × this factor.
+ *
+ * The longest interior chord of a part is bounded by its bounding-box
+ * diagonal, so a ray cast along an inward normal can always reach a back
+ * surface when one exists. The previous hardcoded `maxRayDist = 20` silently
+ * discarded every sample on parts whose interior chord exceeded it (e.g. any
+ * solid thicker than 20 mm), which forced the report layer to substitute a
+ * bounding-box heuristic for a real measurement. The factor (>1) tolerates
+ * numerically off-axis rays without admitting a ray past the geometry.
+ *
+ * Exported for external importers; the value lives in
+ * DEFAULT_ANALYSIS_THRESHOLDS.wallThickness.rayDistanceDiagonalFactor.
+ */
+export const MAX_RAY_DIST_DIAGONAL_FACTOR = DEFAULT_ANALYSIS_THRESHOLDS.wallThickness.rayDistanceDiagonalFactor;
+
+function boundingBoxDiagonal(positions: Float32Array): number {
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i], y = positions[i + 1], z = positions[i + 2];
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
+  }
+  const dx = maxX - minX, dy = maxY - minY, dz = maxZ - minZ;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
@@ -48,48 +78,56 @@ function rayTriangleIntersection(
   return t >= 0 ? t : null;
 }
 
+/**
+ * Wall-thickness confidence. Returns 0.0 — never a fabricated number — when the
+ * raycast could not produce a valid measurement (no opposing faces found).
+ */
 export function computeWallConfidence(
   minThickness: number | null,
   p5Thickness: number | null,
   thinWallCount: number,
   thinWallRatio: number,
   averageConfidence: number,
-  lowConfidenceSampleCount: number,
   sampleCount: number,
+  thresholds: AnalysisThresholds = getThresholds(),
 ): Confidence {
-  if (minThickness === null || sampleCount === 0) return 0.1 as Confidence;
+  if (minThickness === null || sampleCount === 0) return 0.0 as Confidence;
 
+  const wt = thresholds.wallThickness;
   let confidence = averageConfidence;
 
-  const lowConfRatio = sampleCount > 0 ? lowConfidenceSampleCount / sampleCount : 0;
-  confidence *= (1 - lowConfRatio * 0.4);
-
-  if (thinWallRatio > 0.25) {
-    confidence *= 0.5;
-  } else if (thinWallRatio > 0.1) {
-    confidence *= 0.75;
-  } else if (thinWallRatio > 0.02) {
-    confidence *= 0.9;
+  if (thinWallRatio > wt.confidencePenalty.thinWallRatioBandCritical) {
+    confidence *= wt.confidencePenalty.criticalMultiplier;
+  } else if (thinWallRatio > wt.confidencePenalty.thinWallRatioBandHigh) {
+    confidence *= wt.confidencePenalty.highMultiplier;
+  } else if (thinWallRatio > wt.confidencePenalty.thinWallRatioBandModerate) {
+    confidence *= wt.confidencePenalty.moderateMultiplier;
   }
 
-  const clamped = Math.max(0.1, Math.min(0.95, confidence));
-  const levels = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
-  return levels.reduce((a, b) =>
+  const clamped = Math.max(wt.confidenceClamp.min, Math.min(wt.confidenceClamp.max, confidence));
+  return wt.confidenceSnapLevels.reduce((a, b) =>
     Math.abs(b - clamped) < Math.abs(a - clamped) ? b : a
   ) as Confidence;
 }
 
-export function deriveWtStatus(thinWallRatio: number, p5WallThickness?: number | null): 'good' | 'warning' | 'critical' {
-  if (thinWallRatio > 0.15) return 'critical';
-  if (thinWallRatio > 0.05) return 'warning';
-  if (p5WallThickness != null && p5WallThickness < 0.4) return 'warning';
+export function deriveWtStatus(
+  thinWallRatio: number,
+  p5WallThickness?: number | null,
+  thresholds: AnalysisThresholds = getThresholds(),
+): 'good' | 'warning' | 'critical' {
+  const status = thresholds.wallThickness.status;
+  if (thinWallRatio > status.criticalThinRatio) return 'critical';
+  if (thinWallRatio > status.warningThinRatio) return 'warning';
+  if (p5WallThickness != null && p5WallThickness < status.warningMinThicknessMm) return 'warning';
   return 'good';
 }
 
 export function sampleWallThickness(
   positions: Float32Array,
   indices: Uint16Array | Uint32Array,
-  maxSamples: number = 200,
+  maxSamples?: number,
+  maxRayDist?: number,
+  thresholds: AnalysisThresholds = getThresholds(),
 ): {
   samples: WallThicknessSample[];
   minThickness: number | null;
@@ -102,18 +140,24 @@ export function sampleWallThickness(
   thinWallRatio: number;
   thinWallPercentage: number;
   averageConfidence: number;
-  lowConfidenceSampleCount: number;
 } {
+  const wt = thresholds.wallThickness;
+  const maxSampleCount = maxSamples ?? wt.maxSamples;
   const triCount = Math.floor(indices.length / 3);
   const samples: WallThicknessSample[] = [];
 
-  if (triCount < 4) {
-    return { samples, minThickness: null, avgThickness: null, p1Thickness: null, p5Thickness: null, p10Thickness: null, medianThickness: null, thinWallCount: 0, thinWallRatio: 0, thinWallPercentage: 0, averageConfidence: 0, lowConfidenceSampleCount: 0 };
+  if (triCount < wt.minTriCount) {
+    return { samples, minThickness: null, avgThickness: null, p1Thickness: null, p5Thickness: null, p10Thickness: null, medianThickness: null, thinWallCount: 0, thinWallRatio: 0, thinWallPercentage: 0, averageConfidence: 0 };
   }
 
-  const step = Math.max(1, Math.floor(triCount / maxSamples));
+  // Scale-aware ray budget (see MAX_RAY_DIST_DIAGONAL_FACTOR). Callers that
+  // already computed the bounding box pass the diagonal-derived value to avoid
+  // a redundant scan; standalone callers derive it from the positions.
+  const rayLimit = maxRayDist ?? boundingBoxDiagonal(positions) * wt.rayDistanceDiagonalFactor;
 
-  for (let i = 0; i < indices.length && samples.length < maxSamples; i += step * 3) {
+  const step = Math.max(1, Math.floor(triCount / maxSampleCount));
+
+  for (let i = 0; i < indices.length && samples.length < maxSampleCount; i += step * 3) {
     const i0 = indices[i] * 3, i1 = indices[i + 1] * 3, i2 = indices[i + 2] * 3;
 
     const ax = positions[i0], ay = positions[i0 + 1], az = positions[i0 + 2];
@@ -134,8 +178,7 @@ export function sampleWallThickness(
 
     const invNx = -nx / len, invNy = -ny / len, invNz = -nz / len;
 
-    const maxRayDist = 20;
-    let minDist = maxRayDist;
+    let minDist = rayLimit;
     let hitCount = 0;
 
     for (let j = 0; j < indices.length; j += 3) {
@@ -151,24 +194,24 @@ export function sampleWallThickness(
         { x: positions[j2], y: positions[j2 + 1], z: positions[j2 + 2] },
       );
 
-      if (t !== null && t > 0.01 && t < minDist) {
+      if (t !== null && t > wt.rayMinHitDistanceMm && t < minDist) {
         minDist = t;
         hitCount++;
       }
     }
 
     const confidence = hitCount > 0
-      ? Math.min(0.8, 0.3 + hitCount * 0.1) as Confidence
-      : 0.1 as Confidence;
+      ? Math.min(wt.hitConfidenceCap, wt.hitConfidenceBase + hitCount * wt.hitConfidencePerHit) as Confidence
+      : wt.noHitConfidence as Confidence;
 
     samples.push({
       position: { x: fcx, y: fcy, z: fcz },
-      thickness: minDist < maxRayDist ? minDist : 0,
+      thickness: minDist < rayLimit ? minDist : 0,
       confidence,
     });
   }
 
-  const validSamples = samples.filter(s => s.thickness > 0 && s.confidence > 0.1);
+  const validSamples = samples.filter(s => s.thickness > wt.validThicknessMinMm && s.confidence > wt.validConfidenceMin);
   const minThickness = validSamples.length > 0
     ? Math.min(...validSamples.map(s => s.thickness))
     : null;
@@ -177,19 +220,18 @@ export function sampleWallThickness(
     : null;
 
   const sorted = validSamples.map(s => s.thickness).sort((a, b) => a - b);
-  const p1Thickness = validSamples.length > 0 ? percentile(sorted, 0.01) : null;
-  const p5Thickness = validSamples.length > 0 ? percentile(sorted, 0.05) : null;
-  const p10Thickness = validSamples.length > 0 ? percentile(sorted, 0.10) : null;
-  const medianThickness = validSamples.length > 0 ? percentile(sorted, 0.50) : null;
+  const p1Thickness = validSamples.length > 0 ? percentile(sorted, wt.percentiles.p1) : null;
+  const p5Thickness = validSamples.length > 0 ? percentile(sorted, wt.percentiles.p5) : null;
+  const p10Thickness = validSamples.length > 0 ? percentile(sorted, wt.percentiles.p10) : null;
+  const medianThickness = validSamples.length > 0 ? percentile(sorted, wt.percentiles.median) : null;
 
-  const thinWallCount = validSamples.filter(s => s.thickness < THIN_WALL_THRESHOLD_MM).length;
+  const thinWallCount = validSamples.filter(s => s.thickness < wt.thinWallMm).length;
   const thinWallRatio = validSamples.length > 0 ? (thinWallCount / validSamples.length) : 0;
   const thinWallPercentage = thinWallRatio * 100;
 
   const averageConfidence = validSamples.length > 0
     ? validSamples.reduce((sum, s) => sum + s.confidence, 0) / validSamples.length
     : 0;
-  const lowConfidenceSampleCount = validSamples.filter(s => s.confidence < LOW_CONFIDENCE_THRESHOLD).length;
 
-  return { samples, minThickness, avgThickness, p1Thickness, p5Thickness, p10Thickness, medianThickness, thinWallCount, thinWallRatio, thinWallPercentage, averageConfidence, lowConfidenceSampleCount };
+  return { samples, minThickness, avgThickness, p1Thickness, p5Thickness, p10Thickness, medianThickness, thinWallCount, thinWallRatio, thinWallPercentage, averageConfidence };
 }

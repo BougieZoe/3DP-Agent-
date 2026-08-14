@@ -2,20 +2,30 @@ import { useRef, useState, useCallback } from 'react';
 import { loadSTLFile, createMeshFromGeometry } from '@/lib/stlLoader';
 import { Language } from '@/lib/i18n';
 import { runAnalysisPipeline, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
+import { normalizeModelGeometry } from '@/lib/modelNormalization';
+import type { LengthUnit } from '@shared/domain/geometry';
 import * as THREE from 'three';
 
 export interface UploadedModel {
+  /** Render/analysis geometry: scaled to mm and centered on the build plate. */
   geometry: THREE.BufferGeometry;
   mesh: THREE.Mesh;
   unifiedAnalysis: UnifiedAnalysis;
   fileName: string;
   fileSizeBytes?: number;
+  /** Declared units of the source file; geometry is normalized to mm before analysis. */
+  units: LengthUnit;
+  /** Pristine clone of the source geometry — the basis for re-processing on unit change. */
+  rawGeometry: THREE.BufferGeometry;
 }
 
 interface STLUploadHandlerProps {
   onModelLoaded: (model: UploadedModel) => void;
   onError: (error: string) => void;
   language?: Language;
+  /** Declared source units, owned by the parent so a unit change re-processes the model. */
+  units: LengthUnit;
+  onUnitsChange: (units: LengthUnit) => void;
 }
 
 const labels = {
@@ -34,7 +44,7 @@ const labels = {
     stl: '[  STL  ]',
     releaseToUpload: '— RELEASE TO UPLOAD —',
     dragOrClick: 'DRAG FILE HERE OR CLICK TO BROWSE',
-    supported: 'Binary & ASCII STL supported',
+    units: 'UNITS',
   },
   ja: {
     invalidFile: '無効なファイル形式 — STLが必要です',
@@ -51,7 +61,7 @@ const labels = {
     stl: '[  STL  ]',
     releaseToUpload: '— リリースしてアップロード —',
     dragOrClick: 'ファイルをドラッグするか、クリックして参照',
-    supported: 'バイナリ＆ASCII STL対応',
+    units: '単位',
   },
   zh: {
     invalidFile: '无效的文件类型 — 需要 STL',
@@ -68,11 +78,11 @@ const labels = {
     stl: '[  STL  ]',
     releaseToUpload: '— 释放以上传 —',
     dragOrClick: '拖放文件到此处或点击浏览',
-    supported: '支持二进制和 ASCII STL',
+    units: '单位',
   },
 };
 
-export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: STLUploadHandlerProps) {
+export function STLUploadHandler({ onModelLoaded, onError, language = 'en', units, onUnitsChange }: STLUploadHandlerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -93,8 +103,13 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
 
     try {
       log(`> ${t.parsing}`);
-      const geometry = await loadSTLFile(file);
+      // loadSTLFile returns the pristine geometry; normalization clones it.
+      const raw = await loadSTLFile(file);
+      // Explicit unit contract + viewport centering: scale non-mm STLs to
+      // millimeters, center on the build plate (minZ = 0, XY center = 0), and
+      // recompute bounding box / bounding sphere so the camera can frame it.
       log(`> ${t.computing}`);
+      const { geometry, rawGeometry } = normalizeModelGeometry(raw, units);
       const model = fromThreeBufferGeometry(geometry);
       const unifiedAnalysis = runAnalysisPipeline(model, { fileName: file.name });
       log(`> ${t.analyzing}`);
@@ -102,7 +117,7 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
       log(`> ${t.complete}`);
 
       setTimeout(() => {
-        onModelLoaded({ geometry, mesh, unifiedAnalysis, fileName: file.name, fileSizeBytes: file.size });
+        onModelLoaded({ geometry, mesh, unifiedAnalysis, fileName: file.name, fileSizeBytes: file.size, units, rawGeometry });
         setIsLoading(false);
       }, 400);
     } catch (error) {
@@ -110,7 +125,7 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
       onError(`${t.parseFailed}${error instanceof Error ? error.message : t.unknownError}`);
       setIsLoading(false);
     }
-  }, [onModelLoaded, onError, t]);
+  }, [onModelLoaded, onError, t, units]);
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
   const handleDragLeave = () => setIsDragging(false);
@@ -164,8 +179,26 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en' }: ST
         <div className="text-xs font-mono text-muted-foreground">
           {isDragging ? t.releaseToUpload : t.dragOrClick}
         </div>
-        <div className="text-xs text-muted-foreground/40">
-          {t.supported}
+
+        {/* Declared source units — STL carries no unit metadata; changing the
+            unit re-processes the model from its raw geometry (no stacked scales)
+            and re-runs the analysis. */}
+        <div className="flex items-center justify-center gap-1.5 text-xs font-mono">
+          <span className="text-muted-foreground/40">{t.units}</span>
+          {(['mm', 'cm', 'inch'] as const).map((u) => (
+            <button
+              key={u}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onUnitsChange(u); }}
+              className={`px-2 py-0.5 border rounded-sm transition-all ${
+                units === u
+                  ? 'border-primary text-primary'
+                  : 'border-border text-muted-foreground/50 hover:text-primary'
+              }`}
+            >
+              {u === 'inch' ? 'in' : u}
+            </button>
+          ))}
         </div>
       </div>
     </div>

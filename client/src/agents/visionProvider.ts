@@ -1,6 +1,27 @@
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
+import type { AIProviderId } from '@shared/domain/providers';
+import { callLLMProxy, CHAT_COMPLETION_MODELS, CLAUDE_MODEL, GEMINI_MODEL } from '@/lib/llmProxy';
+
+export type VisionIssueCategory =
+  | 'thin_wall'
+  | 'overhang'
+  | 'structural_damage'
+  | 'deformation'
+  | 'asymmetry'
+  | 'missing_feature'
+  | 'hole_or_void'
+  | 'surface_artifact'
+  | 'orientation'
+  | 'other';
+
+export interface VisionIssue {
+  category: VisionIssueCategory;
+  description: string;
+}
+
 export interface VisionAnalysisResult {
   qualitativeAssessment: string;
-  observedIssues: string[];
+  observedIssues: VisionIssue[];
   confidence: number;
   rawResponse: string;
 }
@@ -26,30 +47,32 @@ export class VisionProvider {
   async analyzeWithAI(
     screenshotBase64: string,
     geometrySummary: string,
-    apiConfig?: { provider: string; apiKey: string },
-    language?: string,
+    apiConfig?: { provider: AIProviderId; apiKey: string },
+    language?: ContentLang,
+    signal?: AbortSignal,
   ): Promise<VisionAnalysisResult> {
+    const lang = language ?? 'en';
     if (!apiConfig?.apiKey) {
-      return this.fallbackLocalAnalysis(geometrySummary);
+      return this.fallbackLocalAnalysis(lang);
     }
 
     try {
-      const prompt = this.buildVisionPrompt(geometrySummary, language);
+      const prompt = this.buildVisionPrompt(geometrySummary, lang);
 
-      if (apiConfig.provider === 'claude' || apiConfig.provider === 'openai' || apiConfig.provider === 'kimi') {
-        return await this.callVisionAPI(apiConfig, screenshotBase64, prompt);
+      if (apiConfig.provider === 'claude' || apiConfig.provider === 'openai'
+        || apiConfig.provider === 'kimi' || apiConfig.provider === 'gemini') {
+        return await this.callVisionAPI(apiConfig, screenshotBase64, prompt, lang, signal);
       }
 
-      return this.fallbackLocalAnalysis(geometrySummary);
+      return this.fallbackLocalAnalysis(lang);
     } catch {
-      return this.fallbackLocalAnalysis(geometrySummary || '');
+      return this.fallbackLocalAnalysis(lang);
     }
   }
 
-  private buildVisionPrompt(geometrySummary: string, language?: string): string {
-    const langInstr = language
-      ? `\n\nPlease respond in ${language === 'zh' ? 'Simplified Chinese' : language === 'ja' ? 'Japanese' : 'English'}. Use natural and professional ${language === 'zh' ? 'Chinese' : language === 'ja' ? 'Japanese' : 'English'} terms. Current interface language is ${language}.`
-      : '';
+  private buildVisionPrompt(geometrySummary: string, language: ContentLang): string {
+    const langName = translate(CONTENT, 'prompt.languageName', language);
+    const langInstr = translate(CONTENT, 'vision.langInstr', language, { language: langName });
     return `You are a 3D printing geometry analyst. Analyze this STL model render and geometry data.
 
 Geometry Data:
@@ -58,96 +81,91 @@ ${geometrySummary}
 Examine the rendered image and geometry data. Respond in JSON format:
 {
   "qualitativeAssessment": "Brief overall assessment of model quality",
-  "observedIssues": ["Issue 1", "Issue 2"],
+  "observedIssues": [
+    { "category": "deformation", "description": "Brief, evidence-based issue description" }
+  ],
   "confidence": 0.0-1.0
 }
 
-Focus on: visible thin walls, sharp overhangs, potential support needs, surface defects, and orientation issues.${langInstr}`;
+Allowed categories: thin_wall, overhang, structural_damage, deformation, asymmetry, missing_feature, hole_or_void, surface_artifact, orientation, other.
+Only report visible evidence. Do not infer hidden internal defects from a render. ${langInstr}`;
   }
 
   private async callVisionAPI(
-    apiConfig: { provider: string; apiKey: string },
+    apiConfig: { provider: AIProviderId; apiKey: string },
     imageBase64: string,
     prompt: string,
+    language: ContentLang,
+    signal?: AbortSignal,
   ): Promise<VisionAnalysisResult> {
     const imageData = imageBase64.replace(/^data:image\/png;base64,/, '');
-
-    if (apiConfig.provider === 'openai') {
-      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiConfig.apiKey}` },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: `data:image/png;base64,${imageData}` } },
-            ],
-          }],
-          max_tokens: 500,
-        }),
-      });
-      return this.parseVisionResponse(await resp.text());
-    }
-
-    if (apiConfig.provider === 'kimi') {
-      const resp = await fetch('https://api.moonshot.cn/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiConfig.apiKey}` },
-        body: JSON.stringify({
-          model: 'kimi-k3',
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: `data:image/png;base64,${imageData}` } },
-            ],
-          }],
-          max_tokens: 500,
-        }),
-      });
-      return this.parseVisionResponse(await resp.text());
-    }
-
-    if (apiConfig.provider === 'claude') {
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiConfig.apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 500,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imageData } },
-            ],
-          }],
-        }),
-      });
-      return this.parseVisionResponse(await resp.text());
-    }
-
-    return this.fallbackLocalAnalysis('');
+    // Every provider goes through the /api/llm relay (CORS-safe, same origin);
+    // the provider-specific body is built here and forwarded verbatim.
+    const resp = await callLLMProxy(
+      apiConfig.provider,
+      apiConfig.apiKey,
+      this.buildVisionBody(apiConfig.provider, prompt, imageData),
+      signal,
+    );
+    return this.parseVisionResponse(await resp.text(), language);
   }
 
-  private parseVisionResponse(responseText: string): VisionAnalysisResult {
+  private buildVisionBody(provider: AIProviderId, prompt: string, imageData: string): Record<string, unknown> {
+    if (provider === 'claude') {
+      return {
+        model: CLAUDE_MODEL,
+        max_tokens: 500,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imageData } },
+          ],
+        }],
+      };
+    }
+    if (provider === 'gemini') {
+      return {
+        model: GEMINI_MODEL,
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: 'image/png', data: imageData } },
+          ],
+        }],
+      };
+    }
+    // OpenAI / Kimi use the chat-completions image_url shape.
+    return {
+      model: CHAT_COMPLETION_MODELS[provider] ?? 'gpt-4o',
+      max_tokens: 500,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: `data:image/png;base64,${imageData}` } },
+        ],
+      }],
+    };
+  }
+
+  private parseVisionResponse(responseText: string, language: ContentLang): VisionAnalysisResult {
     try {
       const parsed = JSON.parse(responseText);
-      const content = parsed.choices?.[0]?.message?.content || parsed.content?.[0]?.text || responseText;
+      const content = parsed.choices?.[0]?.message?.content
+        || parsed.content?.[0]?.text
+        || parsed.candidates?.[0]?.content?.parts?.[0]?.text
+        || responseText;
 
       let jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsedJson = JSON.parse(jsonMatch[0]);
         return {
-          qualitativeAssessment: parsedJson.qualitativeAssessment || 'No assessment available',
-          observedIssues: parsedJson.observedIssues || [],
-          confidence: parsedJson.confidence || 0.5,
+          qualitativeAssessment: parsedJson.qualitativeAssessment || translate(CONTENT, 'vision.noAssessment', language),
+          observedIssues: normalizeVisionIssues(parsedJson.observedIssues),
+          confidence: typeof parsedJson.confidence === 'number'
+            ? Math.max(0, Math.min(1, parsedJson.confidence))
+            : 0.5,
           rawResponse: content,
         };
       }
@@ -159,18 +177,47 @@ Focus on: visible thin walls, sharp overhangs, potential support needs, surface 
         rawResponse: content,
       };
     } catch {
-      return this.fallbackLocalAnalysis('');
+      return this.fallbackLocalAnalysis(language);
     }
   }
 
-  private fallbackLocalAnalysis(_geometrySummary: string): VisionAnalysisResult {
+  private fallbackLocalAnalysis(language: ContentLang = 'en'): VisionAnalysisResult {
     return {
-      qualitativeAssessment: 'Vision analysis unavailable (no API key configured or API call failed)',
+      qualitativeAssessment: translate(CONTENT, 'vision.unavailable', language),
       observedIssues: [],
       confidence: 0,
       rawResponse: '',
     };
   }
+}
+
+const VISION_ISSUE_CATEGORIES = new Set<VisionIssueCategory>([
+  'thin_wall', 'overhang', 'structural_damage', 'deformation', 'asymmetry',
+  'missing_feature', 'hole_or_void', 'surface_artifact', 'orientation', 'other',
+]);
+
+/**
+ * Normalizes model output at the trust boundary. String issues are accepted
+ * only for backwards compatibility and intentionally become `other`, so they
+ * cannot trigger a high-severity production risk through keyword matching.
+ */
+export function normalizeVisionIssues(value: unknown): VisionIssue[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((issue): VisionIssue[] => {
+    if (typeof issue === 'string') {
+      const description = issue.trim();
+      return description ? [{ category: 'other', description }] : [];
+    }
+    if (!issue || typeof issue !== 'object') return [];
+    const record = issue as Record<string, unknown>;
+    const description = typeof record.description === 'string' ? record.description.trim() : '';
+    if (!description) return [];
+    const category = typeof record.category === 'string' && VISION_ISSUE_CATEGORIES.has(record.category as VisionIssueCategory)
+      ? record.category as VisionIssueCategory
+      : 'other';
+    return [{ category, description }];
+  });
 }
 
 export const visionProvider = new VisionProvider();

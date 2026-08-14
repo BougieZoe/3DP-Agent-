@@ -1,3 +1,4 @@
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { MarkerInput, CausalityGraph, buildCausalityGraph } from './causalityEngine';
 import { PatternMatch } from './topologyPatternEngine';
 
@@ -135,8 +136,9 @@ function findMatchingPatterns(affectedPositions: Array<{ x: number; y: number; z
 export function evaluateCounterfactuals(
   markers: MarkerInput[],
   patternMatches: PatternMatch[],
+  language: ContentLang = 'en',
 ): GeometrySuggestion[] {
-  const baseline = buildCausalityGraph(markers);
+  const baseline = buildCausalityGraph(markers, undefined, language);
   const suggestions: GeometrySuggestion[] = [];
   let counter = 0;
 
@@ -149,7 +151,7 @@ export function evaluateCounterfactuals(
       affectedIdx.includes(i) ? { ...m, severity: Math.max(0.01, m.severity * meta.factor) } : m,
     );
 
-    const counterfactual = buildCausalityGraph(modified);
+    const counterfactual = buildCausalityGraph(modified, undefined, language);
     const affectedPositions = affectedIdx.map(i => markers[i].position);
     const riskReduction = computeRiskReduction(baseline, counterfactual);
     const thermalImprovement = computeThermalImprovement(baseline, counterfactual);
@@ -166,8 +168,8 @@ export function evaluateCounterfactuals(
       suggestions.push({
         id: `sug-${counter++}`,
         type: modType,
-        label: meta.label,
-        description: meta.description,
+        label: translate(CONTENT, `causality.suggestion.${modType}.label`, language),
+        description: translate(CONTENT, `causality.suggestion.${modType}.desc`, language),
         affectedPositions,
         riskReduction,
         thermalImprovement,

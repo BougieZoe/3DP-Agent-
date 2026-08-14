@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { AgentOrchestrator } from '../orchestrator';
-import { buildMockUnifiedAnalysis, normalMetrics, thinWallMetrics, overhangMetrics, mockGeometry, mockMaterial } from './testAgentFixtures';
+import { visionProvider } from '../visionProvider';
+import { buildMockUnifiedAnalysis, normalMetrics, thinWallMetrics, overhangMetrics, criticalBothMetrics, mockGeometry, mockMaterial } from './testAgentFixtures';
 import type { AgentStageConfig } from '../types';
 
 function makeConfigs(overrides?: Partial<Record<string, Partial<AgentStageConfig>>>): AgentStageConfig[] {
@@ -113,11 +114,77 @@ describe('AgentOrchestrator', () => {
     });
   });
 
+  it('snapshots initialScore before debate so voting records show real adjustments', async () => {
+    const geo = mockGeometry();
+    const ua = buildMockUnifiedAnalysis({
+      metrics: criticalBothMetrics(),
+      support: {
+        totalSupportVolumeMm3: 2000,
+        supportFaceCount: 50,
+        difficulty: 'very_difficult',
+        largestRegionRatio: 0.6,
+        tallSupportRatio: 0.4,
+        supportRegions: [{
+          faceCount: 10,
+          centroid: { x: 5, y: 5, z: 5 },
+          boundingBoxSize: { x: 10, y: 10, z: 10 },
+          normalizedDirection: { x: 0, y: 1, z: 0 },
+          avgAngleDeg: 60,
+          estimatedVolumeMm3: 100,
+          zRange: { min: 0, max: 10 },
+        }],
+      },
+    });
+    const orch = new AgentOrchestrator();
+    const result = await orch.runFullAnalysis(geo, ua, 'debate.stl');
+
+    const scorer = result.votingRecords.find(r => r.agentId === 'printability_scorer');
+    const failure = result.results.find(r => r.agentId === 'failure_predictor');
+    expect(failure?.details).toBeDefined();
+    const riskCount = (failure?.details as { risks?: unknown[] } | undefined)?.risks?.length ?? 0;
+    expect(riskCount).toBeGreaterThan(3);
+
+    expect(scorer).toBeDefined();
+    expect(scorer!.adjustedScore).toBeLessThan(scorer!.initialScore);
+  });
+
   it('always sets usedVision to false when no canvas', async () => {
     const geo = mockGeometry();
     const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
     const orch = new AgentOrchestrator();
     const result = await orch.runFullAnalysis(geo, ua, 'novision.stl');
     expect(result.usedVision).toBe(false);
+  });
+
+  it('feeds the vision LLM the real mesh metrics, not bounding-box estimates', async () => {
+    localStorage.setItem('3dp_agent_api_keys', JSON.stringify({ openai: 'sk-test' }));
+    localStorage.setItem('3dp_agent_active_provider', 'openai');
+
+    const metrics = { ...normalMetrics(), meshVolumeMm3: 1234, surfaceAreaMm2: 5678 };
+    const ua = buildMockUnifiedAnalysis({ metrics });
+    const fakeCanvas = { toDataURL: () => 'data:image/png;base64,abc' } as unknown as HTMLCanvasElement;
+
+    const spy = vi.spyOn(visionProvider, 'analyzeWithAI').mockResolvedValue({
+      qualitativeAssessment: 'ok',
+      observedIssues: [],
+      confidence: 0.5,
+      rawResponse: 'ok',
+    });
+    try {
+      const orch = new AgentOrchestrator();
+      await orch.runFullAnalysis(mockGeometry(), ua, 'real.stl', fakeCanvas, 'en', mockMaterial());
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      const summary = spy.mock.calls[0][1];
+      expect(summary).toContain('Volume: 1234.0mm');
+      expect(summary).toContain('Surface Area: 5678.0mm');
+      // The mock geometry's bounding box is 10×10×0, which would have
+      // produced "Volume: 0.0mm" under the old bounding-box estimation.
+      expect(summary).not.toContain('Volume: 0.0mm');
+    } finally {
+      spy.mockRestore();
+      visionProvider.setRenderCanvas(null);
+      localStorage.clear();
+    }
   });
 });

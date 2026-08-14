@@ -165,16 +165,26 @@ export function createTerrainGrid(size: number, rows: number, cols: number): THR
   return geo;
 }
 
-export function createOverhangPlate(width: number, depth: number, angleDeg: number): THREE.BufferGeometry {
-  const a = (angleDeg * Math.PI) / 180;
-  const height = depth * Math.tan(a);
+/**
+ * A genuine Z-up overhang: a flat plate whose underside faces DOWN at
+ * `overhangAngleDeg` below horizontal, suspended above the build plate so its
+ * centroid is not on the bed. `overhangAngleDeg` is the surface's overhang
+ * angle from vertical (slicer convention): 0 = vertical wall, 90 = horizontal
+ * ceiling. The normal points downward (nz < 0), so it is a true overhang —
+ * unlike an upward-facing ramp, which never needs support.
+ */
+export function createOverhangPlate(width: number, depth: number, overhangAngleDeg: number): THREE.BufferGeometry {
+  const a = ((90 - overhangAngleDeg) * Math.PI) / 180; // surface slope from horizontal
+  const drop = width * Math.tan(a);                    // vertical drop along the slope
+  const h = 10;                                        // suspension height above the bed
   const vertices = new Float32Array([
-    -width / 2, 0,      -depth / 2,
-    width / 2,  0,      -depth / 2,
-    width / 2,  height,  depth / 2,
-    -width / 2, height,  depth / 2,
+    0, -depth / 2, h,
+    0,  depth / 2, h,
+    width,  depth / 2, h - drop,
+    width, -depth / 2, h - drop,
   ]);
-  const indices = [0, 2, 1,  0, 3, 2];
+  // CCW winding → the normal points DOWN (nz < 0): the underside of the ramp.
+  const indices = [0, 1, 2,  0, 2, 3];
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
   geo.setIndex(indices);

@@ -45,6 +45,17 @@ export const C = {
 
 export const kern = (s: string): string => s.split("").join(" ");
 
+/** Kern only Latin text — letter-spacing looks wrong between CJK glyphs. */
+export const kernText = (s: string): string =>
+  /[぀-ヿ一-鿿]/.test(s) ? s : kern(s);
+
+// Active PDF font. Callers set it to the CJK font (via preparePdfFonts) when
+// the report language is ja/zh; helvetica is the default.
+export let pdfActiveFont = "helvetica";
+export function setPdfActiveFont(name: string): void {
+  pdfActiveFont = name;
+}
+
 // ─── Shared PDF Helpers ────────────────────────────────────────────────────────
 
 export const PAGE_W = 210;
@@ -65,7 +76,7 @@ export function drawHeader(
   doc.rect(0, 0, PAGE_W, 60, "F");
 
   // Overline — left
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfActiveFont, "normal");
   doc.setFontSize(7);
   doc.setTextColor(...C.muted);
   doc.text(
@@ -75,18 +86,18 @@ export function drawHeader(
   );
 
   // Version label — right
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfActiveFont, "bold");
   doc.setTextColor(...C.faint);
   doc.text(kern(versionLabel.toUpperCase()), PAGE_W - PAGE_M, 28, { align: "right" });
 
   // Title
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfActiveFont, "normal");
   doc.setFontSize(20);
   doc.setTextColor(...C.ink);
   doc.text(lang === "ja" ? "プリント分析レポート" : "Print Analysis Report", PAGE_M, 36);
 
   // File name + date
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfActiveFont, "normal");
   doc.setFontSize(9);
   doc.setTextColor(...C.muted);
   doc.text(`${fileName} · ${dateStr}`, PAGE_M, 45);
@@ -105,11 +116,11 @@ export function drawFooter(
     doc.setPage(i);
     doc.setFillColor(...C.footerBg);
     doc.rect(0, PAGE_H - 15, PAGE_W, 15, "F");
-    doc.setFont("helvetica", "normal");
+    doc.setFont(pdfActiveFont, "normal");
     doc.setFontSize(7);
     doc.setTextColor(...C.muted);
     doc.text("3DP AGENT · 3dp-agent.vercel.app", PAGE_M, PAGE_H - 5);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(pdfActiveFont, "normal");
     doc.setTextColor(...C.faint);
     if (extraRight) {
       doc.text(`${extraRight} · ${score} / 100`, PAGE_W - PAGE_M, PAGE_H - 5, { align: "right" });
@@ -140,19 +151,19 @@ export function drawVerdictCard(
   doc.rect(PAGE_M, cardY, 4, cardH, "F");
 
   // Label (12pt)
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfActiveFont, "bold");
   doc.setFontSize(12);
   doc.setTextColor(...C.ink);
   doc.text(label, PAGE_M + 12, cardY + 16);
 
   // Description (8pt)
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfActiveFont, "normal");
   doc.setFontSize(8);
   doc.setTextColor(...C.muted);
   doc.text(desc, PAGE_M + 12, cardY + 26);
 
   // Score right (28pt)
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfActiveFont, "bold");
   doc.setFontSize(28);
   doc.setTextColor(...accent);
   doc.text(`${score}`, PAGE_W - PAGE_M, cardY + cardH / 2 + 1, { align: "right" });
@@ -170,10 +181,10 @@ export function drawSectionLine(doc: JsPDF, y: number): number {
 
 export function drawSectionHeader(doc: JsPDF, label: string, y: number): number {
   y = drawSectionLine(doc, y);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfActiveFont, "bold");
   doc.setFontSize(7);
   doc.setTextColor(...C.faint);
-  doc.text(kern(label), PAGE_M, y);
+  doc.text(kernText(label), PAGE_M, y);
   return y + 7;
 }
 
@@ -184,11 +195,11 @@ export function drawDataRow(
   y: number,
   warn = false
 ): number {
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfActiveFont, "normal");
   doc.setFontSize(9);
   doc.setTextColor(...C.muted);
   doc.text(label, PAGE_M, y);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfActiveFont, "bold");
   doc.setTextColor(...(warn ? C.red : C.ink));
   doc.text(value, PAGE_W - PAGE_M, y, { align: "right" });
   return y + 7;
@@ -206,12 +217,12 @@ export function drawIssueBadge(
   doc.setFillColor(...color);
   doc.circle(cx, cy, 2.5, "F");
 
-  doc.setFont("helvetica", "bold");
+  doc.setFont(pdfActiveFont, "bold");
   doc.setFontSize(7);
   doc.setTextColor(...C.white);
   doc.text(`${num}`, cx, cy + 0.5, { align: "center" });
 
-  doc.setFont("helvetica", "normal");
+  doc.setFont(pdfActiveFont, "normal");
   doc.setFontSize(9);
   doc.setTextColor(...C.ink);
   const lines = doc.splitTextToSize(text, PAGE_CW - 14);

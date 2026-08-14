@@ -242,6 +242,7 @@ export interface SemanticTokens {
     heatmap:     string;
     supports:    string;
     risks:       string;
+    wallThickness: string;
     printPath:   string;
     layerReveal: string;
     failure:     string;
@@ -322,6 +323,7 @@ export function buildSemantic(palette: ThemeColors): SemanticTokens {
       heatmap:     'dark:text-orange-400 text-amber-700',
       supports:    'dark:text-blue-400 text-sky-700',
       risks:       'dark:text-cyan-400 text-emerald-700',
+      wallThickness: 'dark:text-amber-400 text-amber-700',
       printPath:   'dark:text-cyan-400 text-emerald-700',
       layerReveal: 'dark:text-cyan-400 text-emerald-700',
       failure:     'dark:text-amber-400 text-amber-700',

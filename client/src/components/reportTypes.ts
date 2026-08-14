@@ -1,9 +1,10 @@
+import type { ContentLang } from "@shared/i18n/content";
 import type { UnifiedAnalysis } from "../analysis/types";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export type ToneMode = "friendly" | "professional" | "expert";
-export type Language = "en" | "ja" | "zh";
+export type Language = ContentLang;
 export type TrafficLight = "green" | "yellow" | "red";
 export type PdfTier = "client" | "designer" | "factory";
 
