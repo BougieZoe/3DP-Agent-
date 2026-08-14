@@ -154,6 +154,82 @@ var SANDBOX_MEM_KB = 2e6;
 var SANDBOX_CPU_S = 120;
 var SANDBOX_FILE_KB = 102400;
 
+// server/llmFailover.ts
+var state = /* @__PURE__ */ new Map();
+function isCircuitOpen(id, now = Date.now()) {
+  const s = state.get(id);
+  if (!s) return false;
+  if (s.openUntil <= 0) return false;
+  return now < s.openUntil;
+}
+function recordAttempt(id, ok, opts, now = Date.now()) {
+  if (ok) {
+    state.delete(id);
+    return;
+  }
+  const prev = state.get(id);
+  if (prev && prev.openUntil > 0 && now >= prev.openUntil) {
+    prev.failures = 0;
+    prev.openUntil = 0;
+  }
+  const s = prev ?? { failures: 0, openUntil: 0 };
+  s.failures += 1;
+  if (s.failures >= opts.failureThreshold) {
+    s.openUntil = now + opts.cooldownMs;
+  }
+  state.set(id, s);
+}
+async function runFailoverSequence(candidates, opts = {}) {
+  const failureThreshold = opts.failureThreshold ?? 3;
+  const cooldownMs = opts.cooldownMs ?? 3e4;
+  const budgetMs = opts.budgetMs ?? 3e4;
+  const onLog = opts.onLog ?? (() => {
+  });
+  const deadline = Date.now() + budgetMs;
+  const failures = [];
+  let lastError;
+  for (const candidate of candidates) {
+    if (Date.now() >= deadline) {
+      failures.push(`budget exceeded before trying ${candidate.label}`);
+      break;
+    }
+    if (isCircuitOpen(candidate.id)) {
+      onLog(`skip ${candidate.label}: circuit open`);
+      failures.push(`${candidate.label}: circuit open`);
+      continue;
+    }
+    onLog(`trying ${candidate.label}`);
+    let result;
+    try {
+      result = await candidate.send();
+    } catch (err) {
+      lastError = String(err);
+      recordAttempt(candidate.id, false, { failureThreshold, cooldownMs });
+      onLog(`${candidate.label} threw: ${lastError}`);
+      failures.push(`${candidate.label}: ${lastError}`);
+      continue;
+    }
+    if (result.ok) {
+      recordAttempt(candidate.id, true, { failureThreshold, cooldownMs });
+      return { ok: true, provider: candidate.label };
+    }
+    lastError = result.message ?? (result.status ? `HTTP ${result.status}` : "unknown failure");
+    if (result.retryAfterSeconds && result.status === 429) {
+      const wait = Math.min(result.retryAfterSeconds * 1e3, deadline - Date.now());
+      if (wait > 0) {
+        onLog(`${candidate.label}: 429 retry-after ${result.retryAfterSeconds}s`);
+        await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+    recordAttempt(candidate.id, false, { failureThreshold, cooldownMs });
+    onLog(`${candidate.label} returned: ${lastError}`);
+    failures.push(`${candidate.label}: ${lastError}`);
+  }
+  const message = failures.length > 0 ? failures.join("; ") : "all LLM candidates failed";
+  onLog(`failover exhausted: ${message}`);
+  return { ok: false, error: lastError ? `${message} (last: ${lastError})` : message };
+}
+
 // server/cadBridge.ts
 var SKILL_DIR = process.env.CAD_SKILL_DIR ?? path.join(os.homedir(), ".agents", "skills", "cad");
 var STEP_CLI_DIR = path.join(SKILL_DIR, "scripts", "step");
@@ -279,20 +355,49 @@ async function llmChatOnce(llm, userMessage) {
   if (!content) throw new Error("LLM returned empty content");
   return extractPythonSource(content);
 }
-async function generateSourceViaLlm(llm, userMessage) {
-  const attempts = 2;
+async function llmChatWithBackoff(llm, userMessage, onLog) {
+  const attempts = 3;
+  let backoffMs = 1e3;
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       return await llmChatOnce(llm, userMessage);
     } catch (err) {
       lastError = err;
+      const message = String(err);
       const timedOut = err instanceof Error && err.name === "TimeoutError";
-      if (timedOut || attempt === attempts) throw err;
-      console.warn(`[cadBridge] LLM attempt ${attempt}/${attempts} failed (${String(err)}); retrying`);
+      const rateLimited = message.includes("429");
+      const transient = rateLimited || /HTTP 5\d\d/.test(message);
+      if (timedOut || attempt === attempts || !transient) throw err;
+      const wait = Math.min(backoffMs, 5e3);
+      onLog(`[cadBridge] LLM attempt ${attempt}/${attempts} (${message}); retrying in ${wait}ms`);
+      await new Promise((r) => setTimeout(r, wait));
+      backoffMs *= 2;
     }
   }
   throw lastError;
+}
+async function generateSourceViaLlm(candidates, userMessage) {
+  let content = "";
+  const candidate = candidates.map((llm) => ({
+    id: `${llm.baseUrl}|${llm.model}`,
+    label: `${new URL(llm.baseUrl).hostname}/${llm.model}`,
+    send: async () => {
+      content = await llmChatWithBackoff(llm, userMessage, () => {
+      });
+      return { ok: true };
+    }
+  }));
+  const result = await runFailoverSequence(candidate, {
+    failureThreshold: 2,
+    cooldownMs: 3e4,
+    budgetMs: 15e4,
+    onLog: (msg) => console.log(`[cadBridge] failover: ${msg}`)
+  });
+  if (!result.ok) {
+    throw new Error(result.error ?? "LLM source generation failed");
+  }
+  return content;
 }
 function composeUserMessage(body, priorSource) {
   const lines = [];
@@ -392,7 +497,7 @@ function createCadBridgeRouter() {
       sendError(res, 400, "generation-failed", "prompt must be a non-empty string");
       return;
     }
-    if (!body.generatorSource && !body.llm) {
+    if (!body.generatorSource && !body.llm && !(body.llmCandidates && body.llmCandidates.length > 0)) {
       console.log(`[cadBridge:${id.slice(0, 8)}] REJECT \u2014 no LLM config or generatorSource`);
       sendError(
         res,
@@ -412,14 +517,19 @@ function createCadBridgeRouter() {
     const warnings = [];
     let priorSource = null;
     if (body.baseModel) {
+      const parentId = body.baseModel.generatedModelId ?? "";
+      if (!/^[0-9a-f-]{20,}$/i.test(parentId)) {
+        sendError(res, 400, "invalid-artifact", "baseModel.generatedModelId has an invalid format");
+        return;
+      }
       try {
         priorSource = await readFile(
-          path.join(RUNS_ROOT, body.baseModel.generatedModelId, "model.py"),
+          path.join(RUNS_ROOT, parentId, "model.py"),
           "utf-8"
         );
       } catch {
         warnings.push(
-          `parent model ${body.baseModel.generatedModelId} source not found; generating fresh`
+          `parent model ${parentId} source not found; generating fresh`
         );
       }
     }
@@ -428,10 +538,17 @@ function createCadBridgeRouter() {
       source = body.generatorSource;
       console.log(`[cadBridge:${id.slice(0, 8)}] Using generatorSource (${source.length} chars)`);
     } else {
+      const candidates = body.llmCandidates && body.llmCandidates.length > 0 ? body.llmCandidates : body.llm ? [body.llm] : [];
+      if (candidates.length === 0) {
+        sendError(res, 502, "generation-failed", "LLM source generation failed: no LLM provider configured");
+        return;
+      }
       const llmStart = Date.now();
       try {
-        console.log(`[cadBridge:${id.slice(0, 8)}] Calling LLM: ${body.llm.model} at ${body.llm.baseUrl}`);
-        source = await generateSourceViaLlm(body.llm, composeUserMessage(body, priorSource));
+        console.log(
+          `[cadBridge:${id.slice(0, 8)}] Calling LLM: ${candidates.map((c) => `${new URL(c.baseUrl).hostname}/${c.model}`).join(" \u2192 ")}`
+        );
+        source = await generateSourceViaLlm(candidates, composeUserMessage(body, priorSource));
         console.log(`[cadBridge:${id.slice(0, 8)}] LLM responded in ${Date.now() - llmStart}ms (${source.length} chars)`);
       } catch (err) {
         console.log(`[cadBridge:${id.slice(0, 8)}] LLM failed after ${Date.now() - llmStart}ms: ${String(err)}`);
@@ -464,7 +581,7 @@ function createCadBridgeRouter() {
     let run = await runStepCli(ready.python, args, runDir, timeoutMs);
     let repairAttempts = 0;
     let repairType = null;
-    const providerLabel = body.llm?.model ?? "template";
+    const providerLabel = (body.llmCandidates?.[0]?.model ?? body.llm?.model) || "template";
     while (run.code !== 0 && !run.timedOut && repairAttempts < MAX_REPAIR_ATTEMPTS) {
       const combined = run.stdout + run.stderr;
       console.log(`[cadBridge:${id.slice(0, 8)}] Attempt ${repairAttempts + 1} failed \u2014 inspecting traceback`);
@@ -599,6 +716,7 @@ import os2 from "node:os";
 import path2 from "node:path";
 var MESH_SCRIPT = path2.join(import.meta.dirname, "mesh_process.py");
 var MESH_PROCESS_TIMEOUT_MS = 3e4;
+var MAX_TRIANGLES = 2e6;
 function resolveMeshPython() {
   const candidates = [
     process.env.CAD_MESH_PYTHON,
@@ -609,12 +727,14 @@ function resolveMeshPython() {
   }
   return resolvePython();
 }
-function runMeshProcess(python, cwd, inPath, outPath, decimateTo) {
+function runMeshProcess(python, cwd, inPath, outPath, diagPath, decimateTo) {
   return new Promise((resolvePromise) => {
-    const child = spawn2(python, ["-I", MESH_SCRIPT, inPath, outPath, String(decimateTo)], {
-      cwd,
-      env: SANDBOX_ENV
-    });
+    const ulimitCmd = `ulimit -v ${SANDBOX_MEM_KB} 2>/dev/null; ulimit -t ${SANDBOX_CPU_S} 2>/dev/null; ulimit -f ${SANDBOX_FILE_KB} 2>/dev/null; exec "$0" "$@"`;
+    const child = spawn2(
+      "/bin/sh",
+      ["-c", ulimitCmd, python, "-I", MESH_SCRIPT, inPath, outPath, String(decimateTo), diagPath],
+      { cwd, env: SANDBOX_ENV }
+    );
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => child.kill("SIGKILL"), MESH_PROCESS_TIMEOUT_MS);
@@ -634,6 +754,10 @@ function runMeshProcess(python, cwd, inPath, outPath, decimateTo) {
     });
   });
 }
+function binaryStlTriangleCount(buf) {
+  if (buf.byteLength < 84) return 0;
+  return buf.readUInt32LE(80);
+}
 function createMeshProcessRouter() {
   const router = Router2();
   router.use(expressJson({ limit: "50mb" }));
@@ -650,16 +774,26 @@ function createMeshProcessRouter() {
       res.status(400).json({ ok: false, error: { code: "invalid-artifact", detail: "STL too small" } });
       return;
     }
+    const triCount = binaryStlTriangleCount(input);
+    if (triCount > MAX_TRIANGLES) {
+      res.status(413).json({
+        ok: false,
+        error: { code: "invalid-artifact", detail: `STL too large (${triCount.toLocaleString()} triangles, max ${MAX_TRIANGLES.toLocaleString()})` }
+      });
+      return;
+    }
     const dir = await mkdtemp(path2.join(os2.tmpdir(), "mesh-process-"));
     const inPath = path2.join(dir, "in.stl");
     const outPath = path2.join(dir, "out.stl");
+    const diagPath = path2.join(dir, "diag.json");
     await writeFile2(inPath, input);
     try {
-      const { stdout, stderr, code } = await runMeshProcess(
+      const { stderr, code } = await runMeshProcess(
         resolveMeshPython(),
         dir,
         inPath,
         outPath,
+        diagPath,
         decimateTo
       );
       if (code !== 0) {
@@ -671,7 +805,7 @@ function createMeshProcessRouter() {
       }
       let diagnostics = {};
       try {
-        diagnostics = JSON.parse(stdout);
+        diagnostics = JSON.parse(await readFile2(diagPath, "utf-8"));
       } catch {
       }
       const out = await readFile2(outPath);
@@ -930,6 +1064,96 @@ function createSlicerRouter() {
   return router;
 }
 
+// server/tripoProxy.ts
+import { Router as Router4, json as expressJson2 } from "express";
+var TRIPO_BASE_URL = (process.env.TRIPO_BASE_URL ?? "https://api.tripo3d.ai/v2/openapi").replace(/\/+$/, "");
+var TRIPO_API_KEY = process.env.TRIPO_API_KEY ?? "";
+var MAX_PROMPT_LENGTH = 4e3;
+function sendError3(res, status, code, detail) {
+  res.status(status).json({ ok: false, error: { code, detail } });
+}
+function isTripoBusinessError(body) {
+  return typeof body === "object" && body !== null && typeof body.code === "number" && body.code !== 0;
+}
+function parseJsonLoose(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+function createTripoProxyRouter() {
+  const router = Router4();
+  router.use(expressJson2({ limit: "64kb" }));
+  router.get("/health", (_req, res) => {
+    res.json({ ok: true, ready: TRIPO_API_KEY.length > 0 });
+  });
+  router.post("/task", async (req, res) => {
+    if (!TRIPO_API_KEY) {
+      sendError3(res, 503, "transport-unavailable", "TRIPO_API_KEY not configured on the server");
+      return;
+    }
+    const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
+    if (prompt.length === 0) {
+      sendError3(res, 400, "generation-failed", "prompt must be a non-empty string");
+      return;
+    }
+    if (prompt.length > MAX_PROMPT_LENGTH) {
+      sendError3(res, 400, "generation-failed", `prompt too long (max ${MAX_PROMPT_LENGTH} chars)`);
+      return;
+    }
+    try {
+      const upstream = await fetch(`${TRIPO_BASE_URL}/task`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${TRIPO_API_KEY}`
+        },
+        body: JSON.stringify({ type: "text_to_model", prompt }),
+        signal: AbortSignal.timeout(3e4)
+      });
+      const text = await upstream.text();
+      const body = parseJsonLoose(text);
+      if (isTripoBusinessError(body)) {
+        sendError3(res, 402, body.code === 2010 ? "generation-failed" : "generation-failed", body.message ?? `Tripo rejected the task (code ${body.code})`);
+        return;
+      }
+      res.status(upstream.status).set("Content-Type", "application/json").send(text || "{}");
+    } catch (err) {
+      const timedOut = err instanceof Error && err.name === "TimeoutError";
+      sendError3(res, timedOut ? 504 : 502, "generation-failed", `Tripo submit failed: ${String(err)}`);
+    }
+  });
+  router.get("/task/:id", async (req, res) => {
+    const id = req.params.id ?? "";
+    if (!/^[A-Za-z0-9_-]+$/.test(id)) {
+      sendError3(res, 400, "invalid-artifact", "invalid task id");
+      return;
+    }
+    if (!TRIPO_API_KEY) {
+      sendError3(res, 503, "transport-unavailable", "TRIPO_API_KEY not configured on the server");
+      return;
+    }
+    try {
+      const upstream = await fetch(`${TRIPO_BASE_URL}/task/${encodeURIComponent(id)}`, {
+        headers: { Authorization: `Bearer ${TRIPO_API_KEY}` },
+        signal: AbortSignal.timeout(3e4)
+      });
+      const text = await upstream.text();
+      const body = parseJsonLoose(text);
+      if (isTripoBusinessError(body)) {
+        sendError3(res, 402, "generation-failed", body.message ?? `Tripo rejected the poll (code ${body.code})`);
+        return;
+      }
+      res.status(upstream.status).set("Content-Type", "application/json").send(text || "{}");
+    } catch (err) {
+      const timedOut = err instanceof Error && err.name === "TimeoutError";
+      sendError3(res, timedOut ? 504 : 502, "generation-failed", `Tripo poll failed: ${String(err)}`);
+    }
+  });
+  return router;
+}
+
 // server/loopbackGuard.ts
 function isLoopback(ip) {
   return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
@@ -1038,6 +1262,7 @@ async function startServer() {
     app.use("/api/cad/generate", ...amdProxy, createCadBridgeRouter());
     app.use("/api/mesh/process", ...amdProxy, createMeshProcessRouter());
     app.use("/api/slice", ...amdProxy, createSlicerRouter());
+    app.use("/api/tripo", ...amdProxy, createTripoProxyRouter());
     console.log(
       `[server] bridges mounted${BRIDGE_TOKEN ? " (BRIDGE_TOKEN auth)" : " (NODE_ENV != production)"}`
     );

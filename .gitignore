@@ -12,5 +12,9 @@ XPRIZE/
 # CAD bridge workspace (venv + generation runs)
 .cad-bridge/
 
+# Python cache
+__pycache__/
+*.pyc
+
 # Test coverage
 coverage/
