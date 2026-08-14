@@ -4,11 +4,14 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { SANDBOX_ENV } from './cadSandbox';
+import { SANDBOX_ENV, SANDBOX_FILE_KB, SANDBOX_MEM_KB, SANDBOX_CPU_S } from './cadSandbox';
 import { resolvePython } from './cadBridge';
 
 const MESH_SCRIPT = path.join(import.meta.dirname, 'mesh_process.py');
 const MESH_PROCESS_TIMEOUT_MS = 30_000;
+/** Binary STL facet ceiling — mirrors the decimateTo clamp; a crafted header
+ * claiming millions of triangles is rejected before trimesh ever parses it. */
+const MAX_TRIANGLES = 2_000_000;
 
 /**
  * Mesh processing runs trimesh + pymeshfix which are incompatible with the
@@ -42,13 +45,24 @@ function runMeshProcess(
   cwd: string,
   inPath: string,
   outPath: string,
+  diagPath: string,
   decimateTo: number,
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolvePromise) => {
-    const child = spawn(python, ['-I', MESH_SCRIPT, inPath, outPath, String(decimateTo)], {
-      cwd,
-      env: SANDBOX_ENV,
-    });
+    // Same sandbox posture as the CAD bridge: isolated interpreter (-I),
+    // sanitized env, and best-effort resource ceilings applied before exec.
+    // The mesh runner previously spawned without ulimits — a large or hostile
+    // STL could exhaust host memory before the SIGKILL timer fired.
+    const ulimitCmd =
+      `ulimit -v ${SANDBOX_MEM_KB} 2>/dev/null; ` +
+      `ulimit -t ${SANDBOX_CPU_S} 2>/dev/null; ` +
+      `ulimit -f ${SANDBOX_FILE_KB} 2>/dev/null; ` +
+      `exec "$0" "$@"`;
+    const child = spawn(
+      '/bin/sh',
+      ['-c', ulimitCmd, python, '-I', MESH_SCRIPT, inPath, outPath, String(decimateTo), diagPath],
+      { cwd, env: SANDBOX_ENV },
+    );
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => child.kill('SIGKILL'), MESH_PROCESS_TIMEOUT_MS);
@@ -67,6 +81,12 @@ function runMeshProcess(
       resolvePromise({ stdout, stderr, code });
     });
   });
+}
+
+/** Read the facet count from a BINARY STL header (80-byte header + uint32 LE). */
+function binaryStlTriangleCount(buf: Buffer): number {
+  if (buf.byteLength < 84) return 0;
+  return buf.readUInt32LE(80);
 }
 
 /**
@@ -96,18 +116,28 @@ export function createMeshProcessRouter(): Router {
       res.status(400).json({ ok: false, error: { code: 'invalid-artifact', detail: 'STL too small' } });
       return;
     }
+    const triCount = binaryStlTriangleCount(input);
+    if (triCount > MAX_TRIANGLES) {
+      res.status(413).json({
+        ok: false,
+        error: { code: 'invalid-artifact', detail: `STL too large (${triCount.toLocaleString()} triangles, max ${MAX_TRIANGLES.toLocaleString()})` },
+      });
+      return;
+    }
 
     const dir = await mkdtemp(path.join(os.tmpdir(), 'mesh-process-'));
     const inPath = path.join(dir, 'in.stl');
     const outPath = path.join(dir, 'out.stl');
+    const diagPath = path.join(dir, 'diag.json');
     await writeFile(inPath, input);
 
     try {
-      const { stdout, stderr, code } = await runMeshProcess(
+      const { stderr, code } = await runMeshProcess(
         resolveMeshPython(),
         dir,
         inPath,
         outPath,
+        diagPath,
         decimateTo,
       );
       if (code !== 0) {
@@ -118,8 +148,10 @@ export function createMeshProcessRouter(): Router {
         return;
       }
       let diagnostics: MeshProcessDiagnostics = {};
+      // Diagnostics travel via a sidecar file, not stdout — trimesh /
+      // pymeshfix warnings can no longer corrupt the payload.
       try {
-        diagnostics = JSON.parse(stdout) as MeshProcessDiagnostics;
+        diagnostics = JSON.parse(await readFile(diagPath, 'utf-8')) as MeshProcessDiagnostics;
       } catch {
         /* keep empty diagnostics */
       }

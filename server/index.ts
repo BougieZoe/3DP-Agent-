@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { createCadBridgeRouter } from "./cadBridge";
 import { createMeshProcessRouter } from "./meshProcess";
 import { createSlicerRouter } from "./slicerRouter";
+import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -147,6 +148,12 @@ async function startServer() {
 
     // Slicer bridge: STL → G-code via a local slicer CLI.
     app.use("/api/slice", ...amdProxy, createSlicerRouter());
+
+    // Tripo text-to-3D relay: the API key stays server-side; the browser only
+    // talks to this proxy. Mounted under the same bridge guards as the other
+    // host-side features so the operator's Tripo quota cannot be drained by
+    // anonymous callers.
+    app.use("/api/tripo", ...amdProxy, createTripoProxyRouter());
 
     console.log(
       `[server] bridges mounted${BRIDGE_TOKEN ? " (BRIDGE_TOKEN auth)" : " (NODE_ENV != production)"}`,

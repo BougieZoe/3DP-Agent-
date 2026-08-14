@@ -258,6 +258,11 @@ export default defineConfig({
         changeOrigin: true,
         xfwd: true,
       },
+      "/api/tripo": {
+        target: "http://127.0.0.1:3001",
+        changeOrigin: true,
+        xfwd: true,
+      },
       // Dev: LLM relay (same origin in prod, forwarded to the Express server here).
       // Deliberately no xfwd — the relay is key-per-request, never host-gated.
       "/api/llm": {

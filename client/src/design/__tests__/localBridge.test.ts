@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GeneratedModel } from '@shared/domain/generatedModel';
-import { createLocalBridgeTransport } from '../transport/localBridge';
+import { createLocalBridgeAdapter } from '../generator/localBridge';
+import { generateDesign } from '../generator/service';
 
 /** Smallest valid binary STL: 80-byte header + facet count + one 50-byte facet. */
 function makeBinaryStl(): ArrayBuffer {
@@ -50,33 +51,46 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-describe('localBridge transport', () => {
+/** Route /health to a ready response so the facade's availability gate passes. */
+function router(handler: (url: string, init?: RequestInit) => Promise<Response>): typeof fetch {
+  return (async (url: unknown, init?: RequestInit) => {
+    const u = String(url);
+    if (u.endsWith('/health')) return jsonResponse({ ok: true, ready: true });
+    return handler(u, init);
+  }) as typeof fetch;
+}
+
+describe('localBridge adapter (via generateDesign facade)', () => {
   it('returns decoded STL bytes and model metadata on success', async () => {
     const model = makeModel();
-    const fetchImpl = (async () =>
-      jsonResponse({ ok: true, model, stlBase64: stlBase64() })) as typeof fetch;
-
-    const transport = createLocalBridgeTransport({ endpoint: 'http://x/api', fetchImpl });
-    const outcome = await transport.generate({ prompt: 'a 20mm cube' });
+    const adapter = createLocalBridgeAdapter({
+      endpoint: 'http://x/api',
+      fetchImpl: router(async () => jsonResponse({ ok: true, model, stlBase64: stlBase64() })),
+    });
+    const outcome = await generateDesign({ prompt: 'a 20mm cube' }, adapter);
 
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
-    expect(outcome.result.model.id).toBe('test-id-1');
+    expect(outcome.result.generatedModel?.id).toBe('test-id-1');
     expect(outcome.result.stlBytes.byteLength).toBe(134);
   });
 
   it('forwards prompt and baseModel in the request body', async () => {
     let captured: unknown;
-    const fetchImpl = (async (_url: unknown, init?: RequestInit) => {
-      captured = JSON.parse(String(init?.body));
-      return jsonResponse({ ok: true, model: makeModel(), stlBase64: stlBase64() });
-    }) as typeof fetch;
-
-    const transport = createLocalBridgeTransport({ endpoint: 'http://x/api', fetchImpl });
-    await transport.generate({
-      prompt: 'make wall 3mm',
-      baseModel: { generatedModelId: 'parent-1', editInstruction: 'make wall 3mm' },
+    const adapter = createLocalBridgeAdapter({
+      endpoint: 'http://x/api',
+      fetchImpl: router(async (_url, init) => {
+        captured = JSON.parse(String(init?.body));
+        return jsonResponse({ ok: true, model: makeModel(), stlBase64: stlBase64() });
+      }),
     });
+    await generateDesign(
+      {
+        prompt: 'make wall 3mm',
+        baseModel: { generatedModelId: 'parent-1', editInstruction: 'make wall 3mm' },
+      },
+      adapter,
+    );
 
     const body = captured as { prompt: string; baseModel: { generatedModelId: string } };
     expect(body.prompt).toBe('make wall 3mm');
@@ -84,14 +98,16 @@ describe('localBridge transport', () => {
   });
 
   it('maps bridge error responses to typed errors', async () => {
-    const fetchImpl = (async () =>
-      jsonResponse(
-        { ok: false, error: { code: 'generation-failed', detail: 'scripts/step exited with code 1' } },
-        502,
-      )) as typeof fetch;
-
-    const transport = createLocalBridgeTransport({ endpoint: 'http://x/api', fetchImpl });
-    const outcome = await transport.generate({ prompt: 'x' });
+    const adapter = createLocalBridgeAdapter({
+      endpoint: 'http://x/api',
+      fetchImpl: router(async () =>
+        jsonResponse(
+          { ok: false, error: { code: 'generation-failed', detail: 'scripts/step exited with code 1' } },
+          502,
+        ),
+      ),
+    });
+    const outcome = await generateDesign({ prompt: 'x' }, adapter);
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
@@ -99,12 +115,13 @@ describe('localBridge transport', () => {
   });
 
   it('reports transport-unavailable on network failure', async () => {
-    const fetchImpl = (async () => {
-      throw new TypeError('fetch failed');
-    }) as typeof fetch;
-
-    const transport = createLocalBridgeTransport({ endpoint: 'http://x/api', fetchImpl });
-    const outcome = await transport.generate({ prompt: 'x' });
+    const adapter = createLocalBridgeAdapter({
+      endpoint: 'http://x/api',
+      fetchImpl: router(async () => {
+        throw new TypeError('fetch failed');
+      }),
+    });
+    const outcome = await generateDesign({ prompt: 'x' }, adapter);
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
@@ -112,15 +129,19 @@ describe('localBridge transport', () => {
   });
 
   it('reports generation-timeout when the request exceeds its budget', async () => {
-    const hangingFetch = ((_url: unknown, init?: RequestInit) =>
-      new Promise<Response>((_resolve, reject) => {
+    const hangingFetch = ((_url: unknown, init?: RequestInit) => {
+      if (String(_url).endsWith('/health')) {
+        return Promise.resolve(jsonResponse({ ok: true, ready: true }));
+      }
+      return new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () =>
           reject(new DOMException('The operation was aborted', 'AbortError')),
         );
-      })) as typeof fetch;
+      });
+    }) as typeof fetch;
 
-    const transport = createLocalBridgeTransport({ endpoint: 'http://x/api', fetchImpl: hangingFetch });
-    const outcome = await transport.generate({ prompt: 'x', timeoutMs: 50 });
+    const adapter = createLocalBridgeAdapter({ endpoint: 'http://x/api', fetchImpl: hangingFetch });
+    const outcome = await generateDesign({ prompt: 'x', timeoutMs: 50 }, adapter);
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
@@ -129,11 +150,11 @@ describe('localBridge transport', () => {
 
   it('rejects responses without an inline STL artifact', async () => {
     const model = makeModel({ artifacts: [] });
-    const fetchImpl = (async () =>
-      jsonResponse({ ok: true, model, stlBase64: stlBase64() })) as typeof fetch;
-
-    const transport = createLocalBridgeTransport({ endpoint: 'http://x/api', fetchImpl });
-    const outcome = await transport.generate({ prompt: 'x' });
+    const adapter = createLocalBridgeAdapter({
+      endpoint: 'http://x/api',
+      fetchImpl: router(async () => jsonResponse({ ok: true, model, stlBase64: stlBase64() })),
+    });
+    const outcome = await generateDesign({ prompt: 'x' }, adapter);
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
@@ -141,11 +162,11 @@ describe('localBridge transport', () => {
   });
 
   it('isAvailable reflects the bridge health endpoint', async () => {
-    const up = createLocalBridgeTransport({
+    const up = createLocalBridgeAdapter({
       endpoint: 'http://x/api',
       fetchImpl: (async () => jsonResponse({ ok: true, ready: true })) as typeof fetch,
     });
-    const down = createLocalBridgeTransport({
+    const down = createLocalBridgeAdapter({
       endpoint: 'http://x/api',
       fetchImpl: (async () => {
         throw new TypeError('fetch failed');
