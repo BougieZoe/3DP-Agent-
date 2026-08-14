@@ -2,15 +2,18 @@ import { moduleResult, type AnalysisModuleResult, type Confidence, type SupportR
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
+import { getThresholds, type AnalysisThresholds } from './thresholds';
 import { overhangTiltBelowHorizontalDeg, isOnBuildPlate } from './metrics';
 
 export function estimateSupportVolume(
   model: GeometryModel,
   graph?: GeometryGraph | null,
-  overhangThresholdDeg: number = 50,
-  densityGPerMm3: number = 0.00124,
+  overhangThresholdDeg?: number,
+  densityGPerMm3?: number,
   language: ContentLang = 'en',
+  thresholds: AnalysisThresholds = getThresholds(),
 ): AnalysisModuleResult<SupportResult> {
+  const supportConfig = thresholds.support;
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
 
@@ -43,11 +46,7 @@ export function estimateSupportVolume(
   const supportFaceAngles: number[] = [];
 
   const volumeByAngle = new Map<string, { volumeMm3: number; faceCount: number }>();
-  const angleBuckets = [
-    { label: '45-60°', min: 45, max: 60, ratio: 0.3 },
-    { label: '60-75°', min: 60, max: 75, ratio: 0.5 },
-    { label: '75-90°', min: 75, max: 90, ratio: 0.8 },
-  ];
+  const angleBuckets = supportConfig.angleBuckets;
 
   for (const bucket of angleBuckets) {
     volumeByAngle.set(bucket.label, { volumeMm3: 0, faceCount: 0 });
@@ -78,12 +77,13 @@ export function estimateSupportVolume(
     // Faces resting on the build plate are supported by the bed, not by supports.
     if (isOnBuildPlate(fcz, minZ, modelHeight)) continue;
 
-    if (tiltDeg <= overhangThresholdDeg) continue;
+    if (tiltDeg <= (overhangThresholdDeg ?? thresholds.overhangThresholdDeg)) continue;
 
     const area = len / 2;
 
-    let bucketRatio = 0.3;
-    let bucketLabel = '45-60°';
+    const defaultBucket = angleBuckets[0];
+    let bucketRatio = defaultBucket?.ratio ?? 0.3;
+    let bucketLabel = defaultBucket?.label ?? '45-60°';
     for (const bucket of angleBuckets) {
       if (tiltDeg >= bucket.min && tiltDeg < bucket.max) {
         bucketRatio = bucket.ratio;
@@ -92,7 +92,7 @@ export function estimateSupportVolume(
       }
     }
 
-    const supportVol = area * Math.max(0.5, height) * bucketRatio;
+    const supportVol = area * Math.max(supportConfig.minHeightMm, height) * bucketRatio;
 
     totalSupportVolume += supportVol;
     totalOverhangAngle += tiltDeg;
@@ -112,14 +112,15 @@ export function estimateSupportVolume(
   }
 
   const avgAngle = supportFaceCount > 0 ? totalOverhangAngle / supportFaceCount : 0;
-  const supportGrams = totalSupportVolume / 1000 * densityGPerMm3;
+  const supportGrams = totalSupportVolume / 1000 * (densityGPerMm3 ?? supportConfig.densityGPerMm3);
 
   let difficulty: SupportDifficulty = 'none';
   if (supportFaceCount > 0) {
     const supportRatio = faceCount > 0 ? supportFaceCount / faceCount : 0;
-    if (supportRatio > 0.3 || totalSupportVolume > 50000) difficulty = 'very_difficult';
-    else if (supportRatio > 0.15 || totalSupportVolume > 20000) difficulty = 'difficult';
-    else if (supportRatio > 0.05 || totalSupportVolume > 5000) difficulty = 'moderate';
+    const diff = supportConfig.difficulty;
+    if (supportRatio > diff.veryDifficultFaceRatio || totalSupportVolume > diff.veryDifficultVolumeMm3) difficulty = 'very_difficult';
+    else if (supportRatio > diff.difficultFaceRatio || totalSupportVolume > diff.difficultVolumeMm3) difficulty = 'difficult';
+    else if (supportRatio > diff.moderateFaceRatio || totalSupportVolume > diff.moderateVolumeMm3) difficulty = 'moderate';
     else difficulty = 'easy';
   }
 
@@ -243,7 +244,8 @@ export function estimateSupportVolume(
     .filter(([, data]) => data.faceCount > 0)
     .map(([range, data]) => ({ range, volumeMm3: data.volumeMm3, faceCount: data.faceCount }));
 
-  const confidence: Confidence = supportFaceCount > 10 ? 0.6 as Confidence : supportFaceCount > 0 ? 0.4 as Confidence : 0.9 as Confidence;
+  const conf = supportConfig.confidence;
+  const confidence: Confidence = supportFaceCount > conf.highConfidenceFaceCount ? conf.highConfidence as Confidence : supportFaceCount > conf.lowConfidenceFaceCount ? conf.lowConfidence as Confidence : conf.noneConfidence as Confidence;
 
   const result: SupportResult = {
     totalSupportVolumeMm3: totalSupportVolume,

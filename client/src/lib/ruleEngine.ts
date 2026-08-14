@@ -6,6 +6,7 @@
 import { CONTENT, translate } from '@shared/i18n/content';
 import type { Material } from '@/lib/materialState';
 import { DEFAULT_MATERIAL } from '@/lib/materialState';
+import { getThresholds, type AnalysisThresholds } from '@/analysis/thresholds';
 
 export interface ModelData {
   fileName: string;
@@ -21,7 +22,6 @@ export interface ModelData {
     thinWallPercentage: number;
     thinWallRatio: number;
     averageConfidence: number;
-    lowConfidenceSampleCount: number;
     areas: number;
     status: 'good' | 'warning' | 'critical';
   };
@@ -46,7 +46,13 @@ function formatMinThickness(v: number | null, lang: 'en' | 'ja' | 'zh'): string 
 }
 
 // Quick local analysis report — no API
-export function generateQuickReport(model: ModelData, lang: 'en' | 'ja' | 'zh', material: Material = DEFAULT_MATERIAL): string {
+export function generateQuickReport(
+  model: ModelData,
+  lang: 'en' | 'ja' | 'zh',
+  material: Material = DEFAULT_MATERIAL,
+  thresholds: AnalysisThresholds = getThresholds(),
+): string {
+  const reportConfig = thresholds.report;
   const issues: string[] = [];
   const tips: string[] = [];
 
@@ -55,14 +61,14 @@ export function generateQuickReport(model: ModelData, lang: 'en' | 'ja' | 'zh', 
     : model.wallThickness.thinWallPercentage;
   const pct = ((twr ?? 0) * 100).toFixed(1);
   const conf = model.wallThickness.averageConfidence;
-  const confLabel = conf < 0.4
+  const confLabel = conf < reportConfig.confidenceLowBelow
     ? translate(CONTENT, 'report.confidence.low', lang)
-    : conf < 0.7
+    : conf < reportConfig.confidenceModerateBelow
       ? translate(CONTENT, 'report.confidence.moderate', lang)
       : translate(CONTENT, 'report.confidence.high', lang);
 
   if (model.wallThickness.status === 'critical') {
-    if ((twr ?? 0) > 0.15) {
+    if ((twr ?? 0) > reportConfig.wallCriticalThinRatio) {
       issues.push(translate(CONTENT, 'rule.wallCritical', lang, { pct, t: formatMinThickness(model.wallThickness.minThickness, lang), conf: confLabel }));
     } else {
       issues.push(translate(CONTENT, 'rule.wallCriticalIsolated', lang, { pct, t: formatMinThickness(model.wallThickness.minThickness, lang), conf: confLabel }));
@@ -76,14 +82,14 @@ export function generateQuickReport(model: ModelData, lang: 'en' | 'ja' | 'zh', 
   }
 
   const maxDim = Math.max(model.dims.x, model.dims.y, model.dims.z);
-  if (maxDim < 1 || maxDim > 1000) {
+  if (maxDim < reportConfig.sizeUnusualMinMm || maxDim > reportConfig.sizeUnusualMaxMm) {
     issues.push(translate(CONTENT, 'rule.sizeUnusual', lang, { max: maxDim.toFixed(1) }));
   }
 
   const volume = model.volume;
-  const process = volume > 500000
+  const process = volume > reportConfig.processLargeVolumeMm3
     ? translate(CONTENT, 'rule.processLarge', lang)
-    : volume > 50000
+    : volume > reportConfig.processMidVolumeMm3
       ? translate(CONTENT, 'rule.processMid', lang)
       : translate(CONTENT, 'rule.processSmall', lang);
 
@@ -139,7 +145,14 @@ export function classifyQuestion(question: string): { needsAI: boolean; category
 }
 
 // Local answers for common questions
-export function answerLocally(category: string, model: ModelData, lang: 'en' | 'ja' | 'zh', material: Material = DEFAULT_MATERIAL): string {
+export function answerLocally(
+  category: string,
+  model: ModelData,
+  lang: 'en' | 'ja' | 'zh',
+  material: Material = DEFAULT_MATERIAL,
+  thresholds: AnalysisThresholds = getThresholds(),
+): string {
+  const reportConfig = thresholds.report;
   const isZh = lang === 'zh', isJa = lang === 'ja';
 
   switch (category) {
@@ -151,8 +164,8 @@ export function answerLocally(category: string, model: ModelData, lang: 'en' | '
     }
     case 'material': {
       const v = model.volume;
-      if (v > 500000) return isZh ? '推荐 FDM — 适合大型零件，成本低，速度快。材料建议：PLA / PETG / ABS。' : isJa ? 'FDM推奨 — 大型部品に最適。材料: PLA / PETG / ABS' : 'Recommend FDM — best for large parts. Materials: PLA / PETG / ABS.';
-      if (v > 50000) return isZh ? '推荐 FDM 或 SLA，取决于精度需求。精度要求高选SLA，成本优先选FDM。' : isJa ? 'FDMまたはSLAを推奨。精度重視ならSLA。' : 'FDM or SLA depending on precision needs. High detail → SLA. Cost-first → FDM.';
+      if (v > reportConfig.processLargeVolumeMm3) return isZh ? '推荐 FDM — 适合大型零件，成本低，速度快。材料建议：PLA / PETG / ABS。' : isJa ? 'FDM推奨 — 大型部品に最適。材料: PLA / PETG / ABS' : 'Recommend FDM — best for large parts. Materials: PLA / PETG / ABS.';
+      if (v > reportConfig.processMidVolumeMm3) return isZh ? '推荐 FDM 或 SLA，取决于精度需求。精度要求高选SLA，成本优先选FDM。' : isJa ? 'FDMまたはSLAを推奨。精度重視ならSLA。' : 'FDM or SLA depending on precision needs. High detail → SLA. Cost-first → FDM.';
       return isZh ? '推荐 SLA / SLS — 适合小型精细件，表面光洁度高。' : isJa ? 'SLA / SLS推奨 — 小型精細部品に最適。' : 'Recommend SLA / SLS — ideal for small detailed parts with fine surface finish.';
     }
     case 'support': {

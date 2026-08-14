@@ -11,7 +11,7 @@ describe('ruleEngine', () => {
     p1Thickness: null, p5Thickness: null, p10Thickness: null,
     medianThickness: null, avgThickness: null,
     thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0,
-    averageConfidence: 0, lowConfidenceSampleCount: 0,
+    averageConfidence: 0,
   };
 
   const validModel: ModelData = {

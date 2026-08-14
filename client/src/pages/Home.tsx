@@ -94,7 +94,6 @@ function unifiedToModelData(
       thinWallPercentage: metrics?.thinWallPercentage ?? 0,
       thinWallRatio: metrics?.thinWallRatio ?? 0,
       averageConfidence: metrics?.averageConfidence ?? 0,
-      lowConfidenceSampleCount: metrics?.lowConfidenceSampleCount ?? 0,
       areas: wtAreas,
       status: wtStatus,
     },
@@ -131,7 +130,6 @@ function unifiedToAnalysisSummary(unifiedAnalysis: import('@/analysis').UnifiedA
       thinWallPercentage: metrics?.thinWallPercentage ?? 0,
       thinWallRatio: metrics?.thinWallRatio ?? 0,
       averageConfidence: metrics?.averageConfidence ?? 0,
-      lowConfidenceSampleCount: metrics?.lowConfidenceSampleCount ?? 0,
       status: deriveWtStatus(thinWallRatio, p5Thickness),
     },
     overhang: {

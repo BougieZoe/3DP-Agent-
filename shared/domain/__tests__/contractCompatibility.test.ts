@@ -33,7 +33,6 @@ describe('domain contract compatibility', () => {
           thinWallCount: 0,
           thinWallPercentage: 0,
           averageConfidence: 0,
-          lowConfidenceSampleCount: 0,
           affectedAreas: 0,
           status: 'good',
         },

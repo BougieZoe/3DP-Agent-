@@ -43,7 +43,6 @@ export function normalMetrics(): MetricsResult {
     thinWallPercentage: 0,
     thinWallRatio: 0,
     averageConfidence: 0.85,
-    lowConfidenceSampleCount: 0,
     wallThicknessSamples: sample(50),
     overhang: {
       faceCount: 5,
@@ -75,7 +74,6 @@ export function thinWallMetrics(): MetricsResult {
     thinWallPercentage: 60,
     thinWallRatio: 0.6,
     averageConfidence: 0.5,
-    lowConfidenceSampleCount: 15,
     wallThicknessSamples: sample(50).map(s => ({ ...s, thickness: 0.5 })),
   };
 }
