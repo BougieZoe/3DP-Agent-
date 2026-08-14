@@ -29,6 +29,9 @@ export interface LocalBridgeAdapterOptions {
   endpoint?: string;
   /** LLM used by the bridge to author build123d source. Resolved client-side (BYO key). */
   llm?: LocalBridgeLlm;
+  /** Ordered [primary, ...fallbacks] for failover when the active provider
+   * is quota-limited. Each must be OpenAI-compatible (chat/completions). */
+  llmCandidates?: LocalBridgeLlm[];
   /** Dev/test escape hatch: skip the LLM and send explicit gen_step() source. */
   generatorSource?: string;
   fetchImpl?: typeof fetch;
@@ -73,6 +76,7 @@ export function createLocalBridgeAdapter(
           baseModel: request.baseModel,
           params: request.params,
           llm: options.llm,
+          llmCandidates: options.llmCandidates,
           generatorSource: options.generatorSource,
           timeoutMs,
         },
