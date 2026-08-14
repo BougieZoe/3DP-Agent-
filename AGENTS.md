@@ -73,7 +73,12 @@ React 19 + Three.js 0.184 + @react-three/fiber 9.6.1 + Vite 7.1.9 + TypeScript s
 
 ## Known Issues
 - RiskAnimation still uses independent `clock.getElapsedTime()` (not refactored)
-- Build error: missing `@/components/ui/sonner` import in App.tsx (pre-existing)
 - Vite dep-scan alias warnings (pre-existing — works at serve time)
-- Build command: `pnpm run build` (fails on pre-existing sonner issue)
 - Type check: `pnpm run check` (passes clean)
+- Build: `pnpm run build` (passes — the old missing-`sonner`-import failure was fixed; stale docs were removed)
+
+## Verification Gate (run before every commit)
+- `pnpm check` — tsc --noEmit, must be clean
+- `pnpm test` — vitest run, must be all green
+- `pnpm run build` — must succeed
+- Enforced automatically by `.github/workflows/ci.yml` on every push/PR; no branch lands without it.
