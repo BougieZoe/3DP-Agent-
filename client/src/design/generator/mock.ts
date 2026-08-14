@@ -1,10 +1,23 @@
 import * as THREE from 'three';
 import { STLExporter } from 'three-stdlib';
-import type { MeshGenerationProvider, MeshJobHandle, MeshJobState, MeshGenerationRequest } from './types';
+import type {
+  GeneratorAdapter,
+  GeneratorJob,
+  GeneratorJobState,
+  GeneratorRequest,
+} from './types';
+
+/**
+ * Local procedural mesh adapter. Produces a real, valid STL (via three.js) so
+ * the "mesh → parse → analysis" pipeline can be exercised end-to-end with no
+ * API key or server. When shape is 'auto' (default) it picks a primitive from
+ * prompt keywords so the demo feels alive. Fallback when no hosted provider is
+ * reachable/configured.
+ */
 
 export type MockShape = 'torus' | 'box' | 'sphere' | 'cylinder';
 
-export interface MockMeshProviderOptions {
+export interface MockAdapterOptions {
   /** Simulated generation latency (ms). */
   delayMs?: number;
   /** Fixed shape to emit, or 'auto' (default) to pick from the prompt. */
@@ -53,14 +66,7 @@ function geometryFor(shape: MockShape): THREE.BufferGeometry {
   }
 }
 
-/**
- * Local procedural mesh provider. Produces a real, valid STL (via three.js)
- * so the "mesh → parse → analysis" pipeline can be exercised end-to-end with
- * no API key. When shape is 'auto' (default) it picks a primitive from prompt
- * keywords so the demo feels alive. Also the fallback when no hosted provider
- * is configured.
- */
-export function createMockMeshProvider(options: MockMeshProviderOptions = {}): MeshGenerationProvider {
+export function createMockMeshAdapter(options: MockAdapterOptions = {}): GeneratorAdapter {
   const delayMs = options.delayMs ?? 600;
   const fixed = options.shape ?? 'auto';
   const shapeByHandle = new Map<string, MockShape>();
@@ -72,7 +78,7 @@ export function createMockMeshProvider(options: MockMeshProviderOptions = {}): M
       return true;
     },
 
-    async generate(request: MeshGenerationRequest): Promise<MeshJobHandle> {
+    async submit(request: GeneratorRequest): Promise<GeneratorJob> {
       const id = `mock-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
       // Keyword match → that shape; otherwise a random primitive so a custom
       // prompt always produces a visibly-new result instead of a silent default.
@@ -85,7 +91,7 @@ export function createMockMeshProvider(options: MockMeshProviderOptions = {}): M
       return { id, provider: 'mock' };
     },
 
-    async poll(handle: MeshJobHandle): Promise<MeshJobState> {
+    async poll(handle: GeneratorJob): Promise<GeneratorJobState> {
       await new Promise((r) => setTimeout(r, delayMs));
       const shape = shapeByHandle.get(handle.id) ?? 'torus';
       shapeByHandle.delete(handle.id);
@@ -97,7 +103,7 @@ export function createMockMeshProvider(options: MockMeshProviderOptions = {}): M
         out instanceof DataView
           ? out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength)
           : new TextEncoder().encode(String(out)).buffer;
-      return { status: 'succeeded', stlBytes };
+      return { status: 'succeeded', payload: { kind: 'mesh', stlBytes } };
     },
   };
 }

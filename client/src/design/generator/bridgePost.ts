@@ -1,11 +1,19 @@
 import type { GeneratedModel } from '@shared/domain/generatedModel';
-import type { CADGenerationError, CADGenerationOutcome } from '../cadGenerationService';
+import type {
+  GenerationError,
+  GenerationOutcome,
+  GeneratorJobState,
+} from './types';
 
 /**
  * Shared "POST a generation request, parse the bridge response, validate the
- * STL artifact, decode bytes" core used by every CADGenerationTransport
+ * STL artifact, decode bytes" core used by the cad-backed generator adapters
  * (localBridge, remoteProxy). Handles the request timeout/abort and maps
  * bridge errors to typed outcomes.
+ *
+ * NOTE: the inbound contract assertions here are the crown jewels of the
+ * generation layer — they moved verbatim from the old transport/fetchGeneration.
+ * Do not weaken them.
  */
 
 export interface BridgeSuccessBody {
@@ -41,11 +49,37 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 }
 
-function fail(error: CADGenerationError): CADGenerationOutcome {
+function fail(error: GenerationError): GenerationOutcome {
   return { ok: false, error };
 }
 
-export interface GenerationPostArgs {
+/** Map a settled cad-bridge outcome into the unified job lifecycle state. */
+export function settleOutcome(outcome: GenerationOutcome): GeneratorJobState {
+  if (outcome.ok) {
+    return {
+      status: 'succeeded',
+      payload: {
+        kind: 'cad',
+        result: {
+          generatedModel: outcome.result.generatedModel as GeneratedModel,
+          stlBytes: outcome.result.stlBytes,
+          repaired: outcome.result.repaired,
+          repairType: outcome.result.repairType,
+          attempts: outcome.result.attempts,
+        },
+      },
+    };
+  }
+  if (outcome.error.code === 'generation-timeout') {
+    return { status: 'failed', code: 'generation-timeout', reason: `generation exceeded ${outcome.error.timeoutMs}ms budget` };
+  }
+  if (outcome.error.code === 'cancelled') {
+    return { status: 'failed', code: 'cancelled', reason: 'cancelled' };
+  }
+  return { status: 'failed', code: outcome.error.code, reason: outcome.error.detail };
+}
+
+export interface BridgePostArgs {
   endpoint: string;
   headers: Record<string, string>;
   body: Record<string, unknown>;
@@ -55,7 +89,7 @@ export interface GenerationPostArgs {
   signal?: AbortSignal;
 }
 
-export async function postGeneration(args: GenerationPostArgs): Promise<CADGenerationOutcome> {
+export async function postGeneration(args: BridgePostArgs): Promise<GenerationOutcome> {
   const { endpoint, headers, body, timeoutMs, fetchImpl, signal } = args;
   const controller = new AbortController();
   let timedOut = false;
@@ -92,7 +126,7 @@ export async function postGeneration(args: GenerationPostArgs): Promise<CADGener
         /* non-JSON error body — keep defaults */
       }
       if (code === 'generation-timeout') return fail({ code, timeoutMs });
-      return fail({ code: code as CADGenerationError['code'], detail } as CADGenerationError);
+      return fail({ code: code as GenerationError['code'], detail } as GenerationError);
     }
 
     const success = (await res.json()) as BridgeSuccessBody;
@@ -120,8 +154,9 @@ export async function postGeneration(args: GenerationPostArgs): Promise<CADGener
     return {
       ok: true,
       result: {
-        model: success.model,
+        modelId: success.model.id,
         stlBytes,
+        generatedModel: success.model,
         repaired: success.repaired ?? false,
         repairType: success.repairType ?? 'none',
         attempts: success.attempts ?? 1,

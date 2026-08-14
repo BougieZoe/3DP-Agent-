@@ -3,10 +3,9 @@
 Runs inside the sandboxed CAD venv (trimesh + fast-simplification). Called by
 the /api/mesh/process endpoint.
 
-Input : sys.argv[1] input STL path
-        sys.argv[2] output STL path
-        sys.argv[3] target triangle count (0 = no decimation)
-Output: a JSON diagnostics object on stdout.
+Output: a JSON diagnostics object, written to a SIDECAR FILE (argv[4]) rather
+than printed to stdout — trimesh/pymeshfix emit warnings on stdout that would
+otherwise corrupt a one-line JSON contract.
 """
 import sys
 import json
@@ -19,6 +18,7 @@ import pymeshfix
 def main() -> None:
     in_path, out_path = sys.argv[1], sys.argv[2]
     decimate_to = int(sys.argv[3]) if len(sys.argv) > 3 else 0
+    diag_path = sys.argv[4] if len(sys.argv) > 4 else ""
 
     loaded = trimesh.load(in_path, file_type="stl", force="mesh")
     if not isinstance(loaded, trimesh.Trimesh):
@@ -77,7 +77,9 @@ def main() -> None:
     diag["watertight"] = bool(loaded.is_watertight)
     diag["volumeMm3"] = float(loaded.volume) if loaded.is_watertight else None
     diag["surfaceAreaMm2"] = float(loaded.area)
-    print(json.dumps(diag))
+    if diag_path:
+        with open(diag_path, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(diag))
 
 
 if __name__ == "__main__":

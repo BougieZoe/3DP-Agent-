@@ -20,7 +20,7 @@ import {
   Settings2,
   Box,
 } from "lucide-react";
-import { createLocalBridgeTransport } from "@/design/transport/localBridge";
+import { createLocalBridgeAdapter, generateDesign } from "@/design/generator";
 import { parseSTL } from "@/lib/stlParser";
 import type { UnifiedAnalysis } from "@/analysis";
 import { getAPIKeys, getActiveProvider } from "@/lib/apiKeys";
@@ -726,8 +726,8 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         mark('llm', 'running', `cached template`);
         templateSourceRef.current = fallback.source;
         setSourceVersion(v => v + 1);
-        const transport = createLocalBridgeTransport({ generatorSource: fallback.source });
-        outcome = await transport.generate({ prompt: p, timeoutMs: CAD_GENERATE_TIMEOUT_MS, baseModel });
+        const adapter = createLocalBridgeAdapter({ generatorSource: fallback.source });
+        outcome = await generateDesign({ prompt: p, timeoutMs: CAD_GENERATE_TIMEOUT_MS, baseModel }, adapter);
         if (outcome.ok) setLlmInfo(`Template: ${fallback.matched}`);
       } else {
         const llmProvider = getActiveProvider();
@@ -735,10 +735,10 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         const llmCfg = llmProvider ? LLM_CONFIGS[llmProvider] : undefined;
         if (llmProvider && llmKey && llmCfg) {
           mark('llm', 'running', `calling ${llmProvider}/${llmCfg.model}`);
-          const transport = createLocalBridgeTransport({
+          const adapter = createLocalBridgeAdapter({
             llm: { baseUrl: llmCfg.baseUrl, apiKey: llmKey, model: llmCfg.model },
           });
-          outcome = await transport.generate({ prompt: p, timeoutMs: CAD_GENERATE_TIMEOUT_MS, baseModel });
+          outcome = await generateDesign({ prompt: p, timeoutMs: CAD_GENERATE_TIMEOUT_MS, baseModel }, adapter);
         } else {
           outcome = null;
         }
@@ -768,8 +768,8 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       if (seq !== runSeqRef.current) return; // superseded by a newer run
       setGenerationQuality(quality);
 
-      setRequestId(outcome.result.model.id);
-      templateSourceRef.current = outcome.result.model.source ?? null;
+      setRequestId(outcome.result.generatedModel!.id);
+      templateSourceRef.current = outcome.result.generatedModel!.source ?? null;
       setSourceVersion(v => v + 1);
       stlBytesRef.current = outcome.result.stlBytes;
       setRepairInfo({
@@ -777,7 +777,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         repairType: outcome.result.repairType ?? 'none',
         attempts: outcome.result.attempts ?? 1,
       });
-      console.log(`[CADStudio] Generated model: ${outcome.result.model.id}, duration: ${outcome.result.model.durationMs}ms`);
+      console.log(`[CADStudio] Generated model: ${outcome.result.generatedModel!.id}, duration: ${outcome.result.generatedModel!.durationMs}ms`);
       mark('llm', 'done');
 
       mark('parse', 'running');
@@ -802,7 +802,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       setConfidenceReport(gate);
       setGateIssues(issues);
       setCadRunHistory(prev => [...prev, {
-        id: outcome.result.model.id,
+        id: outcome.result.generatedModel!.id,
         prompt: p,
         timestamp: new Date().toISOString(),
         confidence: gate.overallScore,
@@ -848,8 +848,8 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     setLoading(true);
     setError(null);
     try {
-      const transport = createLocalBridgeTransport({ generatorSource: source });
-      const outcome = await transport.generate({ prompt: prompt || 'parametric plate', timeoutMs: CAD_GENERATE_TIMEOUT_MS });
+      const adapter = createLocalBridgeAdapter({ generatorSource: source });
+      const outcome = await generateDesign({ prompt: prompt || 'parametric plate', timeoutMs: CAD_GENERATE_TIMEOUT_MS }, adapter);
       if (!outcome || !outcome.ok) throw new Error('Regeneration failed');
 
       templateSourceRef.current = source;
