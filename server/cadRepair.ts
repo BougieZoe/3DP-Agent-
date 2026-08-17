@@ -5,7 +5,15 @@
  * not possible.
  */
 
-export type RepairType = 'fillet' | 'boolean' | 'builder' | 'none';
+export type RepairType = 'fillet' | 'boolean' | 'builder' | 'wedge' | 'kwargs' | 'none';
+
+/** build123d keyword aliases that LLMs guess; mapping a traceback-reported
+ * name to the real one. Covers Cone/Cylinder/Sphere positional-radius bugs. */
+const KWARG_FIXES: Record<string, string> = {
+  bottom_r: 'bottom_radius',
+  top_r: 'top_radius',
+  r: 'radius',
+};
 
 /**
  * Wrap every `name = fillet(...)` line in try/except so a fillet with too
@@ -111,6 +119,37 @@ export function repairCadSource(
     // No salvagable return — create a minimal fallback
     const repaired = `from build123d import *\n\ndef gen_step():\n    body = Box(50, 50, 50, align=(Align.CENTER, Align.CENTER, Align.CENTER))\n    return body\n`;
     return { source: repaired, type: 'builder' };
+  }
+
+  // Rule H — unexpected keyword argument: LLM used a wrong kwarg name
+  // (Cone(bottom_r=...) → bottom_radius). The traceback names it; use that
+  // exact key so we only touch the offending call, then rename globally.
+  const kwArgMatch = /unexpected keyword argument ['"](\w+)['"]/.exec(traceback || '');
+  if (kwArgMatch) {
+    const bad = kwArgMatch[1];
+    const good = KWARG_FIXES[bad];
+    if (good && source.includes(`${bad}=`)) {
+      const repaired = source.replace(new RegExp(`\\b${bad}\\s*=`,'g'), `${good}=`);
+      return { source: repaired, type: 'kwargs' };
+    }
+  }
+
+  // Rule G — Wedge taper failure (Standard_Failure): the taper params are
+  // 0..1 ratios, not lengths; the kernel rejects them. Replace the Wedge call
+  // with an equal-size Box so the variable stays defined and any later
+  // `body + wedge_var` combine still runs — the model builds (as a blocky
+  // approximation) instead of exiting 1.
+  if (combined.includes('standard_failure') && /wedge|make_wedge/.test(combined)) {
+    const repaired = source.replace(
+      /Wedge\s*\(([^)]+)\)/g,
+      (full, args: string) => {
+        const parts = args.split(',').map((s) => s.trim());
+        const [xsize, ysize, zsize] = parts;
+        const rest = parts.slice(3).filter((s) => s && !s.includes('='));
+        return `Box(${[xsize, ysize, zsize, ...rest].join(', ')}, align=(Align.CENTER, Align.CENTER, Align.MIN))`;
+      },
+    );
+    if (repaired !== source) return { source: repaired, type: 'wedge' };
   }
 
   // No known pattern — can't repair.
