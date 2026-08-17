@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { UnifiedAnalysis } from '@/analysis';
 import type { AgentContext } from '../baseAgent';
 import type { Confidence, MetricsResult, TopologyResult, ValidationResult, OverhangMetrics, WallThicknessSample } from '@/analysis/types';
-import type { Material } from '@/lib/materialState';
+import type { Material } from '@shared/domain/material';
 
 export function mockGeometry(vertices?: Float32Array, indices?: number[]): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry();

@@ -4,8 +4,8 @@ import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { VisionIssue } from './visionProvider';
 import type { AgentResultWithExplanation } from './types';
 import type { UnifiedAnalysis } from '@/analysis';
-import type { Material } from '@/lib/materialState';
-import { DEFAULT_MATERIAL } from '@/lib/materialState';
+import type { Material } from '@shared/domain/material';
+import { DEFAULT_MATERIAL } from '@shared/domain/material';
 import { getAgentLabel } from './types';
 
 export interface AgentContext {
@@ -87,16 +87,16 @@ export abstract class BaseAgent {
     return { scoreAdjustment: 0, notes: '' };
   }
 
-  protected abstract analyze(ctx: AgentContext): Promise<AgentOutput>;
+  protected abstract analyze(ctx: AgentContext): Promise<AgentOutput<any>>;
 
-  protected makeOutput(
+  protected makeOutput<TDetails extends object = Record<string, unknown>>(
     score: number,
     confidence: number,
     verdict: AgentVerdict,
     explanation: string,
-    details: Record<string, unknown>,
+    details: TDetails,
     markers: RiskMarker[] = [],
-  ): AgentOutput {
+  ): AgentOutput<TDetails> {
     return {
       agentId: this.agentId,
       agentName: this.agentName,

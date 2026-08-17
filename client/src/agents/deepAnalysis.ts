@@ -1,7 +1,7 @@
 import { runAgentPipeline, type AgentStepResult, type PipelineResult } from '@/lib/agentPipeline';
 import type { ModelData } from '@/lib/ruleEngine';
-import type { Material } from '@/lib/materialState';
-import { DEFAULT_MATERIAL } from '@/lib/materialState';
+import type { Material } from '@shared/domain/material';
+import { DEFAULT_MATERIAL } from '@shared/domain/material';
 import { getActiveProvider, getKey } from '@/lib/apiKeys';
 import type { AgentRunSummary } from './types';
 import { getAgentLabel } from './types';

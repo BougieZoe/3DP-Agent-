@@ -14,6 +14,11 @@ import path from "node:path";
 import express, { Router } from "express";
 
 // server/cadRepair.ts
+var KWARG_FIXES = {
+  bottom_r: "bottom_radius",
+  top_r: "top_radius",
+  r: "radius"
+};
 function wrapFilletsInTry(source) {
   const lines = source.split("\n");
   const out = [];
@@ -78,6 +83,27 @@ def gen_step():
     return body
 `;
     return { source: repaired, type: "builder" };
+  }
+  const kwArgMatch = /unexpected keyword argument ['"](\w+)['"]/.exec(traceback || "");
+  if (kwArgMatch) {
+    const bad = kwArgMatch[1];
+    const good = KWARG_FIXES[bad];
+    if (good && source.includes(`${bad}=`)) {
+      const repaired = source.replace(new RegExp(`\\b${bad}\\s*=`, "g"), `${good}=`);
+      return { source: repaired, type: "kwargs" };
+    }
+  }
+  if (combined.includes("standard_failure") && /wedge|make_wedge/.test(combined)) {
+    const repaired = source.replace(
+      /Wedge\s*\(([^)]+)\)/g,
+      (full, args) => {
+        const parts = args.split(",").map((s) => s.trim());
+        const [xsize, ysize, zsize] = parts;
+        const rest = parts.slice(3).filter((s) => s && !s.includes("="));
+        return `Box(${[xsize, ysize, zsize, ...rest].join(", ")}, align=(Align.CENTER, Align.CENTER, Align.MIN))`;
+      }
+    );
+    if (repaired !== source) return { source: repaired, type: "wedge" };
   }
   return null;
 }
@@ -279,12 +305,13 @@ FORBIDDEN PATTERNS (your code WILL crash if you use these):
 - DO NOT write loops with more than 8 iterations.
 - DO NOT use for/while loops unless absolutely needed (prefer manual unrolling).
 - DO NOT use try/except in generated code.
+- DO NOT use Wedge(...) \u2014 its taper parameters (xmin/zmin/xmax/zmax) are 0..1 ratios, not lengths; models crash with Standard_Failure. Build slanted shapes with extrude() of a 2D polygon instead.
 
 SAFE PATTERNS (always work):
 - Simple box:  Box(w, d, h, align=(Align.CENTER, Align.CENTER, Align.CENTER))
 - Cylinder:    Cylinder(radius=r, height=h, align=(Align.CENTER, Align.CENTER, Align.CENTER))
 - Sphere:      Sphere(radius=r)
-- Cone:        Cone(bottom_r, top_r, h, align=(Align.CENTER, Align.CENTER, Align.MIN))
+- Cone:        Cone(bottom_radius=r1, top_radius=r2, height=h, align=(Align.CENTER, Align.CENTER, Align.MIN)) \u2014 keyword names are bottom_radius/top_radius, never bottom_r/top_r
 - Subtract:    body -= Pos(x, y, z) * Cylinder(radius=r, height=h)
 - Add:         body += Pos(x, y, z) * Box(w, d, h)
 - Fillet (ONLY on a SINGLE primitive, no holes): body = fillet(body.edges(), radius=1)
@@ -322,6 +349,11 @@ function extractPythonSource(text) {
   if (!source.includes("def gen_step")) {
     throw new Error("LLM output did not contain a gen_step() function");
   }
+  const opens = (source.match(/[(\[{]/g) ?? []).length;
+  const closes = (source.match(/[)\]}]/g) ?? []).length;
+  if (opens !== closes) {
+    throw new Error("LLM output is truncated (unbalanced brackets)");
+  }
   return source;
 }
 async function llmChatOnce(llm, userMessage) {
@@ -351,8 +383,12 @@ async function llmChatOnce(llm, userMessage) {
     throw new Error(`LLM request failed: HTTP ${res.status}`);
   }
   const data = await res.json();
-  const content = data.choices?.[0]?.message?.content;
+  const choice = data.choices?.[0];
+  const content = choice?.message?.content;
   if (!content) throw new Error("LLM returned empty content");
+  if (choice?.finish_reason === "length") {
+    throw new Error("LLM output truncated (finish_reason=length)");
+  }
   return extractPythonSource(content);
 }
 async function llmChatWithBackoff(llm, userMessage, onLog) {

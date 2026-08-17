@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { AnalysisReport, ModelAnalysis } from '@shared/domain/analysis';
 import type { AdvisorLanguage } from '@shared/domain/advisor';
+import { createGeometryBounds } from '@shared/domain/geometry';
+import type { PrintabilityFinding } from '@shared/domain/printability';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 import {
   completeStage,
@@ -13,8 +15,8 @@ import {
 import { generateQuickReport, type ModelData } from './ruleEngine';
 import { loadSTLFile } from './stlLoader';
 import { runAnalysisPipeline, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
-import type { Material } from '@/lib/materialState';
-import { DEFAULT_MATERIAL } from '@/lib/materialState';
+import type { Material } from '@shared/domain/material';
+import { DEFAULT_MATERIAL } from '@shared/domain/material';
 
 function unifiedToModelData(unifiedAnalysis: UnifiedAnalysis, fileName: string, material: Material = DEFAULT_MATERIAL): ModelData {
   const metrics = unifiedAnalysis.metrics.result;
@@ -53,6 +55,89 @@ function unifiedToModelData(unifiedAnalysis: UnifiedAnalysis, fileName: string, 
     volume,
     surfaceArea,
     dims,
+  };
+}
+
+/**
+ * Build a real ModelAnalysis from pipeline output. Previously this stage was
+ * filled with an empty `{}` or a double-cast `report as unknown as ModelAnalysis`
+ * (an AnalysisReport is a string document — unrelated to ModelAnalysis).
+ * Any consumer reading typed fields off those fakes would see undefined at
+ * runtime. Now the stage output is a genuine ModelAnalysis.
+ */
+function buildModelAnalysis(
+  unifiedAnalysis: UnifiedAnalysis,
+  fileName: string,
+  fileSizeBytes: number,
+  modelData: ModelData,
+): ModelAnalysis {
+  const metrics = unifiedAnalysis.metrics.result;
+  const topology = unifiedAnalysis.topology.result;
+  const dims = metrics?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
+
+  const findings: PrintabilityFinding[] = [];
+  if (modelData.wallThickness.status !== 'good') {
+    findings.push({
+      id: `wall-thickness:${fileName}`,
+      category: 'wall_thickness',
+      severity: modelData.wallThickness.status === 'critical' ? 'critical' : 'warning',
+      title: 'Wall thickness below recommended minimum',
+      message:
+        modelData.wallThickness.minThickness === null
+          ? 'Wall thickness could not be measured (raycast miss).'
+          : `Minimum wall thickness ~${modelData.wallThickness.minThickness.toFixed(2)} mm — risk of weak or failed prints.`,
+      source: 'heuristic',
+    });
+  }
+  if (modelData.overhang.status !== 'good') {
+    findings.push({
+      id: `overhang:${fileName}`,
+      category: 'overhang',
+      severity: modelData.overhang.status === 'critical' ? 'critical' : 'warning',
+      title: 'Overhangs require support',
+      message: `${modelData.overhang.areas} faces exceed the ${modelData.overhang.angle}° overhang threshold.`,
+      source: 'heuristic',
+    });
+  }
+
+  return {
+    source: {
+      id: `${fileName}:analysis`,
+      fileName,
+      fileSizeBytes,
+      fileType: 'stl',
+      units: 'mm',
+    },
+    metrics: {
+      // Bounds are approximated from bounding-box dimensions with min at the
+      // origin — the pipeline tracks dimensions, not the true mesh offset.
+      bounds: createGeometryBounds({ x: 0, y: 0, z: 0 }, dims),
+      triangleCount: topology?.triangleCount ?? 0,
+      surfaceAreaMm2: metrics?.surfaceAreaMm2 ?? 0,
+      boundingBoxVolumeMm3: metrics?.boundingBoxVolumeMm3 ?? 0,
+      meshVolumeMm3: metrics?.meshVolumeMm3 ?? 0,
+    },
+    findings,
+    legacy: {
+      wallThickness: {
+        minThicknessMm: modelData.wallThickness.minThickness ?? 0,
+        p1ThicknessMm: modelData.wallThickness.p1Thickness,
+        p5ThicknessMm: modelData.wallThickness.p5Thickness,
+        p10ThicknessMm: modelData.wallThickness.p10Thickness,
+        medianThicknessMm: modelData.wallThickness.medianThickness,
+        avgThicknessMm: modelData.wallThickness.avgThickness,
+        thinWallCount: modelData.wallThickness.thinWallCount,
+        thinWallPercentage: modelData.wallThickness.thinWallPercentage,
+        averageConfidence: modelData.wallThickness.averageConfidence,
+        affectedAreas: modelData.wallThickness.areas,
+        status: modelData.wallThickness.status,
+      },
+      overhang: {
+        thresholdDeg: modelData.overhang.angle,
+        affectedFaces: modelData.overhang.areas,
+        status: modelData.overhang.status,
+      },
+    },
   };
 }
 
@@ -133,24 +218,17 @@ export async function executeLocalPrintReviewWorkflow(
 
     stages.evaluatePrintability = startStage(stages.evaluatePrintability, now());
     const modelData = unifiedToModelData(unifiedAnalysis, file.name, options.material);
+    const modelAnalysis = buildModelAnalysis(unifiedAnalysis, file.name, file.size, modelData);
+    result.modelAnalysis = modelAnalysis;
+    stages.evaluatePrintability = completeStage(stages.evaluatePrintability, modelAnalysis, now());
 
     if (options.generateReport === false) {
-      stages.evaluatePrintability = completeStage(
-        stages.evaluatePrintability,
-        {} as ModelAnalysis,
-        now(),
-      );
       stages.generateReport = skipStage(stages.generateReport, now());
       return result;
     }
 
     const report = createAnalysisReport(modelData, options.language, now(), options.material);
     result.report = report;
-    stages.evaluatePrintability = completeStage(
-      stages.evaluatePrintability,
-      report as unknown as ModelAnalysis,
-      now(),
-    );
 
     stages.generateReport = startStage(stages.generateReport, now());
     stages.generateReport = completeStage(stages.generateReport, report, now());

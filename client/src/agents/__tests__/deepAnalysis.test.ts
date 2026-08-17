@@ -7,7 +7,7 @@ import {
   runDeepAnalysis,
 } from '../deepAnalysis';
 import type { ModelData } from '@/lib/ruleEngine';
-import { DEFAULT_MATERIAL } from '@/lib/materialState';
+import { DEFAULT_MATERIAL } from '@shared/domain/material';
 import { runAgentPipeline, type AgentStepResult } from '@/lib/agentPipeline';
 
 const sampleModel: ModelData = {

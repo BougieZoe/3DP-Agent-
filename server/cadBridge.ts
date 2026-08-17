@@ -99,12 +99,13 @@ FORBIDDEN PATTERNS (your code WILL crash if you use these):
 - DO NOT write loops with more than 8 iterations.
 - DO NOT use for/while loops unless absolutely needed (prefer manual unrolling).
 - DO NOT use try/except in generated code.
+- DO NOT use Wedge(...) — its taper parameters (xmin/zmin/xmax/zmax) are 0..1 ratios, not lengths; models crash with Standard_Failure. Build slanted shapes with extrude() of a 2D polygon instead.
 
 SAFE PATTERNS (always work):
 - Simple box:  Box(w, d, h, align=(Align.CENTER, Align.CENTER, Align.CENTER))
 - Cylinder:    Cylinder(radius=r, height=h, align=(Align.CENTER, Align.CENTER, Align.CENTER))
 - Sphere:      Sphere(radius=r)
-- Cone:        Cone(bottom_r, top_r, h, align=(Align.CENTER, Align.CENTER, Align.MIN))
+- Cone:        Cone(bottom_radius=r1, top_radius=r2, height=h, align=(Align.CENTER, Align.CENTER, Align.MIN)) — keyword names are bottom_radius/top_radius, never bottom_r/top_r
 - Subtract:    body -= Pos(x, y, z) * Cylinder(radius=r, height=h)
 - Add:         body += Pos(x, y, z) * Box(w, d, h)
 - Fillet (ONLY on a SINGLE primitive, no holes): body = fillet(body.edges(), radius=1)
@@ -143,6 +144,14 @@ function extractPythonSource(text: string): string {
   if (!source.includes('def gen_step')) {
     throw new Error('LLM output did not contain a gen_step() function');
   }
+  // Guard against truncated output: unbalanced brackets mean the model was
+  // cut off mid-expression (finish_reason=length). Bail so the caller can
+  // retry / fail over instead of shipping unparseable code to the kernel.
+  const opens = (source.match(/[(\[{]/g) ?? []).length;
+  const closes = (source.match(/[)\]}]/g) ?? []).length;
+  if (opens !== closes) {
+    throw new Error('LLM output is truncated (unbalanced brackets)');
+  }
   return source;
 }
 
@@ -173,9 +182,15 @@ async function llmChatOnce(llm: BridgeLlmConfig, userMessage: string): Promise<s
     }
     throw new Error(`LLM request failed: HTTP ${res.status}`);
   }
-  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const content = data.choices?.[0]?.message?.content;
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+  };
+  const choice = data.choices?.[0];
+  const content = choice?.message?.content;
   if (!content) throw new Error('LLM returned empty content');
+  if (choice?.finish_reason === 'length') {
+    throw new Error('LLM output truncated (finish_reason=length)');
+  }
   return extractPythonSource(content);
 }
 
