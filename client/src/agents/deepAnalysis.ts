@@ -1,4 +1,4 @@
-import { runAgentPipeline, type AgentStepResult, type PipelineResult } from '@/lib/agentPipeline';
+import { runAgentPipeline, type AgentStepResult, type AgentTraceFn, type PipelineResult } from '@/lib/agentPipeline';
 import type { ModelData } from '@/lib/ruleEngine';
 import type { Material } from '@shared/domain/material';
 import { DEFAULT_MATERIAL } from '@shared/domain/material';
@@ -111,6 +111,7 @@ export async function runDeepAnalysis(
   language: string = 'en',
   onStepComplete?: (step: AgentStepResult, index: number) => void,
   material: Material = DEFAULT_MATERIAL,
+  trace?: AgentTraceFn,
 ): Promise<AgentRunSummary | null> {
   const startedAt = performance.now();
   const provider = getActiveProvider();
@@ -127,7 +128,7 @@ export async function runDeepAnalysis(
     // The signal is threaded down to every fetch call, so a timeout genuinely
     // cancels in-flight requests instead of merely letting the caller move on
     // while the pipeline keeps consuming tokens/connections in the background.
-    pipeline = await runAgentPipeline(summaryText, language, onStepComplete, material, controller.signal);
+    pipeline = await runAgentPipeline(summaryText, language, onStepComplete, material, controller.signal, trace);
   } catch {
     return null;
   } finally {

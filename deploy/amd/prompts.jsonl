@@ -1,0 +1,29 @@
+{"prompt": "test box", "success": true, "provider": "template"}
+{"prompt": "3D printed house wall panel with insulation channels and structural ribs", "success": true, "provider": "deepseek-chat"}
+{"prompt": "structural bridge with truss reinforcement and support piers", "success": false, "provider": "deepseek-chat"}
+{"prompt": "ergonomic chair with organic curves and lattice seat", "success": true, "provider": "deepseek-chat"}
+{"prompt": "3D printed lamp shade with parametric lattice pattern", "success": false, "provider": "deepseek-chat"}
+{"prompt": "automotive bracket with lightweight topology optimization", "success": false, "provider": "deepseek-chat"}
+{"prompt": "recycled material building panel with interlocking edges and ribbed core", "success": false, "provider": "deepseek-chat"}
+{"prompt": "\u4e00\u4e2a20mm\u7684\u7acb\u65b9\u4f53", "success": true, "provider": "template"}
+{"prompt": "biodegradable composite product with organic surface texture and minimal material usage", "success": true, "provider": "deepseek-chat"}
+{"prompt": "test plate", "success": true, "provider": "template"}
+{"prompt": "plate", "success": false, "provider": "template"}
+{"prompt": "parametric architectural facade panel with modular pattern", "success": true, "provider": "deepseek-chat"}
+{"prompt": "test", "success": true, "provider": "template"}
+{"prompt": "a simple plate 40x30x5mm", "success": true, "provider": "template"}
+{"prompt": "CAD generation failed. LLM source generation failed: TimeoutError: The operation was aborted due to timeout The AI generated a design but the CAD engine could not build it. Try simplifying your prompt", "success": true, "provider": "kimi-k3"}
+{"prompt": "\u5fc5\u987b\u8f93\u5165\u8fd9\u4e9b\u7cbe\u786e\u8bcd\uff08\u4e0d\u533a\u5206\u5927\u5c0f\u5199\uff09\uff1a\n100mm flange\nsports car concept\narchitectural tower\nsimplified human figure\njapanese house", "success": true, "provider": "deepseek-chat"}
+{"prompt": "100mm flange\nsports car concept\narchitectural tower\nsimplified human figure\njapanese house", "success": true, "provider": "deepseek-chat"}
+{"prompt": "japanese house", "success": true, "provider": "template"}
+{"prompt": "sports car concept", "success": true, "provider": "template"}
+{"prompt": "a coffee mug with a handle", "success": false, "provider": "deepseek-chat"}
+{"prompt": "a small open-top box with 2mm walls", "success": true, "provider": "deepseek-chat"}
+{"prompt": "make a mounting plate 60x45mm with four 5mm holes and rounded corners", "success": false, "provider": "deepseek-chat"}
+{"prompt": "mounting plate with rounded corners", "success": true, "provider": "template"}
+{"prompt": "box", "success": true, "provider": "template"}
+{"prompt": "Create a 60mm x 45mm mounting plate with four 5mm holes and rounded corners", "success": true, "provider": "deepseek-chat"}
+{"prompt": "quadcopter drone frame with motor mounts and cable channels", "success": true, "provider": "deepseek-chat"}
+{"prompt": "a 30x20x5mm plate with four 3mm holes", "success": true, "provider": "kimi-k3"}
+{"prompt": "\u505a\u4e00\u4e2a\u65e5\u672c\u7684\u4e00\u6237\u5efa\u623f\u5b50", "success": false, "provider": "kimi-k3"}
+{"prompt": "\u4e00\u4e2a\u65e5\u672c\u4e00\u6237\u5efa", "success": true, "provider": "kimi-k3"}
