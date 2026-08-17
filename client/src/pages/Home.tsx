@@ -384,7 +384,16 @@ export default function Home() {
           label: agentId ? getAgentLabel(agentId, language as 'en' | 'ja' | 'zh') : t('deepAnalysis'),
           raw: step.raw,
         }]);
-      }, mat);
+      }, mat, (trace) => {
+        // Fire-and-forget: persist this step's I/O for fine-tuning data
+        // collection (server appends to deploy/amd/agent-traces.jsonl).
+        if (seq !== deepAnalysisSeq.current) return;
+        fetch('/api/agent-trace', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(trace),
+        }).catch(() => {});
+      });
       if (seq !== deepAnalysisSeq.current) return;
       if (result) {
         setDeepAgentRun(result);

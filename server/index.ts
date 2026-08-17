@@ -1,5 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import { createServer } from "http";
+import { appendFile, mkdir } from "node:fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createCadBridgeRouter } from "./cadBridge";
@@ -154,6 +155,37 @@ async function startServer() {
     // host-side features so the operator's Tripo quota cannot be drained by
     // anonymous callers.
     app.use("/api/tripo", ...amdProxy, createTripoProxyRouter());
+
+    // Agent pipeline trace capture — local fine-tuning data collection.
+    // The browser POSTs each completed pipeline step here after every deep
+    // analysis; we append it to a JSONL file that feeds
+    // deploy/amd/build-dataset.py. Mounted only with the other local bridges,
+    // never on a public host without BRIDGE_TOKEN (same guard as the rest).
+    const AGENT_TRACE_PATH = path.join(
+      process.cwd(),
+      "deploy",
+      "amd",
+      "agent-traces.jsonl",
+    );
+    app.post(
+      "/api/agent-trace",
+      rateLimit,
+      express.json({ limit: "1mb" }),
+      async (req: Request, res: Response) => {
+        const trace = req.body ?? {};
+        if (typeof trace !== "object" || typeof (trace as { raw?: unknown }).raw !== "string") {
+          res.status(400).json({ error: "invalid trace: raw required" });
+          return;
+        }
+        try {
+          await mkdir(path.dirname(AGENT_TRACE_PATH), { recursive: true });
+          await appendFile(AGENT_TRACE_PATH, JSON.stringify(trace) + "\n", "utf-8");
+          res.json({ ok: true });
+        } catch {
+          res.status(500).json({ error: "trace write failed" });
+        }
+      },
+    );
 
     console.log(
       `[server] bridges mounted${BRIDGE_TOKEN ? " (BRIDGE_TOKEN auth)" : " (NODE_ENV != production)"}`,
