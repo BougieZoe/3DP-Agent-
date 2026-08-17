@@ -31,7 +31,7 @@ export class PrintabilityScorer extends BaseAgent {
     super('printability_scorer', { supportsVision: false, requiresVision: false, timeoutMs: 10000 });
   }
 
-  protected async analyze(ctx: AgentContext): Promise<AgentOutput> {
+  protected async analyze(ctx: AgentContext): Promise<AgentOutput<any>> {
     const { unifiedAnalysis, modelSize, previousOutputs } = ctx;
     const metrics = unifiedAnalysis.metrics.result;
     const topology = unifiedAnalysis.topology.result;
@@ -74,7 +74,7 @@ export class PrintabilityScorer extends BaseAgent {
       0.85,
       this.computeVerdict(score),
       explanation,
-      breakdown as unknown as Record<string, unknown>,
+      breakdown,
       markers,
     );
   }

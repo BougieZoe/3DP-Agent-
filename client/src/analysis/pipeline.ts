@@ -10,7 +10,7 @@ import { buildGeometryGraph } from './geometryGraph';
 import { getThresholds, type ThresholdsOverride } from './thresholds';
 import { type GeometryModel } from './geometryModel';
 import type { PrinterProfileId } from './types';
-import type { Material } from '@/lib/materialState';
+import type { Material } from '@shared/domain/material';
 
 export interface PipelineOptions {
   printerId?: PrinterProfileId;

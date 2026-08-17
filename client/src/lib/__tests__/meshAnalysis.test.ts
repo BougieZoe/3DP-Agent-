@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMockMeshAdapter } from '@/design/generator';
 import { parseSTL } from '@/lib/stlParser';
 import { runCadAnalysis } from '@/lib/cadAnalysis';
-import { MATERIALS } from '@/lib/materialState';
+import { MATERIALS } from '@shared/domain/material';
 
 describe('mesh → analysis pipeline', () => {
   it('analyzes a mock-generated mesh end to end', async () => {

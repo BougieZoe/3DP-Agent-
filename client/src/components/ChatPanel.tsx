@@ -4,8 +4,8 @@ import { getActiveProvider, getKey, callAI, AIProvider } from '@/lib/apiKeys';
 import { CONTENT, translate } from '@shared/i18n/content';
 import { Language } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
-import type { Material } from '@/lib/materialState';
-import { DEFAULT_MATERIAL } from '@/lib/materialState';
+import type { Material } from '@shared/domain/material';
+import { DEFAULT_MATERIAL } from '@shared/domain/material';
 
 interface Message {
   id: string;

@@ -28,7 +28,7 @@ export class GeometryAnalyst extends BaseAgent {
     super('geometry_analyst', { supportsVision: true, requiresVision: false, timeoutMs: 15000 });
   }
 
-  protected async analyze(ctx: AgentContext): Promise<AgentOutput> {
+  protected async analyze(ctx: AgentContext): Promise<AgentOutput<any>> {
     const { unifiedAnalysis, vertexPositions, modelSize, material } = ctx;
     const metrics = unifiedAnalysis.metrics.result;
     const validation = unifiedAnalysis.validation.result;
@@ -131,7 +131,7 @@ export class GeometryAnalyst extends BaseAgent {
       explanation += `\n\n[Vision] ${vision.qualitativeAssessment}`;
     }
 
-    return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details as unknown as Record<string, unknown>, markers);
+    return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details, markers);
   }
 
   private computeScore(wtStatus: string, ohStatus: string, overhangRatio: number, aspectRatio: number, triCount: number): number {
