@@ -209,6 +209,7 @@ export async function runAgentPipeline(
     (agentRaw) =>
       `Scorer output: ${agentRaw}\n\nUpstream context (for consistency check): Failure prediction was: ${failureResult.raw}`,
     signal,
+    tracer(3),
   );
   steps.push(scoreResult);
   onStepComplete?.(scoreResult, 3);
@@ -218,6 +219,7 @@ export async function runAgentPipeline(
     `Geometry: ${geoResult.raw}\nFailure prediction: ${failureResult.raw}\nOptimization advice: ${optResult.raw}\nScore: ${scoreResult.raw}`,
     language,
     signal,
+    tracer(4),
   );
   steps.push(summaryResult);
   onStepComplete?.(summaryResult, 4);

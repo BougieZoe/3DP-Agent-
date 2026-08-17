@@ -100,9 +100,14 @@ async function main(): Promise<void> {
   const variants = buildVariants();
   await mkdir(path.dirname(TRACES_PATH), { recursive: true });
 
+  // Collect write promises so the process never exits before the final steps
+  // (score / summary) are flushed — fire-and-forget drops the last entries.
+  const pending: Promise<void>[] = [];
   const traceFn = (t: AgentTrace) => {
-    appendFile(TRACES_PATH, JSON.stringify(t) + '\n', 'utf-8')
-      .catch((err) => console.error('trace append failed:', err));
+    pending.push(
+      appendFile(TRACES_PATH, JSON.stringify(t) + '\n', 'utf-8')
+        .catch((err) => console.error('trace append failed:', err)),
+    );
   };
 
   let total = 0;
@@ -115,6 +120,7 @@ async function main(): Promise<void> {
     console.log(`  -> ${result.steps.length} steps, final score: ${JSON.stringify(result.finalScore)?.slice(0, 80)}`);
   }
 
+  await Promise.all(pending);
   console.log(`\ncaptured ${total} trace entries -> ${TRACES_PATH}`);
   console.log('next: python3 deploy/amd/build-dataset.py');
 }
