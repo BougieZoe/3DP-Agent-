@@ -33,7 +33,7 @@ export class FailurePredictor extends BaseAgent {
     return super.computeVerdict(score);
   }
 
-  protected async analyze(ctx: AgentContext): Promise<AgentOutput> {
+  protected async analyze(ctx: AgentContext): Promise<AgentOutput<any>> {
     const { unifiedAnalysis, modelSize, vertexPositions, vertexNormals, material } = ctx;
     const metrics = unifiedAnalysis.metrics.result;
     const topology = unifiedAnalysis.topology.result;
@@ -108,7 +108,7 @@ export class FailurePredictor extends BaseAgent {
 
     const explanation = this.buildExplanation(risks, overallRiskLevel, ctx.language);
 
-    return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details as unknown as Record<string, unknown>, markers);
+    return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details, markers);
   }
 
   private predictVisionRisks(ctx: AgentContext): PredictedRisk[] {

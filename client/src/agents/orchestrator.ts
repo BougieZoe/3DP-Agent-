@@ -4,8 +4,8 @@ import { calculateAgreementDelta, computeConsensusVerdict } from '@shared/domain
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { UnifiedAnalysis } from '@/analysis';
 import type { MetricsResult } from '@/analysis/types';
-import type { Material } from '@/lib/materialState';
-import { DEFAULT_MATERIAL } from '@/lib/materialState';
+import type { Material } from '@shared/domain/material';
+import { DEFAULT_MATERIAL } from '@shared/domain/material';
 import { fromThreeBufferGeometry } from '@/analysis/geometryConversion';
 import { extractVertexData } from '@/analysis/geometryData';
 import { BaseAgent, type AgentContext } from './baseAgent';

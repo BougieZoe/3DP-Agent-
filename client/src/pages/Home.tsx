@@ -1,5 +1,5 @@
 import { useMaterial, type MaterialName } from "@/contexts/MaterialContext";
-import { MATERIALS, type Material } from "@/lib/materialState";
+import { MATERIALS, type Material } from "@shared/domain/material";
 import { ReportGenerator } from "@/components/ReportGenerator";
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';

@@ -6,7 +6,7 @@ import {
   type CADConfidenceReport,
   type GenerationQuality,
 } from '@/cad-confidence';
-import type { Material } from '@/lib/materialState';
+import type { Material } from '@shared/domain/material';
 import type { Language } from '@/lib/i18n';
 
 /**

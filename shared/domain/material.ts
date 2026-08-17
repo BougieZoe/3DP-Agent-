@@ -1,3 +1,14 @@
+/**
+ * Material — printability domain concept.
+ *
+ * Lives in shared/domain (not client/src/lib) because it is consumed by the
+ * analysis layer, the agent system, and the UI alike. Keeping it in lib/
+ * forced analysis→lib and agents→lib edges, violating the layer boundary:
+ * domain code must not depend on UI-adjacent code. Moved here per the
+ * architecture review (P1-3: "Move Material + materialState into
+ * shared/domain; delete the analysis→lib and agents→lib edges").
+ */
+
 export interface Material {
   name: string;
   overhangThreshold: number;
