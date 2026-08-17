@@ -4,8 +4,8 @@
  */
 
 import { CONTENT, translate } from '@shared/i18n/content';
-import type { Material } from '@/lib/materialState';
-import { DEFAULT_MATERIAL } from '@/lib/materialState';
+import type { Material } from '@shared/domain/material';
+import { DEFAULT_MATERIAL } from '@shared/domain/material';
 import { getThresholds, type AnalysisThresholds } from '@/analysis/thresholds';
 
 export interface ModelData {

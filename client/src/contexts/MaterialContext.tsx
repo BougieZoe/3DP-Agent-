@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
-import { Material, MATERIALS, DEFAULT_MATERIAL } from '@/lib/materialState';
+import { Material, MATERIALS, DEFAULT_MATERIAL } from '@shared/domain/material';
 
 export type MaterialName = keyof typeof MATERIALS;
 

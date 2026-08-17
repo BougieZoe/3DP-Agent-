@@ -34,7 +34,7 @@ export class OptimizationAdvisor extends BaseAgent {
     super('optimization_advisor', { supportsVision: true, requiresVision: false, timeoutMs: 20000 });
   }
 
-  protected async analyze(ctx: AgentContext): Promise<AgentOutput> {
+  protected async analyze(ctx: AgentContext): Promise<AgentOutput<any>> {
     const { unifiedAnalysis, modelSize, previousOutputs, material } = ctx;
     const metrics = unifiedAnalysis.metrics.result;
     const topology = unifiedAnalysis.topology.result;
@@ -79,7 +79,7 @@ export class OptimizationAdvisor extends BaseAgent {
 
     const explanation = this.buildExplanation(suggestions, recommendedMaterials, optimalOrientation, score, ctx.language);
 
-    return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details as unknown as Record<string, unknown>);
+    return this.makeOutput(score, confidence, this.computeVerdict(score), explanation, details);
   }
 
   private generateSuggestions(

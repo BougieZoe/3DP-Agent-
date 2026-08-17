@@ -9,8 +9,8 @@
 // and feeding the previous step's JSON output as context into the next step.
 
 import { callAI, getActiveProvider, getKey } from './apiKeys';
-import type { Material } from '@/lib/materialState';
-import { DEFAULT_MATERIAL } from '@/lib/materialState';
+import type { Material } from '@shared/domain/material';
+import { DEFAULT_MATERIAL } from '@shared/domain/material';
 
 export interface AgentStepResult {
   agentName: string;
