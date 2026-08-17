@@ -20,6 +20,24 @@ export interface AgentStepResult {
   confidence?: 'high' | 'low_after_retries';
 }
 
+/**
+ * Full I/O record of one pipeline step — the raw material for fine-tuning a
+ * domain LoRA (see deploy/amd/build-dataset.py). The callback receives the
+ * step's prompt, context and raw output; `stepIndex` is filled in by the
+ * pipeline so callers can order traces without parsing prompts.
+ */
+export type AgentTrace = {
+  timestamp: string;
+  stepIndex: number;
+  agentName: string;
+  provider: string;
+  systemPrompt: string;
+  userContext: string;
+  raw: string;
+};
+
+export type AgentTraceFn = (t: AgentTrace) => void;
+
 export interface PipelineResult {
   steps: AgentStepResult[];
   finalScore: unknown | null; // Printability Scorer's final structured output
@@ -71,6 +89,7 @@ async function callAgent(
   userContext: string,
   language?: string,
   signal?: AbortSignal,
+  trace?: (t: Omit<AgentTrace, 'stepIndex'>) => void,
 ): Promise<AgentStepResult> {
   const provider = getActiveProvider();
   if (!provider) {
@@ -78,6 +97,14 @@ async function callAgent(
   }
   const apiKey = getKey(provider) ?? ''; // amd-cloud doesn't require a key
   const raw = await callAI(provider, apiKey, systemPrompt, userContext, language, signal);
+  trace?.({
+    timestamp: new Date().toISOString(),
+    agentName: systemPrompt.slice(0, 30),
+    provider,
+    systemPrompt,
+    userContext,
+    raw,
+  });
   const parsed = extractJson(raw);
   return { agentName: systemPrompt.slice(0, 30), raw, parsed };
 }
@@ -89,6 +116,7 @@ async function callAgentWithCritic(
   language: string | undefined,
   buildCriticContext: (agentRaw: string) => string,
   signal?: AbortSignal,
+  trace?: (t: Omit<AgentTrace, 'stepIndex'>) => void,
 ): Promise<AgentStepResult & { confidence: 'high' | 'low_after_retries' }> {
   const MAX_RETRIES = 2;
   let feedback: string | null = null;
@@ -98,7 +126,7 @@ async function callAgentWithCritic(
       ? `${userContext}\n\n[Previous attempt was rejected: ${feedback}. Please correct this.]`
       : userContext;
 
-    const result = await callAgent(agentPrompt, contextWithFeedback, language, signal);
+    const result = await callAgent(agentPrompt, contextWithFeedback, language, signal, trace);
 
     if (result.parsed === null) {
       feedback = 'Your response was not valid JSON. Return ONLY a JSON object.';
@@ -109,7 +137,7 @@ async function callAgentWithCritic(
     }
 
     const criticContext = buildCriticContext(result.raw);
-    const criticResult = await callAgent(criticPrompt, criticContext, language, signal);
+    const criticResult = await callAgent(criticPrompt, criticContext, language, signal, trace);
     const verdict = criticResult.parsed as { passed?: boolean; feedback?: string } | null;
 
     if (verdict?.passed) {
@@ -133,10 +161,13 @@ export async function runAgentPipeline(
   onStepComplete?: (step: AgentStepResult, index: number) => void,
   material: Material = DEFAULT_MATERIAL,
   signal?: AbortSignal,
+  trace?: AgentTraceFn,
 ): Promise<PipelineResult> {
   const steps: AgentStepResult[] = [];
 
   const geometryAnalystPrompt = buildGeometryAnalystPrompt(material.overhangThreshold);
+  const tracer = (stepIndex: number) =>
+    trace ? (t: Omit<AgentTrace, 'stepIndex'>) => trace({ ...t, stepIndex }) : undefined;
 
   const geoResult = await callAgentWithCritic(
     geometryAnalystPrompt,
@@ -145,6 +176,7 @@ export async function runAgentPipeline(
     language,
     (agentRaw) => `Geometry Analyst reported: ${agentRaw}`,
     signal,
+    tracer(0),
   );
   steps.push(geoResult);
   onStepComplete?.(geoResult, 0);
@@ -154,6 +186,7 @@ export async function runAgentPipeline(
     `Geometry Analyst's findings: ${geoResult.raw}`,
     language,
     signal,
+    tracer(1),
   );
   steps.push(failureResult);
   onStepComplete?.(failureResult, 1);
@@ -163,6 +196,7 @@ export async function runAgentPipeline(
     `Geometry analysis: ${geoResult.raw}\n\nFailure prediction: ${failureResult.raw}`,
     language,
     signal,
+    tracer(2),
   );
   steps.push(optResult);
   onStepComplete?.(optResult, 2);
