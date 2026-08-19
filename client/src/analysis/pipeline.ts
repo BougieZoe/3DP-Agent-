@@ -3,6 +3,7 @@ import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { analyzeTopology } from './topology';
 import { validateMesh } from './validation';
 import { computeMetrics } from './metrics';
+import { computeResinMetrics, type ResinResult } from './resin';
 import { checkBedFit } from './bedFit';
 import { estimateSupportVolume } from './support';
 import { estimatePrintTime } from './printTime';
@@ -17,6 +18,8 @@ export interface PipelineOptions {
   layerHeightMm?: number;
   fileName?: string;
   material?: Material;
+  /** Print technology family — selects the per-family metrics module. */
+  materialFamily?: 'fdm' | 'resin' | 'metal' | 'eco';
   /** UI language — module explanations/reasons are localized. */
   language?: ContentLang;
   /**
@@ -106,7 +109,18 @@ export function runAnalysisPipeline(
     } catch (e) { return null; }
   });
 
-  const confidences = [topology, validation, metrics, bedFit, support, printTime]
+  // Resin-specific module — only computed when the caller selects the resin family.
+  const EMPTY_RESIN: ResinResult = { shellCount: 0, enclosedCavity: false, islandCount: 0, suctionRisk: 0, cureRisk: 0, orientation: 'default', footprintAreaMm2: 0 };
+  const resin = time('resin', () => {
+    try {
+      if (options.materialFamily !== 'resin') return null;
+      return moduleResult('resin', 1.0 as Confidence, 0, computeResinMetrics(model), 'Resin-specific printability metrics (suction, islands, drain holes).');
+    } catch (e) {
+      return options.materialFamily === 'resin' ? failResult('resin', e, EMPTY_RESIN) : null;
+    }
+  });
+
+  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin]
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .map(m => m.confidence);
   const overallConfidence = confidences.length > 0
@@ -120,6 +134,7 @@ export function runAnalysisPipeline(
     bedFit,
     support,
     printTime,
+    resin,
     timestamp: now,
     modelFileName: fileName,
     overallConfidence,
