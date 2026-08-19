@@ -939,6 +939,11 @@ const chat = {
     ja: 'この質問にはAI推論が必要です。API Keyを設定すると、より深い製造分析が可能になります。',
     zh: '这个问题需要AI推理。配置API Key后我可以给你更深入的制造分析。',
   },
+  'chat.needSignIn': {
+    en: 'Sign in to use AI chat — the model runs on our servers.',
+    ja: 'AIチャットを利用するにはサインインしてください(モデルはサーバー側で動作)。',
+    zh: '登录后即可使用 AI 聊天(模型在服务器端运行)。',
+  },
   // Initial assessment (composed from these fragments)
   'chat.assessment.scanned': { en: 'Scanned {file} ({dims}).', ja: '{file}（{dims}）をスキャンしました。', zh: '已扫描 {file}（{dims}）。' },
   'chat.assessment.criticalLead': { en: '\n\n⚠ Critical issues found:', ja: '\n\n⚠ 重大な問題を検出：', zh: '\n\n⚠ 发现严重问题：' },

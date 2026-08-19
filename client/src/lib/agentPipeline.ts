@@ -8,7 +8,8 @@
 // calling the AI 5 times in sequence, swapping the system prompt each time,
 // and feeding the previous step's JSON output as context into the next step.
 
-import { callAI, getActiveProvider, getKey } from './apiKeys';
+import { callAI } from './apiKeys';
+import { getLLMProvider } from './llmAccess';
 import type { Material } from '@shared/domain/material';
 import { DEFAULT_MATERIAL } from '@shared/domain/material';
 
@@ -85,31 +86,32 @@ function extractJson(raw: string): unknown | null {
 }
 
 async function callAgent(
+  agentLabel: string,
   systemPrompt: string,
   userContext: string,
   language?: string,
   signal?: AbortSignal,
   trace?: (t: Omit<AgentTrace, 'stepIndex'>) => void,
 ): Promise<AgentStepResult> {
-  const provider = getActiveProvider();
-  if (!provider) {
-    throw new Error('No active AI provider. Please configure an API key (or select AMD Cloud) first.');
+  const llm = getLLMProvider();
+  if (!llm) {
+    throw new Error('Sign in or configure an API key to run AI analysis.');
   }
-  const apiKey = getKey(provider) ?? ''; // amd-cloud doesn't require a key
-  const raw = await callAI(provider, apiKey, systemPrompt, userContext, language, signal);
+  const raw = await callAI(llm.provider, llm.key, systemPrompt, userContext, language, signal);
   trace?.({
     timestamp: new Date().toISOString(),
-    agentName: systemPrompt.slice(0, 30),
-    provider,
+    agentName: agentLabel,
+    provider: llm.provider,
     systemPrompt,
     userContext,
     raw,
   });
   const parsed = extractJson(raw);
-  return { agentName: systemPrompt.slice(0, 30), raw, parsed };
+  return { agentName: agentLabel, raw, parsed };
 }
 
 async function callAgentWithCritic(
+  agentLabel: string,
   agentPrompt: string,
   criticPrompt: string,
   userContext: string,
@@ -126,7 +128,7 @@ async function callAgentWithCritic(
       ? `${userContext}\n\n[Previous attempt was rejected: ${feedback}. Please correct this.]`
       : userContext;
 
-    const result = await callAgent(agentPrompt, contextWithFeedback, language, signal, trace);
+    const result = await callAgent(agentLabel, agentPrompt, contextWithFeedback, language, signal, trace);
 
     if (result.parsed === null) {
       feedback = 'Your response was not valid JSON. Return ONLY a JSON object.';
@@ -137,7 +139,7 @@ async function callAgentWithCritic(
     }
 
     const criticContext = buildCriticContext(result.raw);
-    const criticResult = await callAgent(criticPrompt, criticContext, language, signal, trace);
+    const criticResult = await callAgent(`${agentLabel}_critic`, criticPrompt, criticContext, language, signal, trace);
     const verdict = criticResult.parsed as { passed?: boolean; feedback?: string } | null;
 
     if (verdict?.passed) {
@@ -170,6 +172,7 @@ export async function runAgentPipeline(
     trace ? (t: Omit<AgentTrace, 'stepIndex'>) => trace({ ...t, stepIndex }) : undefined;
 
   const geoResult = await callAgentWithCritic(
+    'geometry',
     geometryAnalystPrompt,
     GEOMETRY_CRITIC_PROMPT,
     `Model data: ${modelDataSummary}`,
@@ -182,6 +185,7 @@ export async function runAgentPipeline(
   onStepComplete?.(geoResult, 0);
 
   const failureResult = await callAgent(
+    'failure',
     FAILURE_PREDICTOR_PROMPT,
     `Geometry Analyst's findings: ${geoResult.raw}`,
     language,
@@ -192,6 +196,7 @@ export async function runAgentPipeline(
   onStepComplete?.(failureResult, 1);
 
   const optResult = await callAgent(
+    'optimization',
     OPTIMIZATION_ADVISOR_PROMPT,
     `Geometry analysis: ${geoResult.raw}\n\nFailure prediction: ${failureResult.raw}`,
     language,
@@ -202,6 +207,7 @@ export async function runAgentPipeline(
   onStepComplete?.(optResult, 2);
 
   const scoreResult = await callAgentWithCritic(
+    'score',
     PRINTABILITY_SCORER_PROMPT,
     SCORER_CRITIC_PROMPT,
     `Geometry analysis: ${geoResult.raw}\n\nFailure prediction: ${failureResult.raw}\n\nOptimization advice: ${optResult.raw}`,
@@ -209,15 +215,18 @@ export async function runAgentPipeline(
     (agentRaw) =>
       `Scorer output: ${agentRaw}\n\nUpstream context (for consistency check): Failure prediction was: ${failureResult.raw}`,
     signal,
+    tracer(3),
   );
   steps.push(scoreResult);
   onStepComplete?.(scoreResult, 3);
 
   const summaryResult = await callAgent(
+    'orchestrator',
     ORCHESTRATOR_SUMMARY_PROMPT,
     `Geometry: ${geoResult.raw}\nFailure prediction: ${failureResult.raw}\nOptimization advice: ${optResult.raw}\nScore: ${scoreResult.raw}`,
     language,
     signal,
+    tracer(4),
   );
   steps.push(summaryResult);
   onStepComplete?.(summaryResult, 4);

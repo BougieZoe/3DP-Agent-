@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from 'react';
 import { loadSTLFile, createMeshFromGeometry } from '@/lib/stlLoader';
 import { Language } from '@/lib/i18n';
-import { runAnalysisPipeline, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
+import { runAnalysisInWorker, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
 import { normalizeModelGeometry } from '@/lib/modelNormalization';
 import type { LengthUnit } from '@shared/domain/geometry';
 import * as THREE from 'three';
@@ -111,7 +111,7 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en', unit
       log(`> ${t.computing}`);
       const { geometry, rawGeometry } = normalizeModelGeometry(raw, units);
       const model = fromThreeBufferGeometry(geometry);
-      const unifiedAnalysis = runAnalysisPipeline(model, { fileName: file.name });
+      const unifiedAnalysis = await runAnalysisInWorker(model, { fileName: file.name });
       log(`> ${t.analyzing}`);
       const mesh = createMeshFromGeometry(geometry);
       log(`> ${t.complete}`);

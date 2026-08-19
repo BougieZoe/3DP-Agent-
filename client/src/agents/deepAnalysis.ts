@@ -2,7 +2,7 @@ import { runAgentPipeline, type AgentStepResult, type AgentTraceFn, type Pipelin
 import type { ModelData } from '@/lib/ruleEngine';
 import type { Material } from '@shared/domain/material';
 import { DEFAULT_MATERIAL } from '@shared/domain/material';
-import { getActiveProvider, getKey } from '@/lib/apiKeys';
+import { getLLMProvider } from '@/lib/llmAccess';
 import type { AgentRunSummary } from './types';
 import { getAgentLabel } from './types';
 import type { AgentId, AgentVerdict } from '@shared/domain/agent';
@@ -114,8 +114,8 @@ export async function runDeepAnalysis(
   trace?: AgentTraceFn,
 ): Promise<AgentRunSummary | null> {
   const startedAt = performance.now();
-  const provider = getActiveProvider();
-  if (!provider || provider === 'amd-cloud') return null;
+  const llm = getLLMProvider();
+  if (!llm || llm.provider === 'amd-cloud') return null;
 
   const summaryText = buildModelDataSummary(model, material);
   const results: AgentRunSummary['results'] = [];
@@ -185,7 +185,6 @@ export async function runDeepAnalysis(
     analysisSource: 'llm',
   };
 
-  void getKey(provider); // re-affirm key presence (getActiveProvider already checked it)
   return runSummary;
 }
 

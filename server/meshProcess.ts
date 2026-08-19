@@ -6,8 +6,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { SANDBOX_ENV, SANDBOX_FILE_KB, SANDBOX_MEM_KB, SANDBOX_CPU_S } from './cadSandbox';
 import { resolvePython } from './cadBridge';
+import { currentDir } from './currentDir';
 
-const MESH_SCRIPT = path.join(import.meta.dirname, 'mesh_process.py');
+const MESH_SCRIPT = path.join(currentDir, 'mesh_process.py');
 const MESH_PROCESS_TIMEOUT_MS = 30_000;
 /** Binary STL facet ceiling — mirrors the decimateTo clamp; a crafted header
  * claiming millions of triangles is rejected before trimesh ever parses it. */
