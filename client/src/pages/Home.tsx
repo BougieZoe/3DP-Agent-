@@ -1,16 +1,19 @@
 import { useMaterial, type MaterialName } from "@/contexts/MaterialContext";
 import { MATERIALS, defaultMaterialKeyFor, type Material } from "@shared/domain/material";
 import { ReportGenerator } from "@/components/ReportGenerator";
-import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { lazy, Suspense, useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
 import { PRINT_TECHNOLOGIES, PRINT_TECH_BY_ID, type PrintTechnology } from '@/lib/technologies';
-import { CADWorkspace } from '@/components/CADWorkspace';
-import { MeshStudio } from '@/components/MeshStudio';
-import { ChatPanel } from '@/components/ChatPanel';
 import { APIKeyModal } from '@/components/APIKeyModal';
+
+// Heavy alternate modes / tab panels — dynamic imports keep the initial
+// bundle lean on mobile. Each wraps a named export into a default for React.lazy.
+const CADWorkspace = lazy(() => import('@/components/CADWorkspace').then(m => ({ default: m.CADWorkspace })));
+const MeshStudio = lazy(() => import('@/components/MeshStudio').then(m => ({ default: m.MeshStudio })));
+const ChatPanel = lazy(() => import('@/components/ChatPanel').then(m => ({ default: m.ChatPanel })));
 import { AccountModal } from '@/components/AccountModal';
 import { InstallButton } from '@/components/InstallButton';
 import { useAuth } from '@/contexts/AuthContext';
@@ -46,12 +49,16 @@ import { CausalityHighlight } from '@/components/3D/CausalityHighlight';
 import { deriveSupportStatus } from '@/analysis/metrics';
 import { buildCausalityGraph, CausalityGraph } from '@/components/causality/causalityEngine';
 import { ManufacturingTimeline } from '@/components/causality/ManufacturingTimeline';
-import { CausalityPanel } from '@/components/causality/CausalityPanel';
 import { detectPatterns, PatternMatch } from '@/components/causality/topologyPatternEngine';
-import { PatternMemoryPanel } from '@/components/causality/PatternMemoryPanel';
 import { evaluateCounterfactuals, GeometrySuggestion } from '@/components/causality/counterfactualEngine';
-import { GeometrySuggestionPanel } from '@/components/causality/GeometrySuggestionPanel';
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
+
+// Causality panels render only in the causality tab — lazy so the engines
+// (eager, they feed the viewport highlights) don't drag the panel UI into the
+// initial bundle.
+const CausalityPanel = lazy(() => import('@/components/causality/CausalityPanel').then(m => ({ default: m.CausalityPanel })));
+const PatternMemoryPanel = lazy(() => import('@/components/causality/PatternMemoryPanel').then(m => ({ default: m.PatternMemoryPanel })));
+const GeometrySuggestionPanel = lazy(() => import('@/components/causality/GeometrySuggestionPanel').then(m => ({ default: m.GeometrySuggestionPanel })));
 import { CognitiveScan } from '@/components/3D/CognitiveScan';
 import { AttentionPulse } from '@/components/3D/AttentionPulse';
 import { ViewfinderCorners } from '@/components/decorative/ViewfinderCorners';
@@ -803,6 +810,11 @@ deepAnalysisSeq.current += 1;
       </header>
 
       {/* ── Main ── */}
+      <Suspense fallback={
+        <div className="flex items-center justify-center h-[60vh] text-xs font-mono text-primary animate-pulse">
+          <span>▋ LOADING...</span>
+        </div>
+      }>
       {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-28 sm:pt-14 flex flex-col lg:flex-row min-h-screen">
 
         {/* Left: 3D Viewport */}
@@ -1309,37 +1321,41 @@ deepAnalysisSeq.current += 1;
 
                 {/* CAUSALITY TAB */}
                 {tab === 'causality' && (
-                  <div className="pt-4 space-y-4">
-                    <CausalityPanel graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} language={language} />
-                    <div className="border-t border-border/20 my-2" />
-                    {patternMatches.length > 0 && (
-                      <PatternMemoryPanel
-                        matches={patternMatches}
-                        selectedPatternId={selectedPatternId}
-                        onSelectPattern={setSelectedPatternId}
+                  <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ LOADING...</div>}>
+                    <div className="pt-4 space-y-4">
+                      <CausalityPanel graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} language={language} />
+                      <div className="border-t border-border/20 my-2" />
+                      {patternMatches.length > 0 && (
+                        <PatternMemoryPanel
+                          matches={patternMatches}
+                          selectedPatternId={selectedPatternId}
+                          onSelectPattern={setSelectedPatternId}
+                          language={language}
+                        />
+                      )}
+                      <div className="border-t border-border/20 my-2" />
+                      <GeometrySuggestionPanel
+                        suggestions={counterfactualSuggestions}
+                        selectedSuggestionId={selectedSuggestionId}
+                        onSelectSuggestion={setSelectedSuggestionId}
                         language={language}
                       />
-                    )}
-                    <div className="border-t border-border/20 my-2" />
-                    <GeometrySuggestionPanel
-                      suggestions={counterfactualSuggestions}
-                      selectedSuggestionId={selectedSuggestionId}
-                      onSelectSuggestion={setSelectedSuggestionId}
-                      language={language}
-                    />
-                  </div>
+                    </div>
+                  </Suspense>
                 )}
 
                 {/* CHAT TAB */}
                 {tab === 'chat' && (
-                  <div className="pt-4 h-[45vh] min-h-[320px] lg:h-[520px]">
-                    <ChatPanel
-                      model={modelData}
-                      language={language}
-                      material={material}
-                      onNeedAuth={() => setShowAccountModal(true)}
-                    />
-                  </div>
+                  <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ LOADING...</div>}>
+                    <div className="pt-4 h-[45vh] min-h-[320px] lg:h-[520px]">
+                      <ChatPanel
+                        model={modelData}
+                        language={language}
+                        material={material}
+                        onNeedAuth={() => setShowAccountModal(true)}
+                      />
+                    </div>
+                  </Suspense>
                 )}
               </div>
             )}
@@ -1361,6 +1377,7 @@ deepAnalysisSeq.current += 1;
           </div>
         </div>
       </div>}
+      </Suspense>
     </div>
     </PrintPlaybackProvider>
   );
