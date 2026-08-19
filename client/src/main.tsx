@@ -14,10 +14,17 @@ declare global {
 
 // PWA service worker: registered on load in production builds only (no SW in dev).
 // The generated SW uses skipWaiting + clientsClaim, so new versions take over
-// automatically on the next reload.
+// automatically on the next reload. `updateViaCache: 'none'` forces the browser
+// to bypass the HTTP cache when checking for a new SW — otherwise a cached
+// sw.js never revalidates and users get stuck on the previous build's precache
+// (the classic "I refreshed but still see the old UI" PWA bug). The explicit
+// reg.update() catches updates earlier than the default navigation-time check.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+    navigator.serviceWorker
+      .register("/sw.js", { updateViaCache: "none" })
+      .then((reg) => { reg.update().catch(() => {}); })
+      .catch(() => {});
   });
 }
 
