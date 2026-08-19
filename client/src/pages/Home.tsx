@@ -16,7 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/useMobile';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
-import { fromThreeBufferGeometry, runAnalysisInWorker } from '@/analysis';
+import { fromThreeBufferGeometry, runAnalysisInWorker, assessContext, type ObjectContext } from '@/analysis';
 import { normalizeModelGeometry, fitCameraToGeometry } from '@/lib/modelNormalization';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
 import { parseSTL } from '@/lib/stlParser';
@@ -284,6 +284,7 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
 export default function Home() {
   const { material, materialName, setMaterialName } = useMaterial();
   const [materialFamily, setMaterialFamily] = useState<'fdm' | 'resin' | 'fgf'>('fdm');
+  const [objectContext, setObjectContext] = useState<ObjectContext>('general');
   const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
@@ -705,17 +706,17 @@ deepAnalysisSeq.current += 1;
               </button>
             ))}
           </div>
-          {/* Print technology family */}
-          <div className="flex items-center gap-0.5">
+          {/* Print technology — dropdown so more technologies (FDM/SLA/SLS/FGF/Metal) stack cleanly */}
+          <select
+            value={materialFamily}
+            onChange={(e) => reanalyzeWithFamily(e.target.value as 'fdm' | 'resin' | 'fgf')}
+            title="Technology"
+            className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer"
+          >
             {(['fdm', 'resin', 'fgf'] as const).map(f => (
-              <button key={f} onClick={() => reanalyzeWithFamily(f)}
-                className={`text-[11px] sm:text-xs font-mono px-2 py-1 rounded-sm transition-all ${
-                  materialFamily === f ? 'bg-primary/15 text-primary' : 'text-muted-foreground/60 hover:text-primary'
-                }`}>
-                {f.toUpperCase()}
-              </button>
+              <option key={f} value={f}>{f.toUpperCase()}</option>
             ))}
-          </div>
+          </select>
           {/* Material */}
           <select
             value={materialName}
@@ -989,6 +990,43 @@ deepAnalysisSeq.current += 1;
                         <MetricRow label="Slenderness" value={unifiedAnalysis.fgf.result.slenderness.toFixed(2)} />
                         <MetricRow label="Orientation" value={unifiedAnalysis.fgf.result.orientation} />
                         <MetricRow label="Footprint" value={`${unifiedAnalysis.fgf.result.footprintAreaMm2} mm²`} />
+                      </div>
+                    )}
+                    {/* Object context — what this part is FOR changes what matters */}
+                    {unifiedAnalysis && (
+                      <div className="border border-border rounded-sm bg-card p-4 mt-3">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">OBJECT</div>
+                          <select
+                            value={objectContext}
+                            onChange={(e) => setObjectContext(e.target.value as ObjectContext)}
+                            className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
+                          >
+                            <option value="general">General</option>
+                            <option value="structural">Furniture · Structural</option>
+                            <option value="large">Large · Construction</option>
+                            <option value="detailed">Fine · Jewelry/Dental</option>
+                          </select>
+                        </div>
+                        {(() => {
+                          const ctx = assessContext(unifiedAnalysis, objectContext);
+                          return (
+                            <>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-xs font-mono text-muted-foreground/60">Risk</span>
+                                <div className="flex-1 h-1.5 bg-border/40 rounded-full overflow-hidden">
+                                  <div className="h-full bg-primary/70" style={{ width: `${Math.round(ctx.overallRisk * 100)}%` }} />
+                                </div>
+                                <span className="text-xs font-mono text-primary tabular-nums">{Math.round(ctx.overallRisk * 100)}%</span>
+                              </div>
+                              <ul className="space-y-1">
+                                {ctx.topConcerns.map((c, i) => (
+                                  <li key={i} className="text-[12px] font-mono text-muted-foreground/70 leading-relaxed">{c}</li>
+                                ))}
+                              </ul>
+                            </>
+                          );
+                        })()}
                       </div>
                     )}
                     <button onClick={() => setTab('report')}
