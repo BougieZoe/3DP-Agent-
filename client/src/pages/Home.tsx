@@ -1351,8 +1351,6 @@ deepAnalysisSeq.current += 1;
                   <div className="text-muted-foreground/20 text-3xl font-mono">[ ]</div>
                   <div className="text-xs text-muted-foreground/50 font-mono">{t('uploadStlBegin')}</div>
                 </div>
-                {/* What you've selected, explained — visible before any upload */}
-                <TechAndMaterialPanels materialFamily={materialFamily} materialName={materialName} />
                 <FeaturesSection t={t} onNavigate={handleFeatureNavigate} />
               </div>
             )}
