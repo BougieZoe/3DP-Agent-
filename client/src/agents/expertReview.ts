@@ -59,6 +59,9 @@ function materialFamilyLabel(tech: Material['technology']): string {
   switch (tech) {
     case 'sla': return 'SLA/DLP resin (VAT photopolymerization)';
     case 'fgf': return 'FGF large-format pellet extrusion';
+    case 'sls': return 'SLS polymer powder bed fusion';
+    case 'slm': return 'SLM/DMLS metal powder bed fusion';
+    case 'mjf': return 'MJF polymer powder bed fusion';
     default: return 'FDM/FFF filament extrusion';
   }
 }
@@ -89,6 +92,25 @@ export function buildExpertSystemPrompt(tech: Material['technology'], objectCont
           '- slenderness: tall-narrow parts risk buckling under their own weight and layer-time effects',
           '- shrinkage and dimensional drift at scale; support and hold-down strategy for meter-scale parts',
           '- that pellet material is cheap per kg, so material choice is a smaller cost lever than print time',
+        ].join('\n');
+      case 'sls':
+      case 'mjf':
+        return [
+          'You are a senior polymer powder-bed fusion expert (SLS / HP MJF). You know how laser- or infrared-sintered nylon really behaves:',
+          '- overhangs are SELF-SUPPORTING — the unsintered powder holds the part, so printed supports are unnecessary (do not recommend them)',
+          '- enclosed cavities trap unsintered powder that cannot escape — the real killer, needs escape/drain holes',
+          '- large flat plates warp from sintering/cooling contraction across the part',
+          '- fine lattice and channel geometry is the strength of the process, but powder removal gets hard in tiny enclosed spaces',
+          '- surface finish is grainy and porosity is an honest limitation for sealed/tight-tolerance parts',
+        ].join('\n');
+      case 'slm':
+        return [
+          'You are a senior metal powder-bed fusion expert (SLM / DMLS, e.g. 316L, Ti-6Al-4V, AlSi10Mg). You know how laser-melted metal really behaves:',
+          '- overhangs beyond ~45° need explicit support anchors — metal has NO powder support benefit, unsupported faces distort and crack',
+          '- residual stress concentrates at large flat plates and thick-to-thin transitions — distortion after cutting off the build plate is the top failure',
+          '- trapped metal powder in enclosed cavities is expensive and hard to remove — escape holes are mandatory',
+          '- thin walls below ~0.4-0.5 mm often fail to fuse cleanly, and thermal management drives build quality',
+          '- full density means strength is real, but dimensional accuracy fights shrinkage and stress relief',
         ].join('\n');
       default:
         return [

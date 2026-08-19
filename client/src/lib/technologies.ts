@@ -48,21 +48,21 @@ export const PRINT_TECHNOLOGIES: readonly PrintTechnologyInfo[] = [
     processFamily: 'Powder Bed Fusion (polymer)',
     description: 'A 3D printer sinters nylon powder with a laser — no supports needed',
     examples: 'Functional small parts, batch production',
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'slm', shortLabel: 'SLM/DMLS', label: 'SLM / DMLS',
     processFamily: 'Powder Bed Fusion (metal)',
     description: 'A 3D printer melts metal powder with a laser into fully dense parts',
     examples: 'Industrial, aerospace, liquid-cooling',
-    implemented: false,
+    implemented: true,
   },
   {
     id: 'mjf', shortLabel: 'MJF', label: 'MJF',
     processFamily: 'Powder Bed Fusion (Multi Jet Fusion)',
     description: 'HP\'s 3D printer applies a fusing agent + infrared to sinter polymer parts fast',
     examples: 'Production polymer parts at volume',
-    implemented: false,
+    implemented: true,
   },
 ];
 

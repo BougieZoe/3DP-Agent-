@@ -9,7 +9,7 @@
  * shared/domain; delete the analysis→lib and agents→lib edges").
  */
 
-export type MaterialTechnology = 'fdm' | 'sla' | 'fgf';
+export type MaterialTechnology = 'fdm' | 'sla' | 'fgf' | 'sls' | 'slm' | 'mjf';
 
 export interface Material {
   name: string;
@@ -134,6 +134,57 @@ export const MATERIALS: Record<string, Material> = {
     description: 'Polypropylene pellets — the lightest material here (~0.91 g/cm³, floats on water), chemically inert, fatigue- and weld-resistant. Holds a living hinge like no other plastic; large-format PP parts are in demand for tanks and industrial hardware.',
     useCase: 'Chemical tanks, living-hinge parts, industrial large-scale hardware',
     overhangThreshold: 45, densityGPerCm3: 0.91, pricePerKgUsd: 10,
+  },
+  // ── SLS / MJF — polymer powder bed fusion (self-supporting powder) ───────
+  PA12: {
+    name: 'PA12 (Nylon 12)', technology: 'sls',
+    category: 'Polymer powder (PBF)',
+    description: 'Nylon 12 powder fused by laser (SLS) or fusing-agent + infrared (MJF). Tough, fatigue-resistant, chemically stable, low moisture uptake. The part grows inside a powder bed, so overhangs are self-supporting and never need printed supports — but enclosed cavities trap unsintered powder that needs escape holes.',
+    useCase: 'Functional parts, snap-fit, batch production',
+    overhangThreshold: 65, densityGPerCm3: 1.01, pricePerKgUsd: 45,
+  },
+  PA11: {
+    name: 'PA11 (Nylon 11)', technology: 'sls',
+    category: 'Polymer powder (PBF)',
+    description: 'Nylon 11 powder — bio-derived (castor oil), noticeably more ductile and impact-resistant than PA12, keeping living hinges and parts in harsh environments intact. Same self-supporting powder-bed behavior as PA12.',
+    useCase: 'Ductile functional parts, automotive, hinges',
+    overhangThreshold: 65, densityGPerCm3: 1.04, pricePerKgUsd: 60,
+  },
+  TPU_POWDER: {
+    name: 'TPU Powder', technology: 'sls',
+    category: 'Elastomer powder (PBF)',
+    description: 'Thermoplastic polyurethane powder — laser-sintered flexible, rubber-like parts with complex compliant geometry that FDM cannot make. Overhangs are powder-supported; open lattices keep powder easy to clear.',
+    useCase: 'Cushions, seals, compliant structures, lattices',
+    overhangThreshold: 65, densityGPerCm3: 1.20, pricePerKgUsd: 85,
+  },
+  MJF_PA12: {
+    name: 'PA12 (MJF)', technology: 'mjf',
+    category: 'Polymer powder (Multi Jet Fusion)',
+    description: 'HP Multi Jet Fusion PA12 — a fusing agent is jetted onto the powder and infrared sinters it, producing fast, consistent, finely-detailed nylon parts at production volume. Powder-supported overhangs; enclosed cavities need escape holes for the unfused powder.',
+    useCase: 'Production parts at volume, end-use parts',
+    overhangThreshold: 65, densityGPerCm3: 1.02, pricePerKgUsd: 55,
+  },
+  // ── SLM / DMLS — metal powder bed fusion (needs supports) ─────────────────
+  STEEL_316L: {
+    name: '316L Stainless', technology: 'slm',
+    category: 'Metal powder (PBF)',
+    description: '316L stainless steel powder melted by laser into fully dense metal parts — corrosion-resistant and weldable, the workhorse industrial metal. Unlike polymer PBF, overhangs beyond ~45° NEED support anchors, and trapped powder in cavities is expensive and hard to remove.',
+    useCase: 'Industrial, tooling, corrosion-resistant parts',
+    overhangThreshold: 45, densityGPerCm3: 7.98, pricePerKgUsd: 50,
+  },
+  TI64: {
+    name: 'Ti-6Al-4V', technology: 'slm',
+    category: 'Metal powder (PBF)',
+    description: 'Ti-6Al-4V titanium alloy powder — aerospace-grade strength-to-weight and biocompatible, but the most demanding metal to print: high residual stress, steep unsupported faces distort, and it is expensive per kg.',
+    useCase: 'Aerospace, medical implants, high-performance',
+    overhangThreshold: 45, densityGPerCm3: 4.43, pricePerKgUsd: 320,
+  },
+  ALSI10MG: {
+    name: 'AlSi10Mg', technology: 'slm',
+    category: 'Metal powder (PBF)',
+    description: 'AlSi10Mg aluminum alloy powder — lightweight with good thermal conductivity, a cast-like alloy popular for automotive and heat-dissipation parts. Lower density than steel makes large parts lighter, but it still needs support anchors and powder-escape planning.',
+    useCase: 'Automotive, heat sinks, lightweight structures',
+    overhangThreshold: 45, densityGPerCm3: 2.67, pricePerKgUsd: 40,
   },
 };
 

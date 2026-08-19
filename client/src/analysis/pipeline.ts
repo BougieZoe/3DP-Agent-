@@ -5,6 +5,7 @@ import { validateMesh } from './validation';
 import { computeMetrics } from './metrics';
 import { computeResinMetrics, type ResinResult } from './resin';
 import { computeFgfMetrics, type FgfResult } from './fgf';
+import { computePbfMetrics, type PbfResult, type PbfKind } from './pbf';
 import { checkBedFit } from './bedFit';
 import { estimateSupportVolume } from './support';
 import { estimatePrintTime } from './printTime';
@@ -20,7 +21,7 @@ export interface PipelineOptions {
   fileName?: string;
   material?: Material;
   /** Print technology family — selects the per-family metrics module. */
-  materialFamily?: 'fdm' | 'sla' | 'fgf' | 'slm' | 'eco';
+  materialFamily?: 'fdm' | 'sla' | 'fgf' | 'sls' | 'slm' | 'mjf' | 'eco';
   /** UI language — module explanations/reasons are localized. */
   language?: ContentLang;
   /**
@@ -132,7 +133,20 @@ export function runAnalysisPipeline(
     }
   });
 
-  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf]
+  // Powder Bed Fusion module (SLS / SLM / MJF) — geometric proxies, not FEA.
+  const PBF_FAMILIES: PbfKind[] = ['sls', 'slm', 'mjf'];
+  const EMPTY_PBF: PbfResult = { kind: 'sls', shellCount: 1, powderTrap: false, largestFlatPlateMm2: 0, flatPlateRatio: 0, overhangRatio: 0, overhangAreaMm2: 0, distortionRisk: 0, selfSupporting: true, footprintAreaMm2: 0, orientation: 'upright' };
+  const pbf = time('pbf', () => {
+    try {
+      const fam = options.materialFamily;
+      if (!fam || !PBF_FAMILIES.includes(fam as PbfKind)) return null;
+      return moduleResult('pbf', 1.0 as Confidence, 0, computePbfMetrics(model, fam as PbfKind), 'Powder Bed Fusion printability metrics (geometric proxies — not thermal simulation).');
+    } catch (e) {
+      return PBF_FAMILIES.includes(options.materialFamily as PbfKind) ? failResult('pbf', e, EMPTY_PBF) : null;
+    }
+  });
+
+  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf]
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .map(m => m.confidence);
   const overallConfidence = confidences.length > 0
@@ -148,6 +162,7 @@ export function runAnalysisPipeline(
     printTime,
     resin,
     fgf,
+    pbf,
     timestamp: now,
     modelFileName: fileName,
     overallConfidence,

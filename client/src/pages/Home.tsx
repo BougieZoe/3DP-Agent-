@@ -294,7 +294,7 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
  * the geometry tab) so a user always sees what they picked and what it means.
  */
 function TechAndMaterialPanels({ materialFamily, materialName }: {
-  materialFamily: 'fdm' | 'sla' | 'fgf';
+  materialFamily: Material['technology'];
   materialName: string;
 }) {
   const tech = PRINT_TECH_BY_ID[materialFamily as PrintTechnology];
@@ -326,7 +326,7 @@ function TechAndMaterialPanels({ materialFamily, materialName }: {
 
 export default function Home() {
   const { material, materialName, setMaterialName } = useMaterial();
-  const [materialFamily, setMaterialFamily] = useState<'fdm' | 'sla' | 'fgf'>('fdm');
+  const [materialFamily, setMaterialFamily] = useState<Material['technology']>('fdm');
   const [objectContext, setObjectContext] = useState<ObjectContext>('general');
   const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
   const [language, setLanguage] = useState<Language>('en');
@@ -496,7 +496,7 @@ export default function Home() {
   }, [uploadedModel, language, setMaterialName]);
 
   // Re-run analysis under a different print-technology family (FDM vs resin).
-  const reanalyzeWithFamily = useCallback(async (family: 'fdm' | 'sla' | 'fgf') => {
+  const reanalyzeWithFamily = useCallback(async (family: Material['technology']) => {
     setMaterialFamily(family);
     setMaterialName(defaultMaterialKeyFor(family)); // switch to that technology's default material (registry key)
     if (!uploadedModel) return;
@@ -753,7 +753,7 @@ deepAnalysisSeq.current += 1;
           {/* Print technology — rigorous ASTH process-family classification */}
           <select
             value={materialFamily}
-            onChange={(e) => reanalyzeWithFamily(e.target.value as 'fdm' | 'sla' | 'fgf')}
+            onChange={(e) => reanalyzeWithFamily(e.target.value as Material['technology'])}
             title={PRINT_TECH_BY_ID[materialFamily as PrintTechnology]?.label}
             className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer"
           >
@@ -1046,6 +1046,20 @@ deepAnalysisSeq.current += 1;
                         <MetricRow label="Footprint" value={`${unifiedAnalysis.fgf.result.footprintAreaMm2} mm²`} />
                       </div>
                     )}
+                    {/* Powder Bed Fusion metrics (SLS / SLM / MJF) — geometric proxies, not thermal simulation */}
+                    {unifiedAnalysis?.pbf?.result && (
+                      <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
+                        <div className="text-xs text-primary mb-1 font-mono tracking-widest">POWDER BED FUSION · {unifiedAnalysis.pbf.result.kind.toUpperCase()}</div>
+                        <div className="text-[11px] font-mono text-muted-foreground/50 mb-3">geometric proxies — not thermal simulation</div>
+                        <MetricRow label="Shells" value={unifiedAnalysis.pbf.result.shellCount} highlight={unifiedAnalysis.pbf.result.powderTrap} />
+                        <MetricRow label="Powder trap" value={unifiedAnalysis.pbf.result.powderTrap ? '⚠ enclosed cavity — needs escape holes' : 'none'} highlight={unifiedAnalysis.pbf.result.powderTrap} />
+                        <MetricRow label="Largest flat plate" value={`${unifiedAnalysis.pbf.result.largestFlatPlateMm2} mm²`} highlight={unifiedAnalysis.pbf.result.largestFlatPlateMm2 > 2000} />
+                        <MetricRow label="Overhang ratio" value={`${Math.round(unifiedAnalysis.pbf.result.overhangRatio * 100)}%`} highlight={!unifiedAnalysis.pbf.result.selfSupporting && unifiedAnalysis.pbf.result.overhangRatio > 0.15} />
+                        <MetricRow label="Support" value={unifiedAnalysis.pbf.result.selfSupporting ? 'self-supporting (powder)' : 'supports required'} />
+                        <MetricRow label="Distortion risk" value={`${Math.round(unifiedAnalysis.pbf.result.distortionRisk * 100)}%`} highlight={unifiedAnalysis.pbf.result.distortionRisk > 0.55} />
+                        <MetricRow label="Orientation" value={unifiedAnalysis.pbf.result.orientation} />
+                      </div>
+                    )}
                     {/* Selected technology + material classification — rigorous, self-describing panels */}
                     <div className="mt-3">
                       <TechAndMaterialPanels materialFamily={materialFamily} materialName={materialName} />
@@ -1326,8 +1340,10 @@ deepAnalysisSeq.current += 1;
                       materialMetrics={(() => {
                         const resin = unifiedAnalysis?.resin?.result;
                         const fgf = unifiedAnalysis?.fgf?.result;
+                        const pbf = unifiedAnalysis?.pbf?.result;
                         if (resin) return `Shells: ${resin.shellCount}, enclosedCavity: ${resin.enclosedCavity}, islands: ${resin.islandCount}, suctionRisk: ${(resin.suctionRisk * 100).toFixed(0)}%, overCureRisk: ${(resin.cureRisk * 100).toFixed(0)}%, orientation: ${resin.orientation}`;
                         if (fgf) return `PartScale: ${fgf.partScale}, maxDim: ${fgf.maxDimMm}mm, warpageRisk: ${(fgf.warpageRisk * 100).toFixed(0)}%, delaminationRisk: ${(fgf.delaminationRisk * 100).toFixed(0)}%, slenderness: ${fgf.slenderness.toFixed(2)}, orientation: ${fgf.orientation}`;
+                        if (pbf) return `Kind: ${pbf.kind}, powderTrap: ${pbf.powderTrap}, largestFlatPlate: ${pbf.largestFlatPlateMm2}mm2, overhangRatio: ${(pbf.overhangRatio * 100).toFixed(0)}%, distortionRisk: ${(pbf.distortionRisk * 100).toFixed(0)}%, selfSupporting: ${pbf.selfSupporting}, orientation: ${pbf.orientation}`;
                         return undefined;
                       })()}
                       language={language}
