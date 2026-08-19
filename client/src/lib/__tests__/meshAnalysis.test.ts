@@ -17,7 +17,7 @@ describe('mesh → analysis pipeline', () => {
     expect(geometry.attributes.position.count).toBeGreaterThan(0);
 
     const material = Object.values(MATERIALS)[0];
-    const result = runCadAnalysis(geometry, {
+    const result = await runCadAnalysis(geometry, {
       fileName: 'gear.stl',
       prompt: 'a gear',
       material,

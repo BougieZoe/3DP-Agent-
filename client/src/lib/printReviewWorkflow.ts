@@ -14,7 +14,7 @@ import {
 } from '@shared/domain/workflow';
 import { generateQuickReport, type ModelData } from './ruleEngine';
 import { loadSTLFile } from './stlLoader';
-import { runAnalysisPipeline, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
+import { runAnalysisInWorker, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
 import type { Material } from '@shared/domain/material';
 import { DEFAULT_MATERIAL } from '@shared/domain/material';
 
@@ -205,7 +205,7 @@ export async function executeLocalPrintReviewWorkflow(
 
     stages.analyzeGeometry = startStage(stages.analyzeGeometry, now());
     const model = fromThreeBufferGeometry(geometry);
-    const unifiedAnalysis = runAnalysisPipeline(model, { fileName: file.name });
+    const unifiedAnalysis = await runAnalysisInWorker(model, { fileName: file.name });
     result.unifiedAnalysis = unifiedAnalysis;
     const triCount = unifiedAnalysis.topology.result?.triangleCount ?? 0;
     const surfaceArea = unifiedAnalysis.metrics.result?.surfaceAreaMm2 ?? 0;

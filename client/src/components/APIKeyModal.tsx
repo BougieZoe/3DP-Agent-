@@ -44,8 +44,8 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-      <div className="bg-card border border-border rounded-lg w-full max-w-md p-6">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 overflow-y-auto">
+      <div className="bg-card border border-border rounded-lg w-full max-w-md p-6 my-6">
         <h2 className="text-lg font-semibold mb-4">API Configuration</h2>
         
         {AI_PROVIDERS.map(provider => (

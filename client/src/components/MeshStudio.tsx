@@ -13,6 +13,7 @@ import { recordPrintOutcome, getPrintStats, type PrintOutcome } from '@/lib/prin
 import { createMeshGenerator, generateDesign, type GeneratorAdapter } from '@/design/generator';
 import { useMaterial } from '@/contexts/MaterialContext';
 import { getTranslation, translations } from '@/lib/i18n';
+import { useIsMobile } from '@/hooks/useMobile';
 import type { Language } from '@/lib/i18n';
 import type { UnifiedAnalysis } from '@/analysis';
 import type { CADConfidenceReport, Issue as ConfidenceIssue } from '@/cad-confidence';
@@ -94,6 +95,9 @@ export function MeshStudio({ language }: { language: Language }) {
   const [serverDiag, setServerDiag] = useState<MeshProcessDiagnostics | null>(null);
   const [fitKey, setFitKey] = useState(0);
   const [printStats, setPrintStats] = useState(() => getPrintStats());
+  // Mobile: which side panel is open as a bottom sheet (null = viewport only)
+  const [mobilePanel, setMobilePanel] = useState<'left' | 'right' | null>(null);
+  const isMobile = useIsMobile();
   const controlsRef = useRef<any>(null);
 
   const generate = useCallback(async (overridePrompt?: string) => {
@@ -130,7 +134,7 @@ export function MeshStudio({ language }: { language: Language }) {
         return;
       }
       const geo = parseSTL(stl);
-      const result = runCadAnalysis(geo, { fileName: `${p}.stl`, prompt: p, material, language });
+      const result = await runCadAnalysis(geo, { fileName: `${p}.stl`, prompt: p, material, language });
       setGeometry(result.geometry);
       setUnified(result.unified);
       setGate(result.gate);
@@ -174,11 +178,11 @@ export function MeshStudio({ language }: { language: Language }) {
     setPrintStats(getPrintStats());
   };
 
-  const handleDecimate = () => {
+  const handleDecimate = async () => {
     if (!geometry) return;
     const target = Math.max(200, Math.floor(countTriangles(geometry) / 2));
     const decimated = decimateGeometry(geometry, target);
-    const result = runCadAnalysis(decimated, {
+    const result = await runCadAnalysis(decimated, {
       fileName: `${(prompt || 'mesh').slice(0, 40).replace(/[^a-z0-9_-]/gi, '_')}.stl`,
       prompt,
       material,
@@ -197,7 +201,7 @@ export function MeshStudio({ language }: { language: Language }) {
       setServerDiag(result.diagnostics);
       if (result.stlBytes.byteLength > 84) {
         const geo = parseSTL(result.stlBytes);
-        const analysis = runCadAnalysis(geo, {
+        const analysis = await runCadAnalysis(geo, {
           fileName: `${(prompt || 'mesh').slice(0, 40).replace(/[^a-z0-9_-]/gi, '_')}.stl`,
           prompt,
           material,
@@ -236,9 +240,11 @@ export function MeshStudio({ language }: { language: Language }) {
   const hasResult = gate != null;
 
   return (
-    <div className={`grid grid-rows-[1fr] h-[calc(100vh-3.5rem)] mt-14 grid-cols-[280px_1fr] ${hasResult ? 'lg:grid-cols-[280px_1fr_380px]' : ''}`}>
-      {/* ── LEFT PANEL ── */}
-      <div className="flex flex-col border-r border-border/15 bg-card/30 overflow-y-auto">
+    <div className={`relative flex flex-col h-[calc(100dvh-5.5rem)] mt-[5.5rem] lg:mt-14 lg:h-[calc(100vh-3.5rem)] lg:grid lg:grid-rows-[1fr] lg:grid-cols-[280px_1fr] ${hasResult ? 'lg:grid-cols-[280px_1fr_380px]' : ''}`}>
+      {/* ── LEFT PANEL (desktop: grid item · mobile: bottom sheet) ── */}
+      <div className={`flex-col border-r border-border/15 bg-card/30 overflow-y-auto ${
+        mobilePanel === 'left' ? 'fixed bottom-0 left-0 right-0 z-30 max-h-[75dvh] flex' : 'hidden'
+      } lg:flex lg:static lg:max-h-none lg:z-auto`}>
         <div className="px-4 pt-6 pb-3 space-y-4">
           <textarea
             value={prompt}
@@ -317,8 +323,25 @@ export function MeshStudio({ language }: { language: Language }) {
       </div>
 
       {/* ── CENTER: VIEWPORT ── */}
-      <section className="relative overflow-hidden bg-card/20">
-        <Canvas gl={{ antialias: true, alpha: true }} style={{ background: 'transparent' }}>
+      <section className="relative overflow-hidden bg-card/20 flex-1 min-h-0">
+        {/* Mobile bottom-sheet backdrop */}
+        {mobilePanel && (
+          <div className="absolute inset-0 z-20 bg-black/50 lg:hidden" onClick={() => setMobilePanel(null)} />
+        )}
+        {/* Mobile: open the side panels as bottom sheets */}
+        <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 lg:hidden">
+          <button onClick={() => setMobilePanel(p => (p === 'left' ? null : 'left'))}
+            className="h-8 px-3 inline-flex items-center gap-1.5 border border-border/40 bg-background/80 backdrop-blur rounded-sm text-[11px] font-mono text-muted-foreground hover:text-foreground">
+            <Sparkles className="w-3.5 h-3.5" /> {t('meshGenerate')}
+          </button>
+          {hasResult && (
+            <button onClick={() => setMobilePanel(p => (p === 'right' ? null : 'right'))}
+              className="h-8 px-3 inline-flex items-center gap-1.5 border border-border/40 bg-background/80 backdrop-blur rounded-sm text-[11px] font-mono text-muted-foreground hover:text-foreground">
+              <CheckCircle2 className="w-3.5 h-3.5" /> {t('cadTabAnalysis')}
+            </button>
+          )}
+        </div>
+        <Canvas dpr={[1, isMobile ? 1.5 : 2]} gl={{ antialias: !isMobile, alpha: true }} style={{ background: 'transparent' }}>
           <PerspectiveCamera makeDefault position={[0, 6, 18]} fov={55} />
           <ambientLight intensity={0.4} />
           <directionalLight position={[6, 8, 5]} intensity={0.8} />
@@ -342,7 +365,9 @@ export function MeshStudio({ language }: { language: Language }) {
 
       {/* ── RIGHT: ANALYSIS REPORT ── */}
       {hasResult && (
-        <div className="hidden lg:flex flex-col border-l border-border/15 bg-card/30 overflow-y-auto">
+        <div className={`flex-col border-l border-border/15 bg-card/30 overflow-y-auto ${
+          mobilePanel === 'right' ? 'fixed bottom-0 left-0 right-0 z-30 max-h-[75dvh] flex' : 'hidden'
+        } lg:flex lg:static lg:max-h-none lg:z-auto`}>
           <div className="p-4 space-y-4">
             <div className="text-center">
               <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em] mb-1.5">
