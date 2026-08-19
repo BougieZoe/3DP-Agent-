@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { ModelData, classifyQuestion, answerLocally } from '@/lib/ruleEngine';
-import { getActiveProvider, getKey, callAI, AIProvider } from '@/lib/apiKeys';
+import { callAI, AIProvider } from '@/lib/apiKeys';
+import { getLLMProvider } from '@/lib/llmAccess';
+import { getAuthSnapshot } from '@/lib/authStore';
 import { CONTENT, translate } from '@shared/i18n/content';
 import { Language } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
@@ -18,7 +20,7 @@ interface Message {
 interface ChatPanelProps {
   model: ModelData;
   language: Language;
-  onNeedAPIKey: () => void;
+  onNeedAuth: () => void;
   material?: Material;
 }
 
@@ -129,7 +131,7 @@ function buildInitialAssessment(model: ModelData, lang: Language): string {
   return text;
 }
 
-export function ChatPanel({ model, language, onNeedAPIKey, material = DEFAULT_MATERIAL }: ChatPanelProps) {
+export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATERIAL }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
@@ -155,7 +157,7 @@ export function ChatPanel({ model, language, onNeedAPIKey, material = DEFAULT_MA
     setIsLoading(true);
 
     const { needsAI, category } = classifyQuestion(text);
-    const provider = getActiveProvider();
+    const { user } = getAuthSnapshot();
 
     if (!needsAI) {
       const localAnswer = answerLocally(category, model, language, material);
@@ -172,27 +174,28 @@ export function ChatPanel({ model, language, onNeedAPIKey, material = DEFAULT_MA
       }
     }
 
-    if (!provider) {
+    // AI chat is a signed-in (hosted) feature. Anonymous users get a sign-in prompt.
+    if (!user) {
       await new Promise(r => setTimeout(r, 300));
       setMessages(prev => [...prev, {
         id: Date.now().toString() + '_a',
         role: 'assistant',
-        content: translate(CONTENT, 'chat.needApiKey', language),
+        content: translate(CONTENT, 'chat.needSignIn', language),
         source: 'local',
       }]);
       setIsLoading(false);
-      onNeedAPIKey();
+      onNeedAuth();
       return;
     }
 
-    const key = getKey(provider)!;
+    const llm = getLLMProvider()!;
     try {
-      const answer = await callAI(provider, key, buildSystemPrompt(model, language, material), text);
+      const answer = await callAI(llm.provider, llm.key, buildSystemPrompt(model, language, material), text);
       setMessages(prev => [...prev, {
         id: Date.now().toString() + '_a',
         role: 'assistant',
         content: answer,
-        source: provider,
+        source: llm.provider,
       }]);
     } catch (err) {
       setMessages(prev => [...prev, {
@@ -201,7 +204,7 @@ export function ChatPanel({ model, language, onNeedAPIKey, material = DEFAULT_MA
         content: translate(CONTENT, 'chat.errorPrefix', language, {
           message: err instanceof Error ? err.message : translate(CONTENT, 'chat.errorFallback', language),
         }),
-        source: provider,
+        source: llm.provider,
       }]);
     } finally {
       setIsLoading(false);
@@ -222,7 +225,7 @@ export function ChatPanel({ model, language, onNeedAPIKey, material = DEFAULT_MA
           <span className="text-xs font-mono text-primary tracking-widest">{translate(CONTENT, 'chat.header', language)}</span>
         </div>
         <span className="text-xs font-mono text-muted-foreground/40">
-          {getActiveProvider() ? `AI: ${AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel}` : translate(CONTENT, 'chat.localMode', language)}
+          {getLLMProvider() ? `AI: ${AI_PROVIDER_METADATA[getLLMProvider()!.provider].shortLabel}` : translate(CONTENT, 'chat.localMode', language)}
         </span>
       </div>
 
