@@ -2,15 +2,12 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { createServer } from "http";
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "path";
-import { fileURLToPath } from "url";
+import { currentDir as __dirname } from "./currentDir";
 import { createCadBridgeRouter } from "./cadBridge";
 import { createMeshProcessRouter } from "./meshProcess";
 import { createSlicerRouter } from "./slicerRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Real address of the AMD machine, read from an environment variable instead
 // of hardcoded. Every time a new Droplet is spun up, only this env var in the
@@ -285,6 +282,13 @@ async function startServer() {
       : path.resolve(__dirname, "..", "dist", "public");
 
   app.use(express.static(staticPath));
+
+  // Unauthenticated liveness probe — used by the Electron main process to wait
+  // for the local server before opening the window. Must be before the SPA
+  // catch-all (which would otherwise answer with index.html).
+  app.get("/health", (_req, res) => {
+    res.json({ ok: true, pid: process.pid });
+  });
 
   // Handle client-side routing - serve index.html for all routes
   app.get("*", (_req, res) => {

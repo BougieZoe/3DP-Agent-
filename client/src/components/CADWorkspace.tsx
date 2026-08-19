@@ -26,6 +26,7 @@ import type { UnifiedAnalysis } from "@/analysis";
 import { getAPIKeys, getActiveProvider } from "@/lib/apiKeys";
 import type { AIProvider } from "@/lib/apiKeys";
 import { useMaterial } from "@/contexts/MaterialContext";
+import { useIsMobile } from "@/hooks/useMobile";
 import { getTranslation, translations } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n";
 
@@ -736,7 +737,12 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       const avail = await fetch('/api/cad/generate/health').then(r => r.json()).then(d => d.ready === true).catch(() => false);
       if (!avail) {
         mark('bridge', 'error');
-        throw new Error('CAD bridge not available — is the server running on port 3001?');
+        const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname);
+        throw new Error(
+          isLocal
+            ? 'CAD bridge not available — start the local engine first (pnpm dev:server) on port 3001.'
+            : 'CAD generation is only available in the desktop app — the web version cannot run the local CAD engine.'
+        );
       }
       mark('bridge', 'done');
 
@@ -808,7 +814,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       mark('parse', 'done');
 
       mark('analysis', 'running');
-      const { geometry: geom, unified, gate, issues } = runCadAnalysis(geo, {
+      const { geometry: geom, unified, gate, issues } = await runCadAnalysis(geo, {
         fileName: `${p}.stl`,
         prompt: p,
         material,
@@ -878,7 +884,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       stlBytesRef.current = outcome.result.stlBytes;
 
       const geo = parseSTL(outcome.result.stlBytes);
-      const { geometry: geom, unified, gate, issues } = runCadAnalysis(geo, {
+      const { geometry: geom, unified, gate, issues } = await runCadAnalysis(geo, {
         fileName: `${prompt || 'parametric'}.stl`,
         prompt: prompt || 'parametric plate',
         material,
@@ -955,7 +961,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       return;
     }
 
-    const { geometry: geom, unified, gate, issues } = runCadAnalysis(modifiedGeo, {
+    const { geometry: geom, unified, gate, issues } = await runCadAnalysis(modifiedGeo, {
       fileName: `improved_${prompt}.stl`,
       prompt,
       material,
@@ -1081,7 +1087,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       return;
     }
 
-    const { geometry: geom, unified, gate, issues } = runCadAnalysis(modifiedGeo, {
+    const { geometry: geom, unified, gate, issues } = await runCadAnalysis(modifiedGeo, {
       fileName: `improved_${prompt}.stl`,
       prompt,
       material,
@@ -1184,6 +1190,9 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const verdict = confidenceReport?.verdict ?? 'FAIL';
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [rightTab, setRightTab] = useState<'cad' | 'analysis'>('cad');
+  // Mobile: which side panel is open as a bottom sheet (null = viewport only)
+  const [mobilePanel, setMobilePanel] = useState<'left' | 'right' | null>(null);
+  const isMobile = useIsMobile();
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [sectionsOpen, setSectionsOpen] = useState<Record<string, boolean>>({
     dimensions: true, holes: false, details: false, manufacturing: false,
@@ -1358,9 +1367,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const bridgeState = useCADBridgeHealth();
 
   return (
-    <div className={`grid grid-rows-[1fr] h-[calc(100vh-3.5rem)] mt-14 ${hasGeometry ? 'grid-cols-[280px_1fr_380px]' : 'grid-cols-[280px_1fr]'}`}>
-      {/* ── LEFT PANEL (always visible) ── */}
-      <div className="flex flex-col border-r border-border/15 bg-card/30 overflow-y-auto">
+    <div className={`relative flex flex-col h-[calc(100dvh-5.5rem)] mt-[5.5rem] lg:mt-14 lg:h-[calc(100vh-3.5rem)] lg:grid lg:grid-rows-[1fr] ${hasGeometry ? 'lg:grid-cols-[280px_1fr_380px]' : 'lg:grid-cols-[280px_1fr]'}`}>
+      {/* ── LEFT PANEL (desktop: grid item · mobile: bottom sheet) ── */}
+      <div className={`flex-col border-r border-border/15 bg-card/30 overflow-y-auto ${
+        mobilePanel === 'left' ? 'fixed bottom-0 left-0 right-0 z-30 max-h-[75dvh] flex' : 'hidden'
+      } lg:flex lg:static lg:max-h-none lg:z-auto`}>
         {/* Prompt input */}
         <div className="px-4 pt-5 pb-3 space-y-4">
           <textarea
@@ -1467,7 +1478,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       </div>
 
       {/* ── CENTER: Viewport ── */}
-      <section className="relative overflow-hidden bg-card/20">
+      <section className="relative overflow-hidden bg-card/20 flex-1 min-h-0">
+        {/* Mobile bottom-sheet backdrop */}
+        {mobilePanel && (
+          <div className="absolute inset-0 z-20 bg-black/50 lg:hidden" onClick={() => setMobilePanel(null)} />
+        )}
         {/* Engine health (top-left, subtle) */}
         <div className="absolute top-3 left-4 z-10 flex items-center gap-1.5">
           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
@@ -1485,7 +1500,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         {/* Generation stages overlay (STATE 2 only) */}
         {loading && stages.length > 0 && !hasGeometry && (
           <div className="absolute inset-0 z-10 flex items-center justify-center">
-            <div className="flex flex-col gap-3 px-5 py-4 bg-background/70 backdrop-blur border border-border/15 rounded-sm min-w-[300px]">
+            <div className="flex flex-col gap-3 px-5 py-4 bg-background/70 backdrop-blur border border-border/15 rounded-sm min-w-[280px] max-w-[calc(100vw-2rem)]">
               <div className="text-sm text-muted-foreground/40 font-mono tracking-[0.2em] mb-1">{t('cadGenerating')}</div>
               {stages.map(s => (
                 <div key={s.id} className="flex items-center gap-2 text-sm font-mono text-muted-foreground/60">
@@ -1505,14 +1520,27 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         )}
 
         {/* Viewport bottom controls */}
-        <div className="absolute bottom-4 left-5 right-5 z-10 flex items-center gap-2">
+        <div className="absolute bottom-4 left-5 right-5 z-10 flex items-center gap-2 flex-wrap lg:flex-nowrap">
+          {/* Mobile: open the side panels as bottom sheets */}
+          <div className="flex items-center gap-2 lg:hidden">
+            <button onClick={() => setMobilePanel(p => (p === 'left' ? null : 'left'))}
+              className="h-8 px-3 inline-flex items-center gap-1.5 border border-border/40 bg-background/80 backdrop-blur rounded-sm text-[11px] font-mono text-muted-foreground hover:text-foreground">
+              <Sparkles className="w-3.5 h-3.5" /> {t('cadTabCad')}
+            </button>
+            {hasGeometry && analysis && (
+              <button onClick={() => setMobilePanel(p => (p === 'right' ? null : 'right'))}
+                className="h-8 px-3 inline-flex items-center gap-1.5 border border-border/40 bg-background/80 backdrop-blur rounded-sm text-[11px] font-mono text-muted-foreground hover:text-foreground">
+                <CheckCircle2 className="w-3.5 h-3.5" /> {t('cadTabAnalysis')}
+              </button>
+            )}
+          </div>
           <MaterialSelector current={cadMaterialId} onChange={setCadMaterialId} />
           <div className="ml-auto" />
           <FitViewButton onFit={() => setFitKey(k => k + 1)} title={t('cadFitView')} />
         </div>
 
         {/* Three.js Canvas */}
-        <Canvas gl={{ antialias: true, alpha: true }} style={{ background: 'transparent' }}>
+        <Canvas dpr={[1, isMobile ? 1.5 : 2]} gl={{ antialias: !isMobile, alpha: true }} style={{ background: 'transparent' }}>
           <PerspectiveCamera makeDefault position={[0, 0, 8]} fov={55} />
           <Environment preset="studio" />
           <ambientLight intensity={0.3} color={0xb9f8ff} />
@@ -1527,7 +1555,9 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
       {/* ── RIGHT: Parametric CAD Controller + Analysis ── */}
       {hasGeometry && analysis ? (
-        <div className="flex flex-col border-l border-border/15 bg-card/30 overflow-y-auto">
+        <div className={`flex-col border-l border-border/15 bg-card/30 overflow-y-auto ${
+          mobilePanel === 'right' ? 'fixed bottom-0 left-0 right-0 z-30 max-h-[75dvh] flex' : 'hidden'
+        } lg:flex lg:static lg:max-h-none lg:z-auto`}>
 
           {/* ── Tab bar ── */}
           <div className="flex border-b border-border/15 shrink-0">

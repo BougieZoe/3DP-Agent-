@@ -10,9 +10,11 @@ import { CADWorkspace } from '@/components/CADWorkspace';
 import { MeshStudio } from '@/components/MeshStudio';
 import { ChatPanel } from '@/components/ChatPanel';
 import { APIKeyModal } from '@/components/APIKeyModal';
+import { InstallButton } from '@/components/InstallButton';
+import { useIsMobile } from '@/hooks/useMobile';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
-import { fromThreeBufferGeometry, runAnalysisPipeline } from '@/analysis';
+import { fromThreeBufferGeometry, runAnalysisInWorker } from '@/analysis';
 import { normalizeModelGeometry, fitCameraToGeometry } from '@/lib/modelNormalization';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
 import { parseSTL } from '@/lib/stlParser';
@@ -312,6 +314,7 @@ export default function Home() {
   const controlsRef = useRef<any>(null);
   const orchestratorRef = useRef<AgentOrchestrator | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isMobile = useIsMobile();
   const deepAnalysisSeq = useRef(0);
 
   if (!orchestratorRef.current) {
@@ -423,7 +426,7 @@ export default function Home() {
     setDeepAgentRun(null);
 
     const model = fromThreeBufferGeometry(uploadedModel.geometry);
-    const newUnified = runAnalysisPipeline(model, { fileName: uploadedModel.fileName, material: newMat });
+    const newUnified = await runAnalysisInWorker(model, { fileName: uploadedModel.fileName, material: newMat });
 
     if (currentSeq !== materialRequestSeq.current) return;
 
@@ -459,7 +462,7 @@ export default function Home() {
     // the build plate, recompute bounds, then re-run the analysis pipeline.
     const { geometry } = normalizeModelGeometry(uploadedModel.rawGeometry, newUnits);
     const geometryModel = fromThreeBufferGeometry(geometry);
-    const newUnified = runAnalysisPipeline(geometryModel, { fileName: uploadedModel.fileName, material });
+    const newUnified = await runAnalysisInWorker(geometryModel, { fileName: uploadedModel.fileName, material });
 
     if (currentSeq !== unitRequestSeq.current) return;
 
@@ -510,7 +513,7 @@ export default function Home() {
       const processed = parseSTL(result.stlBytes);
       processed.computeVertexNormals();
       processed.computeBoundingBox();
-      const newUnified = runAnalysisPipeline(fromThreeBufferGeometry(processed), {
+      const newUnified = await runAnalysisInWorker(fromThreeBufferGeometry(processed), {
         fileName: uploadedModel.fileName,
         material,
       });
@@ -648,17 +651,19 @@ deepAnalysisSeq.current += 1;
       {showAPIModal && <APIKeyModal onClose={() => setShowAPIModal(false)} language={language} />}
 
       {/* ── Header ── */}
-      <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-5 py-3 border-b border-border bg-background/95 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
+      <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 sm:px-5 py-3 border-b border-border bg-background/95 backdrop-blur-sm">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
           <span className="text-sm font-mono text-primary tracking-widest">3DP AGENT</span>
         </div>
-        <div className="flex items-center gap-2">
+        {/* Right controls. On narrow screens flex-wrap drops the trailing language +
+            API controls onto a second row automatically (desktop stays one row). */}
+        <div className="flex items-center justify-end gap-1.5 sm:gap-2 flex-wrap min-w-0">
           {/* Mode toggle */}
           <div className="flex items-center gap-1">
             {(['analyze', 'cad', 'mesh'] as const).map(m => (
               <button key={m} onClick={() => setMode(m)}
-                className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${
+                className={`text-[11px] sm:text-xs font-mono px-2 sm:px-3 py-1 border rounded-sm transition-all ${
                   mode === m ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-primary'
                 }`}>
                 {m === 'analyze' ? 'ANALYZE' : m === 'cad' ? 'CAD' : 'MESH'}
@@ -669,7 +674,7 @@ deepAnalysisSeq.current += 1;
           <select
             value={materialName}
             onChange={(e) => reanalyzeWithMaterial(e.target.value as MaterialName)}
-            className="text-xs font-mono px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer"
+            className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer max-w-[5.5rem] sm:max-w-none"
           >
             {(Object.keys(MATERIALS) as MaterialName[]).map(name => (
               <option key={name} value={name}>{name}</option>
@@ -679,16 +684,18 @@ deepAnalysisSeq.current += 1;
           <div className="flex items-center gap-0.5">
             {SUPPORTED_LANGUAGES.map(lang => (
               <button key={lang} onClick={() => setLanguage(lang)}
-                className={`text-xs font-mono px-2 py-1 rounded-sm transition-all ${
+                className={`text-[11px] sm:text-xs font-mono px-2 py-1 rounded-sm transition-all ${
                   language === lang ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-primary'
                 }`}>
                 {lang.toUpperCase()}
               </button>
             ))}
           </div>
+          {/* Install (PWA) — hidden unless installable; Android/desktop native prompt, iOS guide */}
+          <InstallButton language={language} />
           {/* API config */}
           <button onClick={() => setShowAPIModal(true)}
-            className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${
+            className={`text-[11px] sm:text-xs font-mono px-2 sm:px-3 py-1 border rounded-sm transition-all ${
               hasAnyKey()
                 ? 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10'
                 : 'border-border text-muted-foreground hover:border-primary/40 hover:text-primary'
@@ -699,7 +706,7 @@ deepAnalysisSeq.current += 1;
       </header>
 
       {/* ── Main ── */}
-      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-14 flex flex-col lg:flex-row min-h-screen">
+      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-[5.5rem] sm:pt-14 flex flex-col lg:flex-row min-h-screen">
 
         {/* Left: 3D Viewport */}
         <div className="lg:w-1/2 h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
@@ -708,7 +715,8 @@ deepAnalysisSeq.current += 1;
             <div>// {t('viewportHint')}</div>
           </div>
           <Canvas
-            gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
+            dpr={[1, isMobile ? 1.5 : 2]}
+            gl={{ antialias: !isMobile, alpha: true, preserveDrawingBuffer: true }}
             style={{ background: 'transparent' }}
             onCreated={(state) => { canvasRef.current = state.gl.domElement; }}
           >
@@ -1148,7 +1156,7 @@ deepAnalysisSeq.current += 1;
 
                 {/* CHAT TAB */}
                 {tab === 'chat' && (
-                  <div className="pt-4 h-[520px]">
+                  <div className="pt-4 h-[45vh] min-h-[320px] lg:h-[520px]">
                     <ChatPanel
                       model={modelData}
                       language={language}

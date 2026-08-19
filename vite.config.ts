@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
+import { VitePWA } from "vite-plugin-pwa";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 
 // =============================================================================
@@ -203,7 +204,48 @@ function vitePluginStorageProxy(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy()];
+// =============================================================================
+// PWA — installable on mobile home screens + offline asset precache.
+// generateSW (workbox) mode; manifest injected into the built index.html.
+// Icons in client/public (generated, replaceable). Dev SW disabled by default.
+// =============================================================================
+
+const pwaPlugin = VitePWA({
+  registerType: "autoUpdate",
+  // Registration is done manually in client/src/main.tsx (load-deferred, PROD-only) —
+  // disable vite-plugin-pwa's auto-injected register script to avoid double registration.
+  injectRegister: null,
+  includeAssets: ["icon-192.png", "icon-512.png", "maskable-512.png", "apple-touch-icon.png", "favicon-48.png"],
+  manifest: {
+    name: "3DP Agent",
+    short_name: "3DP Agent",
+    description: "3D Printing AI Consultant — predict print failures before you waste time, material, and money.",
+    start_url: "/",
+    scope: "/",
+    display: "standalone",
+    background_color: "#0d0f14",
+    theme_color: "#0d0f14",
+    lang: "en",
+    categories: ["utilities", "productivity"],
+    icons: [
+      { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      { src: "/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+    ],
+  },
+  workbox: {
+    globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+    globIgnores: ["**/__manus__/**"],
+    navigateFallback: "/index.html",
+    navigateFallbackDenylist: [/^\/api\//],
+    // New SW activates immediately and takes over → auto-update without workbox-window.
+    skipWaiting: true,
+    clientsClaim: true,
+  },
+  devOptions: { enabled: false },
+});
+
+const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy(), pwaPlugin];
 
 export default defineConfig({
   plugins,
