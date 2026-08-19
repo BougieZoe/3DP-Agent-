@@ -20,7 +20,7 @@ export interface PipelineOptions {
   fileName?: string;
   material?: Material;
   /** Print technology family — selects the per-family metrics module. */
-  materialFamily?: 'fdm' | 'resin' | 'fgf' | 'metal' | 'eco';
+  materialFamily?: 'fdm' | 'sla' | 'fgf' | 'slm' | 'eco';
   /** UI language — module explanations/reasons are localized. */
   language?: ContentLang;
   /**
@@ -114,10 +114,10 @@ export function runAnalysisPipeline(
   const EMPTY_RESIN: ResinResult = { shellCount: 0, enclosedCavity: false, islandCount: 0, suctionRisk: 0, cureRisk: 0, orientation: 'default', footprintAreaMm2: 0 };
   const resin = time('resin', () => {
     try {
-      if (options.materialFamily !== 'resin') return null;
-      return moduleResult('resin', 1.0 as Confidence, 0, computeResinMetrics(model), 'Resin-specific printability metrics (suction, islands, drain holes).');
+      if (options.materialFamily !== 'sla') return null;
+      return moduleResult('sla', 1.0 as Confidence, 0, computeResinMetrics(model), 'SLA/DLP resin printability metrics (suction, islands, drain holes).');
     } catch (e) {
-      return options.materialFamily === 'resin' ? failResult('resin', e, EMPTY_RESIN) : null;
+      return options.materialFamily === 'sla' ? failResult('sla', e, EMPTY_RESIN) : null;
     }
   });
 

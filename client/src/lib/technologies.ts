@@ -3,7 +3,7 @@
 // branches its metrics by technology; the UI shows the full classification so
 // users know exactly what they're choosing.
 
-export type PrintTechnology = 'fdm' | 'resin' | 'fgf' | 'sls' | 'metal';
+export type PrintTechnology = 'fdm' | 'sla' | 'fgf' | 'sls' | 'slm' | 'mjf';
 
 export interface PrintTechnologyInfo {
   id: PrintTechnology;
@@ -25,36 +25,43 @@ export const PRINT_TECHNOLOGIES: readonly PrintTechnologyInfo[] = [
   {
     id: 'fdm', shortLabel: 'FDM', label: 'FDM / FFF',
     processFamily: 'Material Extrusion (filament)',
-    description: 'Melted plastic filament stacked in layers',
+    description: 'A 3D printer melts plastic filament and stacks it in layers',
     examples: 'Everyday parts, enclosures, prototypes',
     implemented: true,
   },
   {
-    id: 'resin', shortLabel: 'RESIN', label: 'SLA / DLP / LCD',
+    id: 'sla', shortLabel: 'SLA/DLP', label: 'SLA / DLP / LCD',
     processFamily: 'VAT Photopolymerization',
-    description: 'UV light cures liquid resin, layer by layer',
+    description: 'A 3D printer cures liquid resin (a material) with UV light, layer by layer',
     examples: 'High-detail miniatures, jewelry, dental',
     implemented: true,
   },
   {
     id: 'fgf', shortLabel: 'FGF', label: 'FGF',
     processFamily: 'Material Extrusion (large pellet)',
-    description: 'Melted plastic pellets for very large parts',
+    description: 'A large-format 3D printer melts plastic pellets for very large parts',
     examples: 'Furniture, large structures, boats',
     implemented: true,
   },
   {
     id: 'sls', shortLabel: 'SLS', label: 'SLS',
     processFamily: 'Powder Bed Fusion (polymer)',
-    description: 'Laser sinters nylon powder — no supports needed',
+    description: 'A 3D printer sinters nylon powder with a laser — no supports needed',
     examples: 'Functional small parts, batch production',
     implemented: false,
   },
   {
-    id: 'metal', shortLabel: 'METAL', label: 'SLM / DMLS',
+    id: 'slm', shortLabel: 'SLM/DMLS', label: 'SLM / DMLS',
     processFamily: 'Powder Bed Fusion (metal)',
-    description: 'Laser melts metal powder, fully dense parts',
+    description: 'A 3D printer melts metal powder with a laser into fully dense parts',
     examples: 'Industrial, aerospace, liquid-cooling',
+    implemented: false,
+  },
+  {
+    id: 'mjf', shortLabel: 'MJF', label: 'MJF',
+    processFamily: 'Powder Bed Fusion (Multi Jet Fusion)',
+    description: 'HP\'s 3D printer applies a fusing agent + infrared to sinter polymer parts fast',
+    examples: 'Production polymer parts at volume',
     implemented: false,
   },
 ];
