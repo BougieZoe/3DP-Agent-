@@ -6,6 +6,7 @@ export { validateMesh } from './validation';
 export { computeMetrics, computeMeshVolume, computeSurfaceArea, analyzeOverhang, sampleWallThickness } from './metrics';
 export { computeResinMetrics, type ResinResult } from './resin';
 export { computeFgfMetrics, type FgfResult } from './fgf';
+export { assessContext, type ObjectContext, type ContextAssessment } from './context';
 export { checkBedFit, getPrinterProfile } from './bedFit';
 export { estimateSupportVolume } from './support';
 export { estimatePrintTime } from './printTime';
