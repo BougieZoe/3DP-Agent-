@@ -293,35 +293,6 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
  * classification. Rendered wherever the selection is visible (empty state AND
  * the geometry tab) so a user always sees what they picked and what it means.
  */
-function TechAndMaterialPanels({ materialFamily, materialName }: {
-  materialFamily: Material['technology'];
-  materialName: string;
-}) {
-  const tech = PRINT_TECH_BY_ID[materialFamily as PrintTechnology];
-  const mat = MATERIALS[materialName];
-  return (
-    <div className="space-y-3">
-      {tech && (
-        <div className="border border-border rounded-sm bg-card p-4">
-          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">TECHNOLOGY · {tech.label}</div>
-          <div className="text-sm font-mono text-foreground">{tech.processFamily}</div>
-          <div className="text-[12px] font-mono text-muted-foreground/60 mt-1 leading-relaxed">{tech.description}</div>
-          <div className="text-[11px] font-mono text-muted-foreground/40 mt-1">→ {tech.examples}</div>
-        </div>
-      )}
-      {mat && (
-        <div className="border border-border rounded-sm bg-card p-4">
-          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">MATERIAL · {mat.name}</div>
-          <div className="text-sm font-mono text-foreground">{mat.category} · {mat.technology.toUpperCase()}</div>
-          <div className="text-[12px] font-mono text-muted-foreground/60 mt-1 leading-relaxed">{mat.description}</div>
-          <div className="text-[11px] font-mono text-muted-foreground/40 mt-1">→ {mat.useCase}</div>
-          <div className="text-[11px] font-mono text-muted-foreground/30 mt-1">{mat.densityGPerCm3} g/cm³ · ${mat.pricePerKgUsd}/kg</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Home ──────────────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -1060,10 +1031,6 @@ deepAnalysisSeq.current += 1;
                         <MetricRow label="Orientation" value={unifiedAnalysis.pbf.result.orientation} />
                       </div>
                     )}
-                    {/* Selected technology + material classification — rigorous, self-describing panels */}
-                    <div className="mt-3">
-                      <TechAndMaterialPanels materialFamily={materialFamily} materialName={materialName} />
-                    </div>
                     {/* Object context — what this part is FOR changes what matters */}
                     {unifiedAnalysis && (
                       <div className="border border-border rounded-sm bg-card p-4 mt-3">
