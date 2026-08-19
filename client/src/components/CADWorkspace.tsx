@@ -1367,7 +1367,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const bridgeState = useCADBridgeHealth();
 
   return (
-    <div className={`relative flex flex-col h-[calc(100dvh-5.5rem)] mt-[5.5rem] lg:mt-14 lg:h-[calc(100vh-3.5rem)] lg:grid lg:grid-rows-[1fr] ${hasGeometry ? 'lg:grid-cols-[280px_1fr_380px]' : 'lg:grid-cols-[280px_1fr]'}`}>
+    <div className={`relative flex flex-col h-[calc(100dvh-7rem)] mt-28 lg:mt-14 lg:h-[calc(100vh-3.5rem)] lg:grid lg:grid-rows-[1fr] ${hasGeometry ? 'lg:grid-cols-[280px_1fr_380px]' : 'lg:grid-cols-[280px_1fr]'}`}>
       {/* ── LEFT PANEL (desktop: grid item · mobile: bottom sheet) ── */}
       <div className={`flex-col border-r border-border/15 bg-card/30 overflow-y-auto ${
         mobilePanel === 'left' ? 'fixed bottom-0 left-0 right-0 z-30 max-h-[75dvh] flex' : 'hidden'

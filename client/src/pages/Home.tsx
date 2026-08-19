@@ -761,7 +761,7 @@ deepAnalysisSeq.current += 1;
       </header>
 
       {/* ── Main ── */}
-      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-[5.5rem] sm:pt-14 flex flex-col lg:flex-row min-h-screen">
+      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-28 sm:pt-14 flex flex-col lg:flex-row min-h-screen">
 
         {/* Left: 3D Viewport */}
         <div className="lg:w-1/2 h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
