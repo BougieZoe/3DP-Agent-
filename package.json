@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite --host",
     "dev:server": "PORT=3001 tsx server/index.ts",
-    "build": "vite build && esbuild server/index.ts --platform=node --bundle --format=cjs --outfile=dist/index.cjs && cp server/mesh_process.py dist/mesh_process.py",
+    "build": "vite build && esbuild server/index.ts --platform=node --bundle --format=cjs --outfile=dist/index.cjs && esbuild server/vercel.ts --platform=node --bundle --format=cjs --outfile=dist/vercel.cjs && cp server/mesh_process.py dist/mesh_process.py",
     "start": "NODE_ENV=production node dist/index.cjs",
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
@@ -49,6 +49,7 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@react-three/postprocessing": "^3.0.4",
+    "@supabase/supabase-js": "^2.112.3",
     "@vercel/analytics": "^2.0.1",
     "axios": "^1.12.0",
     "class-variance-authority": "^0.7.1",
@@ -92,6 +93,7 @@
     "@types/react": "^19.2.1",
     "@types/react-dom": "^19.2.1",
     "@types/three": "^0.184.0",
+    "@vercel/node": "^5.10.1",
     "@vitejs/plugin-react": "^5.0.4",
     "add": "^2.0.6",
     "autoprefixer": "^10.4.20",
@@ -117,7 +119,9 @@
   "build": {
     "appId": "com.bougiezoe.3dp-agent",
     "productName": "3DP Agent",
-    "directories": { "output": "release" },
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "dist/**",
       "dist-electron/**",
@@ -128,7 +132,10 @@
     "npmRebuild": false,
     "mac": {
       "category": "public.app-category.developer-tools",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "darkModeSupport": true
     }
   },
