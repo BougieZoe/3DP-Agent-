@@ -10,7 +10,9 @@ import { CADWorkspace } from '@/components/CADWorkspace';
 import { MeshStudio } from '@/components/MeshStudio';
 import { ChatPanel } from '@/components/ChatPanel';
 import { APIKeyModal } from '@/components/APIKeyModal';
+import { AccountModal } from '@/components/AccountModal';
 import { InstallButton } from '@/components/InstallButton';
+import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/useMobile';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
@@ -286,6 +288,7 @@ export default function Home() {
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
   const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality'>('geometry');
   const [showAPIModal, setShowAPIModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
   const [quickReport, setQuickReport] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
   const [agentRun, setAgentRun] = useState<AgentRunSummary | null>(null);
@@ -315,6 +318,7 @@ export default function Home() {
   const orchestratorRef = useRef<AgentOrchestrator | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   const deepAnalysisSeq = useRef(0);
 
   if (!orchestratorRef.current) {
@@ -567,12 +571,12 @@ deepAnalysisSeq.current += 1;
       // No model loaded — tactile feedback only, no navigation.
       return;
     }
-    if (dest.requiresKey && !hasAnyKey()) {
-      setShowAPIModal(true);
+    if (dest.requiresKey && !user) {
+      setShowAccountModal(true);
       return;
     }
     if (dest.tab) setTab(dest.tab);
-  }, [uploadedModel]);
+  }, [uploadedModel, user]);
 
   // Re-generate the rule-based quick report in the current language whenever the
   // language switches (instant, client-side). LLM-generated prose (agent run,
@@ -649,6 +653,7 @@ deepAnalysisSeq.current += 1;
     <PrintPlaybackProvider totalLayers={totalLayers}>
     <div className="relative w-full min-h-screen bg-background grid-bg overflow-x-hidden">
       {showAPIModal && <APIKeyModal onClose={() => setShowAPIModal(false)} language={language} />}
+      {showAccountModal && <AccountModal language={language} onClose={() => setShowAccountModal(false)} />}
 
       {/* ── Header ── */}
       <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 sm:px-5 py-3 border-b border-border bg-background/95 backdrop-blur-sm">
@@ -693,15 +698,24 @@ deepAnalysisSeq.current += 1;
           </div>
           {/* Install (PWA) — hidden unless installable; Android/desktop native prompt, iOS guide */}
           <InstallButton language={language} />
-          {/* API config */}
-          <button onClick={() => setShowAPIModal(true)}
+          {/* Account — sign in / plan badge (signed-in users get hosted LLM) */}
+          <button onClick={() => setShowAccountModal(true)}
             className={`text-[11px] sm:text-xs font-mono px-2 sm:px-3 py-1 border rounded-sm transition-all ${
-              hasAnyKey()
-                ? 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10'
-                : 'border-border text-muted-foreground hover:border-primary/40 hover:text-primary'
+              user ? 'border-primary/40 text-primary' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-primary'
             }`}>
-            {providerLabel ? `${t('api')}: ${providerLabel}` : t('apiKeys')}
+            {user ? t('planFree') : t('signIn')}
           </button>
+          {/* API config — only for anonymous BYOK users */}
+          {!user && (
+            <button onClick={() => setShowAPIModal(true)}
+              className={`text-[11px] sm:text-xs font-mono px-2 sm:px-3 py-1 border rounded-sm transition-all ${
+                hasAnyKey()
+                  ? 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10'
+                  : 'border-border text-muted-foreground hover:border-primary/40 hover:text-primary'
+              }`}>
+              {providerLabel ? `${t('api')}: ${providerLabel}` : t('apiKeys')}
+            </button>
+          )}
         </div>
       </header>
 
@@ -966,9 +980,9 @@ deepAnalysisSeq.current += 1;
                     <div className="border border-dashed border-border/40 rounded-sm p-4 text-center space-y-2">
                       <div className="text-xs font-mono text-muted-foreground">{t('deepAnalysis')}</div>
                       <div className="text-xs text-muted-foreground/50">{t('deepAnalysisDesc')}</div>
-                      <button onClick={() => { setShowAPIModal(true); }}
+                      <button onClick={() => { setShowAccountModal(true); }}
                         className="text-xs font-mono px-4 py-2 border border-primary/30 text-primary hover:bg-primary/10 rounded-sm transition-all">
-                        {hasAnyKey() ? t('switchToChat') : t('configureApiKey')}
+                        {user ? t('switchToChat') : t('signIn')}
                       </button>
                     </div>
                   </div>
@@ -1106,11 +1120,14 @@ deepAnalysisSeq.current += 1;
                               <div className="space-y-2">
                                 {deepError && <div className="text-xs font-mono text-red-400">{deepError}</div>}
                                 <button
-                                  onClick={() => uploadedModel && void runDeepAnalysisIfConfigured(uploadedModel, material)}
-                                  disabled={deepAnalysisLoading || !hasAnyKey()}
+                                  onClick={() => {
+                                    if (!user) { setShowAccountModal(true); return; }
+                                    if (uploadedModel) void runDeepAnalysisIfConfigured(uploadedModel, material);
+                                  }}
+                                  disabled={deepAnalysisLoading || !user}
                                   className="text-xs font-mono px-4 py-2 border border-primary/30 text-primary hover:bg-primary/10 rounded-sm transition-all disabled:opacity-40"
                                 >
-                                  {t('deepAnalysisRun')}
+                                  {user ? t('deepAnalysisRun') : t('signInToDeepAnalysis')}
                                 </button>
                               </div>
                             )
@@ -1161,7 +1178,7 @@ deepAnalysisSeq.current += 1;
                       model={modelData}
                       language={language}
                       material={material}
-                      onNeedAPIKey={() => setShowAPIModal(true)}
+                      onNeedAuth={() => setShowAccountModal(true)}
                     />
                   </div>
                 )}

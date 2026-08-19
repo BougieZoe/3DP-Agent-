@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Home from "./pages/Home";
 import { MaterialProvider } from "./contexts/MaterialContext";
+import { AuthProvider } from "./contexts/AuthContext";
 
 function Router() {
   return (
@@ -19,12 +20,14 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
+      <AuthProvider>
       <TooltipProvider>
         <MaterialProvider>
         <Toaster theme="dark" position="bottom-right" />
         <Router />
         </MaterialProvider>
       </TooltipProvider>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }
