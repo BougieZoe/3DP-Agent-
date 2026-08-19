@@ -6,6 +6,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
+import { PRINT_TECHNOLOGIES, PRINT_TECH_BY_ID, type PrintTechnology } from '@/lib/technologies';
 import { CADWorkspace } from '@/components/CADWorkspace';
 import { MeshStudio } from '@/components/MeshStudio';
 import { ChatPanel } from '@/components/ChatPanel';
@@ -706,15 +707,15 @@ deepAnalysisSeq.current += 1;
               </button>
             ))}
           </div>
-          {/* Print technology — dropdown so more technologies (FDM/SLA/SLS/FGF/Metal) stack cleanly */}
+          {/* Print technology — rigorous ASTH process-family classification */}
           <select
             value={materialFamily}
             onChange={(e) => reanalyzeWithFamily(e.target.value as 'fdm' | 'resin' | 'fgf')}
-            title="Technology"
+            title={PRINT_TECH_BY_ID[materialFamily as PrintTechnology]?.label}
             className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer"
           >
-            {(['fdm', 'resin', 'fgf'] as const).map(f => (
-              <option key={f} value={f}>{f.toUpperCase()}</option>
+            {PRINT_TECHNOLOGIES.filter(t => t.implemented).map(t => (
+              <option key={t.id} value={t.id} title={`${t.label} · ${t.processFamily} — ${t.description}`}>{t.shortLabel}</option>
             ))}
           </select>
           {/* Material */}
@@ -992,6 +993,18 @@ deepAnalysisSeq.current += 1;
                         <MetricRow label="Footprint" value={`${unifiedAnalysis.fgf.result.footprintAreaMm2} mm²`} />
                       </div>
                     )}
+                    {/* Selected technology classification — rigorous process family info */}
+                    {(() => {
+                      const tech = PRINT_TECH_BY_ID[materialFamily as PrintTechnology];
+                      return tech ? (
+                        <div className="border border-border rounded-sm bg-card p-4 mt-3">
+                          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">TECHNOLOGY · {tech.label}</div>
+                          <div className="text-sm font-mono text-foreground">{tech.processFamily}</div>
+                          <div className="text-[12px] font-mono text-muted-foreground/60 mt-1 leading-relaxed">{tech.description}</div>
+                          <div className="text-[11px] font-mono text-muted-foreground/40 mt-1">→ {tech.examples}</div>
+                        </div>
+                      ) : null;
+                    })()}
                     {/* Object context — what this part is FOR changes what matters */}
                     {unifiedAnalysis && (
                       <div className="border border-border rounded-sm bg-card p-4 mt-3">
