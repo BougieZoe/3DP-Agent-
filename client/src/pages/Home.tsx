@@ -1,22 +1,26 @@
 import { useMaterial, type MaterialName } from "@/contexts/MaterialContext";
-import { MATERIALS, type Material } from "@shared/domain/material";
+import { MATERIALS, defaultMaterialKeyFor, type Material } from "@shared/domain/material";
 import { ReportGenerator } from "@/components/ReportGenerator";
-import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { lazy, Suspense, useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
-import { CADWorkspace } from '@/components/CADWorkspace';
-import { MeshStudio } from '@/components/MeshStudio';
-import { ChatPanel } from '@/components/ChatPanel';
+import { PRINT_TECHNOLOGIES, PRINT_TECH_BY_ID, type PrintTechnology } from '@/lib/technologies';
 import { APIKeyModal } from '@/components/APIKeyModal';
+
+// Heavy alternate modes / tab panels — dynamic imports keep the initial
+// bundle lean on mobile. Each wraps a named export into a default for React.lazy.
+const CADWorkspace = lazy(() => import('@/components/CADWorkspace').then(m => ({ default: m.CADWorkspace })));
+const MeshStudio = lazy(() => import('@/components/MeshStudio').then(m => ({ default: m.MeshStudio })));
+const ChatPanel = lazy(() => import('@/components/ChatPanel').then(m => ({ default: m.ChatPanel })));
 import { AccountModal } from '@/components/AccountModal';
 import { InstallButton } from '@/components/InstallButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/useMobile';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
-import { fromThreeBufferGeometry, runAnalysisInWorker } from '@/analysis';
+import { fromThreeBufferGeometry, runAnalysisInWorker, assessContext, type ObjectContext } from '@/analysis';
 import { normalizeModelGeometry, fitCameraToGeometry } from '@/lib/modelNormalization';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
 import { parseSTL } from '@/lib/stlParser';
@@ -45,12 +49,16 @@ import { CausalityHighlight } from '@/components/3D/CausalityHighlight';
 import { deriveSupportStatus } from '@/analysis/metrics';
 import { buildCausalityGraph, CausalityGraph } from '@/components/causality/causalityEngine';
 import { ManufacturingTimeline } from '@/components/causality/ManufacturingTimeline';
-import { CausalityPanel } from '@/components/causality/CausalityPanel';
 import { detectPatterns, PatternMatch } from '@/components/causality/topologyPatternEngine';
-import { PatternMemoryPanel } from '@/components/causality/PatternMemoryPanel';
 import { evaluateCounterfactuals, GeometrySuggestion } from '@/components/causality/counterfactualEngine';
-import { GeometrySuggestionPanel } from '@/components/causality/GeometrySuggestionPanel';
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
+
+// Causality panels render only in the causality tab — lazy so the engines
+// (eager, they feed the viewport highlights) don't drag the panel UI into the
+// initial bundle.
+const CausalityPanel = lazy(() => import('@/components/causality/CausalityPanel').then(m => ({ default: m.CausalityPanel })));
+const PatternMemoryPanel = lazy(() => import('@/components/causality/PatternMemoryPanel').then(m => ({ default: m.PatternMemoryPanel })));
+const GeometrySuggestionPanel = lazy(() => import('@/components/causality/GeometrySuggestionPanel').then(m => ({ default: m.GeometrySuggestionPanel })));
 import { CognitiveScan } from '@/components/3D/CognitiveScan';
 import { AttentionPulse } from '@/components/3D/AttentionPulse';
 import { ViewfinderCorners } from '@/components/decorative/ViewfinderCorners';
@@ -279,10 +287,46 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
   return <span className={`text-xs font-mono px-2 py-0.5 border rounded-sm ${cfg.cls}`}>{label}</span>;
 }
 
+/**
+ * TECHNOLOGY + MATERIAL explainer panels — the rigorous, self-describing
+ * classification. Rendered wherever the selection is visible (empty state AND
+ * the geometry tab) so a user always sees what they picked and what it means.
+ */
+function TechAndMaterialPanels({ materialFamily, materialName }: {
+  materialFamily: 'fdm' | 'sla' | 'fgf';
+  materialName: string;
+}) {
+  const tech = PRINT_TECH_BY_ID[materialFamily as PrintTechnology];
+  const mat = MATERIALS[materialName];
+  return (
+    <div className="space-y-3">
+      {tech && (
+        <div className="border border-border rounded-sm bg-card p-4">
+          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">TECHNOLOGY · {tech.label}</div>
+          <div className="text-sm font-mono text-foreground">{tech.processFamily}</div>
+          <div className="text-[12px] font-mono text-muted-foreground/60 mt-1 leading-relaxed">{tech.description}</div>
+          <div className="text-[11px] font-mono text-muted-foreground/40 mt-1">→ {tech.examples}</div>
+        </div>
+      )}
+      {mat && (
+        <div className="border border-border rounded-sm bg-card p-4">
+          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">MATERIAL · {mat.name}</div>
+          <div className="text-sm font-mono text-foreground">{mat.category} · {mat.technology.toUpperCase()}</div>
+          <div className="text-[12px] font-mono text-muted-foreground/60 mt-1 leading-relaxed">{mat.description}</div>
+          <div className="text-[11px] font-mono text-muted-foreground/40 mt-1">→ {mat.useCase}</div>
+          <div className="text-[11px] font-mono text-muted-foreground/30 mt-1">{mat.densityGPerCm3} g/cm³ · ${mat.pricePerKgUsd}/kg</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Home ──────────────────────────────────────────────────────────────────────
 
 export default function Home() {
   const { material, materialName, setMaterialName } = useMaterial();
+  const [materialFamily, setMaterialFamily] = useState<'fdm' | 'sla' | 'fgf'>('fdm');
+  const [objectContext, setObjectContext] = useState<ObjectContext>('general');
   const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
@@ -449,6 +493,36 @@ export default function Home() {
     setQuickReport(generateQuickReport(md, language, newMat));
     setMaterialLoading(false);
   }, [uploadedModel, language, setMaterialName]);
+
+  // Re-run analysis under a different print-technology family (FDM vs resin).
+  const reanalyzeWithFamily = useCallback(async (family: 'fdm' | 'sla' | 'fgf') => {
+    setMaterialFamily(family);
+    setMaterialName(defaultMaterialKeyFor(family)); // switch to that technology's default material (registry key)
+    if (!uploadedModel) return;
+
+    materialRequestSeq.current += 1;
+    const currentSeq = materialRequestSeq.current;
+    setMaterialLoading(true);
+    setQuickReport('');
+    setAgentRun(null);
+    deepAnalysisSeq.current += 1;
+    setDeepAgentRun(null);
+
+    const model = fromThreeBufferGeometry(uploadedModel.geometry);
+    const newUnified = await runAnalysisInWorker(model, { fileName: uploadedModel.fileName, material: MATERIALS[materialName], materialFamily: family });
+
+    if (currentSeq !== materialRequestSeq.current) return;
+    const updatedModel: UploadedModel = { ...uploadedModel, unifiedAnalysis: newUnified };
+    setUploadedModel(updatedModel);
+
+    if (currentSeq !== materialRequestSeq.current || !orchestratorRef.current) return;
+    const summary = await orchestratorRef.current.runFullAnalysis(
+      updatedModel.geometry, newUnified, updatedModel.fileName, canvasRef.current, language, MATERIALS[materialName],
+    );
+    if (currentSeq !== materialRequestSeq.current) return;
+    setAgentRun(summary);
+    setMaterialLoading(false);
+  }, [uploadedModel, materialName, language]);
 
   const handleUnitsChange = useCallback(async (newUnits: LengthUnit) => {
     setUnits(newUnits);
@@ -675,27 +749,43 @@ deepAnalysisSeq.current += 1;
               </button>
             ))}
           </div>
-          {/* Material */}
+          {/* Print technology — rigorous ASTH process-family classification */}
+          <select
+            value={materialFamily}
+            onChange={(e) => reanalyzeWithFamily(e.target.value as 'fdm' | 'sla' | 'fgf')}
+            title={PRINT_TECH_BY_ID[materialFamily as PrintTechnology]?.label}
+            className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer"
+          >
+            {PRINT_TECHNOLOGIES.map(t => (
+              <option key={t.id} value={t.id} disabled={!t.implemented} title={`${t.label} · ${t.processFamily} — ${t.description}`}>
+                {t.shortLabel}{t.implemented ? '' : ' (soon)'}
+              </option>
+            ))}
+          </select>
+          {/* Material — values are registry keys so MATERIALS[name] always resolves;
+              hover an option to see the rigorous material description */}
           <select
             value={materialName}
             onChange={(e) => reanalyzeWithMaterial(e.target.value as MaterialName)}
             className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer max-w-[5.5rem] sm:max-w-none"
           >
-            {(Object.keys(MATERIALS) as MaterialName[]).map(name => (
-              <option key={name} value={name}>{name}</option>
+            {Object.entries(MATERIALS)
+              .filter(([, m]) => m.technology === materialFamily)
+              .map(([key, m]) => (
+                <option key={key} value={key} title={`${m.category} — ${m.description}`}>{m.name}</option>
+              ))}
+          </select>
+          {/* Language — dropdown so it scales to more languages without crowding the header */}
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as Language)}
+            title="Language"
+            className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer"
+          >
+            {SUPPORTED_LANGUAGES.map(lang => (
+              <option key={lang} value={lang}>{lang.toUpperCase()}</option>
             ))}
           </select>
-          {/* Language */}
-          <div className="flex items-center gap-0.5">
-            {SUPPORTED_LANGUAGES.map(lang => (
-              <button key={lang} onClick={() => setLanguage(lang)}
-                className={`text-[11px] sm:text-xs font-mono px-2 py-1 rounded-sm transition-all ${
-                  language === lang ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-primary'
-                }`}>
-                {lang.toUpperCase()}
-              </button>
-            ))}
-          </div>
           {/* Install (PWA) — hidden unless installable; Android/desktop native prompt, iOS guide */}
           <InstallButton language={language} />
           {/* Account — sign in / plan badge (signed-in users get hosted LLM) */}
@@ -720,7 +810,12 @@ deepAnalysisSeq.current += 1;
       </header>
 
       {/* ── Main ── */}
-      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-[5.5rem] sm:pt-14 flex flex-col lg:flex-row min-h-screen">
+      <Suspense fallback={
+        <div className="flex items-center justify-center h-[60vh] text-xs font-mono text-primary animate-pulse">
+          <span>▋ LOADING...</span>
+        </div>
+      }>
+      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-28 sm:pt-14 flex flex-col lg:flex-row min-h-screen">
 
         {/* Left: 3D Viewport */}
         <div className="lg:w-1/2 h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
@@ -832,6 +927,7 @@ deepAnalysisSeq.current += 1;
                   language={language}
                   units={units}
                   onUnitsChange={handleUnitsChange}
+                  materialFamily={materialFamily}
                 />
                 {/* Decorative presentation-only touches — remove any one freely */}
                 <ViewfinderCorners />
@@ -898,23 +994,98 @@ deepAnalysisSeq.current += 1;
                       <MetricRow label={t('dimY')} value={toUnit(modelData.dims.y).toFixed(2)} unit={unitSuffix} />
                       <MetricRow label={t('dimZ')} value={toUnit(modelData.dims.z).toFixed(2)} unit={unitSuffix} />
                       <MetricRow label={t('overhangFaces')} value={analysis.overhang.areas} />
-                      {topo && (
-                        <>
-                          <MetricRow label={t('cadTri')} value={topo.triangleCount} />
-                          <MetricRow label={t('cadVerts')} value={topo.vertexCount} />
-                          <MetricRow label={t('cadShells')} value={topo.shellCount} />
-                          <MetricRow label={t('cadBoundaryEdges')} value={topo.boundaryEdgeCount} />
-                          <MetricRow label={t('cadNonManifoldEdges')} value={topo.nonManifoldEdgeCount} />
-                        </>
-                      )}
-                      {valid && (
-                        <>
-                          <MetricRow label={t('cadHoles')} value={valid.holeCount} />
-                          <MetricRow label={t('cadNormalOrientation')} value={valid.normalOrientation} />
-                          <MetricRow label={t('cadFlippedFaces')} value={valid.flippedNormalFaceCount} />
-                        </>
-                      )}
                     </div>
+                    {/* Expert mesh diagnostics — collapsed by default so the core metrics stay prominent */}
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-[11px] font-mono text-muted-foreground/60 hover:text-foreground select-none">
+                        MESH DIAGNOSTICS
+                      </summary>
+                      <div className="mt-1.5">
+                        {topo && (
+                          <>
+                            <MetricRow label={t('cadTri')} value={topo.triangleCount} />
+                            <MetricRow label={t('cadVerts')} value={topo.vertexCount} />
+                            <MetricRow label={t('cadShells')} value={topo.shellCount} />
+                            <MetricRow label={t('cadBoundaryEdges')} value={topo.boundaryEdgeCount} />
+                            <MetricRow label={t('cadNonManifoldEdges')} value={topo.nonManifoldEdgeCount} />
+                          </>
+                        )}
+                        {valid && (
+                          <>
+                            <MetricRow label={t('cadHoles')} value={valid.holeCount} />
+                            <MetricRow label={t('cadNormalOrientation')} value={valid.normalOrientation} />
+                            <MetricRow label={t('cadFlippedFaces')} value={valid.flippedNormalFaceCount} />
+                          </>
+                        )}
+                      </div>
+                    </details>
+                    {/* Resin-specific metrics (shown when FDM/RESIN switch set to resin) */}
+                    {unifiedAnalysis?.resin?.result && (
+                      <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
+                        <div className="text-xs text-primary mb-3 font-mono tracking-widest">RESIN PRINTABILITY</div>
+                        <MetricRow label="Shells" value={unifiedAnalysis.resin.result.shellCount} highlight={unifiedAnalysis.resin.result.shellCount > 1} />
+                        <MetricRow label="Enclosed cavity" value={unifiedAnalysis.resin.result.enclosedCavity ? '⚠ yes' : 'no'} highlight={unifiedAnalysis.resin.result.enclosedCavity} />
+                        <MetricRow label="Floating islands" value={unifiedAnalysis.resin.result.islandCount} highlight={unifiedAnalysis.resin.result.islandCount > 0} />
+                        <MetricRow label="Suction risk" value={`${Math.round(unifiedAnalysis.resin.result.suctionRisk * 100)}%`} highlight={unifiedAnalysis.resin.result.suctionRisk > 0.6} />
+                        <MetricRow label="Over-cure risk" value={`${Math.round(unifiedAnalysis.resin.result.cureRisk * 100)}%`} highlight={unifiedAnalysis.resin.result.cureRisk > 0.6} />
+                        <MetricRow label="Orientation" value={unifiedAnalysis.resin.result.orientation} />
+                        <MetricRow label="Footprint" value={`${unifiedAnalysis.resin.result.footprintAreaMm2} mm²`} />
+                      </div>
+                    )}
+                    {/* FGF large-format metrics (shown when FDM/RESIN/FGF switch set to FGF) */}
+                    {unifiedAnalysis?.fgf?.result && (
+                      <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
+                        <div className="text-xs text-primary mb-3 font-mono tracking-widest">FGF LARGE-FORMAT</div>
+                        <MetricRow label="Part scale" value={unifiedAnalysis.fgf.result.partScale} />
+                        <MetricRow label="Max dimension" value={`${unifiedAnalysis.fgf.result.maxDimMm} mm`} />
+                        <MetricRow label="Warpage risk" value={`${Math.round(unifiedAnalysis.fgf.result.warpageRisk * 100)}%`} highlight={unifiedAnalysis.fgf.result.warpageRisk > 0.6} />
+                        <MetricRow label="Delamination risk" value={`${Math.round(unifiedAnalysis.fgf.result.delaminationRisk * 100)}%`} highlight={unifiedAnalysis.fgf.result.delaminationRisk > 0.6} />
+                        <MetricRow label="Slenderness" value={unifiedAnalysis.fgf.result.slenderness.toFixed(2)} />
+                        <MetricRow label="Orientation" value={unifiedAnalysis.fgf.result.orientation} />
+                        <MetricRow label="Footprint" value={`${unifiedAnalysis.fgf.result.footprintAreaMm2} mm²`} />
+                      </div>
+                    )}
+                    {/* Selected technology + material classification — rigorous, self-describing panels */}
+                    <div className="mt-3">
+                      <TechAndMaterialPanels materialFamily={materialFamily} materialName={materialName} />
+                    </div>
+                    {/* Object context — what this part is FOR changes what matters */}
+                    {unifiedAnalysis && (
+                      <div className="border border-border rounded-sm bg-card p-4 mt-3">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">OBJECT</div>
+                          <select
+                            value={objectContext}
+                            onChange={(e) => setObjectContext(e.target.value as ObjectContext)}
+                            className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
+                          >
+                            <option value="general">General</option>
+                            <option value="structural">Furniture · Structural</option>
+                            <option value="large">Large · Construction</option>
+                            <option value="detailed">Fine · Jewelry/Dental</option>
+                          </select>
+                        </div>
+                        {(() => {
+                          const ctx = assessContext(unifiedAnalysis, objectContext);
+                          return (
+                            <>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-xs font-mono text-muted-foreground/60">Risk</span>
+                                <div className="flex-1 h-1.5 bg-border/40 rounded-full overflow-hidden">
+                                  <div className="h-full bg-primary/70" style={{ width: `${Math.round(ctx.overallRisk * 100)}%` }} />
+                                </div>
+                                <span className="text-xs font-mono text-primary tabular-nums">{Math.round(ctx.overallRisk * 100)}%</span>
+                              </div>
+                              <ul className="space-y-1">
+                                {ctx.topConcerns.map((c, i) => (
+                                  <li key={i} className="text-[12px] font-mono text-muted-foreground/70 leading-relaxed">{c}</li>
+                                ))}
+                              </ul>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
                     <button onClick={() => setTab('report')}
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
                       {t('generateReport')}
@@ -1150,37 +1321,41 @@ deepAnalysisSeq.current += 1;
 
                 {/* CAUSALITY TAB */}
                 {tab === 'causality' && (
-                  <div className="pt-4 space-y-4">
-                    <CausalityPanel graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} language={language} />
-                    <div className="border-t border-border/20 my-2" />
-                    {patternMatches.length > 0 && (
-                      <PatternMemoryPanel
-                        matches={patternMatches}
-                        selectedPatternId={selectedPatternId}
-                        onSelectPattern={setSelectedPatternId}
+                  <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ LOADING...</div>}>
+                    <div className="pt-4 space-y-4">
+                      <CausalityPanel graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} language={language} />
+                      <div className="border-t border-border/20 my-2" />
+                      {patternMatches.length > 0 && (
+                        <PatternMemoryPanel
+                          matches={patternMatches}
+                          selectedPatternId={selectedPatternId}
+                          onSelectPattern={setSelectedPatternId}
+                          language={language}
+                        />
+                      )}
+                      <div className="border-t border-border/20 my-2" />
+                      <GeometrySuggestionPanel
+                        suggestions={counterfactualSuggestions}
+                        selectedSuggestionId={selectedSuggestionId}
+                        onSelectSuggestion={setSelectedSuggestionId}
                         language={language}
                       />
-                    )}
-                    <div className="border-t border-border/20 my-2" />
-                    <GeometrySuggestionPanel
-                      suggestions={counterfactualSuggestions}
-                      selectedSuggestionId={selectedSuggestionId}
-                      onSelectSuggestion={setSelectedSuggestionId}
-                      language={language}
-                    />
-                  </div>
+                    </div>
+                  </Suspense>
                 )}
 
                 {/* CHAT TAB */}
                 {tab === 'chat' && (
-                  <div className="pt-4 h-[45vh] min-h-[320px] lg:h-[520px]">
-                    <ChatPanel
-                      model={modelData}
-                      language={language}
-                      material={material}
-                      onNeedAuth={() => setShowAccountModal(true)}
-                    />
-                  </div>
+                  <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ LOADING...</div>}>
+                    <div className="pt-4 h-[45vh] min-h-[320px] lg:h-[520px]">
+                      <ChatPanel
+                        model={modelData}
+                        language={language}
+                        material={material}
+                        onNeedAuth={() => setShowAccountModal(true)}
+                      />
+                    </div>
+                  </Suspense>
                 )}
               </div>
             )}
@@ -1202,6 +1377,7 @@ deepAnalysisSeq.current += 1;
           </div>
         </div>
       </div>}
+      </Suspense>
     </div>
     </PrintPlaybackProvider>
   );

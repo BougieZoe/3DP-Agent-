@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { X } from "lucide-react";
+import { GoogleIcon } from "./GoogleIcon";
 import { getTranslation } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 // Account / sign-in modal. Signed-in users see their plan + monthly usage.
 // Hosted LLM means no API key to configure — just an account.
 export function AccountModal({ language, onClose }: { language: Language; onClose: () => void }) {
-  const { user, profile, loading, signIn, signUp, signOut } = useAuth();
+  const { user, profile, loading, signIn, signUp, signInWithGoogle, signOut } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -96,6 +97,14 @@ export function AccountModal({ language, onClose }: { language: Language; onClos
                 className="w-full h-10 bg-foreground text-background rounded-sm text-sm font-mono font-bold hover:bg-foreground/90 disabled:opacity-40 transition-all"
               >
                 {busy ? "…" : mode === "signin" ? t("signIn") : t("signUp")}
+              </button>
+
+              <button
+                onClick={() => signInWithGoogle()}
+                className="w-full h-10 inline-flex items-center justify-center gap-2.5 bg-white text-[#3c4043] border border-black/10 rounded-[4px] text-sm font-medium shadow-sm hover:bg-gray-50 transition-all"
+              >
+                <GoogleIcon className="w-4 h-4 shrink-0" />
+                {t("signInWithGoogle")}
               </button>
 
               <div className="text-center">
