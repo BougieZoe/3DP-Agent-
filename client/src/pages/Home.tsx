@@ -283,7 +283,7 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
 
 export default function Home() {
   const { material, materialName, setMaterialName } = useMaterial();
-  const [materialFamily, setMaterialFamily] = useState<'fdm' | 'resin'>('fdm');
+  const [materialFamily, setMaterialFamily] = useState<'fdm' | 'resin' | 'fgf'>('fdm');
   const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
@@ -452,7 +452,7 @@ export default function Home() {
   }, [uploadedModel, language, setMaterialName]);
 
   // Re-run analysis under a different print-technology family (FDM vs resin).
-  const reanalyzeWithFamily = useCallback(async (family: 'fdm' | 'resin') => {
+  const reanalyzeWithFamily = useCallback(async (family: 'fdm' | 'resin' | 'fgf') => {
     setMaterialFamily(family);
     if (!uploadedModel) return;
 
@@ -707,7 +707,7 @@ deepAnalysisSeq.current += 1;
           </div>
           {/* Print technology family */}
           <div className="flex items-center gap-0.5">
-            {(['fdm', 'resin'] as const).map(f => (
+            {(['fdm', 'resin', 'fgf'] as const).map(f => (
               <button key={f} onClick={() => reanalyzeWithFamily(f)}
                 className={`text-[11px] sm:text-xs font-mono px-2 py-1 rounded-sm transition-all ${
                   materialFamily === f ? 'bg-primary/15 text-primary' : 'text-muted-foreground/60 hover:text-primary'
@@ -976,6 +976,19 @@ deepAnalysisSeq.current += 1;
                         <MetricRow label="Over-cure risk" value={`${Math.round(unifiedAnalysis.resin.result.cureRisk * 100)}%`} highlight={unifiedAnalysis.resin.result.cureRisk > 0.6} />
                         <MetricRow label="Orientation" value={unifiedAnalysis.resin.result.orientation} />
                         <MetricRow label="Footprint" value={`${unifiedAnalysis.resin.result.footprintAreaMm2} mm²`} />
+                      </div>
+                    )}
+                    {/* FGF large-format metrics (shown when FDM/RESIN/FGF switch set to FGF) */}
+                    {unifiedAnalysis?.fgf?.result && (
+                      <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
+                        <div className="text-xs text-primary mb-3 font-mono tracking-widest">FGF LARGE-FORMAT</div>
+                        <MetricRow label="Part scale" value={unifiedAnalysis.fgf.result.partScale} />
+                        <MetricRow label="Max dimension" value={`${unifiedAnalysis.fgf.result.maxDimMm} mm`} />
+                        <MetricRow label="Warpage risk" value={`${Math.round(unifiedAnalysis.fgf.result.warpageRisk * 100)}%`} highlight={unifiedAnalysis.fgf.result.warpageRisk > 0.6} />
+                        <MetricRow label="Delamination risk" value={`${Math.round(unifiedAnalysis.fgf.result.delaminationRisk * 100)}%`} highlight={unifiedAnalysis.fgf.result.delaminationRisk > 0.6} />
+                        <MetricRow label="Slenderness" value={unifiedAnalysis.fgf.result.slenderness.toFixed(2)} />
+                        <MetricRow label="Orientation" value={unifiedAnalysis.fgf.result.orientation} />
+                        <MetricRow label="Footprint" value={`${unifiedAnalysis.fgf.result.footprintAreaMm2} mm²`} />
                       </div>
                     )}
                     <button onClick={() => setTab('report')}
