@@ -1,6 +1,7 @@
 import { useMaterial, type MaterialName } from "@/contexts/MaterialContext";
 import { MATERIALS, defaultMaterialKeyFor, type Material } from "@shared/domain/material";
 import { ReportGenerator } from "@/components/ReportGenerator";
+import { ExpertReviewPanel } from '@/components/ExpertReviewPanel';
 import { lazy, Suspense, useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
@@ -1316,6 +1317,23 @@ deepAnalysisSeq.current += 1;
                         </div>
                       </>
                     )}
+                    {/* Expert LLM review — a material-domain AI expert translates the
+                        deterministic metrics into plain-language advice */}
+                    <ExpertReviewPanel
+                      model={modelData}
+                      material={material}
+                      objectContext={objectContext}
+                      materialMetrics={(() => {
+                        const resin = unifiedAnalysis?.resin?.result;
+                        const fgf = unifiedAnalysis?.fgf?.result;
+                        if (resin) return `Shells: ${resin.shellCount}, enclosedCavity: ${resin.enclosedCavity}, islands: ${resin.islandCount}, suctionRisk: ${(resin.suctionRisk * 100).toFixed(0)}%, overCureRisk: ${(resin.cureRisk * 100).toFixed(0)}%, orientation: ${resin.orientation}`;
+                        if (fgf) return `PartScale: ${fgf.partScale}, maxDim: ${fgf.maxDimMm}mm, warpageRisk: ${(fgf.warpageRisk * 100).toFixed(0)}%, delaminationRisk: ${(fgf.delaminationRisk * 100).toFixed(0)}%, slenderness: ${fgf.slenderness.toFixed(2)}, orientation: ${fgf.orientation}`;
+                        return undefined;
+                      })()}
+                      language={language}
+                      canRun={!!user || hasAnyKey()}
+                      onNeedAuth={() => setShowAccountModal(true)}
+                    />
                   </div>
                 )}
 
