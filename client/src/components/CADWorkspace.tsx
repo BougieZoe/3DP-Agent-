@@ -741,7 +741,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         throw new Error(
           isLocal
             ? 'CAD bridge not available — start the local engine first (pnpm dev:server) on port 3001.'
-            : 'CAD generation is only available in the desktop app — the web version cannot run the local CAD engine.'
+            : 'CAD generation runs in the desktop app (it needs the 3D engine on your computer). The web version handles STL analysis — download 3DP Agent for Mac to generate parts.'
         );
       }
       mark('bridge', 'done');
@@ -1412,6 +1412,13 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
               </button>
             )}
           </div>
+          {/* On the web (no local engine), tell users CAD generation is desktop-only —
+              better than a scary red error after they click Generate. */}
+          {!window.desktop?.isDesktop && (
+            <div className="mt-3 text-[11px] font-mono text-muted-foreground/40 leading-relaxed">
+              ⚠ CAD generation runs in the desktop app. The web version analyzes STL only — get 3DP Agent for Mac to generate parts.
+            </div>
+          )}
         </div>
 
         {/* Error inline */}
