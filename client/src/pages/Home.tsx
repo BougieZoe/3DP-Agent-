@@ -283,6 +283,7 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
 
 export default function Home() {
   const { material, materialName, setMaterialName } = useMaterial();
+  const [materialFamily, setMaterialFamily] = useState<'fdm' | 'resin'>('fdm');
   const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
@@ -449,6 +450,35 @@ export default function Home() {
     setQuickReport(generateQuickReport(md, language, newMat));
     setMaterialLoading(false);
   }, [uploadedModel, language, setMaterialName]);
+
+  // Re-run analysis under a different print-technology family (FDM vs resin).
+  const reanalyzeWithFamily = useCallback(async (family: 'fdm' | 'resin') => {
+    setMaterialFamily(family);
+    if (!uploadedModel) return;
+
+    materialRequestSeq.current += 1;
+    const currentSeq = materialRequestSeq.current;
+    setMaterialLoading(true);
+    setQuickReport('');
+    setAgentRun(null);
+    deepAnalysisSeq.current += 1;
+    setDeepAgentRun(null);
+
+    const model = fromThreeBufferGeometry(uploadedModel.geometry);
+    const newUnified = await runAnalysisInWorker(model, { fileName: uploadedModel.fileName, material: MATERIALS[materialName], materialFamily: family });
+
+    if (currentSeq !== materialRequestSeq.current) return;
+    const updatedModel: UploadedModel = { ...uploadedModel, unifiedAnalysis: newUnified };
+    setUploadedModel(updatedModel);
+
+    if (currentSeq !== materialRequestSeq.current || !orchestratorRef.current) return;
+    const summary = await orchestratorRef.current.runFullAnalysis(
+      updatedModel.geometry, newUnified, updatedModel.fileName, canvasRef.current, language, MATERIALS[materialName],
+    );
+    if (currentSeq !== materialRequestSeq.current) return;
+    setAgentRun(summary);
+    setMaterialLoading(false);
+  }, [uploadedModel, materialName, language]);
 
   const handleUnitsChange = useCallback(async (newUnits: LengthUnit) => {
     setUnits(newUnits);
@@ -675,6 +705,17 @@ deepAnalysisSeq.current += 1;
               </button>
             ))}
           </div>
+          {/* Print technology family */}
+          <div className="flex items-center gap-0.5">
+            {(['fdm', 'resin'] as const).map(f => (
+              <button key={f} onClick={() => reanalyzeWithFamily(f)}
+                className={`text-[11px] sm:text-xs font-mono px-2 py-1 rounded-sm transition-all ${
+                  materialFamily === f ? 'bg-primary/15 text-primary' : 'text-muted-foreground/60 hover:text-primary'
+                }`}>
+                {f.toUpperCase()}
+              </button>
+            ))}
+          </div>
           {/* Material */}
           <select
             value={materialName}
@@ -832,6 +873,7 @@ deepAnalysisSeq.current += 1;
                   language={language}
                   units={units}
                   onUnitsChange={handleUnitsChange}
+                  materialFamily={materialFamily}
                 />
                 {/* Decorative presentation-only touches — remove any one freely */}
                 <ViewfinderCorners />
@@ -915,6 +957,19 @@ deepAnalysisSeq.current += 1;
                         </>
                       )}
                     </div>
+                    {/* Resin-specific metrics (shown when FDM/RESIN switch set to resin) */}
+                    {unifiedAnalysis?.resin?.result && (
+                      <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
+                        <div className="text-xs text-primary mb-3 font-mono tracking-widest">RESIN PRINTABILITY</div>
+                        <MetricRow label="Shells" value={unifiedAnalysis.resin.result.shellCount} highlight={unifiedAnalysis.resin.result.shellCount > 1} />
+                        <MetricRow label="Enclosed cavity" value={unifiedAnalysis.resin.result.enclosedCavity ? '⚠ yes' : 'no'} highlight={unifiedAnalysis.resin.result.enclosedCavity} />
+                        <MetricRow label="Floating islands" value={unifiedAnalysis.resin.result.islandCount} highlight={unifiedAnalysis.resin.result.islandCount > 0} />
+                        <MetricRow label="Suction risk" value={`${Math.round(unifiedAnalysis.resin.result.suctionRisk * 100)}%`} highlight={unifiedAnalysis.resin.result.suctionRisk > 0.6} />
+                        <MetricRow label="Over-cure risk" value={`${Math.round(unifiedAnalysis.resin.result.cureRisk * 100)}%`} highlight={unifiedAnalysis.resin.result.cureRisk > 0.6} />
+                        <MetricRow label="Orientation" value={unifiedAnalysis.resin.result.orientation} />
+                        <MetricRow label="Footprint" value={`${unifiedAnalysis.resin.result.footprintAreaMm2} mm²`} />
+                      </div>
+                    )}
                     <button onClick={() => setTab('report')}
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
                       {t('generateReport')}
