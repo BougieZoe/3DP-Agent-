@@ -6,6 +6,7 @@ import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
+import { visualizer } from "rollup-plugin-visualizer";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -246,6 +247,15 @@ const pwaPlugin = VitePWA({
 });
 
 const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy(), pwaPlugin];
+if (process.env.ANALYZE) {
+  plugins.push(
+    visualizer({
+      filename: path.resolve(import.meta.dirname, "dist/bundle-stats.json"),
+      gzipSize: true,
+      template: "raw-data",
+    }),
+  );
+}
 
 export default defineConfig({
   plugins,
