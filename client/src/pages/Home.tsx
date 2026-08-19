@@ -1,5 +1,5 @@
 import { useMaterial, type MaterialName } from "@/contexts/MaterialContext";
-import { MATERIALS, type Material } from "@shared/domain/material";
+import { MATERIALS, materialsForTechnology, defaultMaterialFor, type Material } from "@shared/domain/material";
 import { ReportGenerator } from "@/components/ReportGenerator";
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
@@ -456,6 +456,7 @@ export default function Home() {
   // Re-run analysis under a different print-technology family (FDM vs resin).
   const reanalyzeWithFamily = useCallback(async (family: 'fdm' | 'sla' | 'fgf') => {
     setMaterialFamily(family);
+    setMaterialName(defaultMaterialFor(family).name); // switch to that technology's default material
     if (!uploadedModel) return;
 
     materialRequestSeq.current += 1;
@@ -726,8 +727,8 @@ deepAnalysisSeq.current += 1;
             onChange={(e) => reanalyzeWithMaterial(e.target.value as MaterialName)}
             className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer max-w-[5.5rem] sm:max-w-none"
           >
-            {(Object.keys(MATERIALS) as MaterialName[]).map(name => (
-              <option key={name} value={name}>{name}</option>
+            {materialsForTechnology(materialFamily).map(m => (
+              <option key={m.name} value={m.name}>{m.name}</option>
             ))}
           </select>
           {/* Language — dropdown so it scales to more languages without crowding the header */}
