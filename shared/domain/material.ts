@@ -150,6 +150,14 @@ export function defaultMaterialFor(tech: MaterialTechnology): Material {
   return list[0] ?? DEFAULT_MATERIAL;
 }
 
+/** Registry KEY of the first/default material for a technology — selects in the
+ *  UI store the registry key (not the display name), so this is what a
+ *  technology switch should call to land on a valid MATERIALS entry. */
+export function defaultMaterialKeyFor(tech: MaterialTechnology): string {
+  const found = Object.keys(MATERIALS).find(k => MATERIALS[k].technology === tech);
+  return found ?? DEFAULT_MATERIAL.name;
+}
+
 export function getDensityGPerMm3(m: Material): number {
   return m.densityGPerCm3 / 1000;
 }

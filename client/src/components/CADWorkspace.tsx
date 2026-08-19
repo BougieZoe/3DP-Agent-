@@ -1662,7 +1662,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                 <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em]">{t('cadPrintCheck')}</div>
                 <div className="p-2.5 border border-border/15 rounded-sm space-y-1">
                   <TechRow label={t('cadBedFit')} value={bf ? (bf.fits ? `✓ ${bf.printerProfile.name}` : `✗ ${bf.printerProfile.name}`) : '—'} badge={bf?.fits ? 'pass' : bf?.fits === false ? 'fail' : undefined} />
-                  <TechRow label={t('cadMaterial')} value={materialName || '—'} />
+                  <TechRow label={t('cadMaterial')} value={(material?.name ?? materialName) || '—'} />
                   <TechRow label={t('cadSupport')} value={sp?.totalSupportVolumeMm3 != null ? `${Math.round(sp.totalSupportVolumeMm3)} mm³` : '—'} />
                   <TechRow label={t('cadPrintTime')} value={pt ? `${pt.estimatedPrintTimeHours.toFixed(1)} h` : '—'} />
                   <TechRow label={t('cadMaterialWt')} value={pt ? `${pt.materialWeightGrams.toFixed(1)} g` : '—'} />
