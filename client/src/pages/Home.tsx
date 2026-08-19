@@ -284,7 +284,7 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
 
 export default function Home() {
   const { material, materialName, setMaterialName } = useMaterial();
-  const [materialFamily, setMaterialFamily] = useState<'fdm' | 'resin' | 'fgf'>('fdm');
+  const [materialFamily, setMaterialFamily] = useState<'fdm' | 'sla' | 'fgf'>('fdm');
   const [objectContext, setObjectContext] = useState<ObjectContext>('general');
   const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
   const [language, setLanguage] = useState<Language>('en');
@@ -454,7 +454,7 @@ export default function Home() {
   }, [uploadedModel, language, setMaterialName]);
 
   // Re-run analysis under a different print-technology family (FDM vs resin).
-  const reanalyzeWithFamily = useCallback(async (family: 'fdm' | 'resin' | 'fgf') => {
+  const reanalyzeWithFamily = useCallback(async (family: 'fdm' | 'sla' | 'fgf') => {
     setMaterialFamily(family);
     if (!uploadedModel) return;
 
@@ -710,12 +710,14 @@ deepAnalysisSeq.current += 1;
           {/* Print technology — rigorous ASTH process-family classification */}
           <select
             value={materialFamily}
-            onChange={(e) => reanalyzeWithFamily(e.target.value as 'fdm' | 'resin' | 'fgf')}
+            onChange={(e) => reanalyzeWithFamily(e.target.value as 'fdm' | 'sla' | 'fgf')}
             title={PRINT_TECH_BY_ID[materialFamily as PrintTechnology]?.label}
             className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer"
           >
-            {PRINT_TECHNOLOGIES.filter(t => t.implemented).map(t => (
-              <option key={t.id} value={t.id} title={`${t.label} · ${t.processFamily} — ${t.description}`}>{t.shortLabel}</option>
+            {PRINT_TECHNOLOGIES.map(t => (
+              <option key={t.id} value={t.id} disabled={!t.implemented} title={`${t.label} · ${t.processFamily} — ${t.description}`}>
+                {t.shortLabel}{t.implemented ? '' : ' (soon)'}
+              </option>
             ))}
           </select>
           {/* Material */}
