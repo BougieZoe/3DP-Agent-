@@ -79,7 +79,7 @@ describe('visionProvider abort handling', () => {
       );
       expect(captured.url).toBe('/api/llm');
       expect(captured.body.provider).toBe('gemini');
-      expect(captured.body.body?.model).toBe('gemini-2.0-flash');
+      expect(captured.body.body?.model).toBe('gemini-3.6-flash');
       expect(captured.body.body?.contents?.[0]?.parts?.[1]?.inline_data?.data).toBe('xyz');
       expect(result.qualitativeAssessment).toBe('solid model');
       expect(result.observedIssues[0].category).toBe('deformation');

@@ -19,10 +19,11 @@ export const CHAT_COMPLETION_MODELS: Partial<Record<AIProviderId, string>> = {
   deepseek: 'deepseek-chat',
   kimi: 'kimi-k3',
   fireworks: 'accounts/fireworks/models/deepseek-v4-pro',
+  zhipu: 'glm-4.7',
 };
 
 export const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
-export const GEMINI_MODEL = 'gemini-2.0-flash';
+export const GEMINI_MODEL = 'gemini-3.6-flash';
 
 /**
  * POST a provider-specific body to the /api/llm relay.

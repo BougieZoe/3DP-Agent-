@@ -5,7 +5,8 @@ export type AIProviderId =
   | 'deepseek'
   | 'kimi'
   | 'amd-cloud'
-  | 'fireworks';
+  | 'fireworks'
+  | 'zhipu';
 
 export interface AIProviderMetadata {
   id: AIProviderId;
@@ -64,6 +65,13 @@ export const AI_PROVIDERS: readonly AIProviderMetadata[] = [
     shortLabel: 'Fireworks',
     keyPlaceholder: 'fw_...',
     colorClass: 'text-amber-400',
+  },
+  {
+    id: 'zhipu',
+    label: 'GLM (Zhipu)',
+    shortLabel: 'GLM',
+    keyPlaceholder: 'id.secret',
+    colorClass: 'text-violet-400',
   },
 ] as const;
 

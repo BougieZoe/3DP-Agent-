@@ -13,6 +13,7 @@ describe('AI provider metadata', () => {
       'kimi',
       'amd-cloud',
       'fireworks',
+      'zhipu',
     ];
 
     expect(ids).toEqual(expectedIds);
