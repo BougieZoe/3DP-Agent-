@@ -1,5 +1,5 @@
 import { useMaterial, type MaterialName } from "@/contexts/MaterialContext";
-import { MATERIALS, materialsForTechnology, defaultMaterialFor, type Material } from "@shared/domain/material";
+import { MATERIALS, defaultMaterialKeyFor, type Material } from "@shared/domain/material";
 import { ReportGenerator } from "@/components/ReportGenerator";
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
@@ -280,6 +280,40 @@ function StatusChip({ status, label }: { status: 'good' | 'warning' | 'critical'
   return <span className={`text-xs font-mono px-2 py-0.5 border rounded-sm ${cfg.cls}`}>{label}</span>;
 }
 
+/**
+ * TECHNOLOGY + MATERIAL explainer panels — the rigorous, self-describing
+ * classification. Rendered wherever the selection is visible (empty state AND
+ * the geometry tab) so a user always sees what they picked and what it means.
+ */
+function TechAndMaterialPanels({ materialFamily, materialName }: {
+  materialFamily: 'fdm' | 'sla' | 'fgf';
+  materialName: string;
+}) {
+  const tech = PRINT_TECH_BY_ID[materialFamily as PrintTechnology];
+  const mat = MATERIALS[materialName];
+  return (
+    <div className="space-y-3">
+      {tech && (
+        <div className="border border-border rounded-sm bg-card p-4">
+          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">TECHNOLOGY · {tech.label}</div>
+          <div className="text-sm font-mono text-foreground">{tech.processFamily}</div>
+          <div className="text-[12px] font-mono text-muted-foreground/60 mt-1 leading-relaxed">{tech.description}</div>
+          <div className="text-[11px] font-mono text-muted-foreground/40 mt-1">→ {tech.examples}</div>
+        </div>
+      )}
+      {mat && (
+        <div className="border border-border rounded-sm bg-card p-4">
+          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">MATERIAL · {mat.name}</div>
+          <div className="text-sm font-mono text-foreground">{mat.category} · {mat.technology.toUpperCase()}</div>
+          <div className="text-[12px] font-mono text-muted-foreground/60 mt-1 leading-relaxed">{mat.description}</div>
+          <div className="text-[11px] font-mono text-muted-foreground/40 mt-1">→ {mat.useCase}</div>
+          <div className="text-[11px] font-mono text-muted-foreground/30 mt-1">{mat.densityGPerCm3} g/cm³ · ${mat.pricePerKgUsd}/kg</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Home ──────────────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -456,7 +490,7 @@ export default function Home() {
   // Re-run analysis under a different print-technology family (FDM vs resin).
   const reanalyzeWithFamily = useCallback(async (family: 'fdm' | 'sla' | 'fgf') => {
     setMaterialFamily(family);
-    setMaterialName(defaultMaterialFor(family).name); // switch to that technology's default material
+    setMaterialName(defaultMaterialKeyFor(family)); // switch to that technology's default material (registry key)
     if (!uploadedModel) return;
 
     materialRequestSeq.current += 1;
@@ -721,15 +755,18 @@ deepAnalysisSeq.current += 1;
               </option>
             ))}
           </select>
-          {/* Material */}
+          {/* Material — values are registry keys so MATERIALS[name] always resolves;
+              hover an option to see the rigorous material description */}
           <select
             value={materialName}
             onChange={(e) => reanalyzeWithMaterial(e.target.value as MaterialName)}
             className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer max-w-[5.5rem] sm:max-w-none"
           >
-            {materialsForTechnology(materialFamily).map(m => (
-              <option key={m.name} value={m.name}>{m.name}</option>
-            ))}
+            {Object.entries(MATERIALS)
+              .filter(([, m]) => m.technology === materialFamily)
+              .map(([key, m]) => (
+                <option key={key} value={key} title={`${m.category} — ${m.description}`}>{m.name}</option>
+              ))}
           </select>
           {/* Language — dropdown so it scales to more languages without crowding the header */}
           <select
@@ -996,31 +1033,10 @@ deepAnalysisSeq.current += 1;
                         <MetricRow label="Footprint" value={`${unifiedAnalysis.fgf.result.footprintAreaMm2} mm²`} />
                       </div>
                     )}
-                    {/* Selected technology classification — rigorous process family info */}
-                    {(() => {
-                      const tech = PRINT_TECH_BY_ID[materialFamily as PrintTechnology];
-                      return tech ? (
-                        <div className="border border-border rounded-sm bg-card p-4 mt-3">
-                          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">TECHNOLOGY · {tech.label}</div>
-                          <div className="text-sm font-mono text-foreground">{tech.processFamily}</div>
-                          <div className="text-[12px] font-mono text-muted-foreground/60 mt-1 leading-relaxed">{tech.description}</div>
-                          <div className="text-[11px] font-mono text-muted-foreground/40 mt-1">→ {tech.examples}</div>
-                        </div>
-                      ) : null;
-                    })()}
-                    {/* Selected material — same rigorous style as the technology, but for what you're printing with */}
-                    {(() => {
-                      const mat = MATERIALS[materialName];
-                      return mat ? (
-                        <div className="border border-border rounded-sm bg-card p-4 mt-3">
-                          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">MATERIAL · {mat.name}</div>
-                          <div className="text-sm font-mono text-foreground">{mat.category} · {mat.technology.toUpperCase()}</div>
-                          <div className="text-[12px] font-mono text-muted-foreground/60 mt-1 leading-relaxed">{mat.description}</div>
-                          <div className="text-[11px] font-mono text-muted-foreground/40 mt-1">→ {mat.useCase}</div>
-                          <div className="text-[11px] font-mono text-muted-foreground/30 mt-1">{mat.densityGPerCm3} g/cm³ · ${mat.pricePerKgUsd}/kg</div>
-                        </div>
-                      ) : null;
-                    })()}
+                    {/* Selected technology + material classification — rigorous, self-describing panels */}
+                    <div className="mt-3">
+                      <TechAndMaterialPanels materialFamily={materialFamily} materialName={materialName} />
+                    </div>
                     {/* Object context — what this part is FOR changes what matters */}
                     {unifiedAnalysis && (
                       <div className="border border-border rounded-sm bg-card p-4 mt-3">
@@ -1335,6 +1351,8 @@ deepAnalysisSeq.current += 1;
                   <div className="text-muted-foreground/20 text-3xl font-mono">[ ]</div>
                   <div className="text-xs text-muted-foreground/50 font-mono">{t('uploadStlBegin')}</div>
                 </div>
+                {/* What you've selected, explained — visible before any upload */}
+                <TechAndMaterialPanels materialFamily={materialFamily} materialName={materialName} />
                 <FeaturesSection t={t} onNavigate={handleFeatureNavigate} />
               </div>
             )}
