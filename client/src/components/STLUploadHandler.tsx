@@ -26,6 +26,8 @@ interface STLUploadHandlerProps {
   /** Declared source units, owned by the parent so a unit change re-processes the model. */
   units: LengthUnit;
   onUnitsChange: (units: LengthUnit) => void;
+  /** Print-technology family for the initial analysis (FDM default). */
+  materialFamily?: 'fdm' | 'resin' | 'metal' | 'eco';
 }
 
 const labels = {
@@ -82,7 +84,7 @@ const labels = {
   },
 };
 
-export function STLUploadHandler({ onModelLoaded, onError, language = 'en', units, onUnitsChange }: STLUploadHandlerProps) {
+export function STLUploadHandler({ onModelLoaded, onError, language = 'en', units, onUnitsChange, materialFamily = 'fdm' }: STLUploadHandlerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -111,7 +113,7 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en', unit
       log(`> ${t.computing}`);
       const { geometry, rawGeometry } = normalizeModelGeometry(raw, units);
       const model = fromThreeBufferGeometry(geometry);
-      const unifiedAnalysis = await runAnalysisInWorker(model, { fileName: file.name });
+      const unifiedAnalysis = await runAnalysisInWorker(model, { fileName: file.name, materialFamily });
       log(`> ${t.analyzing}`);
       const mesh = createMeshFromGeometry(geometry);
       log(`> ${t.complete}`);
