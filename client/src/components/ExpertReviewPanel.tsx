@@ -1,0 +1,110 @@
+import { useState } from 'react';
+import { runExpertReview, type ExpertReview } from '@/agents';
+import type { ModelData } from '@/lib/ruleEngine';
+import type { Material } from '@shared/domain/material';
+import type { ObjectContext } from '@/analysis/context';
+import { getTranslation, type Language } from '@/lib/i18n';
+
+/**
+ * Expert LLM review — a material-domain AI expert translates the deterministic
+ * metrics into plain-language advice. Runs one on-demand LLM call; shows the
+ * verdict in plain language plus structured findings and next actions.
+ */
+export function ExpertReviewPanel({ model, material, objectContext, materialMetrics, language, canRun, onNeedAuth }: {
+  model: ModelData;
+  material: Material;
+  objectContext: ObjectContext;
+  materialMetrics?: string;
+  language: Language;
+  /** Whether the current user is signed in (hosted LLM) or has a BYOK key. */
+  canRun: boolean;
+  onNeedAuth: () => void;
+}) {
+  const [review, setReview] = useState<ExpertReview | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
+
+  const run = async () => {
+    if (!canRun) {
+      onNeedAuth();
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setReview(null);
+    const result = await runExpertReview({ model, material, objectContext, materialMetrics, language });
+    if (result) {
+      setReview(result);
+    } else {
+      setError(t('expertReviewError'));
+    }
+    setLoading(false);
+  };
+
+  const severityColor = (s: string) =>
+    s === 'high' ? '#ef4444' : s === 'medium' ? '#eab308' : '#34d399';
+
+  return (
+    <div className="border border-dashed border-border/50 rounded-sm p-4 space-y-3">
+      <div>
+        <div className="text-xs font-mono text-muted-foreground">{t('expertReview')}</div>
+        <div className="mt-1 text-xs text-muted-foreground/60">{t('expertReviewDesc')}</div>
+      </div>
+
+      {!review && (
+        loading ? (
+          <div className="text-xs font-mono text-cyan-400/80 animate-pulse">{t('expertReviewLoading')}</div>
+        ) : (
+          <div className="space-y-2">
+            {error && <div className="text-xs font-mono text-red-400">{error}</div>}
+            <button
+              onClick={run}
+              disabled={loading}
+              className="text-xs font-mono px-4 py-2 border border-primary/30 text-primary hover:bg-primary/10 rounded-sm transition-all disabled:opacity-40"
+            >
+              {canRun ? t('expertReviewRun') : t('signInToExpertReview')}
+            </button>
+          </div>
+        )
+      )}
+
+      {review && (
+        <div className="space-y-3 fade-up">
+          <div className="text-xs font-mono text-muted-foreground">{t('expertReviewPlain')}</div>
+          <div className="text-[13px] text-foreground/90 leading-relaxed">{review.plain}</div>
+
+          {review.findings.length > 0 && (
+            <>
+              <div className="text-xs font-mono text-muted-foreground pt-1">{t('expertReviewFindings')}</div>
+              <ul className="space-y-2">
+                {review.findings.map((f, i) => (
+                  <li key={i} className="text-xs text-muted-foreground/80 leading-relaxed border-l-2 pl-2" style={{ borderColor: severityColor(f.severity) }}>
+                    <span className="font-mono uppercase text-[10px]">{f.severity}</span>{' '}
+                    <span className="text-foreground/90">{f.what}</span>{f.why ? ` — ${f.why}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {review.actions.length > 0 && (
+            <>
+              <div className="text-xs font-mono text-muted-foreground pt-1">{t('expertReviewActions')}</div>
+              <ul className="space-y-1.5">
+                {review.actions.map((a, i) => (
+                  <li key={i} className="text-xs text-muted-foreground/80 leading-relaxed">
+                    → {a.do}{' '}
+                    <span className="text-muted-foreground/40">(impact {a.impact} · effort {a.effort})</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          <div className="text-[11px] text-muted-foreground/40 font-mono pt-1">{t('expertReviewAdvisory')}</div>
+        </div>
+      )}
+    </div>
+  );
+}
