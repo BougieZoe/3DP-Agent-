@@ -726,17 +726,17 @@ deepAnalysisSeq.current += 1;
               <option key={name} value={name}>{name}</option>
             ))}
           </select>
-          {/* Language */}
-          <div className="flex items-center gap-0.5">
+          {/* Language — dropdown so it scales to more languages without crowding the header */}
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as Language)}
+            title="Language"
+            className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer"
+          >
             {SUPPORTED_LANGUAGES.map(lang => (
-              <button key={lang} onClick={() => setLanguage(lang)}
-                className={`text-[11px] sm:text-xs font-mono px-2 py-1 rounded-sm transition-all ${
-                  language === lang ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-primary'
-                }`}>
-                {lang.toUpperCase()}
-              </button>
+              <option key={lang} value={lang}>{lang.toUpperCase()}</option>
             ))}
-          </div>
+          </select>
           {/* Install (PWA) — hidden unless installable; Android/desktop native prompt, iOS guide */}
           <InstallButton language={language} />
           {/* Account — sign in / plan badge (signed-in users get hosted LLM) */}
@@ -940,23 +940,31 @@ deepAnalysisSeq.current += 1;
                       <MetricRow label={t('dimY')} value={toUnit(modelData.dims.y).toFixed(2)} unit={unitSuffix} />
                       <MetricRow label={t('dimZ')} value={toUnit(modelData.dims.z).toFixed(2)} unit={unitSuffix} />
                       <MetricRow label={t('overhangFaces')} value={analysis.overhang.areas} />
-                      {topo && (
-                        <>
-                          <MetricRow label={t('cadTri')} value={topo.triangleCount} />
-                          <MetricRow label={t('cadVerts')} value={topo.vertexCount} />
-                          <MetricRow label={t('cadShells')} value={topo.shellCount} />
-                          <MetricRow label={t('cadBoundaryEdges')} value={topo.boundaryEdgeCount} />
-                          <MetricRow label={t('cadNonManifoldEdges')} value={topo.nonManifoldEdgeCount} />
-                        </>
-                      )}
-                      {valid && (
-                        <>
-                          <MetricRow label={t('cadHoles')} value={valid.holeCount} />
-                          <MetricRow label={t('cadNormalOrientation')} value={valid.normalOrientation} />
-                          <MetricRow label={t('cadFlippedFaces')} value={valid.flippedNormalFaceCount} />
-                        </>
-                      )}
                     </div>
+                    {/* Expert mesh diagnostics — collapsed by default so the core metrics stay prominent */}
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-[11px] font-mono text-muted-foreground/60 hover:text-foreground select-none">
+                        MESH DIAGNOSTICS
+                      </summary>
+                      <div className="mt-1.5">
+                        {topo && (
+                          <>
+                            <MetricRow label={t('cadTri')} value={topo.triangleCount} />
+                            <MetricRow label={t('cadVerts')} value={topo.vertexCount} />
+                            <MetricRow label={t('cadShells')} value={topo.shellCount} />
+                            <MetricRow label={t('cadBoundaryEdges')} value={topo.boundaryEdgeCount} />
+                            <MetricRow label={t('cadNonManifoldEdges')} value={topo.nonManifoldEdgeCount} />
+                          </>
+                        )}
+                        {valid && (
+                          <>
+                            <MetricRow label={t('cadHoles')} value={valid.holeCount} />
+                            <MetricRow label={t('cadNormalOrientation')} value={valid.normalOrientation} />
+                            <MetricRow label={t('cadFlippedFaces')} value={valid.flippedNormalFaceCount} />
+                          </>
+                        )}
+                      </div>
+                    </details>
                     {/* Resin-specific metrics (shown when FDM/RESIN switch set to resin) */}
                     {unifiedAnalysis?.resin?.result && (
                       <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
