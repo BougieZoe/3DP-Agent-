@@ -2,15 +2,13 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { createServer } from "http";
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "path";
-import { fileURLToPath } from "url";
+import { currentDir as __dirname } from "./currentDir";
 import { createCadBridgeRouter } from "./cadBridge";
 import { createMeshProcessRouter } from "./meshProcess";
 import { createSlicerRouter } from "./slicerRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { relayLLM } from "./llmRelay";
 
 // Real address of the AMD machine, read from an environment variable instead
 // of hardcoded. Every time a new Droplet is spun up, only this env var in the
@@ -92,9 +90,10 @@ function rateLimit(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
-async function startServer() {
+// Builds and returns the Express app. Vercel (@vercel/node) imports this via
+// server/vercel.ts; local/Electron run startServer() which listens on a port.
+export function createApp() {
   const app = express();
-  const server = createServer(app);
 
   if (bridgesEnabled) {
     const amdProxy = [rateLimit, devLocalBridgeGuard];
@@ -210,72 +209,14 @@ async function startServer() {
   // upstream rejects calls with no valid key. This is the mirror image of the
   // client-side model registry in client/src/lib/llmProxy.ts — keep in sync.
   // -------------------------------------------------------------------------
-  const LLM_ENDPOINTS: Record<string, string> = {
-    claude: "https://api.anthropic.com/v1/messages",
-    openai: "https://api.openai.com/v1/chat/completions",
-    deepseek: "https://api.deepseek.com/v1/chat/completions",
-    kimi: "https://api.moonshot.cn/v1/chat/completions",
-    fireworks: "https://api.fireworks.ai/inference/v1/chat/completions",
-  };
-  const LLM_ALLOWED_MODELS: Record<string, ReadonlySet<string>> = {
-    claude: new Set(["claude-sonnet-4-20250514"]),
-    openai: new Set(["gpt-4o"]),
-    gemini: new Set(["gemini-2.0-flash"]),
-    deepseek: new Set(["deepseek-chat"]),
-    kimi: new Set(["kimi-k3"]),
-    fireworks: new Set(["accounts/fireworks/models/deepseek-v4-pro"]),
-  };
-
+  // The /api/llm relay logic lives in server/llmRelay.ts (shared with the Vercel
+  // function api/llm.ts) so local and deployed behavior stay identical.
   app.post("/api/llm", express.json({ limit: "2mb" }), rateLimit, async (req: Request, res: Response) => {
-    try {
-      const { provider, apiKey, body } = (req.body ?? {}) as Record<string, unknown>;
-      if (typeof provider !== "string" || typeof apiKey !== "string" || apiKey.length === 0) {
-        res.status(400).json({ error: "provider and apiKey are required" });
-        return;
-      }
-      if (typeof body !== "object" || body === null || Array.isArray(body)) {
-        res.status(400).json({ error: "body must be an object" });
-        return;
-      }
-      const allowedModels = LLM_ALLOWED_MODELS[provider];
-      if (!allowedModels) {
-        res.status(400).json({ error: "provider not allowed" });
-        return;
-      }
-      const model = typeof (body as { model?: unknown }).model === "string"
-        ? (body as { model: string }).model
-        : "";
-      if (!allowedModels.has(model)) {
-        res.status(400).json({ error: "model not allowed" });
-        return;
-      }
-
-      const target = provider === "gemini"
-        ? `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
-        : LLM_ENDPOINTS[provider];
-
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (provider === "claude") {
-        headers["x-api-key"] = apiKey;
-        headers["anthropic-version"] = "2023-06-01";
-      } else if (provider === "gemini") {
-        headers["x-goog-api-key"] = apiKey;
-      } else {
-        headers["Authorization"] = `Bearer ${apiKey}`;
-      }
-
-      const upstream = await fetch(target, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(120_000),
-      });
-      const text = await upstream.text();
-      res.status(upstream.status).set("Content-Type", "application/json").send(text || "{}");
-    } catch (err) {
-      const timedOut = err instanceof Error && err.name === "TimeoutError";
-      res.status(timedOut ? 504 : 500).json({ error: "LLM proxy failed", detail: String(err) });
-    }
+    const { provider, apiKey, body } = (req.body ?? {}) as Record<string, unknown>;
+    const authHeader = typeof req.headers.authorization === "string" ? req.headers.authorization : "";
+    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    const result = await relayLLM({ provider: provider as string, apiKey, body, bearer });
+    res.status(result.status).set("Content-Type", "application/json").send(result.text);
   });
 
   // Serve static files from dist/public in production
@@ -286,16 +227,31 @@ async function startServer() {
 
   app.use(express.static(staticPath));
 
+  // Unauthenticated liveness probe — used by the Electron main process to wait
+  // for the local server before opening the window. Must be before the SPA
+  // catch-all (which would otherwise answer with index.html).
+  app.get("/health", (_req, res) => {
+    res.json({ ok: true, pid: process.pid });
+  });
+
   // Handle client-side routing - serve index.html for all routes
   app.get("*", (_req, res) => {
     res.sendFile(path.join(staticPath, "index.html"));
   });
 
-  const port = process.env.PORT || 3000;
+  return app;
+}
 
+/** Local / Electron / `npm start` entry — Vercel uses the exported createApp instead. */
+function startServer() {
+  const app = createApp();
+  const server = createServer(app);
+  const port = process.env.PORT || 3000;
   server.listen(Number(port), HOST as string | undefined, () => {
     console.log(`Server running on http://${HOST ?? "0.0.0.0"}:${port}/`);
   });
 }
 
-startServer().catch(console.error);
+if (!process.env.VERCEL) {
+  startServer();
+}

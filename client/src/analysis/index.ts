@@ -1,4 +1,5 @@
 export { runAnalysisPipeline } from './pipeline';
+export { runAnalysisInWorker } from './workerBridge';
 export type { PipelineOptions } from './pipeline';
 export { analyzeTopology, buildEdgeMap, countShells } from './topology';
 export { validateMesh } from './validation';

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { fromThreeBufferGeometry, runAnalysisPipeline, type UnifiedAnalysis } from '@/analysis';
+import { fromThreeBufferGeometry, runAnalysisInWorker, type UnifiedAnalysis } from '@/analysis';
 import {
   runConfidenceGate,
   type Issue as ConfidenceIssue,
@@ -14,7 +14,7 @@ import type { Language } from '@/lib/i18n';
  * the CAD Studio (generated STEP/STL) and the Mesh Studio (AI meshes) so the
  * manufacturing report is identical regardless of generation path.
  */
-export function runCadAnalysis(
+export async function runCadAnalysis(
   geometry: THREE.BufferGeometry,
   opts: {
     fileName: string;
@@ -23,11 +23,12 @@ export function runCadAnalysis(
     quality?: GenerationQuality;
     language: Language;
   },
-): { geometry: THREE.BufferGeometry; unified: UnifiedAnalysis; gate: CADConfidenceReport; issues: ConfidenceIssue[] } {
+): Promise<{ geometry: THREE.BufferGeometry; unified: UnifiedAnalysis; gate: CADConfidenceReport; issues: ConfidenceIssue[] }> {
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
   const model = fromThreeBufferGeometry(geometry);
-  const unified = runAnalysisPipeline(model, {
+  // Heavy analysis runs off the main thread so the CAD/Mesh UI stays responsive.
+  const unified = await runAnalysisInWorker(model, {
     fileName: opts.fileName,
     material: opts.material,
     printerId: 'bambu_x1c',

@@ -22,7 +22,7 @@ import {
   type VotingRecord,
   type AgentStageConfig,
 } from './types';
-import { getActiveProvider, getKey } from '@/lib/apiKeys';
+import { getLLMProvider } from '@/lib/llmAccess';
 
 /**
  * Time budget for the optional vision capture step, aligned with the
@@ -335,10 +335,8 @@ export class AgentOrchestrator {
     fileName: string,
     language?: ContentLang,
   ): Promise<(Pick<VisionAnalysisResult, 'qualitativeAssessment' | 'observedIssues' | 'confidence'> & { raw: string }) | undefined> {
-    const activeProvider = getActiveProvider();
-    if (!activeProvider) return undefined;
-    const apiKey = getKey(activeProvider);
-    if (!apiKey) return undefined;
+    const llm = getLLMProvider();
+    if (!llm || llm.provider === 'amd-cloud') return undefined;
 
     const screenshot = await visionProvider.captureScene();
     if (!screenshot) return undefined;
@@ -353,8 +351,8 @@ export class AgentOrchestrator {
       const summary = buildVisionGeometrySummary(metrics, vertexData.triangleCount, fileName, language ?? 'en');
 
       const result = await visionProvider.analyzeWithAI(screenshot, summary, {
-        provider: activeProvider,
-        apiKey,
+        provider: llm.provider,
+        apiKey: llm.key,
       }, language, controller.signal);
 
       return {
