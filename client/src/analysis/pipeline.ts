@@ -4,6 +4,7 @@ import { analyzeTopology } from './topology';
 import { validateMesh } from './validation';
 import { computeMetrics } from './metrics';
 import { computeResinMetrics, type ResinResult } from './resin';
+import { computeFgfMetrics, type FgfResult } from './fgf';
 import { checkBedFit } from './bedFit';
 import { estimateSupportVolume } from './support';
 import { estimatePrintTime } from './printTime';
@@ -19,7 +20,7 @@ export interface PipelineOptions {
   fileName?: string;
   material?: Material;
   /** Print technology family — selects the per-family metrics module. */
-  materialFamily?: 'fdm' | 'resin' | 'metal' | 'eco';
+  materialFamily?: 'fdm' | 'resin' | 'fgf' | 'metal' | 'eco';
   /** UI language — module explanations/reasons are localized. */
   language?: ContentLang;
   /**
@@ -120,7 +121,18 @@ export function runAnalysisPipeline(
     }
   });
 
-  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin]
+  // FGF (large-format pellet) module — only when the FGF family is selected.
+  const EMPTY_FGF: FgfResult = { partScale: 'small', maxDimMm: 0, partHeightMm: 0, footprintAreaMm2: 0, warpageRisk: 0, delaminationRisk: 0, slenderness: 0, orientation: 'upright' };
+  const fgf = time('fgf', () => {
+    try {
+      if (options.materialFamily !== 'fgf') return null;
+      return moduleResult('fgf', 1.0 as Confidence, 0, computeFgfMetrics(model), 'FGF large-format printability metrics (geometric proxies).');
+    } catch (e) {
+      return options.materialFamily === 'fgf' ? failResult('fgf', e, EMPTY_FGF) : null;
+    }
+  });
+
+  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf]
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .map(m => m.confidence);
   const overallConfidence = confidences.length > 0
@@ -135,6 +147,7 @@ export function runAnalysisPipeline(
     support,
     printTime,
     resin,
+    fgf,
     timestamp: now,
     modelFileName: fileName,
     overallConfidence,

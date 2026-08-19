@@ -271,6 +271,8 @@ export interface UnifiedAnalysis {
   printTime: AnalysisModuleResult<PrintTimeResult> | null;
   /** Present only when the analysis ran with materialFamily === 'resin'. */
   resin?: AnalysisModuleResult<import('./resin').ResinResult> | null;
+  /** Present only when the analysis ran with materialFamily === 'fgf'. */
+  fgf?: AnalysisModuleResult<import('./fgf').FgfResult> | null;
   /** ISO timestamp of when analysis was run */
   timestamp: string;
   modelFileName: string;

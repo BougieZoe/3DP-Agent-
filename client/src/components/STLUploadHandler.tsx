@@ -27,7 +27,7 @@ interface STLUploadHandlerProps {
   units: LengthUnit;
   onUnitsChange: (units: LengthUnit) => void;
   /** Print-technology family for the initial analysis (FDM default). */
-  materialFamily?: 'fdm' | 'resin' | 'metal' | 'eco';
+  materialFamily?: 'fdm' | 'resin' | 'fgf' | 'metal' | 'eco';
 }
 
 const labels = {
