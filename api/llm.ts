@@ -15,14 +15,16 @@ const LLM_ENDPOINTS: Record<string, string> = {
   deepseek: "https://api.deepseek.com/v1/chat/completions",
   kimi: "https://api.moonshot.cn/v1/chat/completions",
   fireworks: "https://api.fireworks.ai/inference/v1/chat/completions",
+  zhipu: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
 };
 const LLM_ALLOWED_MODELS: Record<string, ReadonlySet<string>> = {
   claude: new Set(["claude-sonnet-4-20250514"]),
   openai: new Set(["gpt-4o"]),
-  gemini: new Set(["gemini-2.0-flash"]),
+  gemini: new Set(["gemini-3.6-flash"]),
   deepseek: new Set(["deepseek-chat"]),
   kimi: new Set(["kimi-k3"]),
   fireworks: new Set(["accounts/fireworks/models/deepseek-v4-pro"]),
+  zhipu: new Set(["glm-4.7"]),
 };
 const SERVER_KEY_ENV: Record<string, string | undefined> = {
   claude: process.env.ANTHROPIC_API_KEY,
@@ -31,6 +33,7 @@ const SERVER_KEY_ENV: Record<string, string | undefined> = {
   kimi: process.env.MOONSHOT_API_KEY,
   fireworks: process.env.FIREWORKS_API_KEY,
   gemini: process.env.GEMINI_API_KEY,
+  zhipu: process.env.GLM_API_KEY,
 };
 const FREE_MONTHLY_LIMIT = Number(process.env.FREE_MONTHLY_LIMIT || 100);
 

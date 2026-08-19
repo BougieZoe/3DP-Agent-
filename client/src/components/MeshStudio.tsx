@@ -26,6 +26,24 @@ function scoreColor(score: number): string {
   return '#ef4444';
 }
 
+// Map raw generator/API errors to friendly, actionable messages — users should
+// never see a raw exception string.
+function friendlyMeshError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const low = msg.toLowerCase();
+  if (low.includes('timeout') || low.includes('timed out'))
+    return 'Generation timed out — try a simpler description or try again.';
+  if (low.includes('cancelled') || low.includes('aborted'))
+    return 'Generation was cancelled.';
+  if (low.includes('rate') || low.includes('limit') || low.includes('quota'))
+    return 'Too many requests right now — wait a moment and try again.';
+  if (low.includes('tripo') || low.includes('api') || low.includes('network') || low.includes('fetch') || low.includes('503') || low.includes('401'))
+    return 'The mesh service is temporarily unavailable — please try again in a moment.';
+  if (low.includes('prompt'))
+    return 'Could not understand that description. Try something more specific, like "a gear with 20 teeth".';
+  return 'Mesh generation failed — please try again.';
+}
+
 const EXAMPLE_PROMPTS = ['a gear', 'a cube', 'a cylinder', 'a marble'];
 
 function verdictClass(verdict: string): string {
@@ -122,7 +140,7 @@ export function MeshStudio({ language }: { language: Language }) {
         } else if (outcome.error.code === 'cancelled') {
           setError('Generation cancelled');
         } else {
-          setError(outcome.error.detail);
+          setError(friendlyMeshError(outcome.error.detail));
         }
         setStatus('idle');
         return;
@@ -144,7 +162,7 @@ export function MeshStudio({ language }: { language: Language }) {
       setFitKey((k) => k + 1); // re-frame camera on the new model
       setStatus('done');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(friendlyMeshError(err));
       setStatus('idle');
     }
   }, [prompt, material, language, t]);
@@ -214,7 +232,7 @@ export function MeshStudio({ language }: { language: Language }) {
         setStlBytes(result.stlBytes);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(friendlyMeshError(err));
     }
   };
 
@@ -240,7 +258,7 @@ export function MeshStudio({ language }: { language: Language }) {
   const hasResult = gate != null;
 
   return (
-    <div className={`relative flex flex-col h-[calc(100dvh-5.5rem)] mt-[5.5rem] lg:mt-14 lg:h-[calc(100vh-3.5rem)] lg:grid lg:grid-rows-[1fr] lg:grid-cols-[280px_1fr] ${hasResult ? 'lg:grid-cols-[280px_1fr_380px]' : ''}`}>
+    <div className={`relative flex flex-col h-[calc(100dvh-7rem)] mt-28 lg:mt-14 lg:h-[calc(100vh-3.5rem)] lg:grid lg:grid-rows-[1fr] lg:grid-cols-[280px_1fr] ${hasResult ? 'lg:grid-cols-[280px_1fr_380px]' : ''}`}>
       {/* ── LEFT PANEL (desktop: grid item · mobile: bottom sheet) ── */}
       <div className={`flex-col border-r border-border/15 bg-card/30 overflow-y-auto ${
         mobilePanel === 'left' ? 'fixed bottom-0 left-0 right-0 z-30 max-h-[75dvh] flex' : 'hidden'

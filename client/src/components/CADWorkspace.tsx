@@ -741,7 +741,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         throw new Error(
           isLocal
             ? 'CAD bridge not available — start the local engine first (pnpm dev:server) on port 3001.'
-            : 'CAD generation is only available in the desktop app — the web version cannot run the local CAD engine.'
+            : 'CAD generation runs in the desktop app (it needs the 3D engine on your computer). The web version handles STL analysis — download 3DP Agent for Mac to generate parts.'
         );
       }
       mark('bridge', 'done');
@@ -1367,7 +1367,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const bridgeState = useCADBridgeHealth();
 
   return (
-    <div className={`relative flex flex-col h-[calc(100dvh-5.5rem)] mt-[5.5rem] lg:mt-14 lg:h-[calc(100vh-3.5rem)] lg:grid lg:grid-rows-[1fr] ${hasGeometry ? 'lg:grid-cols-[280px_1fr_380px]' : 'lg:grid-cols-[280px_1fr]'}`}>
+    <div className={`relative flex flex-col h-[calc(100dvh-7rem)] mt-28 lg:mt-14 lg:h-[calc(100vh-3.5rem)] lg:grid lg:grid-rows-[1fr] ${hasGeometry ? 'lg:grid-cols-[280px_1fr_380px]' : 'lg:grid-cols-[280px_1fr]'}`}>
       {/* ── LEFT PANEL (desktop: grid item · mobile: bottom sheet) ── */}
       <div className={`flex-col border-r border-border/15 bg-card/30 overflow-y-auto ${
         mobilePanel === 'left' ? 'fixed bottom-0 left-0 right-0 z-30 max-h-[75dvh] flex' : 'hidden'
@@ -1412,6 +1412,13 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
               </button>
             )}
           </div>
+          {/* On the web (no local engine), tell users CAD generation is desktop-only —
+              better than a scary red error after they click Generate. */}
+          {!window.desktop?.isDesktop && (
+            <div className="mt-3 text-[11px] font-mono text-muted-foreground/40 leading-relaxed">
+              ⚠ CAD generation runs in the desktop app. The web version analyzes STL only — get 3DP Agent for Mac to generate parts.
+            </div>
+          )}
         </div>
 
         {/* Error inline */}
@@ -1655,7 +1662,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                 <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em]">{t('cadPrintCheck')}</div>
                 <div className="p-2.5 border border-border/15 rounded-sm space-y-1">
                   <TechRow label={t('cadBedFit')} value={bf ? (bf.fits ? `✓ ${bf.printerProfile.name}` : `✗ ${bf.printerProfile.name}`) : '—'} badge={bf?.fits ? 'pass' : bf?.fits === false ? 'fail' : undefined} />
-                  <TechRow label={t('cadMaterial')} value={materialName || '—'} />
+                  <TechRow label={t('cadMaterial')} value={(material?.name ?? materialName) || '—'} />
                   <TechRow label={t('cadSupport')} value={sp?.totalSupportVolumeMm3 != null ? `${Math.round(sp.totalSupportVolumeMm3)} mm³` : '—'} />
                   <TechRow label={t('cadPrintTime')} value={pt ? `${pt.estimatedPrintTimeHours.toFixed(1)} h` : '—'} />
                   <TechRow label={t('cadMaterialWt')} value={pt ? `${pt.materialWeightGrams.toFixed(1)} g` : '—'} />
