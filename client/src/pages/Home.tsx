@@ -313,6 +313,7 @@ export default function Home() {
   const [deepAnalysisLoading, setDeepAnalysisLoading] = useState(false);
   const [deepSteps, setDeepSteps] = useState<Array<{ index: number; label: string; raw: string }>>([]);
   const [deepError, setDeepError] = useState<string | null>(null);
+  const [expertReview, setExpertReview] = useState<import('@/agents').ExpertReview | null>(null);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showGhosts, setShowGhosts] = useState(false);
   const [showRisks, setShowRisks] = useState(false);
@@ -349,6 +350,7 @@ export default function Home() {
     setAgentRun(null);
     deepAnalysisSeq.current += 1;
     setDeepAgentRun(null);
+    setExpertReview(null);
     setShowHeatmap(false);
     setShowGhosts(false);
     setShowRisks(false);
@@ -1143,6 +1145,7 @@ deepAnalysisSeq.current += 1;
     analysis={unifiedAnalysis}
     fileName={uploadedModel?.fileName ?? "model.stl"}
     language={language}
+    expertReview={expertReview}
   />
 )}
                       </div>
@@ -1325,6 +1328,7 @@ deepAnalysisSeq.current += 1;
                       model={modelData}
                       material={material}
                       objectContext={objectContext}
+                      onReviewChange={setExpertReview}
                       materialMetrics={(() => {
                         const resin = unifiedAnalysis?.resin?.result;
                         const fgf = unifiedAnalysis?.fgf?.result;

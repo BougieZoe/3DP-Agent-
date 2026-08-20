@@ -3,6 +3,7 @@ import { CONTENT, translate, type ContentLang } from "@shared/i18n/content";
 import type { UnifiedAnalysis, NormalOrientation } from "../analysis/types";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
 import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
+import type { ExpertReview } from "@/agents/expertReview";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -21,6 +22,8 @@ interface ReportGeneratorProps {
   chatHistory?: ChatMessage[];
   fileName?: string;
   language?: ContentLang;
+  /** AI expert review (if run) — embedded into the exported PDF report. */
+  expertReview?: ExpertReview | null;
 }
 
 // ─── Language Detection ─────────────────────────────────────────────────────────
@@ -525,12 +528,72 @@ function drawIssueBadge(
   return y + 6 + lines.length * 5;
 }
 
+/**
+ * Embed the AI expert review into a PDF page: a section header, the
+ * plain-language summary (wrapped), then numbered findings (severity-coloured
+ * badges) and next actions. Returns the next free y.
+ */
+function drawExpertReview(
+  doc: JsPDF,
+  review: ExpertReview,
+  lang: Language,
+  y: number,
+): number {
+  y = drawSectionHeader(doc, translate(CONTENT, 'pdf.expertReview', lang), y);
+
+  // Verdict + plain-language summary in one boxed block.
+  const vColor: [number, number, number] =
+    review.verdict === 'pass' ? C.green : review.verdict === 'warning' ? C.amber : C.red;
+  const verdictLabel =
+    review.verdict === 'pass'
+      ? translate(CONTENT, 'pdf.verdict.ready', lang)
+      : review.verdict === 'warning'
+        ? translate(CONTENT, 'pdf.verdict.review', lang)
+        : translate(CONTENT, 'pdf.verdict.notReady', lang);
+  const label = `[${verdictLabel.toUpperCase()}] ${review.plain}`;
+  const plainLines = doc.splitTextToSize(label, PAGE_CW - 14);
+  doc.setFont(pdfFont, "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...C.ink);
+  for (const line of plainLines) {
+    if (y > PAGE_BOT - 8) { doc.addPage(); y = PAGE_M + 6; }
+    doc.text(line, PAGE_M + 3, y);
+    y += 5;
+  }
+  // Verdict accent line
+  doc.setDrawColor(...vColor);
+  doc.setLineWidth(1);
+  doc.line(PAGE_M, y - 2, PAGE_M, y - 2 - plainLines.length * 5);
+  doc.setLineWidth(0.3);
+  y += 4;
+
+  if (review.findings.length > 0) {
+    y = drawSectionHeader(doc, translate(CONTENT, 'pdf.expertFindings', lang), y);
+    review.findings.forEach((f, i) => {
+      const sev: [number, number, number] =
+        f.severity === 'high' ? C.red : f.severity === 'medium' ? C.amber : C.green;
+      const text = f.why ? `${f.what} — ${f.why}` : f.what;
+      y = drawIssueBadge(doc, i + 1, text, y, sev);
+    });
+  }
+
+  if (review.actions.length > 0) {
+    y = drawSectionHeader(doc, translate(CONTENT, 'pdf.expertActions', lang), y);
+    review.actions.forEach((a, i) => {
+      y = drawIssueBadge(doc, i + 1, `${a.do}  (impact ${a.impact} · effort ${a.effort})`, y, C.muted);
+    });
+  }
+
+  return y + 4;
+}
+
 // ─── CLIENT PDF ────────────────────────────────────────────────────────────────
 
 async function generateClientPDF(
   analysis: UnifiedAnalysis,
   lang: Language,
-  fileName: string
+  fileName: string,
+  review?: ExpertReview | null
 ): Promise<void> {
   const doc = createPdfCanvasSurface();
 
@@ -643,6 +706,12 @@ async function generateClientPDF(
     y += 7;
   }
 
+  // ── AI expert review (if run) ──
+  if (review) {
+    y = drawExpertReview(doc, review, lang, y);
+    y += 4;
+  }
+
   // ── Next step ──
   y += 6;
   doc.setFont(pdfFont, "italic");
@@ -669,7 +738,8 @@ async function generateDesignerPDF(
   analysis: UnifiedAnalysis,
   tone: ToneMode,
   lang: Language,
-  fileName: string
+  fileName: string,
+  review?: ExpertReview | null
 ): Promise<void> {
   const doc = createPdfCanvasSurface();
 
@@ -883,6 +953,12 @@ async function generateDesignerPDF(
       : (lang === "ja" ? "問題点を確認して調整してください" : "Review issues and adjust");
   }
 
+  // ── AI expert review (if run) ──
+  if (review) {
+    y = drawExpertReview(doc, review, lang, y);
+    y += 4;
+  }
+
   doc.setFont(pdfFont, "italic");
   doc.setFontSize(8);
   doc.setTextColor(...C.muted);
@@ -905,7 +981,8 @@ async function generateDesignerPDF(
 async function generateFactoryPDF(
   analysis: UnifiedAnalysis,
   lang: Language,
-  fileName: string
+  fileName: string,
+  review?: ExpertReview | null
 ): Promise<void> {
   const doc = createPdfCanvasSurface();
 
@@ -1058,6 +1135,12 @@ async function generateFactoryPDF(
     }
   }
 
+  // ── AI expert review (if run) ──
+  if (review) {
+    y = drawExpertReview(doc, review, lang, y);
+    y += 4;
+  }
+
   // ── Disclaimer ──
   y += 6;
   const disclaimer = translate(CONTENT, 'pdf.disclaimer', lang, { id: reportId });
@@ -1087,6 +1170,7 @@ export function ReportGenerator({
   chatHistory = [],
   fileName = "model.stl",
   language = "en",
+  expertReview,
 }: ReportGeneratorProps) {
   const tone = detectTone(chatHistory);
   const lang = language ?? detectLanguage(chatHistory);
@@ -1094,13 +1178,13 @@ export function ReportGenerator({
 
   const handleExport = useCallback(async (tier: PdfTier) => {
     if (tier === "client") {
-      await generateClientPDF(analysis, lang, fileName);
+      await generateClientPDF(analysis, lang, fileName, expertReview);
     } else if (tier === "designer") {
-      await generateDesignerPDF(analysis, tone, lang, fileName);
+      await generateDesignerPDF(analysis, tone, lang, fileName, expertReview);
     } else {
-      await generateFactoryPDF(analysis, lang, fileName);
+      await generateFactoryPDF(analysis, lang, fileName, expertReview);
     }
-  }, [analysis, tone, lang, fileName]);
+  }, [analysis, tone, lang, fileName, expertReview]);
 
   const lightStyles: Record<TrafficLight, string> = {
     green: "bg-emerald-50 text-emerald-700 border-emerald-200",
