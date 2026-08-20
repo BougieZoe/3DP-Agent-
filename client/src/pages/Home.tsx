@@ -2,6 +2,7 @@ import { useMaterial, type MaterialName } from "@/contexts/MaterialContext";
 import { MATERIALS, defaultMaterialKeyFor, type Material } from "@shared/domain/material";
 import { ReportGenerator } from "@/components/ReportGenerator";
 import { ExpertReviewPanel } from '@/components/ExpertReviewPanel';
+import { BatchReport } from '@/components/BatchReport';
 import { lazy, Suspense, useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
@@ -1156,6 +1157,15 @@ deepAnalysisSeq.current += 1;
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 rounded-sm">
                         <div className="text-xs font-mono text-primary animate-pulse">&#x258b; {t('recalculating')}</div>
                       </div>
+                    )}
+                    {/* Batch overview — every loaded model, one glance; click a row to switch */}
+                    {models.length > 1 && (
+                      <BatchReport
+                        models={models}
+                        activeFileName={activeFileName}
+                        onSelect={switchModel}
+                        language={language}
+                      />
                     )}
                     {quickReport && (
                       <div className="border border-border rounded-sm bg-card p-4 fade-up">
