@@ -717,7 +717,7 @@ deepAnalysisSeq.current += 1;
                 className={`text-[11px] sm:text-xs font-mono px-2 sm:px-3 py-1 border rounded-sm transition-all ${
                   mode === m ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-primary'
                 }`}>
-                {m === 'analyze' ? 'ANALYZE' : m === 'cad' ? 'CAD' : 'MESH'}
+                {m === 'analyze' ? t('modeAnalyze') : m === 'cad' ? 'CAD' : 'MESH'}
               </button>
             ))}
           </div>
@@ -784,7 +784,7 @@ deepAnalysisSeq.current += 1;
       {/* ── Main ── */}
       <Suspense fallback={
         <div className="flex items-center justify-center h-[60vh] text-xs font-mono text-primary animate-pulse">
-          <span>▋ LOADING...</span>
+          <span>▋ {t('loading3d')}</span>
         </div>
       }>
       {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-28 sm:pt-14 flex flex-col lg:flex-row min-h-screen">
@@ -933,7 +933,7 @@ deepAnalysisSeq.current += 1;
                   <div className="space-y-4 pt-4 relative">
                     {materialLoading && (
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 rounded-sm">
-                        <div className="text-xs font-mono text-primary animate-pulse">&#x258b; RECALCULATING...</div>
+                        <div className="text-xs font-mono text-primary animate-pulse">&#x258b; {t('recalculating')}</div>
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-3">
@@ -970,7 +970,7 @@ deepAnalysisSeq.current += 1;
                     {/* Expert mesh diagnostics — collapsed by default so the core metrics stay prominent */}
                     <details className="mt-2">
                       <summary className="cursor-pointer text-[11px] font-mono text-muted-foreground/60 hover:text-foreground select-none">
-                        MESH DIAGNOSTICS
+                        {t('meshDiagnostics')}
                       </summary>
                       <div className="mt-1.5">
                         {topo && (
@@ -994,57 +994,57 @@ deepAnalysisSeq.current += 1;
                     {/* Resin-specific metrics (shown when FDM/RESIN switch set to resin) */}
                     {unifiedAnalysis?.resin?.result && (
                       <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
-                        <div className="text-xs text-primary mb-3 font-mono tracking-widest">RESIN PRINTABILITY</div>
-                        <MetricRow label="Shells" value={unifiedAnalysis.resin.result.shellCount} highlight={unifiedAnalysis.resin.result.shellCount > 1} />
-                        <MetricRow label="Enclosed cavity" value={unifiedAnalysis.resin.result.enclosedCavity ? '⚠ yes' : 'no'} highlight={unifiedAnalysis.resin.result.enclosedCavity} />
-                        <MetricRow label="Floating islands" value={unifiedAnalysis.resin.result.islandCount} highlight={unifiedAnalysis.resin.result.islandCount > 0} />
-                        <MetricRow label="Suction risk" value={`${Math.round(unifiedAnalysis.resin.result.suctionRisk * 100)}%`} highlight={unifiedAnalysis.resin.result.suctionRisk > 0.6} />
-                        <MetricRow label="Over-cure risk" value={`${Math.round(unifiedAnalysis.resin.result.cureRisk * 100)}%`} highlight={unifiedAnalysis.resin.result.cureRisk > 0.6} />
-                        <MetricRow label="Orientation" value={unifiedAnalysis.resin.result.orientation} />
-                        <MetricRow label="Footprint" value={`${unifiedAnalysis.resin.result.footprintAreaMm2} mm²`} />
+                        <div className="text-xs text-primary mb-3 font-mono tracking-widest">{t('resinPrintability')}</div>
+                        <MetricRow label={t('resinShells')} value={unifiedAnalysis.resin.result.shellCount} highlight={unifiedAnalysis.resin.result.shellCount > 1} />
+                        <MetricRow label={t('resinEnclosedCavity')} value={unifiedAnalysis.resin.result.enclosedCavity ? '⚠ yes' : 'no'} highlight={unifiedAnalysis.resin.result.enclosedCavity} />
+                        <MetricRow label={t('resinIslands')} value={unifiedAnalysis.resin.result.islandCount} highlight={unifiedAnalysis.resin.result.islandCount > 0} />
+                        <MetricRow label={t('resinSuction')} value={`${Math.round(unifiedAnalysis.resin.result.suctionRisk * 100)}%`} highlight={unifiedAnalysis.resin.result.suctionRisk > 0.6} />
+                        <MetricRow label={t('resinOverCure')} value={`${Math.round(unifiedAnalysis.resin.result.cureRisk * 100)}%`} highlight={unifiedAnalysis.resin.result.cureRisk > 0.6} />
+                        <MetricRow label={t('orientation')} value={unifiedAnalysis.resin.result.orientation} />
+                        <MetricRow label={t('footprint')} value={`${unifiedAnalysis.resin.result.footprintAreaMm2} mm²`} />
                       </div>
                     )}
                     {/* FGF large-format metrics (shown when FDM/RESIN/FGF switch set to FGF) */}
                     {unifiedAnalysis?.fgf?.result && (
                       <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
-                        <div className="text-xs text-primary mb-3 font-mono tracking-widest">FGF LARGE-FORMAT</div>
-                        <MetricRow label="Part scale" value={unifiedAnalysis.fgf.result.partScale} />
-                        <MetricRow label="Max dimension" value={`${unifiedAnalysis.fgf.result.maxDimMm} mm`} />
-                        <MetricRow label="Warpage risk" value={`${Math.round(unifiedAnalysis.fgf.result.warpageRisk * 100)}%`} highlight={unifiedAnalysis.fgf.result.warpageRisk > 0.6} />
-                        <MetricRow label="Delamination risk" value={`${Math.round(unifiedAnalysis.fgf.result.delaminationRisk * 100)}%`} highlight={unifiedAnalysis.fgf.result.delaminationRisk > 0.6} />
-                        <MetricRow label="Slenderness" value={unifiedAnalysis.fgf.result.slenderness.toFixed(2)} />
-                        <MetricRow label="Orientation" value={unifiedAnalysis.fgf.result.orientation} />
-                        <MetricRow label="Footprint" value={`${unifiedAnalysis.fgf.result.footprintAreaMm2} mm²`} />
+                        <div className="text-xs text-primary mb-3 font-mono tracking-widest">{t('fgfLargeFormat')}</div>
+                        <MetricRow label={t('fgfPartScale')} value={unifiedAnalysis.fgf.result.partScale} />
+                        <MetricRow label={t('fgfMaxDim')} value={`${unifiedAnalysis.fgf.result.maxDimMm} mm`} />
+                        <MetricRow label={t('fgfWarpage')} value={`${Math.round(unifiedAnalysis.fgf.result.warpageRisk * 100)}%`} highlight={unifiedAnalysis.fgf.result.warpageRisk > 0.6} />
+                        <MetricRow label={t('fgfDelamination')} value={`${Math.round(unifiedAnalysis.fgf.result.delaminationRisk * 100)}%`} highlight={unifiedAnalysis.fgf.result.delaminationRisk > 0.6} />
+                        <MetricRow label={t('fgfSlenderness')} value={unifiedAnalysis.fgf.result.slenderness.toFixed(2)} />
+                        <MetricRow label={t('orientation')} value={unifiedAnalysis.fgf.result.orientation} />
+                        <MetricRow label={t('footprint')} value={`${unifiedAnalysis.fgf.result.footprintAreaMm2} mm²`} />
                       </div>
                     )}
                     {/* Powder Bed Fusion metrics (SLS / SLM / MJF) — geometric proxies, not thermal simulation */}
                     {unifiedAnalysis?.pbf?.result && (
                       <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
-                        <div className="text-xs text-primary mb-1 font-mono tracking-widest">POWDER BED FUSION · {unifiedAnalysis.pbf.result.kind.toUpperCase()}</div>
-                        <div className="text-[11px] font-mono text-muted-foreground/50 mb-3">geometric proxies — not thermal simulation</div>
-                        <MetricRow label="Shells" value={unifiedAnalysis.pbf.result.shellCount} highlight={unifiedAnalysis.pbf.result.powderTrap} />
-                        <MetricRow label="Powder trap" value={unifiedAnalysis.pbf.result.powderTrap ? '⚠ enclosed cavity — needs escape holes' : 'none'} highlight={unifiedAnalysis.pbf.result.powderTrap} />
-                        <MetricRow label="Largest flat plate" value={`${unifiedAnalysis.pbf.result.largestFlatPlateMm2} mm²`} highlight={unifiedAnalysis.pbf.result.largestFlatPlateMm2 > 2000} />
-                        <MetricRow label="Overhang ratio" value={`${Math.round(unifiedAnalysis.pbf.result.overhangRatio * 100)}%`} highlight={!unifiedAnalysis.pbf.result.selfSupporting && unifiedAnalysis.pbf.result.overhangRatio > 0.15} />
-                        <MetricRow label="Support" value={unifiedAnalysis.pbf.result.selfSupporting ? 'self-supporting (powder)' : 'supports required'} />
-                        <MetricRow label="Distortion risk" value={`${Math.round(unifiedAnalysis.pbf.result.distortionRisk * 100)}%`} highlight={unifiedAnalysis.pbf.result.distortionRisk > 0.55} />
-                        <MetricRow label="Orientation" value={unifiedAnalysis.pbf.result.orientation} />
+                        <div className="text-xs text-primary mb-1 font-mono tracking-widest">{t('pbfLabel')} · {unifiedAnalysis.pbf.result.kind.toUpperCase()}</div>
+                        <div className="text-[11px] font-mono text-muted-foreground/50 mb-3">{t('pbfGeometricProxy')}</div>
+                        <MetricRow label={t('resinShells')} value={unifiedAnalysis.pbf.result.shellCount} highlight={unifiedAnalysis.pbf.result.powderTrap} />
+                        <MetricRow label={t('pbfPowderTrap')} value={unifiedAnalysis.pbf.result.powderTrap ? t('pbfPowderTrapValue') : t('none')} highlight={unifiedAnalysis.pbf.result.powderTrap} />
+                        <MetricRow label={t('pbfLargestFlatPlate')} value={`${unifiedAnalysis.pbf.result.largestFlatPlateMm2} mm²`} highlight={unifiedAnalysis.pbf.result.largestFlatPlateMm2 > 2000} />
+                        <MetricRow label={t('pbfOverhangRatio')} value={`${Math.round(unifiedAnalysis.pbf.result.overhangRatio * 100)}%`} highlight={!unifiedAnalysis.pbf.result.selfSupporting && unifiedAnalysis.pbf.result.overhangRatio > 0.15} />
+                        <MetricRow label={t('pbfSupport')} value={unifiedAnalysis.pbf.result.selfSupporting ? t('pbfSelfSupporting') : t('pbfSupportsRequired')} />
+                        <MetricRow label={t('pbfDistortion')} value={`${Math.round(unifiedAnalysis.pbf.result.distortionRisk * 100)}%`} highlight={unifiedAnalysis.pbf.result.distortionRisk > 0.55} />
+                        <MetricRow label={t('orientation')} value={unifiedAnalysis.pbf.result.orientation} />
                       </div>
                     )}
                     {/* Object context — what this part is FOR changes what matters */}
                     {unifiedAnalysis && (
                       <div className="border border-border rounded-sm bg-card p-4 mt-3">
                         <div className="flex items-center justify-between mb-3">
-                          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">OBJECT</div>
+                          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">{t('objectTitle')}</div>
                           <select
                             value={objectContext}
                             onChange={(e) => setObjectContext(e.target.value as ObjectContext)}
                             className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
                           >
-                            <option value="general">General</option>
-                            <option value="structural">Furniture · Structural</option>
-                            <option value="large">Large · Construction</option>
-                            <option value="detailed">Fine · Jewelry/Dental</option>
+                            <option value="general">{t('objectGeneral')}</option>
+                            <option value="structural">{t('objectStructural')}</option>
+                            <option value="large">{t('objectLarge')}</option>
+                            <option value="detailed">{t('objectDetailed')}</option>
                           </select>
                         </div>
                         {(() => {
@@ -1052,7 +1052,7 @@ deepAnalysisSeq.current += 1;
                           return (
                             <>
                               <div className="flex items-center gap-2 mb-2">
-                                <span className="text-xs font-mono text-muted-foreground/60">Risk</span>
+                                <span className="text-xs font-mono text-muted-foreground/60">{t('objectRisk')}</span>
                                 <div className="flex-1 h-1.5 bg-border/40 rounded-full overflow-hidden">
                                   <div className="h-full bg-primary/70" style={{ width: `${Math.round(ctx.overallRisk * 100)}%` }} />
                                 </div>
@@ -1094,7 +1094,7 @@ deepAnalysisSeq.current += 1;
                   <div className="pt-4 space-y-4 relative">
                     {materialLoading && (
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 rounded-sm">
-                        <div className="text-xs font-mono text-primary animate-pulse">&#x258b; RECALCULATING...</div>
+                        <div className="text-xs font-mono text-primary animate-pulse">&#x258b; {t('recalculating')}</div>
                       </div>
                     )}
                     {!quickReport && (
@@ -1146,8 +1146,12 @@ deepAnalysisSeq.current += 1;
                   <div className="pt-4 space-y-4">
                     {agentLoading && (
                       <div className="border border-primary/30 rounded-sm p-6 text-center">
-                        <div className="text-xs font-mono text-primary animate-pulse mb-2">\u258b MULTI-AGENT ANALYSIS RUNNING</div>
-                        <div className="text-xs text-muted-foreground/50">Geometry Analyst \u2022 Printability Scorer \u2022 Failure Predictor \u2022 Optimization Advisor</div>
+                        <div className="text-xs font-mono text-primary animate-pulse mb-2">\u258b {t('multiAgentRunning')}</div>
+                        <div className="text-xs text-muted-foreground/50">
+                          {['geometry_analyst', 'printability_scorer', 'failure_predictor', 'optimization_advisor']
+                            .map((id) => getAgentLabel(id as AgentId, language))
+                            .join(' \u2022 ')}
+                        </div>
                         <div className="flex justify-center gap-2 mt-3">
                           {['geometry_analyst', 'printability_scorer', 'failure_predictor', 'optimization_advisor'].map(id => (
                             <div key={id} className="w-2 h-2 bg-primary/40 rounded-full animate-pulse" />
@@ -1160,7 +1164,7 @@ deepAnalysisSeq.current += 1;
                       <>
                         {/* Consensus Score */}
                         <div className="border border-border rounded-sm bg-card p-5 text-center">
-                          <div className="text-xs font-mono text-muted-foreground mb-2">CONSENSUS SCORE</div>
+                          <div className="text-xs font-mono text-muted-foreground mb-2">{t('consensusScore')}</div>
                           <div className={`text-4xl font-mono font-bold ${
                             agentRun.consensus.verdict === 'pass' ? 'text-emerald-400'
                               : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
@@ -1174,16 +1178,16 @@ deepAnalysisSeq.current += 1;
                               : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
                               : 'text-red-400'
                           }`}>
-                            {agentRun.consensus.verdict}
+                            {agentRun.consensus.verdict === 'pass' ? t('verdictPass') : agentRun.consensus.verdict === 'warning' ? t('verdictWarning') : t('verdictFail')}
                           </div>
                           <div className="mt-2 text-xs text-muted-foreground/50">
                             {agentRun.analysisSource === 'llm' ? (
-                              <span className="text-cyan-400">Deep Agent \u2022 LLM</span>
+                              <span className="text-cyan-400">{t('deepAgentLlm')}</span>
                             ) : (
-                              <><span className="text-primary">Deterministic Engine</span>{' \u2022 '}</>
+                              <><span className="text-primary">{t('deterministicEngine')}</span>{' \u2022 '}</>
                             )}
-                            {agentRun.usedVision && <><span className="text-primary">Vision</span>{' \u2022 '}</>}
-                            {agentRun.consensus.agreementDelta < 10 ? 'Strong agreement' : 'Moderate agreement'}
+                            {agentRun.usedVision && <><span className="text-primary">{t('visionUsed')}</span>{' \u2022 '}</>}
+                            {agentRun.consensus.agreementDelta < 10 ? t('strongAgreement') : t('moderateAgreement')}
                             {' \u2022 '}{agentRun.totalDurationMs}ms
                           </div>
                         </div>
@@ -1322,7 +1326,7 @@ deepAnalysisSeq.current += 1;
 
                 {/* CAUSALITY TAB */}
                 {tab === 'causality' && (
-                  <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ LOADING...</div>}>
+                  <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
                     <div className="pt-4 space-y-4">
                       <CausalityPanel graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} language={language} />
                       <div className="border-t border-border/20 my-2" />
@@ -1347,7 +1351,7 @@ deepAnalysisSeq.current += 1;
 
                 {/* CHAT TAB */}
                 {tab === 'chat' && (
-                  <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ LOADING...</div>}>
+                  <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
                     <div className="pt-4 h-[45vh] min-h-[320px] lg:h-[520px]">
                       <ChatPanel
                         model={modelData}
