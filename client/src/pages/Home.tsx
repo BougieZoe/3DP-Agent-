@@ -949,6 +949,62 @@ deepAnalysisSeq.current += 1;
                         <StatusChip status={valid?.isWatertight ? 'good' : 'critical'} label={valid ? (valid.isWatertight ? '✓' : '✗') : '—'} />
                       </div>
                     </div>
+                    {/* Object context — what this part is FOR changes what matters.
+                        Kept near the top (right under the verdict cards) so users
+                        actually find it; buried at the bottom it went unnoticed. */}
+                    {unifiedAnalysis && (
+                      <div className="border border-border rounded-sm bg-card p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">{t('objectTitle')}</div>
+                          <select
+                            value={objectContext}
+                            onChange={(e) => setObjectContext(e.target.value as ObjectContext)}
+                            className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
+                          >
+                            <option value="general">{t('objectGeneral')}</option>
+                            <option value="structural">{t('objectStructural')}</option>
+                            <option value="large">{t('objectLarge')}</option>
+                            <option value="detailed">{t('objectDetailed')}</option>
+                            <option value="liquid-cooling">{t('objectLiquidCooling')}</option>
+                          </select>
+                        </div>
+                        {(() => {
+                          const ctx = assessContext(unifiedAnalysis, objectContext);
+                          return (
+                            <>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-xs font-mono text-muted-foreground/60">{t('objectRisk')}</span>
+                                <div className="flex-1 h-1.5 bg-border/40 rounded-full overflow-hidden">
+                                  <div className="h-full bg-primary/70" style={{ width: `${Math.round(ctx.overallRisk * 100)}%` }} />
+                                </div>
+                                <span className="text-xs font-mono text-primary tabular-nums">{Math.round(ctx.overallRisk * 100)}%</span>
+                              </div>
+                              <ul className="space-y-1">
+                                {ctx.topConcerns.map((c, i) => (
+                                  <li key={i} className="text-[12px] font-mono text-muted-foreground/70 leading-relaxed">{c}</li>
+                                ))}
+                              </ul>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
+                    {/* Liquid-cooling application panel — right under the OBJECT
+                        dropdown so picking "Liquid Cooling" shows its risks immediately */}
+                    {objectContext === 'liquid-cooling' && unifiedAnalysis && (() => {
+                      const lc = liquidCoolingFromUnified(unifiedAnalysis);
+                      return lc ? (
+                        <div className="border border-primary/25 rounded-sm bg-primary/5 p-4">
+                          <div className="text-xs text-primary mb-1 font-mono tracking-widest">{t('lcTitle')}</div>
+                          <div className="text-[11px] font-mono text-muted-foreground/50 mb-3">geometric proxies — not CFD</div>
+                          <MetricRow label={t('lcLeak')} value={`${Math.round(lc.leakRisk * 100)}%`} highlight={lc.leakRisk > 0.5} />
+                          <MetricRow label={t('lcChannel')} value={`${Math.round(lc.channelRisk * 100)}%`} highlight={lc.channelRisk > 0.5} />
+                          <MetricRow label={t('lcHeatExchange')} value={`${Math.round(lc.heatExchangeProxy * 100)}%`} highlight={lc.heatExchangeProxy < 0.25} />
+                          <MetricRow label={t('lcPressureWall')} value={lc.pressureWall.minThicknessMm != null ? `${lc.pressureWall.minThicknessMm.toFixed(2)} mm (min)` : '—'} highlight={lc.pressureWall.minThicknessMm != null && lc.pressureWall.minThicknessMm < lc.pressureWall.thresholdMm} />
+                          <MetricRow label={t('lcOverallRisk')} value={`${Math.round(lc.overallRisk * 100)}%`} highlight={lc.overallRisk > 0.5} />
+                        </div>
+                      ) : null;
+                    })()}
                     <div className="border border-border rounded-sm bg-card p-4">
                       <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">{t('geometryDataLabel')}</div>
                       <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness != null ? toUnit(analysis.wallThickness.minThickness).toFixed(3) : '—'} unit={unitSuffix} highlight />
@@ -1024,60 +1080,6 @@ deepAnalysisSeq.current += 1;
                         <MetricRow label={t('pbfSupport')} value={unifiedAnalysis.pbf.result.selfSupporting ? t('pbfSelfSupporting') : t('pbfSupportsRequired')} />
                         <MetricRow label={t('pbfDistortion')} value={`${Math.round(unifiedAnalysis.pbf.result.distortionRisk * 100)}%`} highlight={unifiedAnalysis.pbf.result.distortionRisk > 0.55} />
                         <MetricRow label={t('orientation')} value={unifiedAnalysis.pbf.result.orientation} />
-                      </div>
-                    )}
-                    {/* Liquid-cooling application panel — shown when the user
-                        picks "Liquid Cooling" as the object context */}
-                    {objectContext === 'liquid-cooling' && unifiedAnalysis && (() => {
-                      const lc = liquidCoolingFromUnified(unifiedAnalysis);
-                      return lc ? (
-                        <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
-                          <div className="text-xs text-primary mb-1 font-mono tracking-widest">{t('lcTitle')}</div>
-                          <div className="text-[11px] font-mono text-muted-foreground/50 mb-3">geometric proxies — not CFD</div>
-                          <MetricRow label={t('lcLeak')} value={`${Math.round(lc.leakRisk * 100)}%`} highlight={lc.leakRisk > 0.5} />
-                          <MetricRow label={t('lcChannel')} value={`${Math.round(lc.channelRisk * 100)}%`} highlight={lc.channelRisk > 0.5} />
-                          <MetricRow label={t('lcHeatExchange')} value={`${Math.round(lc.heatExchangeProxy * 100)}%`} highlight={lc.heatExchangeProxy < 0.25} />
-                          <MetricRow label={t('lcPressureWall')} value={lc.pressureWall.minThicknessMm != null ? `${lc.pressureWall.minThicknessMm.toFixed(2)} mm (min)` : '—'} highlight={lc.pressureWall.minThicknessMm != null && lc.pressureWall.minThicknessMm < lc.pressureWall.thresholdMm} />
-                          <MetricRow label={t('lcOverallRisk')} value={`${Math.round(lc.overallRisk * 100)}%`} highlight={lc.overallRisk > 0.5} />
-                        </div>
-                      ) : null;
-                    })()}
-                    {/* Object context — what this part is FOR changes what matters */}
-                    {unifiedAnalysis && (
-                      <div className="border border-border rounded-sm bg-card p-4 mt-3">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">{t('objectTitle')}</div>
-                          <select
-                            value={objectContext}
-                            onChange={(e) => setObjectContext(e.target.value as ObjectContext)}
-                            className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
-                          >
-                            <option value="general">{t('objectGeneral')}</option>
-                            <option value="structural">{t('objectStructural')}</option>
-                            <option value="large">{t('objectLarge')}</option>
-                            <option value="detailed">{t('objectDetailed')}</option>
-                            <option value="liquid-cooling">{t('objectLiquidCooling')}</option>
-                          </select>
-                        </div>
-                        {(() => {
-                          const ctx = assessContext(unifiedAnalysis, objectContext);
-                          return (
-                            <>
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-xs font-mono text-muted-foreground/60">{t('objectRisk')}</span>
-                                <div className="flex-1 h-1.5 bg-border/40 rounded-full overflow-hidden">
-                                  <div className="h-full bg-primary/70" style={{ width: `${Math.round(ctx.overallRisk * 100)}%` }} />
-                                </div>
-                                <span className="text-xs font-mono text-primary tabular-nums">{Math.round(ctx.overallRisk * 100)}%</span>
-                              </div>
-                              <ul className="space-y-1">
-                                {ctx.topConcerns.map((c, i) => (
-                                  <li key={i} className="text-[12px] font-mono text-muted-foreground/70 leading-relaxed">{c}</li>
-                                ))}
-                              </ul>
-                            </>
-                          );
-                        })()}
                       </div>
                     )}
                     <button onClick={() => setTab('report')}
