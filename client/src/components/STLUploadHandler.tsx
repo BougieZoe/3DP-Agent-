@@ -21,7 +21,8 @@ export interface UploadedModel {
 }
 
 interface STLUploadHandlerProps {
-  onModelLoaded: (model: UploadedModel) => void;
+  /** Called once all selected files have been analyzed (in upload order). */
+  onModelsLoaded: (models: UploadedModel[]) => void;
   onError: (error: string) => void;
   language?: Language;
   /** Declared source units, owned by the parent so a unit change re-processes the model. */
@@ -85,7 +86,7 @@ const labels = {
   },
 };
 
-export function STLUploadHandler({ onModelLoaded, onError, language = 'en', units, onUnitsChange, materialFamily = 'fdm' }: STLUploadHandlerProps) {
+export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', units, onUnitsChange, materialFamily = 'fdm' }: STLUploadHandlerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -94,53 +95,50 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en', unit
 
   const log = (msg: string) => setProgress(p => [...p, msg]);
 
-  const handleFileSelect = useCallback(async (file: File) => {
-    const isSupported = /\.(stl|obj|3mf)$/i.test(file.name);
-    if (!isSupported) {
+  const handleFiles = useCallback(async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+    const supported = files.filter((f) => /\.(stl|obj|3mf)$/i.test(f.name));
+    if (supported.length !== files.length) {
       onError(t.invalidFile);
-      return;
     }
+    if (supported.length === 0) return;
+
     setIsLoading(true);
-    setProgress([]);
-    log(`> ${t.loading} ${file.name}`);
-    log(`> ${t.fileSize}: ${(file.size / 1024).toFixed(1)} KB`);
-
-    try {
-      log(`> ${t.parsing}`);
-      // loadModelFile returns the pristine geometry; normalization clones it.
-      // 3MF declares its unit in the package — use it instead of the user's pick,
-      // so a millimeter 3MF never gets misread as inches.
-      const loaded = await loadModelFile(file);
-      const effectiveUnits = loaded.units ?? units;
-      // Explicit unit contract + viewport centering: scale non-mm models to
-      // millimeters, center on the build plate (minZ = 0, XY center = 0), and
-      // recompute bounding box / bounding sphere so the camera can frame it.
-      log(`> ${t.computing}`);
-      const { geometry, rawGeometry } = normalizeModelGeometry(loaded.geometry, effectiveUnits);
-      const model = fromThreeBufferGeometry(geometry);
-      const unifiedAnalysis = await runAnalysisInWorker(model, { fileName: file.name, materialFamily });
-      log(`> ${t.analyzing}`);
-      const mesh = createMeshFromGeometry(geometry);
-      log(`> ${t.complete}`);
-
-      setTimeout(() => {
-        onModelLoaded({ geometry, mesh, unifiedAnalysis, fileName: file.name, fileSizeBytes: file.size, units: effectiveUnits, rawGeometry });
-        setIsLoading(false);
-      }, 400);
-    } catch (error) {
-      log(`> ${t.error}: ${error instanceof Error ? error.message : t.unknownError}`);
-      onError(`${t.parseFailed}${error instanceof Error ? error.message : t.unknownError}`);
-      setIsLoading(false);
+    const results: UploadedModel[] = [];
+    for (const file of supported) {
+      setProgress([`> ${t.loading} ${file.name}`, `> ${t.fileSize}: ${(file.size / 1024).toFixed(1)} KB`]);
+      try {
+        // loadModelFile returns the pristine geometry; normalization clones it.
+        // 3MF declares its unit in the package — use it instead of the user's
+        // pick, so a millimeter 3MF never gets misread as inches.
+        const loaded = await loadModelFile(file);
+        const effectiveUnits = loaded.units ?? units;
+        // Explicit unit contract + viewport centering: scale non-mm models to
+        // millimeters, center on the build plate (minZ = 0, XY center = 0), and
+        // recompute bounding box / bounding sphere so the camera can frame it.
+        const { geometry, rawGeometry } = normalizeModelGeometry(loaded.geometry, effectiveUnits);
+        const model = fromThreeBufferGeometry(geometry);
+        const unifiedAnalysis = await runAnalysisInWorker(model, { fileName: file.name, materialFamily });
+        const mesh = createMeshFromGeometry(geometry);
+        results.push({ geometry, mesh, unifiedAnalysis, fileName: file.name, fileSizeBytes: file.size, units: effectiveUnits, rawGeometry });
+      } catch (error) {
+        log(`> ${t.error} ${file.name}: ${error instanceof Error ? error.message : t.unknownError}`);
+      }
     }
-  }, [onModelLoaded, onError, t, units]);
+    if (results.length > 0) {
+      onModelsLoaded(results);
+    }
+    setIsLoading(false);
+  }, [onModelsLoaded, onError, t, units]);
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
   const handleDragLeave = () => setIsDragging(false);
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleFileSelect(file);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) handleFiles(files);
   };
 
   if (isLoading) {
@@ -174,8 +172,9 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en', unit
         ref={fileInputRef}
         type="file"
         accept=".stl,.obj,.3mf"
+        multiple
         className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
+        onChange={(e) => { if (e.target.files) handleFiles(e.target.files); }}
       />
 
       <div className="space-y-3">

@@ -305,6 +305,10 @@ export default function Home() {
   const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality'>('geometry');
   const [showAPIModal, setShowAPIModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
+  // Multi-file: the full set of loaded models + which one is active. The active
+  // model is still `uploadedModel` — switching just swaps it in.
+  const [models, setModels] = useState<UploadedModel[]>([]);
+  const [activeFileName, setActiveFileName] = useState<string | null>(null);
   const [quickReport, setQuickReport] = useState('');
   const [agentRun, setAgentRun] = useState<AgentRunSummary | null>(null);
   const [deepAgentRun, setDeepAgentRun] = useState<AgentRunSummary | null>(null);
@@ -341,11 +345,11 @@ export default function Home() {
     orchestratorRef.current = new AgentOrchestrator();
   }
 
-  const handleModelLoaded = (model: UploadedModel) => {
+  /** Set the working model and regenerate everything that derives from it. */
+  const activateModel = (model: UploadedModel) => {
     setUnits(model.units);
-    setUploadedModel(model);
+    setActiveFileName(model.fileName);
     setTab('geometry');
-    setQuickReport('');
     setAgentRun(null);
     deepAnalysisSeq.current += 1;
     setDeepAgentRun(null);
@@ -368,6 +372,28 @@ export default function Home() {
     // "generate" click needed.
     const md = unifiedToModelData(model.unifiedAnalysis, model.fileName, material.overhangThreshold);
     setQuickReport(generateQuickReport(md, language, material));
+    commitModel(model);
+  };
+
+  /** Keep models[] and uploadedModel in sync (used after re-analysis too). */
+  const commitModel = (updated: UploadedModel) => {
+    setUploadedModel(updated);
+    setModels((prev) =>
+      prev.some((m) => m.fileName === updated.fileName)
+        ? prev.map((m) => (m.fileName === updated.fileName ? updated : m))
+        : [...prev, updated],
+    );
+  };
+
+  const handleModelsLoaded = (loaded: UploadedModel[]) => {
+    setModels(loaded);
+    const first = loaded[0];
+    if (first) activateModel(first);
+  };
+
+  const switchModel = (name: string) => {
+    const target = models.find((m) => m.fileName === name);
+    if (target) activateModel(target);
   };
 
   const runAgentAnalysis = async (model: UploadedModel, mat: Material = material) => {
@@ -456,7 +482,7 @@ export default function Home() {
     if (currentSeq !== materialRequestSeq.current) return;
 
     const updatedModel: UploadedModel = { ...uploadedModel, unifiedAnalysis: newUnified };
-    setUploadedModel(updatedModel);
+    commitModel(updatedModel);
 
     if (currentSeq !== materialRequestSeq.current || !orchestratorRef.current) return;
     const summary = await orchestratorRef.current.runFullAnalysis(
@@ -490,7 +516,7 @@ export default function Home() {
 
     if (currentSeq !== materialRequestSeq.current) return;
     const updatedModel: UploadedModel = { ...uploadedModel, unifiedAnalysis: newUnified };
-    setUploadedModel(updatedModel);
+    commitModel(updatedModel);
 
     if (currentSeq !== materialRequestSeq.current || !orchestratorRef.current) return;
     const summary = await orchestratorRef.current.runFullAnalysis(
@@ -523,7 +549,7 @@ export default function Home() {
 
     const mesh = createMeshFromGeometry(geometry);
     const updatedModel: UploadedModel = { ...uploadedModel, geometry, mesh, unifiedAnalysis: newUnified, units: newUnits };
-    setUploadedModel(updatedModel);
+    commitModel(updatedModel);
 
     if (currentSeq !== unitRequestSeq.current || !orchestratorRef.current) return;
     try {
@@ -562,7 +588,7 @@ export default function Home() {
         fileName: uploadedModel.fileName,
         material,
       });
-      setUploadedModel({
+      commitModel({
         ...uploadedModel,
         geometry: processed,
         mesh: createMeshFromGeometry(processed),
@@ -889,7 +915,7 @@ deepAnalysisSeq.current += 1;
               <div className="text-xs text-muted-foreground/50 mb-2 font-mono tracking-widest">// {t('input')}</div>
               <div className="relative">
                 <STLUploadHandler
-                  onModelLoaded={handleModelLoaded}
+                  onModelsLoaded={handleModelsLoaded}
                   onError={e => toast.error(e)}
                   language={language}
                   units={units}
@@ -903,6 +929,26 @@ deepAnalysisSeq.current += 1;
                 <LayerHeightLabel />
               </div>
             </div>
+
+            {/* Loaded-model switcher — only appears when more than one file is in */}
+            {models.length > 1 && (
+              <div className="flex flex-wrap gap-1.5">
+                {models.map((m) => (
+                  <button
+                    key={m.fileName}
+                    onClick={() => switchModel(m.fileName)}
+                    title={m.fileName}
+                    className={`text-[11px] font-mono px-2 py-1 border rounded-sm transition-all max-w-[11rem] truncate ${
+                      activeFileName === m.fileName
+                        ? 'border-primary text-primary'
+                        : 'border-border text-muted-foreground/60 hover:text-primary'
+                    }`}
+                  >
+                    {m.fileName}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Analysis tabs */}
             {analysis && modelData && (
