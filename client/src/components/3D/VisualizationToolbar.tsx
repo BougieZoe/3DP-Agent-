@@ -88,7 +88,7 @@ export function VisualizationToolbar({
 
   const panelContent = (
     <>
-      <div className={`${PANEL.fontLabel} mb-1`}>OVERLAYS</div>
+      <div className={`${PANEL.fontLabel} mb-1`}>{t('overlays')}</div>
 
       <ToggleChip
         label={t('toolbarHeatmap')}
@@ -226,7 +226,7 @@ export function VisualizationToolbar({
           bg-background/60 backdrop-blur-md border border-border/20 rounded-full
           px-3 py-1.5 shadow-lg flex items-center gap-2 ${PANEL.fontButton}`}
       >
-        OVERLAYS <span className="text-sm leading-none">{isOpen ? '\u2193' : '\u2191'}</span>
+        {t('overlays')} <span className="text-sm leading-none">{isOpen ? '\u2193' : '\u2191'}</span>
       </button>
 
       {/* Mobile drawer */}
