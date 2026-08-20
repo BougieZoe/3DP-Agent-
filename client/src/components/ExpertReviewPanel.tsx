@@ -10,7 +10,7 @@ import { getTranslation, type Language } from '@/lib/i18n';
  * metrics into plain-language advice. Runs one on-demand LLM call; shows the
  * verdict in plain language plus structured findings and next actions.
  */
-export function ExpertReviewPanel({ model, material, objectContext, materialMetrics, language, canRun, onNeedAuth }: {
+export function ExpertReviewPanel({ model, material, objectContext, materialMetrics, language, canRun, onNeedAuth, onReviewChange }: {
   model: ModelData;
   material: Material;
   objectContext: ObjectContext;
@@ -19,6 +19,8 @@ export function ExpertReviewPanel({ model, material, objectContext, materialMetr
   /** Whether the current user is signed in (hosted LLM) or has a BYOK key. */
   canRun: boolean;
   onNeedAuth: () => void;
+  /** Called with the review whenever it's (re)run — lets the parent include it in the PDF report. */
+  onReviewChange?: (review: ExpertReview | null) => void;
 }) {
   const [review, setReview] = useState<ExpertReview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,9 +35,11 @@ export function ExpertReviewPanel({ model, material, objectContext, materialMetr
     setLoading(true);
     setError(null);
     setReview(null);
+    onReviewChange?.(null);
     const result = await runExpertReview({ model, material, objectContext, materialMetrics, language });
     if (result) {
       setReview(result);
+      onReviewChange?.(result);
     } else {
       setError(t('expertReviewError'));
     }

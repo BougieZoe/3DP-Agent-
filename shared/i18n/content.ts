@@ -1379,6 +1379,21 @@ const pdf = {
     ja: 'このレポートは自動推定です。実際の印刷結果は素材・スライサー設定・プリンター校正により異なる場合があります。レポート ID: {id}',
     zh: '此报告为自动估算。实际打印结果可能因材料、切片设置和打印机校准而异。报告ID: {id}',
   },
+  'pdf.expertReview': {
+    en: 'AI EXPERT REVIEW',
+    ja: 'AI専門家レビュー',
+    zh: 'AI 专家解读',
+  },
+  'pdf.expertFindings': {
+    en: 'WHAT THE EXPERT SEES',
+    ja: '専門家の所見',
+    zh: '专家看到的问题',
+  },
+  'pdf.expertActions': {
+    en: 'WHAT TO DO NEXT',
+    ja: '次のアクション',
+    zh: '接下来怎么做',
+  },
   // client-tier issue sentences
   'pdf.issue.client.thinWallsCritical': {
     en: '{pct}% of sampled walls are below safe thickness — risk of print failure.',
