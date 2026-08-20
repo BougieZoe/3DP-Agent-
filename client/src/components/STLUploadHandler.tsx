@@ -137,8 +137,18 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) handleFiles(files);
+    // dataTransfer.items is the reliable source for multi-file drags — some
+    // browsers (Finder drags on macOS) only expose the FIRST file in
+    // dataTransfer.files and hide the rest. Fall back to files when items
+    // is unavailable.
+    const items = Array.from(e.dataTransfer.items ?? []);
+    const fromItems = items
+      .filter((i) => i.kind === 'file')
+      .map((i) => i.getAsFile())
+      .filter((f): f is File => f !== null);
+    const fromFiles = Array.from(e.dataTransfer.files ?? []);
+    if (fromItems.length > 0) handleFiles(fromItems);
+    else if (fromFiles.length > 0) handleFiles(fromFiles);
   };
 
   if (isLoading) {
