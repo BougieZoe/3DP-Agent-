@@ -393,6 +393,10 @@ export default function Home() {
     setModels(loaded);
     const first = loaded[0];
     if (first) activateModel(first);
+    // Give clear feedback on how many models actually loaded — if a user drags
+    // 3 and only 1 appears, this number shows whether the drop delivered all 3
+    // (processing dropped the rest) or only 1 (the drop itself was truncated).
+    if (loaded.length > 1) toast.success(t('modelsLoaded').replace('{n}', String(loaded.length)));
   };
 
   const switchModel = (name: string) => {
