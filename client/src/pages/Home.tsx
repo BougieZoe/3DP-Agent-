@@ -1511,6 +1511,10 @@ deepAnalysisSeq.current += 1;
             {/* Empty state */}
             {!uploadedModel && (
               <div className="space-y-4">
+                <div className="text-center space-y-1.5 pt-1">
+                  <div className="text-sm font-mono text-foreground/80 leading-relaxed">{t('emptyHero')}</div>
+                  <div className="text-[11px] font-mono text-muted-foreground/50">{t('emptySub')}</div>
+                </div>
                 <div className="border border-dashed border-border/30 rounded-sm p-8 text-center space-y-2">
                   <div className="text-muted-foreground/20 text-3xl font-mono">[ ]</div>
                   <div className="text-xs text-muted-foreground/50 font-mono">{t('uploadStlBegin')}</div>
