@@ -1053,7 +1053,9 @@ deepAnalysisSeq.current += 1;
                       ) : null;
                     })()}
                     <div className="border border-border rounded-sm bg-card p-4">
-                      <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">{t('geometryDataLabel')}</div>
+                      <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">
+                        {t('geometryDataLabel')} <span className="text-primary/60">[ {unitSuffix} ]</span>
+                      </div>
                       <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness != null ? toUnit(analysis.wallThickness.minThickness).toFixed(3) : '—'} unit={unitSuffix} highlight />
                       {unifiedAnalysis?.metrics.result?.minWallThicknessMm != null && (
                         <MetricRow label={t('minAbs')} value={toUnit(unifiedAnalysis.metrics.result.minWallThicknessMm).toFixed(3)} unit={unitSuffix} />
