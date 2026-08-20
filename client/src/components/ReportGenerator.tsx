@@ -4,6 +4,7 @@ import type { UnifiedAnalysis, NormalOrientation } from "../analysis/types";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
 import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
 import type { ExpertReview } from "@/agents/expertReview";
+import type { ProductionSuitability } from "@/analysis/production";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,8 @@ interface ReportGeneratorProps {
   language?: ContentLang;
   /** AI expert review (if run) — embedded into the exported PDF report. */
   expertReview?: ExpertReview | null;
+  /** Production-suitability estimate (computed by the caller) — embedded into the PDF. */
+  production?: ProductionSuitability | null;
 }
 
 // ─── Language Detection ─────────────────────────────────────────────────────────
@@ -587,6 +590,29 @@ function drawExpertReview(
   return y + 4;
 }
 
+/** Production-suitability section: score, parts per build, per-part cost, verdict. */
+function drawProductionSection(doc: JsPDF, prod: ProductionSuitability, lang: Language, y: number): number {
+  y = drawSectionHeader(doc, translate(CONTENT, 'pdf.production', lang), y);
+  const verdictLabel =
+    prod.verdict === 'production'
+      ? translate(CONTENT, 'pdf.prodProduction', lang)
+      : prod.verdict === 'small-batch'
+        ? translate(CONTENT, 'pdf.prodSmallBatch', lang)
+        : translate(CONTENT, 'pdf.prodPrototype', lang);
+  y = drawDataRow(doc, translate(CONTENT, 'pdf.prodPerBatch', lang), `${prod.partsPerBatch}`, y);
+  y = drawDataRow(doc, translate(CONTENT, 'pdf.prodPerPartCost', lang), `$${prod.perPartCostUsd.toFixed(2)}`, y);
+  y = drawDataRow(doc, translate(CONTENT, 'pdf.prodVerdict', lang), `${prod.score}/100 · ${verdictLabel}`, y);
+  y += 2;
+  const advisory = translate(CONTENT, 'pdf.prodAdvisory', lang);
+  const aLines = doc.splitTextToSize(advisory, PAGE_CW);
+  if (y + aLines.length * 4 > PAGE_BOT) { doc.addPage(); y = PAGE_M + 6; }
+  doc.setFont(pdfFont, "normal");
+  doc.setFontSize(6.5);
+  doc.setTextColor(...C.faint);
+  doc.text(aLines, PAGE_M, y);
+  return y + aLines.length * 4 + 4;
+}
+
 /** One-line report-boundary note (measured vs AI opinion vs not simulated). */
 function drawLimitsNote(doc: JsPDF, lang: Language, y: number): number {
   const line = translate(CONTENT, 'pdf.limitsNote', lang);
@@ -608,7 +634,8 @@ async function generateClientPDF(
   analysis: UnifiedAnalysis,
   lang: Language,
   fileName: string,
-  review?: ExpertReview | null
+  review?: ExpertReview | null,
+  production?: ProductionSuitability | null
 ): Promise<void> {
   const doc = createPdfCanvasSurface();
 
@@ -726,6 +753,10 @@ async function generateClientPDF(
     y = drawExpertReview(doc, review, lang, y);
     y += 4;
   }
+  if (production) {
+    y = drawProductionSection(doc, production, lang, y);
+    y += 4;
+  }
 
   // ── Next step ──
   y += 6;
@@ -756,7 +787,8 @@ async function generateDesignerPDF(
   tone: ToneMode,
   lang: Language,
   fileName: string,
-  review?: ExpertReview | null
+  review?: ExpertReview | null,
+  production?: ProductionSuitability | null
 ): Promise<void> {
   const doc = createPdfCanvasSurface();
 
@@ -975,6 +1007,10 @@ async function generateDesignerPDF(
     y = drawExpertReview(doc, review, lang, y);
     y += 4;
   }
+  if (production) {
+    y = drawProductionSection(doc, production, lang, y);
+    y += 4;
+  }
 
   doc.setFont(pdfFont, "italic");
   doc.setFontSize(8);
@@ -1001,7 +1037,8 @@ async function generateFactoryPDF(
   analysis: UnifiedAnalysis,
   lang: Language,
   fileName: string,
-  review?: ExpertReview | null
+  review?: ExpertReview | null,
+  production?: ProductionSuitability | null
 ): Promise<void> {
   const doc = createPdfCanvasSurface();
 
@@ -1159,6 +1196,10 @@ async function generateFactoryPDF(
     y = drawExpertReview(doc, review, lang, y);
     y += 4;
   }
+  if (production) {
+    y = drawProductionSection(doc, production, lang, y);
+    y += 4;
+  }
 
   // ── Disclaimer ──
   y += 6;
@@ -1192,6 +1233,7 @@ export function ReportGenerator({
   fileName = "model.stl",
   language = "en",
   expertReview,
+  production,
 }: ReportGeneratorProps) {
   const tone = detectTone(chatHistory);
   const lang = language ?? detectLanguage(chatHistory);
@@ -1199,13 +1241,13 @@ export function ReportGenerator({
 
   const handleExport = useCallback(async (tier: PdfTier) => {
     if (tier === "client") {
-      await generateClientPDF(analysis, lang, fileName, expertReview);
+      await generateClientPDF(analysis, lang, fileName, expertReview, production);
     } else if (tier === "designer") {
-      await generateDesignerPDF(analysis, tone, lang, fileName, expertReview);
+      await generateDesignerPDF(analysis, tone, lang, fileName, expertReview, production);
     } else {
-      await generateFactoryPDF(analysis, lang, fileName, expertReview);
+      await generateFactoryPDF(analysis, lang, fileName, expertReview, production);
     }
-  }, [analysis, tone, lang, fileName, expertReview]);
+  }, [analysis, tone, lang, fileName, expertReview, production]);
 
   const lightStyles: Record<TrafficLight, string> = {
     green: "bg-emerald-50 text-emerald-700 border-emerald-200",

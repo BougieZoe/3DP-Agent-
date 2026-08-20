@@ -18,12 +18,13 @@ const CADWorkspace = lazy(() => import('@/components/CADWorkspace').then(m => ({
 const MeshStudio = lazy(() => import('@/components/MeshStudio').then(m => ({ default: m.MeshStudio })));
 const ChatPanel = lazy(() => import('@/components/ChatPanel').then(m => ({ default: m.ChatPanel })));
 import { AccountModal } from '@/components/AccountModal';
+import { PrivacyModal } from '@/components/PrivacyModal';
 import { InstallButton } from '@/components/InstallButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/useMobile';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
-import { fromThreeBufferGeometry, runAnalysisInWorker, assessContext, liquidCoolingFromUnified, type ObjectContext } from '@/analysis';
+import { fromThreeBufferGeometry, runAnalysisInWorker, assessContext, liquidCoolingFromUnified, productionFromUnified, type ObjectContext } from '@/analysis';
 import { normalizeModelGeometry, fitCameraToGeometry } from '@/lib/modelNormalization';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
 import { parseSTL } from '@/lib/stlParser';
@@ -307,6 +308,7 @@ export default function Home() {
   const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality'>('geometry');
   const [showAPIModal, setShowAPIModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   // Multi-file: the full set of loaded models + which one is active. The active
   // model is still `uploadedModel` — switching just swaps it in.
   const [models, setModels] = useState<UploadedModel[]>([]);
@@ -723,6 +725,7 @@ deepAnalysisSeq.current += 1;
     <div className="relative w-full min-h-screen bg-background grid-bg overflow-x-hidden">
       {showAPIModal && <APIKeyModal onClose={() => setShowAPIModal(false)} language={language} />}
       {showAccountModal && <AccountModal language={language} onClose={() => setShowAccountModal(false)} />}
+      {showPrivacy && <PrivacyModal language={language} onClose={() => setShowPrivacy(false)} />}
 
       {/* ── Header ── */}
       <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 sm:px-5 py-3 border-b border-border bg-background/95 backdrop-blur-sm">
@@ -1211,6 +1214,7 @@ deepAnalysisSeq.current += 1;
     fileName={uploadedModel?.fileName ?? "model.stl"}
     language={language}
     expertReview={expertReview}
+    production={productionFromUnified(unifiedAnalysis, material)}
   />
 )}
 {unifiedAnalysis && (
@@ -1504,8 +1508,11 @@ deepAnalysisSeq.current += 1;
               </div>
             )}
 
-            <div className="pt-2 border-t border-border/30 text-xs text-muted-foreground/20 font-mono text-center">
-              {'\u00a9 2026'}
+            <div className="pt-2 border-t border-border/30 text-xs text-muted-foreground/20 font-mono text-center flex items-center justify-center gap-4">
+              <span>{'\u00a9 2026'}</span>
+              <button onClick={() => setShowPrivacy(true)} className="hover:text-muted-foreground transition-colors">
+                {t('privacyTitle')}
+              </button>
             </div>
           </div>
         </div>

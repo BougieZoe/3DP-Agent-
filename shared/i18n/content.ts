@@ -1419,6 +1419,46 @@ const pdf = {
     ja: '境界: 幾何は測定値、AI テキストは意見（誤る可能性あり）、熱/スライサー挙動は未シミュレーション。',
     zh: '边界: 几何为测量值，AI 文案为意见（可能出错），热力学/切片行为未仿真。',
   },
+  'pdf.production': {
+    en: 'PRODUCTION SUITABILITY',
+    ja: '量産適合性',
+    zh: '量产适性',
+  },
+  'pdf.prodPerBatch': {
+    en: 'Parts per build',
+    ja: '1ビルドあたり部品数',
+    zh: '每炉件数',
+  },
+  'pdf.prodPerPartCost': {
+    en: 'Per-part cost',
+    ja: '単品コスト',
+    zh: '单件成本',
+  },
+  'pdf.prodVerdict': {
+    en: 'Verdict',
+    ja: '判定',
+    zh: '判定',
+  },
+  'pdf.prodProduction': {
+    en: 'Production-ready',
+    ja: '量産向き',
+    zh: '适合量产',
+  },
+  'pdf.prodSmallBatch': {
+    en: 'Small-batch',
+    ja: '小ロット向き',
+    zh: '适合小批量',
+  },
+  'pdf.prodPrototype': {
+    en: 'Prototype only',
+    ja: '試作向き',
+    zh: '仅适合原型',
+  },
+  'pdf.prodAdvisory': {
+    en: 'Directional estimate — not a manufacturing quote.',
+    ja: '方向性の推定 — 製造見積りではありません。',
+    zh: '方向性估算 — 不是制造报价。',
+  },
   // client-tier issue sentences
   'pdf.issue.client.thinWallsCritical': {
     en: '{pct}% of sampled walls are below safe thickness — risk of print failure.',
