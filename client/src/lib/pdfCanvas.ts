@@ -14,8 +14,11 @@
 
 const PAGE_W = 210; // A4 mm
 const PAGE_H = 297;
-// 72 dpi * 2x for crisp text.
-const SCALE = 2;
+// 72 dpi * 4x = 288 dpi — print quality. At 2x (144 dpi) the rasterized page
+// looked soft/blurry when zoomed, and small CJK glyphs were muddy. 4x keeps
+// the embedded bitmap crisp without a meaningfully larger file (the pages are
+// mostly flat backgrounds, so PNG compresses well).
+const SCALE = 4;
 const PX_PER_MM = (72 / 25.4) * SCALE;
 
 const FONT_STACK =
@@ -74,8 +77,11 @@ export function createPdfCanvasSurface() {
     const align = opts?.align === 'center' ? 'center' : opts?.align === 'right' ? 'right' : 'left';
     current.ctx.textAlign = align;
     const px = mm2px;
+    // 1.5× line height: CJK glyphs are taller and use an ideographic baseline,
+    // so 1.25× let consecutive Japanese/Chinese lines touch. The layout helpers
+    // advance ≥4mm per line, so the extra headroom stays inside their budget.
     for (let i = 0; i < lines.length; i++) {
-      current.ctx.fillText(lines[i], px(x), px(y) + i * fontPt * SCALE * 1.25);
+      current.ctx.fillText(lines[i], px(x), px(y) + i * fontPt * SCALE * 1.5);
     }
     current.ctx.textAlign = 'left';
   }
