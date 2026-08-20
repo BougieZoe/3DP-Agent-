@@ -3,6 +3,7 @@ import { MATERIALS, defaultMaterialKeyFor, type Material } from "@shared/domain/
 import { ReportGenerator } from "@/components/ReportGenerator";
 import { ExpertReviewPanel } from '@/components/ExpertReviewPanel';
 import { BatchReport } from '@/components/BatchReport';
+import { ProductionCard } from '@/components/ProductionCard';
 import { lazy, Suspense, useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
@@ -1210,6 +1211,13 @@ deepAnalysisSeq.current += 1;
     fileName={uploadedModel?.fileName ?? "model.stl"}
     language={language}
     expertReview={expertReview}
+  />
+)}
+{unifiedAnalysis && (
+  <ProductionCard
+    analysis={unifiedAnalysis}
+    material={material}
+    language={language}
   />
 )}
                       </div>
