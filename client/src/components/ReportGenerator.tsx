@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { CONTENT, translate, type ContentLang } from "@shared/i18n/content";
 import type { UnifiedAnalysis, NormalOrientation } from "../analysis/types";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
@@ -1216,8 +1216,7 @@ export function ReportGenerator({
     red: "bg-red-500",
   };
 
-  const tierBtn =
-    "flex-1 text-[10px] font-mono px-2 py-2 border border-border/40 bg-card text-muted-foreground hover:text-primary hover:border-primary/40 rounded-sm transition-all";
+  const [tier, setTier] = useState<PdfTier>("client");
 
   return (
     <div className="space-y-2">
@@ -1244,13 +1243,21 @@ export function ReportGenerator({
         </div>
       </details>
 
-      <div>
-        <div className="text-[10px] font-mono text-muted-foreground/30 tracking-widest mb-2">{translate(CONTENT, 'pdf.labelExport', language)}</div>
-        <div className="flex gap-2">
-          <button onClick={() => handleExport("client")} className={tierBtn}>{translate(CONTENT, 'pdf.tier.client', language)}</button>
-          <button onClick={() => handleExport("designer")} className={tierBtn}>{translate(CONTENT, 'pdf.tier.designer', language)}</button>
-          <button onClick={() => handleExport("factory")} className={tierBtn}>{translate(CONTENT, 'pdf.tier.factory', language)}</button>
-        </div>
+      {/* One primary action — export. Tier is a small secondary select. */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => handleExport(tier)} className="flex-1 py-2.5 text-[11px] font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
+          {translate(CONTENT, 'pdf.exportPdf', language)}
+        </button>
+        <select
+          value={tier}
+          onChange={(e) => setTier(e.target.value as PdfTier)}
+          title={translate(CONTENT, 'pdf.labelExport', language)}
+          className="text-[10px] font-mono px-2 py-2 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
+        >
+          <option value="client">{translate(CONTENT, 'pdf.tier.client', language)}</option>
+          <option value="designer">{translate(CONTENT, 'pdf.tier.designer', language)}</option>
+          <option value="factory">{translate(CONTENT, 'pdf.tier.factory', language)}</option>
+        </select>
       </div>
     </div>
   );

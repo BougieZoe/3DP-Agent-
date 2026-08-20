@@ -136,18 +136,12 @@ export function ExpertReviewPanel({ model, material, objectContext, materialMetr
 
           {/* Feedback → self-improvement */}
           {feedback ? (
-            <div className="text-[11px] font-mono text-emerald-400/80 pt-1">{t('expertFeedbackThanks')}</div>
+            <div className="text-[10px] font-mono text-emerald-400/60 pt-1">{t('expertFeedbackThanks')}</div>
           ) : (
-            <div className="flex items-center gap-2 pt-1">
-              <span className="text-[11px] font-mono text-muted-foreground/50">{t('expertFeedback')}</span>
-              <button onClick={() => sendFeedback('up')} title="Helpful"
-                className="text-sm px-2 py-0.5 border border-border/40 rounded-sm hover:border-emerald-400/50 hover:bg-emerald-400/10 transition-all">
-                👍
-              </button>
-              <button onClick={() => sendFeedback('down')} title="Not helpful"
-                className="text-sm px-2 py-0.5 border border-border/40 rounded-sm hover:border-red-400/50 hover:bg-red-400/10 transition-all">
-                👎
-              </button>
+            <div className="flex items-center gap-1.5 pt-1 text-muted-foreground/40">
+              <span className="text-[10px] font-mono">{t('expertFeedback')}</span>
+              <button onClick={() => sendFeedback('up')} title="Helpful" className="text-[11px] opacity-60 hover:opacity-100 hover:text-emerald-400 transition-all">👍</button>
+              <button onClick={() => sendFeedback('down')} title="Not helpful" className="text-[11px] opacity-60 hover:opacity-100 hover:text-red-400 transition-all">👎</button>
             </div>
           )}
         </div>
