@@ -306,7 +306,6 @@ export default function Home() {
   const [showAPIModal, setShowAPIModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [quickReport, setQuickReport] = useState('');
-  const [reportLoading, setReportLoading] = useState(false);
   const [agentRun, setAgentRun] = useState<AgentRunSummary | null>(null);
   const [deepAgentRun, setDeepAgentRun] = useState<AgentRunSummary | null>(null);
   const [agentLoading, setAgentLoading] = useState(false);
@@ -365,6 +364,10 @@ export default function Home() {
     setOverlayOpacity(0.7);
     toast.success(t('stlParsed') + model.fileName);
     runAgentAnalysis(model, material);
+    // Auto-compose the report so the REPORT tab reads immediately — no
+    // "generate" click needed.
+    const md = unifiedToModelData(model.unifiedAnalysis, model.fileName, material.overhangThreshold);
+    setQuickReport(generateQuickReport(md, language, material));
   };
 
   const runAgentAnalysis = async (model: UploadedModel, mat: Material = material) => {
@@ -541,16 +544,6 @@ export default function Home() {
   const getModelData = (): ModelData | null => {
     if (!uploadedModel) return null;
     return unifiedToModelData(uploadedModel.unifiedAnalysis, uploadedModel.fileName, material.overhangThreshold);
-  };
-
-  const handleGenerateReport = () => {
-    const md = getModelData();
-    if (!md) return;
-    setReportLoading(true);
-    setTimeout(() => {
-      setQuickReport(generateQuickReport(md, language, material));
-      setReportLoading(false);
-    }, 600);
   };
 
   // Repair & process the uploaded mesh via the shared /api/mesh/process endpoint
@@ -1116,12 +1109,6 @@ deepAnalysisSeq.current += 1;
                         <div className="text-xs font-mono text-primary animate-pulse">&#x258b; {t('recalculating')}</div>
                       </div>
                     )}
-                    {!quickReport && (
-                      <button onClick={handleGenerateReport} disabled={reportLoading}
-                        className="w-full py-3 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all disabled:opacity-50">
-                        {reportLoading ? '\u258b ' + t('analyze') : t('generateQuickReport')}
-                      </button>
-                    )}
                     {quickReport && (
                       <div className="border border-border rounded-sm bg-card p-4 fade-up">
                         <div className="flex items-center justify-between mb-3">
@@ -1136,10 +1123,6 @@ deepAnalysisSeq.current += 1;
                         <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap leading-relaxed">
                           {quickReport}
                         </pre>
-                        <button onClick={() => setQuickReport('')}
-                          className="mt-4 text-xs font-mono text-muted-foreground hover:text-primary transition-colors">
-                          {t('regenerate')}
-                        </button>
 {unifiedAnalysis && (
   <ReportGenerator
     analysis={unifiedAnalysis}
@@ -1150,14 +1133,36 @@ deepAnalysisSeq.current += 1;
 )}
                       </div>
                     )}
-                    <div className="border border-dashed border-border/40 rounded-sm p-4 text-center space-y-2">
-                      <div className="text-xs font-mono text-muted-foreground">{t('deepAnalysis')}</div>
-                      <div className="text-xs text-muted-foreground/50">{t('deepAnalysisDesc')}</div>
-                      <button onClick={() => { setShowAccountModal(true); }}
-                        className="text-xs font-mono px-4 py-2 border border-primary/30 text-primary hover:bg-primary/10 rounded-sm transition-all">
-                        {user ? t('switchToChat') : t('signIn')}
-                      </button>
-                    </div>
+                    {/* AI interpretation — part of the report, read-only here
+                        (the run control lives in the AGENTS tab) */}
+                    {expertReview && (
+                      <div className="border border-border rounded-sm bg-card p-4 fade-up">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-mono text-primary tracking-widest">{t('expertReview')}</span>
+                          <span className="text-xs font-mono text-muted-foreground/40">{t('expertReviewAdvisory')}</span>
+                        </div>
+                        <div className="text-[13px] text-foreground/90 leading-relaxed">{expertReview.plain}</div>
+                        {expertReview.findings.length > 0 && (
+                          <ul className="mt-3 space-y-1.5">
+                            {expertReview.findings.map((f, i) => (
+                              <li key={i} className="text-xs text-muted-foreground/80 leading-relaxed">
+                                <span className={`font-mono uppercase text-[10px] ${f.severity === 'high' ? 'text-red-400' : f.severity === 'medium' ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                                  {f.severity}
+                                </span>{' '}
+                                <span className="text-foreground/90">{f.what}</span>{f.why ? ` — ${f.why}` : ''}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {expertReview.actions.length > 0 && (
+                          <ul className="mt-2 space-y-1">
+                            {expertReview.actions.map((a, i) => (
+                              <li key={i} className="text-xs text-muted-foreground/70 leading-relaxed">→ {a.do}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 

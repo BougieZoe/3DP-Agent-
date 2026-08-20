@@ -1531,6 +1531,7 @@ const pdf = {
     zh: '基于扣分的通过/不通过筛选。与智能体标签页的加权评分不同。',
   },
   'pdf.labelExport': { en: 'EXPORT REPORT', ja: 'レポート出力', zh: '导出报告' },
+  'pdf.exportPdf': { en: 'EXPORT PDF', ja: 'PDF出力', zh: '导出 PDF' },
   'pdf.tier.client': { en: 'CLIENT', ja: 'クライアント', zh: '客户' },
   'pdf.tier.designer': { en: 'DESIGNER', ja: 'デザイナー', zh: '设计师' },
   'pdf.tier.factory': { en: 'FACTORY', ja: '工場', zh: '工厂' },
