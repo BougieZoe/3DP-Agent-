@@ -8,6 +8,7 @@ export { computeResinMetrics, type ResinResult } from './resin';
 export { computeFgfMetrics, type FgfResult } from './fgf';
 export { computePbfMetrics, type PbfResult, type PbfKind } from './pbf';
 export { assessContext, type ObjectContext, type ContextAssessment } from './context';
+export { computeLiquidCoolingMetrics, liquidCoolingFromUnified, type LiquidCoolingResult, PRESSURE_WALL_MM } from './liquidCooling';
 export { checkBedFit, getPrinterProfile } from './bedFit';
 export { estimateSupportVolume } from './support';
 export { estimatePrintTime } from './printTime';

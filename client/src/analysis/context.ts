@@ -1,14 +1,16 @@
 import type { UnifiedAnalysis } from './types';
+import { liquidCoolingFromUnified } from './liquidCooling';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Object-context axis: the SAME geometry, printed for different USE CASES, has
 // different things that matter. This weights the technology metrics by the
 // object's purpose and surfaces the top concerns — e.g. furniture cares about
 // strength (wall thickness / delamination), a large structure cares about
-// warpage at scale, a jewel cares about detail / surface.
+// warpage at scale, a jewel cares about detail / surface, a liquid-cooling
+// part cares about channel flow and seal integrity.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ObjectContext = 'general' | 'structural' | 'large' | 'detailed';
+export type ObjectContext = 'general' | 'structural' | 'large' | 'detailed' | 'liquid-cooling';
 
 export interface ContextAssessment {
   /** 0..1 context-weighted overall risk. */
@@ -65,6 +67,14 @@ export function assessContext(unified: UnifiedAnalysis, context: ObjectContext):
       push(1, wallRisk);
       concerns.push(...[concern(resin?.suctionRisk, 'suction will distort fine details', 0.4), concern(resin?.islandCount != null && resin.islandCount > 0 ? 1 : undefined, 'floating islands', 1)].filter(Boolean) as string[]);
       break;
+    case 'liquid-cooling': { // cold plates / water blocks / heat sinks
+      const lc = liquidCoolingFromUnified(unified);
+      push(3, lc?.leakRisk);
+      push(3, lc?.channelRisk);
+      push(1, lc ? 1 - lc.heatExchangeProxy : undefined);
+      if (lc) concerns.push(...lc.concerns);
+      break;
+    }
     default: // general
       push(2, wallRisk);
       push(2, overhang);

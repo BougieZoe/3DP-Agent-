@@ -21,7 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/useMobile';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
-import { fromThreeBufferGeometry, runAnalysisInWorker, assessContext, type ObjectContext } from '@/analysis';
+import { fromThreeBufferGeometry, runAnalysisInWorker, assessContext, liquidCoolingFromUnified, type ObjectContext } from '@/analysis';
 import { normalizeModelGeometry, fitCameraToGeometry } from '@/lib/modelNormalization';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
 import { parseSTL } from '@/lib/stlParser';
@@ -1031,6 +1031,22 @@ deepAnalysisSeq.current += 1;
                         <MetricRow label={t('orientation')} value={unifiedAnalysis.pbf.result.orientation} />
                       </div>
                     )}
+                    {/* Liquid-cooling application panel — shown when the user
+                        picks "Liquid Cooling" as the object context */}
+                    {objectContext === 'liquid-cooling' && unifiedAnalysis && (() => {
+                      const lc = liquidCoolingFromUnified(unifiedAnalysis);
+                      return lc ? (
+                        <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
+                          <div className="text-xs text-primary mb-1 font-mono tracking-widest">{t('lcTitle')}</div>
+                          <div className="text-[11px] font-mono text-muted-foreground/50 mb-3">geometric proxies — not CFD</div>
+                          <MetricRow label={t('lcLeak')} value={`${Math.round(lc.leakRisk * 100)}%`} highlight={lc.leakRisk > 0.5} />
+                          <MetricRow label={t('lcChannel')} value={`${Math.round(lc.channelRisk * 100)}%`} highlight={lc.channelRisk > 0.5} />
+                          <MetricRow label={t('lcHeatExchange')} value={`${Math.round(lc.heatExchangeProxy * 100)}%`} highlight={lc.heatExchangeProxy < 0.25} />
+                          <MetricRow label={t('lcPressureWall')} value={lc.pressureWall.minThicknessMm != null ? `${lc.pressureWall.minThicknessMm.toFixed(2)} mm (min)` : '—'} highlight={lc.pressureWall.minThicknessMm != null && lc.pressureWall.minThicknessMm < lc.pressureWall.thresholdMm} />
+                          <MetricRow label={t('lcOverallRisk')} value={`${Math.round(lc.overallRisk * 100)}%`} highlight={lc.overallRisk > 0.5} />
+                        </div>
+                      ) : null;
+                    })()}
                     {/* Object context — what this part is FOR changes what matters */}
                     {unifiedAnalysis && (
                       <div className="border border-border rounded-sm bg-card p-4 mt-3">
@@ -1045,6 +1061,7 @@ deepAnalysisSeq.current += 1;
                             <option value="structural">{t('objectStructural')}</option>
                             <option value="large">{t('objectLarge')}</option>
                             <option value="detailed">{t('objectDetailed')}</option>
+                            <option value="liquid-cooling">{t('objectLiquidCooling')}</option>
                           </select>
                         </div>
                         {(() => {
@@ -1315,6 +1332,10 @@ deepAnalysisSeq.current += 1;
                         if (resin) return `Shells: ${resin.shellCount}, enclosedCavity: ${resin.enclosedCavity}, islands: ${resin.islandCount}, suctionRisk: ${(resin.suctionRisk * 100).toFixed(0)}%, overCureRisk: ${(resin.cureRisk * 100).toFixed(0)}%, orientation: ${resin.orientation}`;
                         if (fgf) return `PartScale: ${fgf.partScale}, maxDim: ${fgf.maxDimMm}mm, warpageRisk: ${(fgf.warpageRisk * 100).toFixed(0)}%, delaminationRisk: ${(fgf.delaminationRisk * 100).toFixed(0)}%, slenderness: ${fgf.slenderness.toFixed(2)}, orientation: ${fgf.orientation}`;
                         if (pbf) return `Kind: ${pbf.kind}, powderTrap: ${pbf.powderTrap}, largestFlatPlate: ${pbf.largestFlatPlateMm2}mm2, overhangRatio: ${(pbf.overhangRatio * 100).toFixed(0)}%, distortionRisk: ${(pbf.distortionRisk * 100).toFixed(0)}%, selfSupporting: ${pbf.selfSupporting}, orientation: ${pbf.orientation}`;
+                        if (objectContext === 'liquid-cooling' && unifiedAnalysis) {
+                          const lc = liquidCoolingFromUnified(unifiedAnalysis);
+                          if (lc) return `LiquidCooling: leakRisk: ${(lc.leakRisk * 100).toFixed(0)}%, channelRisk: ${(lc.channelRisk * 100).toFixed(0)}%, heatExchangeProxy: ${(lc.heatExchangeProxy * 100).toFixed(0)}%, pressureWallMin: ${lc.pressureWall.minThicknessMm ?? 'n/a'}mm, threshold: ${lc.pressureWall.thresholdMm}mm`;
+                        }
                         return undefined;
                       })()}
                       language={language}
