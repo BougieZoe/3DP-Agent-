@@ -69,7 +69,7 @@ function detectTone(messages: ChatMessage[]): ToneMode {
 
 // ─── Traffic Light Score ───────────────────────────────────────────────────────
 
-function getTrafficLight(analysis: UnifiedAnalysis): {
+export function getTrafficLight(analysis: UnifiedAnalysis): {
   light: TrafficLight;
   score: number;
 } {
