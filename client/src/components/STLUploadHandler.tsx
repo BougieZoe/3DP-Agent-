@@ -21,8 +21,10 @@ export interface UploadedModel {
 }
 
 interface STLUploadHandlerProps {
-  /** Called once all selected files have been analyzed (in upload order). */
-  onModelsLoaded: (models: UploadedModel[]) => void;
+  /** Called once all selected files have been analyzed (in upload order).
+   *  `received` = how many files were passed in, so the caller can tell a
+   *  truncated drop (received < picked) from a processing failure. */
+  onModelsLoaded: (models: UploadedModel[], received: number) => void;
   onError: (error: string) => void;
   language?: Language;
   /** Declared source units, owned by the parent so a unit change re-processes the model. */
@@ -127,7 +129,7 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
       }
     }
     if (results.length > 0) {
-      onModelsLoaded(results);
+      onModelsLoaded(results, supported.length);
     }
     setIsLoading(false);
   }, [onModelsLoaded, onError, t, units]);

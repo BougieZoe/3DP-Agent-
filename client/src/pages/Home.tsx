@@ -389,14 +389,21 @@ export default function Home() {
     );
   };
 
-  const handleModelsLoaded = (loaded: UploadedModel[]) => {
+  const handleModelsLoaded = (loaded: UploadedModel[], received: number) => {
     setModels(loaded);
     const first = loaded[0];
     if (first) activateModel(first);
-    // Give clear feedback on how many models actually loaded — if a user drags
-    // 3 and only 1 appears, this number shows whether the drop delivered all 3
-    // (processing dropped the rest) or only 1 (the drop itself was truncated).
-    if (loaded.length > 1) toast.success(t('modelsLoaded').replace('{n}', String(loaded.length)));
+    // Definitive diagnostics when multiple files were passed in:
+    //  - no toast when dragging several → the DROP only delivered 1 file
+    //  - "Loaded 3 models"        → drop + processing both fine (chips must show)
+    //  - "Loaded 1 of 3"          → drop delivered 3 but processing dropped 2
+    if (received > 1) {
+      if (loaded.length === received) {
+        toast.success(t('modelsLoaded').replace('{n}', String(loaded.length)));
+      } else {
+        toast.error(t('modelsPartial').replace('{a}', String(loaded.length)).replace('{b}', String(received)));
+      }
+    }
   };
 
   const switchModel = (name: string) => {
