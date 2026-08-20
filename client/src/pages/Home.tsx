@@ -1329,13 +1329,16 @@ deepAnalysisSeq.current += 1;
                         const resin = unifiedAnalysis?.resin?.result;
                         const fgf = unifiedAnalysis?.fgf?.result;
                         const pbf = unifiedAnalysis?.pbf?.result;
-                        if (resin) return `Shells: ${resin.shellCount}, enclosedCavity: ${resin.enclosedCavity}, islands: ${resin.islandCount}, suctionRisk: ${(resin.suctionRisk * 100).toFixed(0)}%, overCureRisk: ${(resin.cureRisk * 100).toFixed(0)}%, orientation: ${resin.orientation}`;
-                        if (fgf) return `PartScale: ${fgf.partScale}, maxDim: ${fgf.maxDimMm}mm, warpageRisk: ${(fgf.warpageRisk * 100).toFixed(0)}%, delaminationRisk: ${(fgf.delaminationRisk * 100).toFixed(0)}%, slenderness: ${fgf.slenderness.toFixed(2)}, orientation: ${fgf.orientation}`;
-                        if (pbf) return `Kind: ${pbf.kind}, powderTrap: ${pbf.powderTrap}, largestFlatPlate: ${pbf.largestFlatPlateMm2}mm2, overhangRatio: ${(pbf.overhangRatio * 100).toFixed(0)}%, distortionRisk: ${(pbf.distortionRisk * 100).toFixed(0)}%, selfSupporting: ${pbf.selfSupporting}, orientation: ${pbf.orientation}`;
+                        // Liquid-cooling context takes priority — a liquid-cooled SLM
+                        // part is simultaneously a pbf part, and the application-level
+                        // numbers matter most to that expert.
                         if (objectContext === 'liquid-cooling' && unifiedAnalysis) {
                           const lc = liquidCoolingFromUnified(unifiedAnalysis);
                           if (lc) return `LiquidCooling: leakRisk: ${(lc.leakRisk * 100).toFixed(0)}%, channelRisk: ${(lc.channelRisk * 100).toFixed(0)}%, heatExchangeProxy: ${(lc.heatExchangeProxy * 100).toFixed(0)}%, pressureWallMin: ${lc.pressureWall.minThicknessMm ?? 'n/a'}mm, threshold: ${lc.pressureWall.thresholdMm}mm`;
                         }
+                        if (resin) return `Shells: ${resin.shellCount}, enclosedCavity: ${resin.enclosedCavity}, islands: ${resin.islandCount}, suctionRisk: ${(resin.suctionRisk * 100).toFixed(0)}%, overCureRisk: ${(resin.cureRisk * 100).toFixed(0)}%, orientation: ${resin.orientation}`;
+                        if (fgf) return `PartScale: ${fgf.partScale}, maxDim: ${fgf.maxDimMm}mm, warpageRisk: ${(fgf.warpageRisk * 100).toFixed(0)}%, delaminationRisk: ${(fgf.delaminationRisk * 100).toFixed(0)}%, slenderness: ${fgf.slenderness.toFixed(2)}, orientation: ${fgf.orientation}`;
+                        if (pbf) return `Kind: ${pbf.kind}, powderTrap: ${pbf.powderTrap}, largestFlatPlate: ${pbf.largestFlatPlateMm2}mm2, overhangRatio: ${(pbf.overhangRatio * 100).toFixed(0)}%, distortionRisk: ${(pbf.distortionRisk * 100).toFixed(0)}%, selfSupporting: ${pbf.selfSupporting}, orientation: ${pbf.orientation}`;
                         return undefined;
                       })()}
                       language={language}
