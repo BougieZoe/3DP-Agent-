@@ -958,7 +958,7 @@ deepAnalysisSeq.current += 1;
                       <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">{t('geometryDataLabel')}</div>
                       <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness != null ? toUnit(analysis.wallThickness.minThickness).toFixed(3) : '—'} unit={unitSuffix} highlight />
                       {unifiedAnalysis?.metrics.result?.minWallThicknessMm != null && (
-                        <MetricRow label="Min (abs)" value={toUnit(unifiedAnalysis.metrics.result.minWallThicknessMm).toFixed(3)} unit={unitSuffix} />
+                        <MetricRow label={t('minAbs')} value={toUnit(unifiedAnalysis.metrics.result.minWallThicknessMm).toFixed(3)} unit={unitSuffix} />
                       )}
                       <MetricRow label={t('volume')} value={toUnit3(analysis.volume).toFixed(1)} unit={volumeUnit} />
                       <MetricRow label={t('surfaceArea')} value={toUnit2(analysis.surfaceArea).toFixed(1)} unit={areaUnit} />
