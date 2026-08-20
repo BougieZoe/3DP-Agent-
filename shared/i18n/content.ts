@@ -1394,6 +1394,31 @@ const pdf = {
     ja: '次のアクション',
     zh: '接下来怎么做',
   },
+  'pdf.limitsTitle': {
+    en: 'METHODOLOGY & LIMITS',
+    ja: '手法と限界',
+    zh: '方法与边界',
+  },
+  'pdf.limitsMeasured': {
+    en: 'MEASURED — geometry metrics (wall, overhang, watertight, support): deterministic, reliable.',
+    ja: '測定値 — 幾何メトリクス（肉厚・オーバーハング・水密・サポート）：決定論的で信頼できます。',
+    zh: '测量值 — 几何指标（壁厚、悬垂、水密、支撑）：确定性计算，可靠。',
+  },
+  'pdf.limitsAi': {
+    en: 'AI OPINION — expert review & deep analysis: interpretation only; may err on details; measured results remain authoritative.',
+    ja: 'AI の意見 — 専門家レビューとディープ分析：あくまで解釈。詳細は誤る可能性があります。測定結果が優先です。',
+    zh: 'AI 意见 — 专家解读与深度分析：仅为解读，细节可能有误；以测量结果为准。',
+  },
+  'pdf.limitsNotAnalyzed': {
+    en: 'NOT ANALYZED — thermal/FEA simulation, slicer settings, and real printer calibration.',
+    ja: '未分析 — 熱/FEA シミュレーション、スライサー設定、実機キャリブレーション。',
+    zh: '未分析 — 热力学/FEA 仿真、切片参数、真实打印机校准。',
+  },
+  'pdf.limitsNote': {
+    en: 'Boundary: geometry is measured; AI text is opinion (may be wrong); thermal/slicer behavior is not simulated.',
+    ja: '境界: 幾何は測定値、AI テキストは意見（誤る可能性あり）、熱/スライサー挙動は未シミュレーション。',
+    zh: '边界: 几何为测量值，AI 文案为意见（可能出错），热力学/切片行为未仿真。',
+  },
   // client-tier issue sentences
   'pdf.issue.client.thinWallsCritical': {
     en: '{pct}% of sampled walls are below safe thickness — risk of print failure.',

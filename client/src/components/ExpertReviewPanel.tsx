@@ -49,6 +49,32 @@ export function ExpertReviewPanel({ model, material, objectContext, materialMetr
   const severityColor = (s: string) =>
     s === 'high' ? '#ef4444' : s === 'medium' ? '#eab308' : '#34d399';
 
+  // Feedback → self-improvement loop. The rating plus a snapshot of the review
+  // is appended to the same agent-trace JSONL that feeds the fine-tuning
+  // dataset (deploy/amd/build-dataset.py). Fire-and-forget: on Vercel the
+  // endpoint is unmounted, so failures are silently ignored.
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+  const sendFeedback = (rating: 'up' | 'down') => {
+    setFeedback(rating);
+    fetch('/api/agent-trace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'expert_feedback',
+        rating,
+        raw: review?.plain ?? '',
+        verdict: review?.verdict ?? 'warning',
+        materialName: material.name,
+        materialFamily: material.technology,
+        objectContext,
+        findings: review?.findings.length ?? 0,
+        actions: review?.actions.length ?? 0,
+        language,
+        timestamp: new Date().toISOString(),
+      }),
+    }).catch(() => {});
+  };
+
   return (
     <div className="border border-dashed border-border/50 rounded-sm p-4 space-y-3">
       <div>
@@ -107,6 +133,23 @@ export function ExpertReviewPanel({ model, material, objectContext, materialMetr
           )}
 
           <div className="text-[11px] text-muted-foreground/40 font-mono pt-1">{t('expertReviewAdvisory')}</div>
+
+          {/* Feedback → self-improvement */}
+          {feedback ? (
+            <div className="text-[11px] font-mono text-emerald-400/80 pt-1">{t('expertFeedbackThanks')}</div>
+          ) : (
+            <div className="flex items-center gap-2 pt-1">
+              <span className="text-[11px] font-mono text-muted-foreground/50">{t('expertFeedback')}</span>
+              <button onClick={() => sendFeedback('up')} title="Helpful"
+                className="text-sm px-2 py-0.5 border border-border/40 rounded-sm hover:border-emerald-400/50 hover:bg-emerald-400/10 transition-all">
+                👍
+              </button>
+              <button onClick={() => sendFeedback('down')} title="Not helpful"
+                className="text-sm px-2 py-0.5 border border-border/40 rounded-sm hover:border-red-400/50 hover:bg-red-400/10 transition-all">
+                👎
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
