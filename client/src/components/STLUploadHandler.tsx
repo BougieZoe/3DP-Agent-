@@ -29,7 +29,7 @@ interface STLUploadHandlerProps {
   units: LengthUnit;
   onUnitsChange: (units: LengthUnit) => void;
   /** Print-technology family for the initial analysis (FDM default). */
-  materialFamily?: 'fdm' | 'sla' | 'fgf' | 'sls' | 'slm' | 'mjf' | 'eco';
+  materialFamily?: 'fdm' | 'sla' | 'fgf' | 'sls' | 'slm' | 'mjf' | 'concrete' | 'eco';
 }
 
 const labels = {
