@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
-import { loadSTLFile, createMeshFromGeometry } from '@/lib/stlLoader';
+import { createMeshFromGeometry } from '@/lib/stlLoader';
+import { loadModelFile } from '@/lib/modelLoader';
 import { Language } from '@/lib/i18n';
 import { runAnalysisInWorker, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
 import { normalizeModelGeometry } from '@/lib/modelNormalization';
@@ -32,7 +33,7 @@ interface STLUploadHandlerProps {
 
 const labels = {
   en: {
-    invalidFile: 'Invalid file type — STL required',
+    invalidFile: 'Invalid file type — STL, OBJ or 3MF required',
     parseFailed: 'Parse failed: ',
     unknownError: 'Unknown error',
     loading: 'LOADING',
@@ -43,13 +44,13 @@ const labels = {
     complete: 'COMPLETE ✓',
     error: 'ERROR',
     drop: '[  DROP  ]',
-    stl: '[  STL  ]',
+    stl: '[ STL · OBJ · 3MF ]',
     releaseToUpload: '— RELEASE TO UPLOAD —',
     dragOrClick: 'DRAG FILE HERE OR CLICK TO BROWSE',
     units: 'UNITS',
   },
   ja: {
-    invalidFile: '無効なファイル形式 — STLが必要です',
+    invalidFile: '無効なファイル形式 — STL・OBJ・3MFが必要です',
     parseFailed: '解析失敗: ',
     unknownError: '不明なエラー',
     loading: '読み込み中',
@@ -60,13 +61,13 @@ const labels = {
     complete: '完了 ✓',
     error: 'エラー',
     drop: '[  ドロップ  ]',
-    stl: '[  STL  ]',
+    stl: '[ STL · OBJ · 3MF ]',
     releaseToUpload: '— リリースしてアップロード —',
     dragOrClick: 'ファイルをドラッグするか、クリックして参照',
     units: '単位',
   },
   zh: {
-    invalidFile: '无效的文件类型 — 需要 STL',
+    invalidFile: '无效的文件类型 — 需要 STL、OBJ 或 3MF',
     parseFailed: '解析失败: ',
     unknownError: '未知错误',
     loading: '加载中',
@@ -77,7 +78,7 @@ const labels = {
     complete: '完成 ✓',
     error: '错误',
     drop: '[  放下  ]',
-    stl: '[  STL  ]',
+    stl: '[ STL · OBJ · 3MF ]',
     releaseToUpload: '— 释放以上传 —',
     dragOrClick: '拖放文件到此处或点击浏览',
     units: '单位',
@@ -94,7 +95,8 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en', unit
   const log = (msg: string) => setProgress(p => [...p, msg]);
 
   const handleFileSelect = useCallback(async (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.stl')) {
+    const isSupported = /\.(stl|obj|3mf)$/i.test(file.name);
+    if (!isSupported) {
       onError(t.invalidFile);
       return;
     }
@@ -105,13 +107,16 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en', unit
 
     try {
       log(`> ${t.parsing}`);
-      // loadSTLFile returns the pristine geometry; normalization clones it.
-      const raw = await loadSTLFile(file);
-      // Explicit unit contract + viewport centering: scale non-mm STLs to
+      // loadModelFile returns the pristine geometry; normalization clones it.
+      // 3MF declares its unit in the package — use it instead of the user's pick,
+      // so a millimeter 3MF never gets misread as inches.
+      const loaded = await loadModelFile(file);
+      const effectiveUnits = loaded.units ?? units;
+      // Explicit unit contract + viewport centering: scale non-mm models to
       // millimeters, center on the build plate (minZ = 0, XY center = 0), and
       // recompute bounding box / bounding sphere so the camera can frame it.
       log(`> ${t.computing}`);
-      const { geometry, rawGeometry } = normalizeModelGeometry(raw, units);
+      const { geometry, rawGeometry } = normalizeModelGeometry(loaded.geometry, effectiveUnits);
       const model = fromThreeBufferGeometry(geometry);
       const unifiedAnalysis = await runAnalysisInWorker(model, { fileName: file.name, materialFamily });
       log(`> ${t.analyzing}`);
@@ -119,7 +124,7 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en', unit
       log(`> ${t.complete}`);
 
       setTimeout(() => {
-        onModelLoaded({ geometry, mesh, unifiedAnalysis, fileName: file.name, fileSizeBytes: file.size, units, rawGeometry });
+        onModelLoaded({ geometry, mesh, unifiedAnalysis, fileName: file.name, fileSizeBytes: file.size, units: effectiveUnits, rawGeometry });
         setIsLoading(false);
       }, 400);
     } catch (error) {
@@ -168,7 +173,7 @@ export function STLUploadHandler({ onModelLoaded, onError, language = 'en', unit
       <input
         ref={fileInputRef}
         type="file"
-        accept=".stl"
+        accept=".stl,.obj,.3mf"
         className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
       />

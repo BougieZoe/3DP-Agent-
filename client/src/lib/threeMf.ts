@@ -39,7 +39,10 @@ function zipStore(files: Array<{ name: string; data: Uint8Array }>): Uint8Array 
   for (const f of files) {
     const name = encoder.encode(f.name);
     const crc = crc32(f.data);
-    const local = new DataView(new ArrayBuffer(30 + name.length));
+    // The local file header is exactly 30 bytes; the filename is appended AFTER
+    // it (below). Allocating 30 + name.length and appending the name separately
+    // would double-count the name and misalign every zip reader.
+    const local = new DataView(new ArrayBuffer(30));
     local.setUint32(0, 0x04034b50, true); // PK\x03\x04
     local.setUint16(4, 20, true);
     local.setUint16(6, 0, true);
@@ -57,7 +60,8 @@ function zipStore(files: Array<{ name: string; data: Uint8Array }>): Uint8Array 
   const centralStart = offset;
   const centralChunks: Uint8Array[] = [];
   for (const c of central) {
-    const cd = new DataView(new ArrayBuffer(46 + c.name.length));
+    // Central directory header is exactly 46 bytes; the filename follows it.
+    const cd = new DataView(new ArrayBuffer(46));
     cd.setUint32(0, 0x02014b50, true); // PK\x01\x02
     cd.setUint16(4, 20, true);
     cd.setUint16(6, 20, true);
