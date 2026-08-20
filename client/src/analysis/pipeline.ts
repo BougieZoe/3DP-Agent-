@@ -6,6 +6,8 @@ import { computeMetrics } from './metrics';
 import { computeResinMetrics, type ResinResult } from './resin';
 import { computeFgfMetrics, type FgfResult } from './fgf';
 import { computePbfMetrics, type PbfResult, type PbfKind } from './pbf';
+import { computeConcreteMetrics, type ConcreteResult } from './concrete';
+import { computeEcoMetrics, type EcoResult } from './eco';
 import { checkBedFit } from './bedFit';
 import { estimateSupportVolume } from './support';
 import { estimatePrintTime } from './printTime';
@@ -21,7 +23,7 @@ export interface PipelineOptions {
   fileName?: string;
   material?: Material;
   /** Print technology family — selects the per-family metrics module. */
-  materialFamily?: 'fdm' | 'sla' | 'fgf' | 'sls' | 'slm' | 'mjf' | 'eco';
+  materialFamily?: 'fdm' | 'sla' | 'fgf' | 'sls' | 'slm' | 'mjf' | 'concrete' | 'eco';
   /** UI language — module explanations/reasons are localized. */
   language?: ContentLang;
   /**
@@ -146,7 +148,40 @@ export function runAnalysisPipeline(
     }
   });
 
-  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf]
+  // Concrete (construction-scale) module — geometric proxies, not structural simulation.
+  const EMPTY_CONCRETE: ConcreteResult = { featureResolutionRisk: 0, overhangSagRisk: 0, crackRisk: 0, printTimeHours: 0, concerns: [] };
+  const concrete = time('concrete', () => {
+    try {
+      if (options.materialFamily !== 'concrete') return null;
+      const m = metrics.result;
+      return moduleResult('concrete', 1.0 as Confidence, 0, computeConcreteMetrics({
+        minWallThicknessMm: m.minWallThicknessMm,
+        overhangRatio: m.overhang?.ratio ?? 0,
+        surfaceAreaMm2: m.surfaceAreaMm2,
+        volumeMm3: m.meshVolumeMm3,
+      }), 'Concrete construction-scale printability (geometric proxies — not structural engineering).');
+    } catch (e) {
+      return options.materialFamily === 'concrete' ? failResult('concrete', e, EMPTY_CONCRETE) : null;
+    }
+  });
+
+  // Eco-material advisory — material knowledge + thin-wall geometry.
+  const EMPTY_ECO: EcoResult = { moistureRisk: 0, degradationRisk: 0, brittlenessRisk: 0, concerns: [] };
+  const eco = time('eco', () => {
+    try {
+      if (options.materialFamily !== 'eco') return null;
+      return moduleResult('eco', 1.0 as Confidence, 0, computeEcoMetrics({
+        moistureRisk: mat?.moistureRisk ?? 0.3,
+        degradationRisk: mat?.degradationRisk ?? 0.3,
+        brittlenessRisk: mat?.brittlenessRisk ?? 0.3,
+        thinWallRatio: metrics.result.thinWallRatio,
+      }), 'Eco-material advisory (material properties + thin-wall geometry).');
+    } catch (e) {
+      return options.materialFamily === 'eco' ? failResult('eco', e, EMPTY_ECO) : null;
+    }
+  });
+
+  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco]
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .map(m => m.confidence);
   const overallConfidence = confidences.length > 0
@@ -163,6 +198,8 @@ export function runAnalysisPipeline(
     resin,
     fgf,
     pbf,
+    concrete,
+    eco,
     timestamp: now,
     modelFileName: fileName,
     overallConfidence,

@@ -63,6 +63,8 @@ function materialFamilyLabel(tech: Material['technology']): string {
     case 'sls': return 'SLS polymer powder bed fusion';
     case 'slm': return 'SLM/DMLS metal powder bed fusion';
     case 'mjf': return 'MJF polymer powder bed fusion';
+    case 'concrete': return 'concrete construction-scale extrusion';
+    case 'eco': return 'recycled/bio eco thermoplastic (FDM)';
     default: return 'FDM/FFF filament extrusion';
   }
 }
@@ -112,6 +114,24 @@ export function buildExpertSystemPrompt(tech: Material['technology'], objectCont
           '- trapped metal powder in enclosed cavities is expensive and hard to remove — escape holes are mandatory',
           '- thin walls below ~0.4-0.5 mm often fail to fuse cleanly, and thermal management drives build quality',
           '- full density means strength is real, but dimensional accuracy fights shrinkage and stress relief',
+        ].join('\n');
+      case 'concrete':
+        return [
+          'You are a senior large-format concrete printing expert for construction-scale parts. You know:',
+          '- a ~20mm nozzle cannot resolve features thinner than about twice the nozzle — fine detail under-resolves',
+          '- wet concrete is viscous: unsupported overhangs beyond ~35° sag and slump under their own weight',
+          '- large flat pours lose surface water fast and crack during curing',
+          '- layer height is tens of mm, so FDM layer-adhesion rules do not apply',
+          '- real structural soundness depends on rebar, pump rheology and curing control — the STL cannot see those, so be honest that a geometry-only review has hard limits',
+        ].join('\n');
+      case 'eco':
+        return [
+          'You are a senior recycled / bio-sourced filament printing expert. You know how eco thermoplastics really behave:',
+          '- recycled feedstock has batch-to-batch variability — the same settings may behave differently spool to spool',
+          '- hygroscopic materials must be dried before printing or the part steams and bubbles',
+          '- recycled PLA degrades in heat and UV — check the service environment, not just the print',
+          '- brittleness from reprocessing means thin walls crack under load — thicker sections are safer',
+          '- the process is still FDM, so the standard overhang/wall rules apply on top of the material advisories',
         ].join('\n');
       default:
         return [

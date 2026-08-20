@@ -275,6 +275,10 @@ export interface UnifiedAnalysis {
   fgf?: AnalysisModuleResult<import('./fgf').FgfResult> | null;
   /** Present only when the analysis ran with materialFamily sls/slm/mjf (powder bed fusion). */
   pbf?: AnalysisModuleResult<import('./pbf').PbfResult> | null;
+  /** Present only when the analysis ran with materialFamily === 'concrete'. */
+  concrete?: AnalysisModuleResult<import('./concrete').ConcreteResult> | null;
+  /** Present only when the analysis ran with materialFamily === 'eco'. */
+  eco?: AnalysisModuleResult<import('./eco').EcoResult> | null;
   /** ISO timestamp of when analysis was run */
   timestamp: string;
   modelFileName: string;

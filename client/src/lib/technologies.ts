@@ -3,7 +3,7 @@
 // branches its metrics by technology; the UI shows the full classification so
 // users know exactly what they're choosing.
 
-export type PrintTechnology = 'fdm' | 'sla' | 'fgf' | 'sls' | 'slm' | 'mjf';
+export type PrintTechnology = 'fdm' | 'sla' | 'fgf' | 'sls' | 'slm' | 'mjf' | 'concrete' | 'eco';
 
 export interface PrintTechnologyInfo {
   id: PrintTechnology;
@@ -62,6 +62,20 @@ export const PRINT_TECHNOLOGIES: readonly PrintTechnologyInfo[] = [
     processFamily: 'Powder Bed Fusion (Multi Jet Fusion)',
     description: 'HP\'s 3D printer applies a fusing agent + infrared to sinter polymer parts fast',
     examples: 'Production polymer parts at volume',
+    implemented: true,
+  },
+  {
+    id: 'concrete', shortLabel: 'CONCRETE', label: 'Concrete',
+    processFamily: 'Material Extrusion (construction-scale)',
+    description: 'A large gantry printer extrudes wet concrete in thick layers to build houses and structures',
+    examples: 'Walls, furniture, large structures',
+    implemented: true,
+  },
+  {
+    id: 'eco', shortLabel: 'ECO', label: 'Eco',
+    processFamily: 'Material Extrusion (recycled / bio thermoplastics)',
+    description: 'FDM printing with recycled or bio-sourced filaments — the same process, different material care',
+    examples: 'Low-impact prototypes, everyday parts',
     implemented: true,
   },
 ];

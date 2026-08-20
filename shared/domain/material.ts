@@ -9,7 +9,7 @@
  * shared/domain; delete the analysis→lib and agents→lib edges").
  */
 
-export type MaterialTechnology = 'fdm' | 'sla' | 'fgf' | 'sls' | 'slm' | 'mjf';
+export type MaterialTechnology = 'fdm' | 'sla' | 'fgf' | 'sls' | 'slm' | 'mjf' | 'concrete' | 'eco';
 
 export interface Material {
   name: string;
@@ -24,6 +24,12 @@ export interface Material {
   overhangThreshold: number;
   densityGPerCm3: number;
   pricePerKgUsd: number;
+  /** Eco-material advisory (0..1): absorbs moisture. */
+  moistureRisk?: number;
+  /** Eco-material advisory (0..1): degrades in heat/UV. */
+  degradationRisk?: number;
+  /** Eco-material advisory (0..1): brittle, cracks under load. */
+  brittlenessRisk?: number;
 }
 
 export const MATERIALS: Record<string, Material> = {
@@ -185,6 +191,53 @@ export const MATERIALS: Record<string, Material> = {
     description: 'AlSi10Mg aluminum alloy powder — lightweight with good thermal conductivity, a cast-like alloy popular for automotive and heat-dissipation parts. Lower density than steel makes large parts lighter, but it still needs support anchors and powder-escape planning.',
     useCase: 'Automotive, heat sinks, lightweight structures',
     overhangThreshold: 45, densityGPerCm3: 2.67, pricePerKgUsd: 40,
+  },
+  // ── Concrete — construction-scale extrusion (independent of FGF) ─────────
+  CONCRETE_STD: {
+    name: 'Standard Concrete Mix', technology: 'concrete',
+    category: 'Construction extrusion',
+    description: 'A standard cement-based mortar for large-format construction printers. Extruded wet in thick (~20mm) layers, so features finer than about twice the nozzle under-resolve, and unsupported overhangs sag under their own weight. Real structural design needs rebar and curing control — the STL cannot see those.',
+    useCase: 'Walls, furniture, large structures, architectural elements',
+    overhangThreshold: 35, densityGPerCm3: 2.40, pricePerKgUsd: 0.15,
+  },
+  CONCRETE_FIBER: {
+    name: 'Fiber-Reinforced Concrete', technology: 'concrete',
+    category: 'Construction extrusion',
+    description: 'Cement-based mix with short reinforcing fibers — more crack-resistant and tolerant of thin sections than plain mix, at slightly higher cost. Same wet-extrusion limits as standard concrete.',
+    useCase: 'Thin-shell structures, panels, elements with higher crack resistance',
+    overhangThreshold: 35, densityGPerCm3: 2.40, pricePerKgUsd: 0.40,
+  },
+  CONCRETE_HP: {
+    name: 'High-Performance Concrete', technology: 'concrete',
+    category: 'Construction extrusion',
+    description: 'High-strength, low-shrinkage concrete mix for demanding structural elements. Better finish and tighter tolerances, but the geometry rules (nozzle resolution, overhang sag) still apply.',
+    useCase: 'Structural elements, demanding architectural pieces',
+    overhangThreshold: 35, densityGPerCm3: 2.40, pricePerKgUsd: 0.80,
+  },
+  // ── Eco — recycled / bio-sourced thermoplastics ──────────────────────────
+  ECO_RPLA: {
+    name: 'Recycled PLA', technology: 'eco',
+    category: 'Recycled thermoplastic',
+    description: 'Reclaimed polylactic acid — prints like PLA but with more batch-to-batch variability and brittleness from reprocessing. Hygroscopic (dry before printing) and degrades in heat/UV, so it is a poor choice for warm or sunlit parts.',
+    useCase: 'Low-impact prototypes, decorative parts, short-life items',
+    overhangThreshold: 50, densityGPerCm3: 1.24, pricePerKgUsd: 15,
+    moistureRisk: 0.5, degradationRisk: 0.6, brittlenessRisk: 0.7,
+  },
+  ECO_BIOPLA: {
+    name: 'PLA+Bio Blend', technology: 'eco',
+    category: 'Recycled thermoplastic',
+    description: 'A bio-blended PLA with impact modifiers — more ductile than plain PLA, still hygroscopic and still degrades in sustained heat/UV. A reasonable everyday choice where the part is protected from the sun.',
+    useCase: 'Everyday prototypes, enclosures, low-cost parts',
+    overhangThreshold: 50, densityGPerCm3: 1.23, pricePerKgUsd: 18,
+    moistureRisk: 0.5, degradationRisk: 0.6, brittlenessRisk: 0.6,
+  },
+  ECO_RPETG: {
+    name: 'Recycled PETG', technology: 'eco',
+    category: 'Recycled thermoplastic',
+    description: 'Recycled PETG — tough and chemical-resistant like virgin PETG, with slightly more batch variability. Needs drying before printing; much less brittle than recycled PLA and far more UV-tolerant.',
+    useCase: 'Functional parts, containers, outdoor-adjacent use',
+    overhangThreshold: 40, densityGPerCm3: 1.27, pricePerKgUsd: 16,
+    moistureRisk: 0.6, degradationRisk: 0.4, brittlenessRisk: 0.3,
   },
 };
 

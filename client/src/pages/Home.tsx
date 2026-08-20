@@ -1129,6 +1129,27 @@ deepAnalysisSeq.current += 1;
                         <MetricRow label={t('orientation')} value={unifiedAnalysis.pbf.result.orientation} />
                       </div>
                     )}
+                    {/* Concrete construction-scale metrics — geometric proxies, not structural engineering */}
+                    {unifiedAnalysis?.concrete?.result && (
+                      <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
+                        <div className="text-xs text-primary mb-1 font-mono tracking-widest">{t('concreteTitle')}</div>
+                        <div className="text-[11px] font-mono text-muted-foreground/50 mb-3">{t('concreteProxy')}</div>
+                        <MetricRow label={t('concreteFeature')} value={`${Math.round(unifiedAnalysis.concrete.result.featureResolutionRisk * 100)}%`} highlight={unifiedAnalysis.concrete.result.featureResolutionRisk > 0.5} />
+                        <MetricRow label={t('concreteOverhang')} value={`${Math.round(unifiedAnalysis.concrete.result.overhangSagRisk * 100)}%`} highlight={unifiedAnalysis.concrete.result.overhangSagRisk > 0.4} />
+                        <MetricRow label={t('concreteCrack')} value={`${Math.round(unifiedAnalysis.concrete.result.crackRisk * 100)}%`} highlight={unifiedAnalysis.concrete.result.crackRisk > 0.5} />
+                        <MetricRow label={t('concreteTime')} value={`${unifiedAnalysis.concrete.result.printTimeHours} h`} />
+                      </div>
+                    )}
+                    {/* Eco-material advisory — material properties + thin-wall geometry */}
+                    {unifiedAnalysis?.eco?.result && (
+                      <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
+                        <div className="text-xs text-primary mb-1 font-mono tracking-widest">{t('ecoTitle')}</div>
+                        <div className="text-[11px] font-mono text-muted-foreground/50 mb-3">{t('ecoProxy')}</div>
+                        <MetricRow label={t('ecoMoisture')} value={`${Math.round(unifiedAnalysis.eco.result.moistureRisk * 100)}%`} highlight={unifiedAnalysis.eco.result.moistureRisk > 0.4} />
+                        <MetricRow label={t('ecoDegradation')} value={`${Math.round(unifiedAnalysis.eco.result.degradationRisk * 100)}%`} highlight={unifiedAnalysis.eco.result.degradationRisk > 0.5} />
+                        <MetricRow label={t('ecoBrittleness')} value={`${Math.round(unifiedAnalysis.eco.result.brittlenessRisk * 100)}%`} highlight={unifiedAnalysis.eco.result.brittlenessRisk > 0.6} />
+                      </div>
+                    )}
                     <button onClick={() => setTab('report')}
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
                       {t('generateReport')}
@@ -1396,6 +1417,7 @@ deepAnalysisSeq.current += 1;
                         const resin = unifiedAnalysis?.resin?.result;
                         const fgf = unifiedAnalysis?.fgf?.result;
                         const pbf = unifiedAnalysis?.pbf?.result;
+                        const concrete = unifiedAnalysis?.concrete?.result;
                         // Liquid-cooling context takes priority — a liquid-cooled SLM
                         // part is simultaneously a pbf part, and the application-level
                         // numbers matter most to that expert.
@@ -1406,6 +1428,11 @@ deepAnalysisSeq.current += 1;
                         if (resin) return `Shells: ${resin.shellCount}, enclosedCavity: ${resin.enclosedCavity}, islands: ${resin.islandCount}, suctionRisk: ${(resin.suctionRisk * 100).toFixed(0)}%, overCureRisk: ${(resin.cureRisk * 100).toFixed(0)}%, orientation: ${resin.orientation}`;
                         if (fgf) return `PartScale: ${fgf.partScale}, maxDim: ${fgf.maxDimMm}mm, warpageRisk: ${(fgf.warpageRisk * 100).toFixed(0)}%, delaminationRisk: ${(fgf.delaminationRisk * 100).toFixed(0)}%, slenderness: ${fgf.slenderness.toFixed(2)}, orientation: ${fgf.orientation}`;
                         if (pbf) return `Kind: ${pbf.kind}, powderTrap: ${pbf.powderTrap}, largestFlatPlate: ${pbf.largestFlatPlateMm2}mm2, overhangRatio: ${(pbf.overhangRatio * 100).toFixed(0)}%, distortionRisk: ${(pbf.distortionRisk * 100).toFixed(0)}%, selfSupporting: ${pbf.selfSupporting}, orientation: ${pbf.orientation}`;
+                        if (concrete) return `Concrete: featureResolutionRisk: ${(concrete.featureResolutionRisk * 100).toFixed(0)}%, overhangSagRisk: ${(concrete.overhangSagRisk * 100).toFixed(0)}%, crackRisk: ${(concrete.crackRisk * 100).toFixed(0)}%, printTimeHours: ${concrete.printTimeHours}`;
+                        if (material.technology === 'eco' && unifiedAnalysis?.eco?.result) {
+                          const eco = unifiedAnalysis.eco.result;
+                          return `Eco: moistureRisk: ${(eco.moistureRisk * 100).toFixed(0)}%, degradationRisk: ${(eco.degradationRisk * 100).toFixed(0)}%, brittlenessRisk: ${(eco.brittlenessRisk * 100).toFixed(0)}%`;
+                        }
                         return undefined;
                       })()}
                       language={language}
