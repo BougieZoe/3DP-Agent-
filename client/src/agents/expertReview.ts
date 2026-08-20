@@ -50,6 +50,7 @@ export function objectContextLabel(ctx: ObjectContext): string {
     case 'structural': return 'structural / load-bearing (furniture)';
     case 'large': return 'large / construction-scale';
     case 'detailed': return 'detailed / fine-feature (jewelry, dental, miniatures)';
+    case 'liquid-cooling': return 'liquid-cooling / heat-exchanger (cold plates, water blocks)';
     default: return 'general-purpose';
   }
 }
@@ -129,6 +130,7 @@ export function buildExpertSystemPrompt(tech: Material['technology'], objectCont
       case 'structural': return 'The part is load-bearing/structural — weight STRENGTH issues (thin walls, layer adhesion, material limits) highest.';
       case 'large': return 'The part is large/construction-scale — weight WARPAGE, delamination at scale, and slenderness highest.';
       case 'detailed': return 'The part has fine detail — weight surface finish, thin features, over-cure/overhang detail loss highest.';
+      case 'liquid-cooling': return 'The part carries liquid coolant — weight CHANNEL FLOW (enclosed dead-ends, trapped powder clogging), SEAL INTEGRITY (pressure-wall thickness, leak risk), and HEAT EXCHANGE (surface area vs volume) highest. A thin wall on a cooling part is a leak, not just a strength issue.';
       default: return 'The part is general-purpose — treat strength and geometry risks evenly.';
     }
   })();

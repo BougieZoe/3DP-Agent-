@@ -38,4 +38,17 @@ describe('object-context assessment', () => {
     );
     expect(ctx.topConcerns.some(c => c.toLowerCase().includes('suction'))).toBe(true);
   });
+
+  it('liquid-cooling context flags thin pressure walls and dead-end channels', () => {
+    const ctx = assessContext(
+      fakeUnified({
+        metrics: { moduleName: 'metrics', confidence: 1.0 as const, durationMs: 0, result: { minWallThicknessMm: 0.3, p5WallThicknessMm: 0.2, thinWallRatio: 0.15, surfaceAreaMm2: 1000, meshVolumeMm3: 2000 } as never, explanation: '' },
+        topology: { moduleName: 'topology', confidence: 1.0 as const, durationMs: 0, result: { shellCount: 2 } as never, explanation: '' },
+      }),
+      'liquid-cooling',
+    );
+    expect(ctx.overallRisk).toBeGreaterThan(0.5);
+    expect(ctx.topConcerns.some(c => c.toLowerCase().includes('leak'))).toBe(true);
+    expect(ctx.topConcerns.some(c => c.toLowerCase().includes('coolant'))).toBe(true);
+  });
 });
