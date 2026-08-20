@@ -739,6 +739,7 @@ async function generateClientPDF(
     y = PAGE_M + 6;
   }
   doc.text(nsLines, PAGE_M, y);
+  y += nsLines.length * 4 + 4;
 
   // ── Footer ──
   y = drawLimitsNote(doc, lang, y);
@@ -984,6 +985,7 @@ async function generateDesignerPDF(
     y = PAGE_M + 6;
   }
   doc.text(sugLines, PAGE_M, y);
+  y += sugLines.length * 4 + 4;
 
   // ── Footer ──
   y = drawLimitsNote(doc, lang, y);
@@ -1172,6 +1174,7 @@ async function generateFactoryPDF(
   doc.setFontSize(7.5);
   doc.setTextColor(...C.faint);
   doc.text(dLines, PAGE_M, y);
+  y += dLines.length * 4 + 4;
 
   // ── Footer ──
   y = drawLimitsNote(doc, lang, y);
