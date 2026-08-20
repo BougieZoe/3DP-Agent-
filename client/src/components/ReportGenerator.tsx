@@ -587,6 +587,21 @@ function drawExpertReview(
   return y + 4;
 }
 
+/** One-line report-boundary note (measured vs AI opinion vs not simulated). */
+function drawLimitsNote(doc: JsPDF, lang: Language, y: number): number {
+  const line = translate(CONTENT, 'pdf.limitsNote', lang);
+  const lines = doc.splitTextToSize(line, PAGE_CW);
+  if (y + lines.length * 4 > PAGE_BOT) {
+    doc.addPage();
+    y = PAGE_M + 6;
+  }
+  doc.setFont(pdfFont, "normal");
+  doc.setFontSize(6.5);
+  doc.setTextColor(...C.faint);
+  doc.text(lines, PAGE_M, y);
+  return y + lines.length * 4 + 2;
+}
+
 // ─── CLIENT PDF ────────────────────────────────────────────────────────────────
 
 async function generateClientPDF(
@@ -726,6 +741,7 @@ async function generateClientPDF(
   doc.text(nsLines, PAGE_M, y);
 
   // ── Footer ──
+  y = drawLimitsNote(doc, lang, y);
   drawFooter(doc, score);
 
   const baseName = fileName.replace(/\.stl$/i, "");
@@ -970,6 +986,7 @@ async function generateDesignerPDF(
   doc.text(sugLines, PAGE_M, y);
 
   // ── Footer ──
+  y = drawLimitsNote(doc, lang, y);
   drawFooter(doc, score);
 
   const baseName = fileName.replace(/\.stl$/i, "");
@@ -1157,6 +1174,7 @@ async function generateFactoryPDF(
   doc.text(dLines, PAGE_M, y);
 
   // ── Footer ──
+  y = drawLimitsNote(doc, lang, y);
   drawFooter(doc, score, reportId);
 
   const baseName = fileName.replace(/\.stl$/i, "");
@@ -1213,6 +1231,18 @@ export function ReportGenerator({
       <div className="text-[10px] font-mono text-muted-foreground/30 leading-relaxed">
         {translate(CONTENT, 'pdf.labelPenalty', language)}
       </div>
+
+      {/* Report boundary legend — what's measured vs AI opinion vs not analyzed */}
+      <details className="text-[10px] font-mono border border-border/30 rounded-sm px-2 py-1.5">
+        <summary className="cursor-pointer text-muted-foreground/40 tracking-widest select-none">
+          {translate(CONTENT, 'pdf.limitsTitle', language)}
+        </summary>
+        <div className="mt-1.5 space-y-1 text-muted-foreground/55 leading-relaxed">
+          <div>✓ {translate(CONTENT, 'pdf.limitsMeasured', language)}</div>
+          <div>⚠ {translate(CONTENT, 'pdf.limitsAi', language)}</div>
+          <div>✗ {translate(CONTENT, 'pdf.limitsNotAnalyzed', language)}</div>
+        </div>
+      </details>
 
       <div>
         <div className="text-[10px] font-mono text-muted-foreground/30 tracking-widest mb-2">{translate(CONTENT, 'pdf.labelExport', language)}</div>
