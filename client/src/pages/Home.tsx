@@ -4,6 +4,7 @@ import { ReportGenerator } from "@/components/ReportGenerator";
 import { ExpertReviewPanel } from '@/components/ExpertReviewPanel';
 import { BatchReport } from '@/components/BatchReport';
 import { ProductionCard } from '@/components/ProductionCard';
+import { DiagnosisPanel } from '@/components/DiagnosisPanel';
 import { lazy, Suspense, useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
@@ -1495,6 +1496,15 @@ deepAnalysisSeq.current += 1;
                 {/* CHAT TAB */}
                 {tab === 'chat' && (
                   <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
+                    {/* Failed-print photo diagnosis — the "why did it fail?" half */}
+                    <div className="pt-4">
+                      <DiagnosisPanel
+                        language={language}
+                        canRun={!!user || hasAnyKey()}
+                        onNeedAuth={() => setShowAccountModal(true)}
+                        materialContext={`${material.name} (${material.technology.toUpperCase()})`}
+                      />
+                    </div>
                     <div className="pt-4 h-[45vh] min-h-[320px] lg:h-[520px]">
                       <ChatPanel
                         model={modelData}
