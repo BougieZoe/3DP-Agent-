@@ -24,8 +24,20 @@ export interface FailureMode {
 export interface FailureDiagnosis {
   /** Plain-language overall diagnosis. */
   overallAssessment: string;
+  /**
+   * Alternatives explicitly considered and ruled out (or not) before the model
+   * committed to a failure — e.g. intentional multi-part segmentation for
+   * assembly, or a low-poly facet seam that could be misread as a crack.
+   */
+  ruledOutAlternatives: string[];
+  /**
+   * 0..1 confidence that a FAILURE actually occurred (vs. intentional design).
+   * Kept separate from `confidence` so "I'm not sure this is even a failure"
+   * and "I'm sure it failed but not which way" don't collapse into one number.
+   */
+  isFailure: number;
   failureModes: FailureMode[];
-  /** 0..1 confidence in the diagnosis. */
+  /** 0..1 confidence in the specific failure mode, GIVEN a failure occurred. */
   confidence: number;
 }
 
@@ -35,23 +47,35 @@ function stripDataUrlPrefix(base64: string): string {
   return base64.replace(/^data:image\/\w+;base64,/, '');
 }
 
-export function buildDiagnosisPrompt(materialContext?: string): string {
-  const context = materialContext
-    ? `\nThe part was printed in: ${materialContext}\n`
-    : '';
-  return `You are a senior 3D printing failure diagnostician. Look at this photo of a FAILED 3D print and diagnose it.${context}
+export function buildDiagnosisPrompt(materialContext?: string, geometryContext?: string): string {
+  const lines = [
+    'You are a senior 3D printing failure diagnostician. Look at this photo of a 3D print and decide whether it FAILED or is INTENTIONAL DESIGN.',
+  ];
+  if (geometryContext) lines.push(`\n${geometryContext}`);
+  if (materialContext) lines.push(`\nThe part was printed in: ${materialContext}`);
+  lines.push(`
+CRITICAL — before committing to a failure diagnosis, actively consider and RULE OUT these alternatives (do not silently assume them away):
+
+1. INTENTIONAL MULTI-PART SEGMENTATION FOR ASSEMBLY. A part is often printed as separate pieces that are assembled afterwards. Cues: consistent handwritten/printed labels or marks on each piece, cut lines/seams that follow planar or near-planar splits rather than stress patterns, pieces of comparable size/shape suggesting a systematic split plan rather than random fracture. If the uploaded 3D file already contains multiple bodies, that fact strongly supports intentional segmentation, NOT "broke apart".
+
+2. PANEL / FACET SEAM vs TRUE INTERLAYER CRACK. On low-poly-faceted prints, straight seam lines are facet boundaries (they match the model's own geometry), not cracks. True delamination cracks are irregular, follow layer lines (horizontal bands), and show a color/texture change at the exposed inner layers.
 
 Respond in JSON only, no markdown fences:
 {
-  "overallAssessment": "2-3 plain-language sentences explaining the main problem",
+  "overallAssessment": "2-3 plain-language sentences",
+  "ruledOutAlternatives": ["short sentence on whether segmentation-for-assembly was a better explanation, and why/why not", "short sentence on whether panel-seam was a better explanation, and why/why not"],
+  "isFailure": 0.0-1.0,
   "failureModes": [
-    { "mode": "warping", "probability": 0.8, "causes": ["uneven cooling", "poor bed adhesion"], "fixes": ["raise bed temperature", "add a brim", "use an enclosure"] }
+    { "mode": "warping", "probability": 0.8, "causes": ["..."], "fixes": ["..."] }
   ],
   "confidence": 0.0-1.0
 }
 
-Common failure modes to consider: warping, layer_shift, under_extrusion, over_extrusion, stringing, bed_adhesion, elephant_foot, z_banding, delamination, overhang_sagging, clogged_nozzle, first_layer_failure, other.
-Give 1-3 most likely modes with a probability (the mode you are most sure of first). Only report what the photo actually shows — do not guess about hidden internals.`;
+- isFailure = how confident you are that a FAILURE actually occurred (vs. intentional design or a facet seam). If you cannot confidently rule out segmentation or a seam, LOWER isFailure and say so in ruledOutAlternatives.
+- confidence = how confident you are in the specific failure mode, GIVEN a failure occurred.
+- Common failure modes: warping, layer_shift, under_extrusion, over_extrusion, stringing, bed_adhesion, elephant_foot, z_banding, delamination, overhang_sagging, clogged_nozzle, first_layer_failure, other.
+- Give 1-3 most likely modes (most sure first). Only report what the photo actually shows — do not guess about hidden internals.`);
+  return lines.join('\n');
 }
 
 export function buildDiagnosisBody(imageBase64: string, prompt: string): Record<string, unknown> {
@@ -110,6 +134,8 @@ export function parseDiagnosis(raw: string): FailureDiagnosis | null {
     : '';
   if (!assessment) return null;
 
+  const ruledOutAlternatives = asStringArray(obj.ruledOutAlternatives);
+
   const modes: FailureMode[] = Array.isArray(obj.failureModes)
     ? obj.failureModes
         .filter((m): m is Record<string, unknown> => !!m && typeof m === 'object')
@@ -126,18 +152,26 @@ export function parseDiagnosis(raw: string): FailureDiagnosis | null {
 
   return {
     overallAssessment: assessment,
+    ruledOutAlternatives,
+    isFailure: asNumber(obj.isFailure, confidenceFallback(modes)),
     failureModes: modes,
     confidence: asNumber(obj.confidence, 0.5),
   };
+}
+
+/** When the model omits isFailure, derive a cautious default from the modes. */
+function confidenceFallback(modes: FailureMode[]): number {
+  if (modes.length === 0) return 0.3;
+  return modes.reduce((a, m) => a + m.probability, 0) / modes.length;
 }
 
 export type DiagnoseError = 'auth' | 'not_configured' | 'quota' | 'timeout' | 'failed';
 
 export async function diagnosePrintFailure(
   imageBase64: string,
-  opts: { materialContext?: string; language?: Language; signal?: AbortSignal } = {},
+  opts: { materialContext?: string; geometryContext?: string; language?: Language; signal?: AbortSignal } = {},
 ): Promise<{ diagnosis: FailureDiagnosis | null; error: DiagnoseError | null }> {
-  const prompt = buildDiagnosisPrompt(opts.materialContext);
+  const prompt = buildDiagnosisPrompt(opts.materialContext, opts.geometryContext);
   const body = buildDiagnosisBody(imageBase64, prompt);
   // Safety net: don't let the UI hang forever if the vision call stalls.
   const signal = opts.signal ?? AbortSignal.timeout(60_000);

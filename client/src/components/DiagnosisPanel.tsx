@@ -27,11 +27,14 @@ async function compressImage(file: File, maxDim = 800): Promise<string> {
 }
 
 /** Failed-print photo diagnosis — the "after the fact" half of the agent loop. */
-export function DiagnosisPanel({ language, canRun, onNeedAuth, materialContext }: {
+export function DiagnosisPanel({ language, canRun, onNeedAuth, materialContext, geometryContext }: {
   language: Language;
   canRun: boolean;
   onNeedAuth: () => void;
   materialContext?: string;
+  /** Known geometry facts from the uploaded 3D file (if any) — lets the model
+   *  weigh "multiple bodies by design" against a "broke apart" narrative. */
+  geometryContext?: string;
 }) {
   const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -61,7 +64,7 @@ export function DiagnosisPanel({ language, canRun, onNeedAuth, materialContext }
     setLoading(true);
     setError(null);
     setDiagnosis(null);
-    const result = await diagnosePrintFailure(image, { materialContext, language });
+    const result = await diagnosePrintFailure(image, { materialContext, geometryContext, language });
     if (result.diagnosis) {
       setDiagnosis(result.diagnosis);
     } else if (result.error === 'not_configured') {
@@ -116,6 +119,19 @@ export function DiagnosisPanel({ language, canRun, onNeedAuth, materialContext }
           {diagnosis && (
             <div className="space-y-3 fade-up">
               <div className="text-[13px] text-foreground/90 leading-relaxed">{diagnosis.overallAssessment}</div>
+
+              {diagnosis.ruledOutAlternatives.length > 0 && (
+                <div className="border border-border/40 rounded-sm p-3 space-y-1">
+                  <div className="text-[10px] font-mono text-muted-foreground/40 tracking-widest">{t('diagAlternatives')}</div>
+                  {diagnosis.ruledOutAlternatives.map((a, i) => (
+                    <div key={i} className="text-[11px] text-muted-foreground/70 leading-relaxed">· {a}</div>
+                  ))}
+                </div>
+              )}
+
+              <div className="text-[11px] font-mono text-muted-foreground/60">
+                {t('diagIsFailure')}: {Math.round(diagnosis.isFailure * 100)}% · {t('diagModeConfidence')}: {Math.round(diagnosis.confidence * 100)}%
+              </div>
 
               {diagnosis.failureModes.map((m, i) => (
                 <div key={i} className="border border-border/40 rounded-sm p-3 space-y-2">

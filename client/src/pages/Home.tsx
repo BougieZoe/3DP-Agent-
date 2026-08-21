@@ -128,6 +128,23 @@ function unifiedToModelData(
   };
 }
 
+/**
+ * Compact geometry facts for the photo-diagnosis model — so it can weigh
+ * "the uploaded file already has N bodies by design" against a "broke apart"
+ * narrative instead of reasoning from the photo in isolation.
+ */
+function buildDiagnosisGeometryContext(u: import('@/analysis').UnifiedAnalysis): string {
+  const topo = u.topology?.result;
+  const val = u.validation?.result;
+  const m = u.metrics?.result;
+  const dims = m?.boundingBoxDimensionsMm;
+  const parts: string[] = [];
+  if (topo) parts.push(`${topo.shellCount} body/bodies`);
+  if (val) parts.push(val.isWatertight ? 'watertight' : 'not watertight');
+  if (dims) parts.push(`size ${dims.x.toFixed(0)}×${dims.y.toFixed(0)}×${dims.z.toFixed(0)} mm`);
+  return parts.length ? `Known from the uploaded 3D file: ${parts.join(', ')}.` : '';
+}
+
 function unifiedToAnalysisSummary(unifiedAnalysis: import('@/analysis').UnifiedAnalysis) {
   const metrics = unifiedAnalysis.metrics.result;
   const topology = unifiedAnalysis.topology.result;
@@ -967,24 +984,55 @@ deepAnalysisSeq.current += 1;
               </div>
             )}
 
-            {/* Analysis tabs */}
+            {/* Tab bar — always visible so CHAT / photo-diagnosis works without a model */}
+            <div className="flex border-b border-border">
+              {(['geometry', 'report', 'agents', 'chat', 'causality'] as const).map(tabKey => (
+                <button key={tabKey} onClick={() => setTab(tabKey)}
+                  className={`text-xs font-mono px-4 py-2.5 border-b-2 transition-all ${
+                    tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}>
+                  {tabKey === 'geometry' ? t('geometry').toUpperCase()
+                    : tabKey === 'report' ? t('report').toUpperCase()
+                    : tabKey === 'agents' ? t('agents').toUpperCase()
+                    : tabKey === 'causality' ? t('causality').toUpperCase()
+                    : t('chatAI').toUpperCase()}
+                </button>
+              ))}
+            </div>
+
+            {/* CHAT TAB — reachable with zero files uploaded (photo diagnosis);
+                the geometry-aware chat stays gated on an uploaded model */}
+            {tab === 'chat' && (
+              <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
+                <div className="pt-4">
+                  <DiagnosisPanel
+                    language={language}
+                    canRun={!!user || hasAnyKey()}
+                    onNeedAuth={() => setShowAccountModal(true)}
+                    materialContext={`${material.name} (${material.technology.toUpperCase()})`}
+                    geometryContext={unifiedAnalysis ? buildDiagnosisGeometryContext(unifiedAnalysis) : undefined}
+                  />
+                </div>
+                {modelData ? (
+                  <div className="pt-4 h-[45vh] min-h-[320px] lg:h-[520px]">
+                    <ChatPanel
+                      model={modelData}
+                      language={language}
+                      material={material}
+                      onNeedAuth={() => setShowAccountModal(true)}
+                    />
+                  </div>
+                ) : (
+                  <div className="pt-6 text-center text-xs font-mono text-muted-foreground/40">
+                    {t('uploadStlBegin')} — {t('chatNeedsModel')}
+                  </div>
+                )}
+              </Suspense>
+            )}
+
+            {/* Model-dependent tabs (need an uploaded + analyzed file) */}
             {analysis && modelData && (
               <div className="space-y-0 fade-up">
-                {/* Tabs */}
-                <div className="flex border-b border-border">
-                  {(['geometry', 'report', 'agents', 'chat', 'causality'] as const).map(tabKey => (
-                    <button key={tabKey} onClick={() => setTab(tabKey)}
-                      className={`text-xs font-mono px-4 py-2.5 border-b-2 transition-all ${
-                        tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-                      }`}>
-                      {tabKey === 'geometry' ? t('geometry').toUpperCase()
-                        : tabKey === 'report' ? t('report').toUpperCase()
-                        : tabKey === 'agents' ? t('agents').toUpperCase()
-                        : tabKey === 'causality' ? t('causality').toUpperCase()
-                        : t('chatAI').toUpperCase()}
-                    </button>
-                  ))}
-                </div>
 
                 {/* GEOMETRY TAB */}
                 {tab === 'geometry' && (
@@ -1493,28 +1541,12 @@ deepAnalysisSeq.current += 1;
                   </Suspense>
                 )}
 
-                {/* CHAT TAB */}
-                {tab === 'chat' && (
-                  <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
-                    {/* Failed-print photo diagnosis — the "why did it fail?" half */}
-                    <div className="pt-4">
-                      <DiagnosisPanel
-                        language={language}
-                        canRun={!!user || hasAnyKey()}
-                        onNeedAuth={() => setShowAccountModal(true)}
-                        materialContext={`${material.name} (${material.technology.toUpperCase()})`}
-                      />
-                    </div>
-                    <div className="pt-4 h-[45vh] min-h-[320px] lg:h-[520px]">
-                      <ChatPanel
-                        model={modelData}
-                        language={language}
-                        material={material}
-                        onNeedAuth={() => setShowAccountModal(true)}
-                      />
-                    </div>
-                  </Suspense>
-                )}
+              </div>
+            )}
+            {/* No model + a model-dependent tab selected → gentle prompt */}
+            {!uploadedModel && tab !== 'chat' && (
+              <div className="pt-8 text-center text-xs font-mono text-muted-foreground/50">
+                {t('uploadStlBegin')}
               </div>
             )}
 
