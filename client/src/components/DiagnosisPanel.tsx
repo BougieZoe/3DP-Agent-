@@ -2,8 +2,10 @@ import { useRef, useState } from 'react';
 import { diagnosePrintFailure, failureModeLabel, type FailureDiagnosis } from '@/lib/failureDiagnosis';
 import { getTranslation, type Language } from '@/lib/i18n';
 
-/** Downscale an image to ≤800px and export as a ~80% JPEG data URL. */
-async function compressImage(file: File, maxDim = 800): Promise<string> {
+/** Downscale an image to ≤640px and export as a ~80% JPEG data URL —
+ *  small enough to keep the vision inference fast, clear enough to read a
+ *  failure pattern. */
+async function compressImage(file: File, maxDim = 640): Promise<string> {
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
