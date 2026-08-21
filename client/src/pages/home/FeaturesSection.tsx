@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, Bot, FileText, MessageCircle, Wand2, type LucideIcon } from 'lucide-react';
+import { Box, Bot, Camera, FileText, MessageCircle, Wand2, type LucideIcon } from 'lucide-react';
 import type { translations } from '@/lib/i18n';
 import { FEATURE_DESTINATIONS, type FeatureDestination, type FeatureId } from './featuresNavigation';
 import './features.css';
@@ -24,6 +24,8 @@ const LOCAL_FEATURES: FeatureItem[] = [
 const AI_FEATURES: FeatureItem[] = [
   { id: 'deepChat', icon: Bot, titleKey: 'featuresChatTitle', descKey: 'featuresChatDesc' },
   { id: 'optimize', icon: Wand2, titleKey: 'featuresOptimizeTitle', descKey: 'featuresOptimizeDesc' },
+  // Photo-based failed-print diagnosis — calls the hosted vision model (cloud AI, sign-in).
+  { id: 'diagnose', icon: Camera, titleKey: 'featuresDiagnoseTitle', descKey: 'featuresDiagnoseDesc' },
 ];
 
 function FeatureGroup({
