@@ -216,6 +216,8 @@ export const translations = {
     featuresChatDesc: 'bring your own AI provider',
     featuresOptimizeTitle: 'Design optimization',
     featuresOptimizeDesc: 'complex design optimization advice',
+    featuresDiagnoseTitle: 'Failed print diagnosis',
+    featuresDiagnoseDesc: 'photo-based — AI identifies why it failed',
     // ── CAD Studio ──
     cadStudio: 'CAD',
     cadDescribePlaceholder: 'Describe your object...',
@@ -619,6 +621,8 @@ export const translations = {
     featuresChatDesc: 'AIプロバイダーを持ち込む',
     featuresOptimizeTitle: '設計最適化',
     featuresOptimizeDesc: '複雑な設計最適化アドバイス',
+    featuresDiagnoseTitle: '失敗プリント診断',
+    featuresDiagnoseDesc: '写真ベース — AIが失敗原因を特定',
     // ── CAD Studio ──
     cadStudio: 'CAD',
     cadDescribePlaceholder: 'オブジェクトを説明してください...',
@@ -1022,6 +1026,8 @@ export const translations = {
     featuresChatDesc: '自带 AI 提供商',
     featuresOptimizeTitle: '设计优化',
     featuresOptimizeDesc: '复杂设计优化建议',
+    featuresDiagnoseTitle: '失败打印诊断',
+    featuresDiagnoseDesc: '基于照片 — AI 识别失败原因',
     // ── CAD Studio ──
     cadStudio: 'CAD',
     cadDescribePlaceholder: '描述你的对象...',

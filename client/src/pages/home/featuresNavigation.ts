@@ -9,7 +9,7 @@
  * file only declares intent.
  */
 
-export type FeatureId = 'geometry' | 'quickReport' | 'qa' | 'deepChat' | 'optimize';
+export type FeatureId = 'geometry' | 'quickReport' | 'qa' | 'deepChat' | 'optimize' | 'diagnose';
 
 export type FeatureTab = 'geometry' | 'report' | 'chat' | 'agents' | 'causality';
 
@@ -29,4 +29,7 @@ export const FEATURE_DESTINATIONS: Record<FeatureId, FeatureDestination> = {
   deepChat:    { tab: 'chat', requiresKey: true },
   // Optimization advisor results live under the AGENTS tab.
   optimize:    { tab: 'agents', requiresKey: true },
+  // Failed-print photo diagnosis lives in the CHAT tab; it calls the hosted
+  // vision model (Kimi), so it is a sign-in AI feature, not a local one.
+  diagnose:    { tab: 'chat', requiresKey: true },
 };
