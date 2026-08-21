@@ -123,7 +123,7 @@ export function parseDiagnosis(raw: string): FailureDiagnosis | null {
   };
 }
 
-export type DiagnoseError = 'auth' | 'not_configured' | 'quota' | 'failed';
+export type DiagnoseError = 'auth' | 'not_configured' | 'quota' | 'timeout' | 'failed';
 
 export async function diagnosePrintFailure(
   imageBase64: string,
@@ -131,8 +131,10 @@ export async function diagnosePrintFailure(
 ): Promise<{ diagnosis: FailureDiagnosis | null; error: DiagnoseError | null }> {
   const prompt = buildDiagnosisPrompt(opts.materialContext);
   const body = buildDiagnosisBody(imageBase64, prompt);
+  // Safety net: don't let the UI hang forever if the vision call stalls.
+  const signal = opts.signal ?? AbortSignal.timeout(60_000);
   try {
-    const resp = await callLLMProxy(DIAGNOSE_PROVIDER, '', body, opts.signal);
+    const resp = await callLLMProxy(DIAGNOSE_PROVIDER, '', body, signal);
     if (resp.status === 401) return { diagnosis: null, error: 'auth' };
     if (resp.status === 429) return { diagnosis: null, error: 'quota' };
     if (resp.status === 503) {
@@ -141,8 +143,9 @@ export async function diagnosePrintFailure(
     }
     if (!resp.ok) return { diagnosis: null, error: 'failed' };
     return { diagnosis: parseDiagnosis(await resp.text()), error: null };
-  } catch {
-    return { diagnosis: null, error: 'failed' };
+  } catch (e) {
+    const aborted = e instanceof DOMException && e.name === 'AbortError';
+    return { diagnosis: null, error: aborted ? 'timeout' : 'failed' };
   }
 }
 

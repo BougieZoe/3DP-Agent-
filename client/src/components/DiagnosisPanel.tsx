@@ -2,6 +2,30 @@ import { useRef, useState } from 'react';
 import { diagnosePrintFailure, failureModeLabel, type FailureDiagnosis } from '@/lib/failureDiagnosis';
 import { getTranslation, type Language } from '@/lib/i18n';
 
+/** Downscale an image to ≤800px and export as a ~80% JPEG data URL. */
+async function compressImage(file: File, maxDim = 800): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error('image load failed'));
+    img.src = dataUrl;
+  });
+  const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', 0.8);
+}
+
 /** Failed-print photo diagnosis — the "after the fact" half of the agent loop. */
 export function DiagnosisPanel({ language, canRun, onNeedAuth, materialContext }: {
   language: Language;
@@ -16,16 +40,19 @@ export function DiagnosisPanel({ language, canRun, onNeedAuth, materialContext }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const pick = (file: File | undefined) => {
+  const pick = async (file: File | undefined) => {
     if (!file) return;
     if (!/^image\//.test(file.type)) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImage(reader.result as string);
+    // Downscale to a small JPEG so the vision call is fast and stays well under
+    // the server's 2MB body cap — a raw phone photo base64 can be several MB.
+    try {
+      const compressed = await compressImage(file);
+      setImage(compressed);
       setDiagnosis(null);
       setError(null);
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      setError(t('diagError'));
+    }
   };
 
   const run = async () => {
@@ -43,6 +70,8 @@ export function DiagnosisPanel({ language, canRun, onNeedAuth, materialContext }
       setError(t('diagErrorAuth'));
     } else if (result.error === 'quota') {
       setError(t('diagErrorQuota'));
+    } else if (result.error === 'timeout') {
+      setError(t('diagErrorTimeout'));
     } else {
       setError(t('diagError'));
     }
