@@ -123,18 +123,26 @@ export function parseDiagnosis(raw: string): FailureDiagnosis | null {
   };
 }
 
+export type DiagnoseError = 'auth' | 'not_configured' | 'quota' | 'failed';
+
 export async function diagnosePrintFailure(
   imageBase64: string,
   opts: { materialContext?: string; language?: Language; signal?: AbortSignal } = {},
-): Promise<FailureDiagnosis | null> {
+): Promise<{ diagnosis: FailureDiagnosis | null; error: DiagnoseError | null }> {
   const prompt = buildDiagnosisPrompt(opts.materialContext);
   const body = buildDiagnosisBody(imageBase64, prompt);
   try {
     const resp = await callLLMProxy(DIAGNOSE_PROVIDER, '', body, opts.signal);
-    if (!resp.ok) return null;
-    return parseDiagnosis(await resp.text());
+    if (resp.status === 401) return { diagnosis: null, error: 'auth' };
+    if (resp.status === 429) return { diagnosis: null, error: 'quota' };
+    if (resp.status === 503) {
+      const text = await resp.text().catch(() => '');
+      return { diagnosis: null, error: text.includes('provider_not_configured') ? 'not_configured' : 'failed' };
+    }
+    if (!resp.ok) return { diagnosis: null, error: 'failed' };
+    return { diagnosis: parseDiagnosis(await resp.text()), error: null };
   } catch {
-    return null;
+    return { diagnosis: null, error: 'failed' };
   }
 }
 

@@ -35,8 +35,17 @@ export function DiagnosisPanel({ language, canRun, onNeedAuth, materialContext }
     setError(null);
     setDiagnosis(null);
     const result = await diagnosePrintFailure(image, { materialContext, language });
-    if (result) setDiagnosis(result);
-    else setError(t('diagError'));
+    if (result.diagnosis) {
+      setDiagnosis(result.diagnosis);
+    } else if (result.error === 'not_configured') {
+      setError(t('diagErrorConfig'));
+    } else if (result.error === 'auth') {
+      setError(t('diagErrorAuth'));
+    } else if (result.error === 'quota') {
+      setError(t('diagErrorQuota'));
+    } else {
+      setError(t('diagError'));
+    }
     setLoading(false);
   };
 
