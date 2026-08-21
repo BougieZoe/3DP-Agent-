@@ -173,7 +173,7 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
       onDrop={handleDrop}
       onClick={() => fileInputRef.current?.click()}
       className={`
-        relative border rounded-sm p-6 cursor-pointer transition-all duration-200 text-center
+        relative border rounded-sm py-12 px-6 cursor-pointer transition-all duration-200 text-center
         ${isDragging
           ? 'border-primary bg-primary/5 border-glow'
           : 'border-dashed border-border hover:border-primary/50 hover:bg-card'

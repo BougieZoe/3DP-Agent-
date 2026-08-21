@@ -924,7 +924,7 @@ deepAnalysisSeq.current += 1;
 
         {/* Right: Panel */}
         <div className="lg:w-1/2 lg:h-[calc(100vh-3.5rem)] lg:overflow-y-auto">
-          <div className="p-5 space-y-5">
+          <div className="pt-4 px-5 pb-5 space-y-8">
 
             {/* Upload */}
             <div>
@@ -1508,17 +1508,11 @@ deepAnalysisSeq.current += 1;
               </div>
             )}
 
-            {/* Empty state */}
+            {/* Empty state — the drop zone above already prompts the upload.
+                Features sit lower with breathing room in between; the middle
+                stays open for future content. */}
             {!uploadedModel && (
-              <div className="space-y-4">
-                <div className="text-center space-y-1.5 pt-1">
-                  <div className="text-sm font-mono text-foreground/80 leading-relaxed">{t('emptyHero')}</div>
-                  <div className="text-[11px] font-mono text-muted-foreground/50">{t('emptySub')}</div>
-                </div>
-                <div className="border border-dashed border-border/30 rounded-sm p-8 text-center space-y-2">
-                  <div className="text-muted-foreground/20 text-3xl font-mono">[ ]</div>
-                  <div className="text-xs text-muted-foreground/50 font-mono">{t('uploadStlBegin')}</div>
-                </div>
+              <div className="mt-28">
                 <FeaturesSection t={t} onNavigate={handleFeatureNavigate} />
               </div>
             )}
