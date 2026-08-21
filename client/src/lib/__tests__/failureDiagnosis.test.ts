@@ -5,6 +5,8 @@ describe('parseDiagnosis', () => {
   it('parses a well-formed diagnosis', () => {
     const raw = JSON.stringify({
       overallAssessment: 'The print warped at the corners from uneven cooling.',
+      ruledOutAlternatives: ['The pieces are labelled — segmentation for assembly, not breakage.', 'The seam follows the model geometry, not a crack path.'],
+      isFailure: 0.9,
       failureModes: [
         { mode: 'warping', probability: 0.8, causes: ['uneven cooling'], fixes: ['use an enclosure'] },
       ],
@@ -12,11 +14,23 @@ describe('parseDiagnosis', () => {
     });
     const d = parseDiagnosis(raw)!;
     expect(d.overallAssessment).toContain('warped');
+    expect(d.ruledOutAlternatives).toHaveLength(2);
+    expect(d.isFailure).toBe(0.9);
     expect(d.failureModes).toHaveLength(1);
     expect(d.failureModes[0].mode).toBe('warping');
     expect(d.failureModes[0].probability).toBe(0.8);
     expect(d.failureModes[0].causes[0]).toBe('uneven cooling');
     expect(d.confidence).toBe(0.75);
+  });
+
+  it('derives a cautious isFailure default when the model omits it', () => {
+    const raw = JSON.stringify({
+      overallAssessment: 'n',
+      failureModes: [{ mode: 'warping', probability: 0.4, causes: [], fixes: [] }],
+      confidence: 0.5,
+    });
+    expect(parseDiagnosis(raw)!.isFailure).toBe(0.4);
+    expect(parseDiagnosis('{"overallAssessment":"x","failureModes":[]}')!.isFailure).toBe(0.3);
   });
 
   it('tolerates markdown fences around the JSON', () => {
@@ -50,6 +64,15 @@ describe('buildDiagnosisPrompt', () => {
   it('includes material context when provided', () => {
     expect(buildDiagnosisPrompt('PLA (FDM)')).toContain('PLA (FDM)');
     expect(buildDiagnosisPrompt()).not.toContain('The part was printed');
+  });
+
+  it('asks the model to rule out segmentation and facet-seam alternatives', () => {
+    const prompt = buildDiagnosisPrompt('PLA', 'Known from the uploaded 3D file: 3 bodies, not watertight.');
+    expect(prompt).toContain('INTENTIONAL MULTI-PART SEGMENTATION');
+    expect(prompt).toContain('PANEL / FACET SEAM');
+    expect(prompt).toContain('ruledOutAlternatives');
+    expect(prompt).toContain('isFailure');
+    expect(prompt).toContain('3 bodies');
   });
 });
 
