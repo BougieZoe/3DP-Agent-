@@ -5,6 +5,7 @@ import { ExpertReviewPanel } from '@/components/ExpertReviewPanel';
 import { BatchReport } from '@/components/BatchReport';
 import { ProductionCard } from '@/components/ProductionCard';
 import { DiagnosisPanel } from '@/components/DiagnosisPanel';
+import { DiagnosisModal } from '@/components/DiagnosisModal';
 import { lazy, Suspense, useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
@@ -327,6 +328,7 @@ export default function Home() {
   const [showAPIModal, setShowAPIModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showDiagnosis, setShowDiagnosis] = useState(false);
   // Multi-file: the full set of loaded models + which one is active. The active
   // model is still `uploadedModel` — switching just swaps it in.
   const [models, setModels] = useState<UploadedModel[]>([]);
@@ -675,6 +677,10 @@ deepAnalysisSeq.current += 1;
       setShowAccountModal(true);
       return;
     }
+    if (dest.modal === 'diagnose') {
+      setShowDiagnosis(true);
+      return;
+    }
     if (dest.tab) setTab(dest.tab);
   }, [uploadedModel, user]);
 
@@ -755,6 +761,16 @@ deepAnalysisSeq.current += 1;
       {showAPIModal && <APIKeyModal onClose={() => setShowAPIModal(false)} language={language} />}
       {showAccountModal && <AccountModal language={language} onClose={() => setShowAccountModal(false)} />}
       {showPrivacy && <PrivacyModal language={language} onClose={() => setShowPrivacy(false)} />}
+      {showDiagnosis && (
+        <DiagnosisModal
+          language={language}
+          canRun={!!user || hasAnyKey()}
+          onNeedAuth={() => setShowAccountModal(true)}
+          materialContext={`${material.name} (${material.technology.toUpperCase()})`}
+          geometryContext={unifiedAnalysis ? buildDiagnosisGeometryContext(unifiedAnalysis) : undefined}
+          onClose={() => setShowDiagnosis(false)}
+        />
+      )}
 
       {/* ── Header ── */}
       <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 sm:px-5 py-3 border-b border-border bg-background/95 backdrop-blur-sm">
@@ -984,25 +1000,28 @@ deepAnalysisSeq.current += 1;
               </div>
             )}
 
-            {/* Tab bar — always visible so CHAT / photo-diagnosis works without a model */}
-            <div className="flex border-b border-border">
-              {(['geometry', 'report', 'agents', 'chat', 'causality'] as const).map(tabKey => (
-                <button key={tabKey} onClick={() => setTab(tabKey)}
-                  className={`text-xs font-mono px-4 py-2.5 border-b-2 transition-all ${
-                    tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}>
-                  {tabKey === 'geometry' ? t('geometry').toUpperCase()
-                    : tabKey === 'report' ? t('report').toUpperCase()
-                    : tabKey === 'agents' ? t('agents').toUpperCase()
-                    : tabKey === 'causality' ? t('causality').toUpperCase()
-                    : t('chatAI').toUpperCase()}
-                </button>
-              ))}
-            </div>
+            {/* Tab bar — only when a model is loaded; the empty state uses the
+                feature cards (diagnosis opens as a modal) instead */}
+            {modelData && (
+              <div className="flex border-b border-border">
+                {(['geometry', 'report', 'agents', 'chat', 'causality'] as const).map(tabKey => (
+                  <button key={tabKey} onClick={() => setTab(tabKey)}
+                    className={`text-xs font-mono px-4 py-2.5 border-b-2 transition-all ${
+                      tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}>
+                    {tabKey === 'geometry' ? t('geometry').toUpperCase()
+                      : tabKey === 'report' ? t('report').toUpperCase()
+                      : tabKey === 'agents' ? t('agents').toUpperCase()
+                      : tabKey === 'causality' ? t('causality').toUpperCase()
+                      : t('chatAI').toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            )}
 
-            {/* CHAT TAB — reachable with zero files uploaded (photo diagnosis);
-                the geometry-aware chat stays gated on an uploaded model */}
-            {tab === 'chat' && (
+            {/* CHAT TAB — photo diagnosis lives here once a model is loaded;
+                without a model it opens via the standalone DiagnosisModal */}
+            {tab === 'chat' && modelData && (
               <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
                 <div className="pt-4">
                   <DiagnosisPanel
@@ -1541,12 +1560,6 @@ deepAnalysisSeq.current += 1;
                   </Suspense>
                 )}
 
-              </div>
-            )}
-            {/* No model + a model-dependent tab selected → gentle prompt */}
-            {!uploadedModel && tab !== 'chat' && (
-              <div className="pt-8 text-center text-xs font-mono text-muted-foreground/50">
-                {t('uploadStlBegin')}
               </div>
             )}
 
