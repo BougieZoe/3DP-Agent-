@@ -165,29 +165,45 @@ function confidenceFallback(modes: FailureMode[]): number {
   return modes.reduce((a, m) => a + m.probability, 0) / modes.length;
 }
 
-export type DiagnoseError = 'auth' | 'not_configured' | 'quota' | 'timeout' | 'failed';
+export type DiagnoseError = 'auth' | 'not_configured' | 'quota' | 'timeout' | 'parse' | 'failed';
+
+export interface DiagnoseResult {
+  diagnosis: FailureDiagnosis | null;
+  error: DiagnoseError | null;
+  /** The raw failure (HTTP status + body, or exception) — for diagnostics, not UI. */
+  detail?: string;
+}
+
+function fail(error: DiagnoseError, detail?: string): DiagnoseResult {
+  // Record the real underlying cause so it's not silently lost behind the
+  // user-facing catch-all. Also surface to the dev console.
+  if (detail) console.error('[diagnosis] failed:', error, detail);
+  return { diagnosis: null, error, detail };
+}
 
 export async function diagnosePrintFailure(
   imageBase64: string,
   opts: { materialContext?: string; geometryContext?: string; language?: Language; signal?: AbortSignal } = {},
-): Promise<{ diagnosis: FailureDiagnosis | null; error: DiagnoseError | null }> {
+): Promise<DiagnoseResult> {
   const prompt = buildDiagnosisPrompt(opts.materialContext, opts.geometryContext);
   const body = buildDiagnosisBody(imageBase64, prompt);
   // Safety net: don't let the UI hang forever if the vision call stalls.
   const signal = opts.signal ?? AbortSignal.timeout(60_000);
   try {
     const resp = await callLLMProxy(DIAGNOSE_PROVIDER, '', body, signal);
-    if (resp.status === 401) return { diagnosis: null, error: 'auth' };
-    if (resp.status === 429) return { diagnosis: null, error: 'quota' };
+    if (resp.status === 401) return fail('auth', `401 from relay`);
+    if (resp.status === 429) return fail('quota', `429 from relay`);
+    const text = await resp.text().catch(() => '');
     if (resp.status === 503) {
-      const text = await resp.text().catch(() => '');
-      return { diagnosis: null, error: text.includes('provider_not_configured') ? 'not_configured' : 'failed' };
+      return fail(text.includes('provider_not_configured') ? 'not_configured' : 'failed', `503 body: ${text.slice(0, 200)}`);
     }
-    if (!resp.ok) return { diagnosis: null, error: 'failed' };
-    return { diagnosis: parseDiagnosis(await resp.text()), error: null };
+    if (!resp.ok) return fail('failed', `HTTP ${resp.status} body: ${text.slice(0, 200)}`);
+    const diagnosis = parseDiagnosis(text);
+    if (!diagnosis) return fail('parse', `200 but unparseable body: ${text.slice(0, 300)}`);
+    return { diagnosis, error: null };
   } catch (e) {
     const aborted = e instanceof DOMException && e.name === 'AbortError';
-    return { diagnosis: null, error: aborted ? 'timeout' : 'failed' };
+    return fail(aborted ? 'timeout' : 'failed', `exception: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 

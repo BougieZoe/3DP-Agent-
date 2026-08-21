@@ -75,6 +75,8 @@ export function DiagnosisPanel({ language, canRun, onNeedAuth, materialContext, 
       setError(t('diagErrorQuota'));
     } else if (result.error === 'timeout') {
       setError(t('diagErrorTimeout'));
+    } else if (result.error === 'parse') {
+      setError(t('diagErrorParse'));
     } else {
       setError(t('diagError'));
     }
