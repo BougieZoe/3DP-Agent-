@@ -58,7 +58,10 @@ export function buildDiagnosisBody(imageBase64: string, prompt: string): Record<
   const imageData = stripDataUrlPrefix(imageBase64);
   return {
     model: 'kimi-k3',
-    max_tokens: 700,
+    // Kimi k3 is a reasoning model: it spends tokens on reasoning_content
+    // before the answer lands in content. Give it room or content comes back
+    // empty and the diagnosis parse fails.
+    max_tokens: 2000,
     messages: [{
       role: 'user',
       content: [
@@ -83,9 +86,14 @@ export function parseDiagnosis(raw: string): FailureDiagnosis | null {
   let content = raw;
   try {
     const parsed = JSON.parse(raw);
-    content = parsed.choices?.[0]?.message?.content
-      || parsed.content?.[0]?.text
-      || raw;
+    const msg = parsed.choices?.[0]?.message ?? {};
+    // Kimi reasoning models may put the answer in reasoning_content when
+    // content is empty — fall back to it.
+    content = (typeof msg.content === 'string' && msg.content.trim())
+      ? msg.content
+      : (typeof msg.reasoning_content === 'string' && msg.reasoning_content.trim())
+        ? msg.reasoning_content
+        : (parsed.content?.[0]?.text ?? raw);
   } catch { /* content stays as raw */ }
 
   const jsonMatch = content.match(/\{[\s\S]*\}/);
