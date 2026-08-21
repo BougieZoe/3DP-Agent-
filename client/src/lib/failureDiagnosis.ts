@@ -187,8 +187,10 @@ export async function diagnosePrintFailure(
 ): Promise<DiagnoseResult> {
   const prompt = buildDiagnosisPrompt(opts.materialContext, opts.geometryContext);
   const body = buildDiagnosisBody(imageBase64, prompt);
-  // Safety net: don't let the UI hang forever if the vision call stalls.
-  const signal = opts.signal ?? AbortSignal.timeout(60_000);
+  // Safety net — but LONGER than the server relay's 120s timeout (llmRelay.ts),
+  // otherwise the client aborts while the server is still working. Kimi-k3 is a
+  // reasoning vision model; a diagnosis routinely takes 60-120s.
+  const signal = opts.signal ?? AbortSignal.timeout(130_000);
   try {
     const resp = await callLLMProxy(DIAGNOSE_PROVIDER, '', body, signal);
     if (resp.status === 401) return fail('auth', `401 from relay`);
