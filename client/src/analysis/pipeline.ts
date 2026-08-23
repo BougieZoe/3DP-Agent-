@@ -1,4 +1,4 @@
-import { moduleResult, PRINTER_PROFILES, type UnifiedAnalysis, type AnalysisModuleResult, type Confidence, type TopologyResult, type ValidationResult, type MetricsResult, type BedFitResult, type SupportResult, type PrintTimeResult } from './types';
+import { moduleResult, PRINTER_PROFILES, type UnifiedAnalysis, type AnalysisModuleResult, type Confidence, type TopologyResult, type ValidationResult, type MetricsResult, type BedFitResult, type SupportResult, type PrintTimeResult, type SlicerBackedMetrics } from './types';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { analyzeTopology } from './topology';
 import { validateMesh } from './validation';
@@ -37,6 +37,13 @@ export interface PipelineOptions {
    * instrumentation the telemetry/BVH decision relies on.
    */
   enableProfiling?: boolean;
+  /**
+   * Ground-truth metrics parsed from a real slicer run (server /api/slice).
+   * When present, the printTime module uses the slicer's print time / filament /
+   * layer count instead of the volumetric estimate. Absent on the cloud tier
+   * without a slicer binary — the estimate path stays honest (source: 'estimate').
+   */
+  slicer?: SlicerBackedMetrics;
 }
 
 export function runAnalysisPipeline(
@@ -109,7 +116,7 @@ export function runAnalysisPipeline(
   const printTime = time('printTime', () => {
     try {
       if (metrics.result.meshVolumeMm3 <= 0) return null;
-      return estimatePrintTime(metrics.result, options.printerId ?? 'bambu_x1c', options.layerHeightMm ?? 0.2, mat?.densityGPerCm3, mat?.pricePerKgUsd, lang, thresholds);
+      return estimatePrintTime(metrics.result, options.printerId ?? 'bambu_x1c', options.layerHeightMm ?? 0.2, mat?.densityGPerCm3, mat?.pricePerKgUsd, lang, thresholds, options.slicer);
     } catch (e) { return null; }
   });
 

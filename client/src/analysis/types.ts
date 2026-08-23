@@ -249,6 +249,25 @@ export interface SupportResult {
 // ─── Print Time ────────────────────────────────────────────────────────────────
 // Estimation based on volume, overhang complexity, and printer profile.
 
+/**
+ * Ground-truth print metrics parsed from a real slicer's G-code
+ * (PrusaSlicer / BambuStudio / OrcaSlicer via server/slicerBridge). When
+ * present, `estimatePrintTime` uses these instead of the volumetric proxy —
+ * see `PrintTimeResult.source`.
+ */
+export interface SlicerBackedMetrics {
+  /** Which slicer produced the G-code, e.g. 'prusaslicer' | 'bambustudio' | 'orca'. */
+  slicerId: string;
+  /** Exact print time parsed from the G-code header (minutes). */
+  printTimeMinutes: number;
+  /** Filament consumed (grams), parsed from the G-code. */
+  filamentGrams: number;
+  /** Layer count from `;LAYER:n` markers. */
+  layerCount: number;
+  /** Slicer-reported layer height, if available. */
+  layerHeightMm: number | null;
+}
+
 export interface PrintTimeResult {
   estimatedPrintTimeMinutes: number;
   estimatedPrintTimeHours: number;
@@ -257,6 +276,10 @@ export interface PrintTimeResult {
   totalCostUsd: number;
   layerCount: number;
   printerProfile: PrinterBedProfile;
+  /** Provenance: 'slicer' = parsed from real G-code; 'estimate' = volumetric proxy. */
+  source?: 'estimate' | 'slicer';
+  /** Set when source === 'slicer'. */
+  slicerId?: string;
 }
 
 // ─── Unified Analysis ─────────────────────────────────────────────────────────
