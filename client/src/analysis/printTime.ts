@@ -15,7 +15,7 @@
  * - The volumetric rate is a rough average — real prints vary significantly.
  */
 
-import { moduleResult, PRINTER_PROFILES, type AnalysisModuleResult, type Confidence, type PrintTimeResult, type PrinterProfileId } from './types';
+import { moduleResult, PRINTER_PROFILES, type AnalysisModuleResult, type Confidence, type PrintTimeResult, type SlicerBackedMetrics, type PrinterProfileId } from './types';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { MetricsResult } from './types';
 import { getThresholds, DEFAULT_ANALYSIS_THRESHOLDS, type AnalysisThresholds } from './thresholds';
@@ -42,6 +42,8 @@ export function estimatePrintTime(
   pricePerKgUsd?: number,
   language: ContentLang = 'en',
   thresholds: AnalysisThresholds = getThresholds(),
+  /** Ground truth from a real slicer run; when present, overrides the volumetric estimate. */
+  slicer?: SlicerBackedMetrics,
 ): AnalysisModuleResult<PrintTimeResult> {
   const pt = thresholds.printTime;
   const startTime = performance.now();
@@ -54,11 +56,48 @@ export function estimatePrintTime(
     return moduleResult('printTime', 0.0, 0, {
       estimatedPrintTimeMinutes: 0, estimatedPrintTimeHours: 0,
       materialWeightGrams: 0, materialCostUsd: 0, totalCostUsd: 0,
-      layerCount: 0, printerProfile: { id: printerId, name: profile.name, widthMm: profile.widthMm, depthMm: profile.depthMm, heightMm: profile.heightMm },
+      layerCount: 0, source: 'estimate',
+      printerProfile: { id: printerId, name: profile.name, widthMm: profile.widthMm, depthMm: profile.depthMm, heightMm: profile.heightMm },
     }, translate(CONTENT, 'printTime.zeroVolume', language));
   }
 
   const effectiveLayerHeight = layerHeightMm ?? pt.defaultLayerHeightMm;
+
+  // --- Ground truth: when the caller already sliced the model server-side
+  // (server/slicerBridge → /api/slice), the slicer's print time / filament /
+  // layer count are authoritative — NOT a volumetric estimate. Cost is still
+  // derived here from the real filament weight + machine rate, since the
+  // slicer does not price. Falls through to the volumetric path when `slicer`
+  // is absent (cloud tier without a slicer binary, or pre-slice).
+  if (slicer && slicer.printTimeMinutes > 0) {
+    const realMinutes = slicer.printTimeMinutes;
+    const realHours = parseFloat((realMinutes / 60).toFixed(1));
+    const weightGrams = slicer.filamentGrams > 0
+      ? slicer.filamentGrams
+      : (volume / 1000) * (densityGPerCm3 ?? 1.24);
+    const materialCost = weightGrams / 1000 * (pricePerKgUsd ?? 22);
+    const machineCost = realHours * pt.machineRatePerHourUsd;
+    const totalCost = materialCost + machineCost;
+    const lh = slicer.layerHeightMm ?? effectiveLayerHeight;
+    const layerCount = slicer.layerCount > 0
+      ? slicer.layerCount
+      : Math.ceil(metricsResult.boundingBoxDimensionsMm.z / Math.max(1e-6, lh));
+    const result: PrintTimeResult = {
+      estimatedPrintTimeMinutes: Math.round(realMinutes),
+      estimatedPrintTimeHours: realHours,
+      materialWeightGrams: parseFloat(weightGrams.toFixed(1)),
+      materialCostUsd: parseFloat(materialCost.toFixed(2)),
+      totalCostUsd: parseFloat(totalCost.toFixed(2)),
+      layerCount,
+      printerProfile: { id: printerId, name: profile.name, widthMm: profile.widthMm, depthMm: profile.depthMm, heightMm: profile.heightMm },
+      source: 'slicer',
+      slicerId: slicer.slicerId,
+    };
+    // i18n TODO: localize 'printTime.slicerBacked' in all 3 lang blocks
+    // (shared/i18n/content.ts) instead of this English literal.
+    return moduleResult('printTime', pt.confidence.high as Confidence, Math.round(performance.now() - startTime), result,
+      'Print time and filament from a real slicer run (G-code); cost derived from real filament weight.');
+  }
 
   // Pick closest layer height rate
   const layerHeights = Object.keys(pt.volumetricRates).map(Number);
@@ -106,6 +145,7 @@ export function estimatePrintTime(
     materialCostUsd: parseFloat(materialCost.toFixed(2)),
     totalCostUsd: parseFloat(totalCost.toFixed(2)),
     layerCount,
+    source: 'estimate',
     printerProfile: { id: printerId, name: profile.name, widthMm: profile.widthMm, depthMm: profile.depthMm, heightMm: profile.heightMm },
   };
 
