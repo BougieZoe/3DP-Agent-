@@ -69,7 +69,19 @@ interface SliceBody {
   layerHeightMm?: number;
   autoDropToBed?: boolean;
   timeoutMs?: number;
+  /** Large-format printer profile override. */
+  largeFormat?: boolean;
 }
+
+/**
+ * Large-format printer profiles for OrcaSlicer.
+ * These extend the standard Bambu Lab profiles with larger bed dimensions.
+ */
+const LARGE_FORMAT_PROFILES: Record<string, { widthMm: number; depthMm: number; heightMm: number }> = {
+  'bambu_h2d': { widthMm: 350, depthMm: 350, heightMm: 350 },
+  'bambu_h2d_pro': { widthMm: 350, depthMm: 350, heightMm: 350 },
+  'bambu_x1c': { widthMm: 256, depthMm: 256, heightMm: 256 },
+};
 
 function sendError(res: Response, status: number, code: string, detail: string): void {
   res.status(status).json({ ok: false, error: { code, detail } });
@@ -121,6 +133,19 @@ export function createSlicerRouter(): Router {
       // NOTE: extraArgs is intentionally never populated from request input —
       // it is reserved for server-side configuration only.
     };
+
+    // Handle large-format printer profiles
+    if (body.largeFormat && body.printerPreset) {
+      const largeFormatProfile = LARGE_FORMAT_PROFILES[body.printerPreset.toLowerCase()];
+      if (largeFormatProfile) {
+        // Add large-format specific args
+        if (!profile.extraArgs) profile.extraArgs = [];
+        profile.extraArgs.push(
+          '--bed-shape', `${largeFormatProfile.widthMm}x${largeFormatProfile.depthMm}`,
+          '--max-print-height', String(largeFormatProfile.heightMm),
+        );
+      }
+    }
 
     const adapter = createSlicerAdapter(profile);
 
