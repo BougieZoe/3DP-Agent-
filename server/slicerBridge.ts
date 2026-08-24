@@ -241,19 +241,34 @@ export interface GCodeMetadata extends SlicerMetadata {}
  * PrusaSlicer / BambuStudio comment dialect:
  *   ; estimated printing time (normal mode) = 0m 42s
  *   ; filament used [g] = 0.79
+ *   ; filament used [mm] = 1493.99
+ *   ; filament used [cm3] = 3.59
+ *   ; total filament used [g] = 0.00
  *   ; layer_height = 0.2
  *   ; total layers count = 21   (older slicers: `; layer_count = 21`)
+ *
  * Missing fields fall back to safe defaults (0 / null) rather than guessing.
+ * For filament grams, we try multiple patterns as different slicers use different formats.
  */
 export function parseGCodeMetadata(gcode: string): GCodeMetadata {
   const timeMatch = gcode.match(/estimated printing time[^=]*=\s*([\dhms\s]+)/);
-  const filamentMatch = gcode.match(/filament used \[g\]\s*=\s*([\d.]+)/);
+
+  // Try multiple filament patterns (PrusaSlicer uses different formats)
+  let filamentGrams = 0;
+  const filamentGMatch = gcode.match(/filament used \[g\]\s*=\s*([\d.]+)/);
+  const filamentTotalGMatch = gcode.match(/total filament used \[g\]\s*=\s*([\d.]+)/);
+  if (filamentGMatch) {
+    filamentGrams = parseFloat(filamentGMatch[1]);
+  } else if (filamentTotalGMatch) {
+    filamentGrams = parseFloat(filamentTotalGMatch[1]);
+  }
+
   const layerCountMatch = gcode.match(/(?:total layers count|layer_count)\s*=\s*(\d+)/);
   const layerHeightMatch = gcode.match(/layer_height\s*=\s*([\d.]+)/);
 
   return {
     printTimeMinutes: timeMatch ? parsePrintTime(timeMatch[1]) : 0,
-    filamentGrams: filamentMatch ? parseFloat(filamentMatch[1]) : 0,
+    filamentGrams,
     layerCount: layerCountMatch ? parseInt(layerCountMatch[1], 10) : 0,
     layerHeightMm: layerHeightMatch ? parseFloat(layerHeightMatch[1]) : null,
   };
@@ -272,31 +287,43 @@ function parsePrintTime(s: string): number {
 }
 
 /**
- * Pair `;LAYER:n` markers with the following `;Z:...` value to build a
- * layer-by-layer table. Handles the PrusaSlicer/BambuStudio order
- * (`;LAYER:n` then `;Z:...`); layer thickness is the Z delta from the
- * previous layer. Note: exact per-layer *time* is not present in standard
- * G-code — a slicer-specific verbose marker would be required, so
- * `timeSeconds` is omitted unless such a marker is added later.
+ * Pair `;LAYER:n` or `;LAYER_CHANGE` markers with the following `;Z:...` value
+ * to build a layer-by-layer table. Handles:
+ *   - PrusaSlicer/BambuStudio: `;LAYER:n` then `;Z:...`
+ *   - PrusaSlicer 2.9+: `;LAYER_CHANGE` then `;Z:...`
+ *
+ * Layer thickness is the Z delta from the previous layer.
+ * Note: exact per-layer *time* is not present in standard G-code.
  */
 export function parseLayers(gcode: string): SlicerLayerInfo[] {
   const layers: SlicerLayerInfo[] = [];
-  let currentLayer = -1;
+  let layerIndex = 0;
   let lastZ: number | null = null;
 
   for (const raw of gcode.split('\n')) {
     const line = raw.trim();
-    const layerMatch = /^;LAYER:(\d+)/.exec(line);
-    if (layerMatch) {
-      currentLayer = parseInt(layerMatch[1], 10);
+
+    // PrusaSlicer 2.9+ format: ;LAYER_CHANGE
+    if (line === ';LAYER_CHANGE') {
+      // Layer number is inferred from the count
       continue;
     }
+
+    // Legacy format: ;LAYER:n
+    const layerMatch = /^;LAYER:(\d+)/.exec(line);
+    if (layerMatch) {
+      layerIndex = parseInt(layerMatch[1], 10);
+      continue;
+    }
+
+    // Z height marker
     const zMatch = /^;Z:([\d.]+)/.exec(line);
-    if (zMatch && currentLayer >= 0) {
+    if (zMatch) {
       const z = parseFloat(zMatch[1]);
       const heightMm = lastZ !== null ? Math.max(0, Math.round((z - lastZ) * 1000) / 1000) : 0;
-      layers.push({ layerNumber: currentLayer, zMm: z, heightMm });
+      layers.push({ layerNumber: layerIndex, zMm: z, heightMm });
       lastZ = z;
+      layerIndex++;
     }
   }
 
