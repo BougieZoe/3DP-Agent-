@@ -733,4 +733,162 @@ export const testCases: S3TestCase[] = [
     },
     tags: ["regression"],
   },
+
+  // ===========================================================================
+  // Use Case 3: Performance Stress Tests
+  // ===========================================================================
+
+  // High triangle count mesh
+  {
+    id: "stress-high-triangle-count",
+    label: "High Triangle Count — 100k Triangles",
+    description: "Mesh with 100,000 triangles testing performance limits",
+    input: {
+      id: "high-tri-count",
+      label: "High Triangle Count",
+      mesh: {
+        type: "high-triangle-count",
+        params: { triangleCount: 100000 },
+        coordinateSystem: "z-up",
+        expectedUnit: "mm",
+      },
+      material: {
+        materialFamily: "fdm",
+      },
+    },
+    expected: {
+      modules: {
+        metrics: {
+          moduleName: "metrics",
+          shouldExist: true,
+          fields: {
+            triangleCount: { range: [99000, 101000] },
+          },
+        },
+      },
+      overallConfidence: { min: 0.3, max: 1.0 },
+      stability: {
+        maxTotalDurationMs: 2000,
+      },
+    },
+    tags: ["stress"],
+  },
+
+  // Extreme aspect ratio
+  {
+    id: "stress-extreme-aspect-ratio",
+    label: "Extreme Aspect Ratio — 1000:1",
+    description: "Very thin and long mesh testing numerical stability",
+    input: {
+      id: "extreme-aspect",
+      label: "Extreme Aspect Ratio",
+      mesh: {
+        type: "thin-plate",
+        params: { width: 100, height: 0.1, thickness: 0.1 },
+        coordinateSystem: "z-up",
+        expectedUnit: "mm",
+      },
+      material: {
+        materialFamily: "fdm",
+      },
+    },
+    expected: {
+      modules: {
+        metrics: {
+          moduleName: "metrics",
+          shouldExist: true,
+          fields: {
+            meshVolumeMm3: { range: [0.5, 2] },
+          },
+        },
+      },
+      overallConfidence: { min: 0.2, max: 1.0 },
+      stability: {
+        maxTotalDurationMs: 1000,
+      },
+    },
+    tags: ["stress", "boundary"],
+  },
+
+  // Complex manifold (torus)
+  {
+    id: "edge-torus",
+    label: "Torus — Genus-1 Manifold",
+    description: "Torus testing genus detection and complex topology",
+    input: {
+      id: "torus",
+      label: "Torus",
+      mesh: {
+        type: "torus",
+        params: { majorRadius: 10, minorRadius: 3, segments: 32 },
+        coordinateSystem: "z-up",
+        expectedUnit: "mm",
+      },
+      material: {
+        materialFamily: "fdm",
+      },
+    },
+    expected: {
+      modules: {
+        topology: {
+          moduleName: "topology",
+          shouldExist: true,
+          fields: {
+            isManifold: { value: true },
+            shellCount: { range: [1, 1] },
+          },
+        },
+        validation: {
+          moduleName: "validation",
+          shouldExist: true,
+          fields: {
+            isWatertight: { value: true },
+          },
+        },
+      },
+      overallConfidence: { min: 0.3, max: 1.0 },
+    },
+    tags: ["boundary", "regression"],
+  },
+
+  // Nested shells (concentric cubes)
+  {
+    id: "edge-nested-shells",
+    label: "Nested Shells — Concentric Cubes",
+    description: "Two concentric cubes testing nested shell detection",
+    input: {
+      id: "nested-shells",
+      label: "Nested Shells",
+      mesh: {
+        type: "nested-shells",
+        params: { outerSize: 20, innerSize: 10 },
+        coordinateSystem: "z-up",
+        expectedUnit: "mm",
+      },
+      material: {
+        materialFamily: "fdm",
+      },
+    },
+    expected: {
+      modules: {
+        topology: {
+          moduleName: "topology",
+          shouldExist: true,
+          fields: {
+            shellCount: { range: [2, 2] },
+            isManifold: { value: true },
+          },
+        },
+        validation: {
+          moduleName: "validation",
+          shouldExist: true,
+          fields: {
+            isWatertight: { value: true },
+          },
+        },
+      },
+      overallConfidence: { min: 0.3, max: 1.0 },
+    },
+    tags: ["boundary", "regression"],
+  },
 ];
