@@ -71,7 +71,23 @@ function devLocalBridgeGuard(req: Request, res: Response, next: NextFunction): v
 // bridges from a single origin.
 const RATE_WINDOW_MS = 60_000;
 const RATE_LIMIT = 30; // requests per window per IP
+const RATE_CLEANUP_INTERVAL_MS = 300_000; // cleanup every 5 minutes
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+// Periodically remove expired buckets to prevent memory leaks.
+const rateCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, bucket] of rateBuckets) {
+    if (bucket.resetAt < now) {
+      rateBuckets.delete(ip);
+    }
+  }
+}, RATE_CLEANUP_INTERVAL_MS);
+
+// Allow the process to exit even if the timer is still active.
+if (rateCleanupTimer.unref) {
+  rateCleanupTimer.unref();
+}
 
 function rateLimit(req: Request, res: Response, next: NextFunction): void {
   const ip = req.ip || req.socket.remoteAddress || "unknown";
