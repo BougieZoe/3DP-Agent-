@@ -30,6 +30,28 @@ export interface Material {
   degradationRisk?: number;
   /** Eco-material advisory (0..1): brittle, cracks under load. */
   brittlenessRisk?: number;
+
+  // ── Thermal properties (S2 — heat field / warping analysis) ──────────────
+  /** Glass transition temperature (°C) — critical for FDM warping. Above this, polymer softens. */
+  glassTransitionTempC?: number;
+  /** Thermal conductivity (W/m·K) — how fast heat spreads through the material. */
+  thermalConductivityWPerMK?: number;
+  /** Specific heat capacity (J/g·K) — energy needed to raise 1g by 1K. */
+  specificHeatJPerGK?: number;
+  /** Printing temperature range (°C) — nozzle temp for FDM, laser power proxy for SLM. */
+  printTempC?: { min: number; max: number };
+  /** Heated bed temperature (°C) — FDM only. Higher = more adhesion, less warping. */
+  bedTempC?: number;
+  /** Volumetric shrinkage on cooling (%) — direct driver of warping stress. */
+  shrinkagePercent?: number;
+  /** Linear thermal expansion coefficient (1/K) — ΔL/L per degree. */
+  thermalExpansionCoeff?: number;
+  /** Environment requirements for successful printing. */
+  environment?: {
+    enclosure: boolean;
+    draftShield: boolean;
+    chamberTempC?: number;
+  };
 }
 
 export const MATERIALS: Record<string, Material> = {
@@ -40,6 +62,15 @@ export const MATERIALS: Record<string, Material> = {
     description: 'Polylactic acid — a plant-based (corn-starch) thermoplastic that melts at the lowest nozzle temperature (~180–220 °C). The easiest filament to print: minimal warping, no enclosure needed, but it is stiff, brittle, and softens above ~60 °C.',
     useCase: 'Prototypes, decorative parts, enclosures, lithophanes',
     overhangThreshold: 50, densityGPerCm3: 1.24, pricePerKgUsd: 22,
+    // Thermal properties — low warping material
+    glassTransitionTempC: 60,
+    thermalConductivityWPerMK: 0.13,
+    specificHeatJPerGK: 1.8,
+    printTempC: { min: 180, max: 220 },
+    bedTempC: 50,
+    shrinkagePercent: 0.3,
+    thermalExpansionCoeff: 7e-5,
+    environment: { enclosure: false, draftShield: false },
   },
   PETG: {
     name: 'PETG', technology: 'fdm',
@@ -47,6 +78,15 @@ export const MATERIALS: Record<string, Material> = {
     description: 'Polyethylene terephthalate glycol — a tough, water- and chemical-resistant filament with strong layer adhesion and a slight flexibility. Prints near ~230–250 °C with good bridging, but is stringy and needs a dry filament to avoid bubbles.',
     useCase: 'Functional parts, containers, parts that flex slightly',
     overhangThreshold: 40, densityGPerCm3: 1.27, pricePerKgUsd: 25,
+    // Thermal properties — moderate warping
+    glassTransitionTempC: 80,
+    thermalConductivityWPerMK: 0.24,
+    specificHeatJPerGK: 1.4,
+    printTempC: { min: 230, max: 250 },
+    bedTempC: 70,
+    shrinkagePercent: 0.4,
+    thermalExpansionCoeff: 6e-5,
+    environment: { enclosure: false, draftShield: false },
   },
   ABS: {
     name: 'ABS', technology: 'fdm',
@@ -54,6 +94,15 @@ export const MATERIALS: Record<string, Material> = {
     description: 'Acrylonitrile butadiene styrene — a strong, impact- and heat-resistant thermoplastic (~105 °C glass transition). Requires a heated bed (~100 °C) and an enclosure; it shrinks as it cools, so large flat parts warp and layers can delaminate.',
     useCase: 'Mechanical parts, automotive, electronics housings',
     overhangThreshold: 45, densityGPerCm3: 1.04, pricePerKgUsd: 28,
+    // Thermal properties — HIGH warping risk, needs enclosure
+    glassTransitionTempC: 105,
+    thermalConductivityWPerMK: 0.17,
+    specificHeatJPerGK: 1.4,
+    printTempC: { min: 230, max: 260 },
+    bedTempC: 100,
+    shrinkagePercent: 0.8,
+    thermalExpansionCoeff: 7e-5,
+    environment: { enclosure: true, draftShield: true, chamberTempC: 50 },
   },
   TPU: {
     name: 'TPU', technology: 'fdm',
@@ -61,6 +110,15 @@ export const MATERIALS: Record<string, Material> = {
     description: 'Thermoplastic polyurethane — a rubber-like elastomer (hardness ~80–95A). Bends, stretches and absorbs shocks instead of cracking. Hard to push through a Bowden tube; prints best with a direct-drive extruder at slow speed.',
     useCase: 'Gaskets, phone cases, shock absorbers, flexible hinges',
     overhangThreshold: 40, densityGPerCm3: 1.21, pricePerKgUsd: 45,
+    // Thermal properties — low warping (flexible)
+    glassTransitionTempC: 50,
+    thermalConductivityWPerMK: 0.25,
+    specificHeatJPerGK: 1.5,
+    printTempC: { min: 210, max: 240 },
+    bedTempC: 50,
+    shrinkagePercent: 0.2,
+    thermalExpansionCoeff: 8e-5,
+    environment: { enclosure: false, draftShield: false },
   },
   ASA: {
     name: 'ASA', technology: 'fdm',
@@ -68,6 +126,15 @@ export const MATERIALS: Record<string, Material> = {
     description: 'Acrylonitrile styrene acrylate — ABS-class strength with a UV-resistant acrylate surface layer, so it withstands sunlight and weather far longer than ABS. Same warping/enclosure requirements as ABS.',
     useCase: 'Outdoor parts, automotive exterior, marine hardware',
     overhangThreshold: 45, densityGPerCm3: 1.07, pricePerKgUsd: 30,
+    // Thermal properties — HIGH warping (similar to ABS)
+    glassTransitionTempC: 105,
+    thermalConductivityWPerMK: 0.17,
+    specificHeatJPerGK: 1.4,
+    printTempC: { min: 235, max: 260 },
+    bedTempC: 100,
+    shrinkagePercent: 0.7,
+    thermalExpansionCoeff: 7e-5,
+    environment: { enclosure: true, draftShield: true, chamberTempC: 50 },
   },
   PC: {
     name: 'PC', technology: 'fdm',
@@ -75,6 +142,15 @@ export const MATERIALS: Record<string, Material> = {
     description: 'Polycarbonate — an amorphous engineering plastic with exceptional strength, impact resistance and heat tolerance (~147 °C glass transition). Demands very high nozzle temperature (~260–310 °C), a heated enclosure and bone-dry filament; warps aggressively.',
     useCase: 'Structural and load-bearing parts, high-temperature service',
     overhangThreshold: 35, densityGPerCm3: 1.20, pricePerKgUsd: 40,
+    // Thermal properties — EXTREME warping, needs high-temp enclosure
+    glassTransitionTempC: 147,
+    thermalConductivityWPerMK: 0.20,
+    specificHeatJPerGK: 1.3,
+    printTempC: { min: 280, max: 310 },
+    bedTempC: 110,
+    shrinkagePercent: 1.0,
+    thermalExpansionCoeff: 6.5e-5,
+    environment: { enclosure: true, draftShield: true, chamberTempC: 70 },
   },
   NYLON: {
     name: 'Nylon', technology: 'fdm',
@@ -82,6 +158,15 @@ export const MATERIALS: Record<string, Material> = {
     description: 'Polyamide — a tough, wear-resistant, low-friction engineering thermoplastic with excellent layer adhesion. Strongly hygroscopic: it absorbs atmospheric moisture and must be dried before and during printing or it turns brittle and steams.',
     useCase: 'Gears, bearings, hinges, wear parts',
     overhangThreshold: 40, densityGPerCm3: 1.14, pricePerKgUsd: 45,
+    // Thermal properties — HIGH warping + hygroscopic
+    glassTransitionTempC: 50,
+    thermalConductivityWPerMK: 0.25,
+    specificHeatJPerGK: 1.7,
+    printTempC: { min: 240, max: 270 },
+    bedTempC: 70,
+    shrinkagePercent: 1.5,
+    thermalExpansionCoeff: 8e-5,
+    environment: { enclosure: true, draftShield: true, chamberTempC: 40 },
   },
   // ── SLA/DLP — resins (a material family for the SLA/DLP printer technology) ──
   RESIN_STD: {

@@ -9,6 +9,7 @@ export { computeFgfMetrics, type FgfResult } from './fgf';
 export { computePbfMetrics, type PbfResult, type PbfKind } from './pbf';
 export { computeConcreteMetrics, concreteFromUnified, type ConcreteResult } from './concrete';
 export { computeEcoMetrics, type EcoResult } from './eco';
+export { computeThermalMetrics, type ThermalFieldResult, type ThermalLayerData, type WarpingHotspot, type ThermalRecommendation } from './thermal';
 export { productionFromUnified, type ProductionSuitability } from './production';
 export { assessContext, type ObjectContext, type ContextAssessment } from './context';
 export { computeLiquidCoolingMetrics, liquidCoolingFromUnified, type LiquidCoolingResult, PRESSURE_WALL_MM } from './liquidCooling';

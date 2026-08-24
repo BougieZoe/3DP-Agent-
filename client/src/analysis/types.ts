@@ -302,6 +302,8 @@ export interface UnifiedAnalysis {
   concrete?: AnalysisModuleResult<import('./concrete').ConcreteResult> | null;
   /** Present only when the analysis ran with materialFamily === 'eco'. */
   eco?: AnalysisModuleResult<import('./eco').EcoResult> | null;
+  /** Thermal field & warping analysis — present when material has thermal properties. */
+  thermal?: AnalysisModuleResult<import('./thermal').ThermalFieldResult> | null;
   /** ISO timestamp of when analysis was run */
   timestamp: string;
   modelFileName: string;

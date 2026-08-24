@@ -223,6 +223,22 @@ export interface AnalysisThresholds {
     /** Wall confidence >= this → measurement trusted (banner hidden). */
     minTrustedWallConfidence: number;
   };
+
+  /** Thermal field & warping analysis (thermal.ts). */
+  thermal: {
+    /** Shrinkage percent > this → high warping risk. */
+    highShrinkagePercent: number;
+    /** Heat accumulation risk > this → poor inter-layer adhesion. */
+    highHeatAccumulationRisk: number;
+    /** Layer fill fraction > this → large flat area risk. */
+    largeFlatAreaFillFraction: number;
+    /** Warping risk score > this → critical recommendations. */
+    criticalWarpingRisk: number;
+    /** Warping risk score > this → warning recommendations. */
+    warningWarpingRisk: number;
+    /** Thermal risk score > this → temperature-related concerns. */
+    highThermalRisk: number;
+  };
 }
 
 /** Deeply-partial override shape accepted by getThresholds(). */
@@ -372,6 +388,15 @@ export const DEFAULT_ANALYSIS_THRESHOLDS: AnalysisThresholds = {
 
   verdictGate: {
     minTrustedWallConfidence: 0.4,
+  },
+
+  thermal: {
+    highShrinkagePercent: 0.7,
+    highHeatAccumulationRisk: 0.7,
+    largeFlatAreaFillFraction: 0.7,
+    criticalWarpingRisk: 0.7,
+    warningWarpingRisk: 0.4,
+    highThermalRisk: 0.6,
   },
 };
 
