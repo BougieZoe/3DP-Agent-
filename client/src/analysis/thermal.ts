@@ -88,7 +88,94 @@ const FDM_PRINT_SPEED_MM_PER_S = 60; // typical FDM speed for duration estimatio
 // Per-material defaults (when thermal props are missing)
 // ---------------------------------------------------------------------------
 
-const THERMAL_DEFAULTS: Record<string, Partial<Material>> = {
+/**
+ * Material-specific thermal properties for common 3D printing materials.
+ * Based on published data and empirical measurements.
+ */
+const MATERIAL_THERMAL_PROPS: Record<string, {
+  glassTransitionTempC: number;
+  thermalConductivityWPerMK: number;
+  specificHeatJPerGK: number;
+  shrinkagePercent: number;
+  printTempC: { min: number; max: number };
+  bedTempC: number;
+  densityGPerCm3: number;
+  thermalDiffusivityMm2PerS: number;
+  emisivity: number;
+}> = {
+  // PLA - Low shrinkage, easy to print
+  pla: {
+    glassTransitionTempC: 60,
+    thermalConductivityWPerMK: 0.13,
+    specificHeatJPerGK: 1.8,
+    shrinkagePercent: 0.2,
+    printTempC: { min: 190, max: 220 },
+    bedTempC: 50,
+    densityGPerCm3: 1.24,
+    thermalDiffusivityMm2PerS: 0.059,
+    emisivity: 0.92,
+  },
+  // ABS - High shrinkage, requires enclosure
+  abs: {
+    glassTransitionTempC: 105,
+    thermalConductivityWPerMK: 0.17,
+    specificHeatJPerGK: 1.4,
+    shrinkagePercent: 0.8,
+    printTempC: { min: 220, max: 250 },
+    bedTempC: 100,
+    densityGPerCm3: 1.04,
+    thermalDiffusivityMm2PerS: 0.116,
+    emisivity: 0.90,
+  },
+  // PETG - Medium shrinkage, good balance
+  petg: {
+    glassTransitionTempC: 80,
+    thermalConductivityWPerMK: 0.24,
+    specificHeatJPerGK: 1.2,
+    shrinkagePercent: 0.4,
+    printTempC: { min: 220, max: 250 },
+    bedTempC: 80,
+    densityGPerCm3: 1.27,
+    thermalDiffusivityMm2PerS: 0.157,
+    emisivity: 0.94,
+  },
+  // TPU - Flexible, low shrinkage
+  tpu: {
+    glassTransitionTempC: -40,
+    thermalConductivityWPerMK: 0.15,
+    specificHeatJPerGK: 2.0,
+    shrinkagePercent: 0.3,
+    printTempC: { min: 210, max: 230 },
+    bedTempC: 60,
+    densityGPerCm3: 1.20,
+    thermalDiffusivityMm2PerS: 0.063,
+    emisivity: 0.93,
+  },
+  // Nylon (PA6) - High shrinkage, hygroscopic
+  nylon: {
+    glassTransitionTempC: 50,
+    thermalConductivityWPerMK: 0.25,
+    specificHeatJPerGK: 1.6,
+    shrinkagePercent: 1.0,
+    printTempC: { min: 240, max: 270 },
+    bedTempC: 80,
+    densityGPerCm3: 1.14,
+    thermalDiffusivityMm2PerS: 0.137,
+    emisivity: 0.91,
+  },
+  // PC - High temperature, high shrinkage
+  pc: {
+    glassTransitionTempC: 147,
+    thermalConductivityWPerMK: 0.20,
+    specificHeatJPerGK: 1.3,
+    shrinkagePercent: 0.7,
+    printTempC: { min: 260, max: 310 },
+    bedTempC: 110,
+    densityGPerCm3: 1.20,
+    thermalDiffusivityMm2PerS: 0.128,
+    emisivity: 0.89,
+  },
+  // FDM default
   fdm: {
     glassTransitionTempC: 80,
     thermalConductivityWPerMK: 0.2,
@@ -96,21 +183,62 @@ const THERMAL_DEFAULTS: Record<string, Partial<Material>> = {
     shrinkagePercent: 0.5,
     printTempC: { min: 200, max: 240 },
     bedTempC: 60,
+    densityGPerCm3: 1.2,
+    thermalDiffusivityMm2PerS: 0.111,
+    emisivity: 0.92,
   },
+  // SLA default
   sla: {
+    glassTransitionTempC: 60,
+    thermalConductivityWPerMK: 0.15,
+    specificHeatJPerGK: 1.6,
     shrinkagePercent: 0.1,
+    printTempC: { min: 20, max: 30 },
+    bedTempC: 25,
+    densityGPerCm3: 1.15,
+    thermalDiffusivityMm2PerS: 0.081,
+    emisivity: 0.95,
   },
+  // SLS default
   sls: {
+    glassTransitionTempC: 175,
+    thermalConductivityWPerMK: 0.25,
+    specificHeatJPerGK: 1.4,
     shrinkagePercent: 0.3,
+    printTempC: { min: 170, max: 190 },
+    bedTempC: 170,
+    densityGPerCm3: 1.01,
+    thermalDiffusivityMm2PerS: 0.173,
+    emisivity: 0.90,
   },
+  // SLM default
   slm: {
+    glassTransitionTempC: 1400,
+    thermalConductivityWPerMK: 30,
+    specificHeatJPerGK: 0.5,
     shrinkagePercent: 0.2,
     printTempC: { min: 1000, max: 1400 },
+    bedTempC: 200,
+    densityGPerCm3: 7.8,
+    thermalDiffusivityMm2PerS: 7.7,
+    emisivity: 0.85,
   },
+  // Concrete default
   concrete: {
+    glassTransitionTempC: 100,
+    thermalConductivityWPerMK: 1.5,
+    specificHeatJPerGK: 0.8,
     shrinkagePercent: 0.5,
+    printTempC: { min: 15, max: 25 },
+    bedTempC: 20,
+    densityGPerCm3: 2.4,
+    thermalDiffusivityMm2PerS: 0.78,
+    emisivity: 0.93,
   },
 };
+
+// Legacy alias for backward compatibility
+const THERMAL_DEFAULTS: Record<string, Partial<Material>> = MATERIAL_THERMAL_PROPS;
 
 // ---------------------------------------------------------------------------
 // Core analysis
@@ -126,7 +254,10 @@ export function computeThermalMetrics(
   model: GeometryModel,
   options: ThermalAnalysisOptions,
 ): ThermalFieldResult {
-  const mat = { ...THERMAL_DEFAULTS[options.materialFamily], ...options.material };
+  // Get material-specific thermal properties
+  const materialKey = options.material.name?.toLowerCase().replace(/\s+/g, '') ?? options.materialFamily;
+  const matProps = MATERIAL_THERMAL_PROPS[materialKey] ?? MATERIAL_THERMAL_PROPS[options.materialFamily];
+  const mat = { ...matProps, ...options.material };
 
   // Build geometry graph for spatial queries
   const graph = buildGeometryGraph(model);
@@ -349,6 +480,10 @@ function identifyWarpingHotspots(
   // Sample every Nth layer to keep computation bounded
   const step = Math.max(1, Math.floor(layers.length / 20));
 
+  // Material-specific risk factors
+  const shrinkageFactor = (mat.shrinkagePercent ?? 0.5) / 1.5;
+  const glassTransitionFactor = mat.glassTransitionTempC ? (mat.glassTransitionTempC - 60) / 100 : 0.5;
+
   for (let i = 0; i < layers.length; i += step) {
     const layer = layers[i];
 
@@ -356,35 +491,50 @@ function identifyWarpingHotspots(
     const layerFraction = estimateLayerFillFraction(layer, graph);
     const flatAreaRatio = layerFraction;
     if (flatAreaRatio > 0.7) {
+      const risk = Math.min(1, flatAreaRatio * 0.8 * (1 + shrinkageFactor * 0.5));
       hotspots.push({
         layerNumber: layer.layerNumber,
         zMm: layer.zMm,
         region: "large_flat",
-        risk: Math.min(1, flatAreaRatio * 0.8),
-        cause: `Large flat cross-section (${(flatAreaRatio * 100).toFixed(0)}% fill) — high thermal stress`,
+        risk,
+        cause: `Large flat cross-section (${(flatAreaRatio * 100).toFixed(0)}% fill) — high thermal stress (shrinkage: ${(shrinkageFactor * 100).toFixed(0)}%)`,
       });
     }
 
     // Corner stress concentration (simplified: check if near bounding box corners)
     const isNearCorner = isLayerNearCorner(layer, bbox);
     if (isNearCorner) {
+      const risk = Math.min(1, 0.6 * (1 + shrinkageFactor * 0.3));
       hotspots.push({
         layerNumber: layer.layerNumber,
         zMm: layer.zMm,
         region: "corner",
-        risk: 0.6,
+        risk,
         cause: "Corner region — stress concentration point",
       });
     }
 
     // Thin bridge detection
     if (layer.heatAccumulationRisk > 0.7) {
+      const risk = layer.heatAccumulationRisk * 0.8 * (1 + glassTransitionFactor * 0.2);
       hotspots.push({
         layerNumber: layer.layerNumber,
         zMm: layer.zMm,
         region: "thin_bridge",
-        risk: layer.heatAccumulationRisk * 0.8,
+        risk,
         cause: "High heat accumulation — thin section or bridge",
+      });
+    }
+
+    // Edge detection (high cooling rate at edges)
+    if (layer.coolingRateCPerS > 50) {
+      const risk = Math.min(1, (layer.coolingRateCPerS / 100) * shrinkageFactor);
+      hotspots.push({
+        layerNumber: layer.layerNumber,
+        zMm: layer.zMm,
+        region: "edge",
+        risk,
+        cause: `Rapid cooling (${layer.coolingRateCPerS.toFixed(1)}°C/s) — thermal shock risk`,
       });
     }
   }
