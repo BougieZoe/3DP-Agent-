@@ -10,7 +10,15 @@
  * - Integration with existing GeometryModel interface
  */
 import { OcctKernel } from 'occt-wasm';
-import type { GeometryModel } from '../analysis/geometryModel';
+
+export interface GeometryModel {
+  positions: Float32Array;
+  normals: Float32Array;
+  indices: Uint32Array;
+  vertexCount: number;
+  triangleCount: number;
+  units: 'mm';
+}
 
 export interface StepParseResult {
   /** Parsed geometry model ready for analysis */
@@ -119,8 +127,8 @@ export async function parseStepFile(
     solidCount,
     faceCount,
     boundingBox: [
-      bbox.min.x, bbox.min.y, bbox.min.z,
-      bbox.max.x, bbox.max.y, bbox.max.z,
+      bbox.xmin, bbox.ymin, bbox.zmin,
+      bbox.xmax, bbox.ymax, bbox.zmax,
     ],
     volumeMm3: volume,
     surfaceAreaMm2: surfaceArea,
