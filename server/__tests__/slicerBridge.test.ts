@@ -193,6 +193,27 @@ G1 Z0.65
         }),
       ).rejects.toThrow('Refusing to run non-absolute slicer binary');
     });
+
+    it.skipIf(!prusaSlicerAvailable)('should handle large-format printer profile', async () => {
+      const stlBytes = await readFile(TEST_STL_PATH);
+      const profile: SlicerProfile = {
+        id: 'prusaslicer',
+        binary: PRUSASLICER_PATH,
+        printerPreset: 'bambu_h2d',
+        extraArgs: ['--bed-shape', '350x350', '--max-print-height', '350'],
+      };
+      const adapter = createSlicerAdapter(profile);
+
+      const result = await adapter.slice({
+        stlBytes,
+        fileName: 'test_cube.stl',
+        profile,
+        autoDropToBed: true,
+      });
+
+      expect(result.gcode).toBeTruthy();
+      expect(result.metadata.printTimeMinutes).toBeGreaterThan(0);
+    });
   });
 });
 
