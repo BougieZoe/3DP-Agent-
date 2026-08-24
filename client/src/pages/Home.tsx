@@ -1149,6 +1149,19 @@ deepAnalysisSeq.current += 1;
                       <MetricRow label={t('dimY')} value={toUnit(modelData.dims.y).toFixed(2)} unit={unitSuffix} />
                       <MetricRow label={t('dimZ')} value={toUnit(modelData.dims.z).toFixed(2)} unit={unitSuffix} />
                       <MetricRow label={t('overhangFaces')} value={analysis.overhang.areas} />
+                      {/* Slicer provenance indicator — shows whether print metrics come from real G-code or estimates */}
+                      {uploadedModel?.sliceProvenance && (
+                        <div className="flex items-center gap-2 text-[11px] font-mono text-emerald-400/70 mt-2">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          SLICED: {uploadedModel.sliceProvenance.slicerId} · {uploadedModel.sliceMetadata?.printTimeMinutes.toFixed(1)}min · {uploadedModel.sliceMetadata?.filamentGrams.toFixed(1)}g
+                        </div>
+                      )}
+                      {!uploadedModel?.sliceMetadata && uploadedModel && (
+                        <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground/50 mt-2">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />
+                          ESTIMATED (volume-based)
+                        </div>
+                      )}
                     </div>
                     {/* Expert mesh diagnostics — collapsed by default so the core metrics stay prominent */}
                     <details className="mt-2">

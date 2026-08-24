@@ -4,6 +4,8 @@ import { loadModelFile } from '@/lib/modelLoader';
 import { Language } from '@/lib/i18n';
 import { runAnalysisInWorker, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
 import { normalizeModelGeometry } from '@/lib/modelNormalization';
+import { geometryToStl } from '@/lib/meshOps';
+import { sliceSTL, type SliceMetadata, type SliceProvenance, type SlicerId } from '@/lib/sliceClient';
 import type { LengthUnit } from '@shared/domain/geometry';
 import * as THREE from 'three';
 
@@ -18,6 +20,10 @@ export interface UploadedModel {
   units: LengthUnit;
   /** Pristine clone of the source geometry — the basis for re-processing on unit change. */
   rawGeometry: THREE.BufferGeometry;
+  /** Ground-truth print metrics from real slicer G-code (when available). */
+  sliceMetadata?: SliceMetadata;
+  /** Provenance info tracking the data source (slicer vs estimate). */
+  sliceProvenance?: SliceProvenance;
 }
 
 interface STLUploadHandlerProps {
@@ -122,8 +128,48 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
         const { geometry, rawGeometry } = normalizeModelGeometry(loaded.geometry, effectiveUnits);
         const model = fromThreeBufferGeometry(geometry);
         const unifiedAnalysis = await runAnalysisInWorker(model, { fileName: file.name, materialFamily });
+
+        // Slice STL to get ground-truth print metrics (time, filament, layers).
+        // Only for STL files (binary format) — OBJ/3MF go through estimate path.
+        let sliceMetadata: SliceMetadata | undefined;
+        let sliceProvenance: SliceProvenance | undefined;
+        if (file.name.toLowerCase().endsWith('.stl')) {
+          try {
+            log(`> SLICING ${file.name}...`);
+            const stlBytes = geometryToStl(geometry);
+            const sliceResult = await sliceSTL({
+              stlBytes,
+              fileName: file.name,
+              slicer: 'prusaslicer',
+              autoDropToBed: true,
+            });
+            sliceMetadata = sliceResult.metadata;
+            sliceProvenance = {
+              slicerId: 'prusaslicer',
+              slicedAt: new Date().toISOString(),
+              profileUsed: 'default',
+              autoDropToBed: true,
+            };
+            log(`> SLICE COMPLETE: ${sliceMetadata.printTimeMinutes.toFixed(1)}min, ${sliceMetadata.filamentGrams.toFixed(1)}g`);
+          } catch (err) {
+            // Slice failure does not block upload — fall back to volume estimates.
+            console.warn('[STLUploadHandler] slice failed, using estimates:', err);
+            log(`> SLICE UNAVAILABLE (using estimates)`);
+          }
+        }
+
         const mesh = createMeshFromGeometry(geometry);
-        results.push({ geometry, mesh, unifiedAnalysis, fileName: file.name, fileSizeBytes: file.size, units: effectiveUnits, rawGeometry });
+        results.push({
+          geometry,
+          mesh,
+          unifiedAnalysis,
+          fileName: file.name,
+          fileSizeBytes: file.size,
+          units: effectiveUnits,
+          rawGeometry,
+          sliceMetadata,
+          sliceProvenance,
+        });
       } catch (error) {
         log(`> ${t.error} ${file.name}: ${error instanceof Error ? error.message : t.unknownError}`);
       }
