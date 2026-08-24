@@ -535,7 +535,8 @@ export default function Home() {
   // Re-run analysis under a different print-technology family (FDM vs resin).
   const reanalyzeWithFamily = useCallback(async (family: Material['technology']) => {
     setMaterialFamily(family);
-    setMaterialName(defaultMaterialKeyFor(family)); // switch to that technology's default material (registry key)
+    const newMaterialKey = defaultMaterialKeyFor(family);
+    setMaterialName(newMaterialKey); // switch to that technology's default material (registry key)
     if (!uploadedModel) return;
 
     materialRequestSeq.current += 1;
@@ -547,7 +548,8 @@ export default function Home() {
     setDeepAgentRun(null);
 
     const model = fromThreeBufferGeometry(uploadedModel.geometry);
-    const newUnified = await runAnalysisInWorker(model, { fileName: uploadedModel.fileName, material: MATERIALS[materialName], materialFamily: family });
+    const newMaterial = MATERIALS[newMaterialKey];
+    const newUnified = await runAnalysisInWorker(model, { fileName: uploadedModel.fileName, material: newMaterial, materialFamily: family });
 
     if (currentSeq !== materialRequestSeq.current) return;
     const updatedModel: UploadedModel = { ...uploadedModel, unifiedAnalysis: newUnified };
@@ -555,12 +557,12 @@ export default function Home() {
 
     if (currentSeq !== materialRequestSeq.current || !orchestratorRef.current) return;
     const summary = await orchestratorRef.current.runFullAnalysis(
-      updatedModel.geometry, newUnified, updatedModel.fileName, canvasRef.current, language, MATERIALS[materialName],
+      updatedModel.geometry, newUnified, updatedModel.fileName, canvasRef.current, language, newMaterial,
     );
     if (currentSeq !== materialRequestSeq.current) return;
     setAgentRun(summary);
     setMaterialLoading(false);
-  }, [uploadedModel, materialName, language]);
+  }, [uploadedModel, language]);
 
   const handleUnitsChange = useCallback(async (newUnits: LengthUnit) => {
     setUnits(newUnits);
