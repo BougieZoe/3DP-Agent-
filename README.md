@@ -44,6 +44,9 @@ Drop in an STL file and receive:
 | Printability Score | Overall manufacturing readiness |
 | Failure Prediction | Where and why a print may fail |
 | Optimization Advice | Recommended fixes and improvements |
+| **Slicer Integration** | **Real G-code generation via PrusaSlicer/OrcaSlicer** |
+| **STEP Input** | **Direct CAD file analysis via OpenCASCADE WASM** |
+| **Thermal Analysis** | **Material-specific thermal behavior prediction** |
 
 No account required.
 
@@ -126,12 +129,95 @@ Instead of reading a report, users can watch the model explain itself.
 
 ---
 
+## Slicer Integration (S1c, S1b)
+
+3DP Agent integrates with real slicer CLIs to generate accurate print predictions:
+
+### Supported Slicers
+
+| Slicer | Status | Notes |
+|--------|--------|-------|
+| **PrusaSlicer** | ✅ Full | Auto-discovery, G-code parsing |
+| **OrcaSlicer** | ✅ Full | 3MF extraction, large-format support |
+| **BambuStudio** | 🔲 Planned | Same CLI as PrusaSlicer |
+
+### Features
+
+- **Real G-code generation** with accurate print time and filament estimates
+- **Layer-by-layer analysis** from actual slicer output
+- **Material-specific profiles** for PLA, ABS, PETG, TPU, Nylon, PC
+- **Large-format printer support** (Bambu Lab H2D/H2D Pro: 350x350x350mm)
+- **Auto bed normalization** for optimal print orientation
+
+### API
+
+```bash
+# Health check
+curl http://localhost:3001/api/slice/health
+
+# Slice an STL
+curl -X POST http://localhost:3001/api/slice \
+  -H "Content-Type: application/json" \
+  -d '{"stlBase64": "<base64-encoded-stl>", "slicer": "prusaslicer"}'
+```
+
+---
+
+## STEP Input Support (D1)
+
+3DP Agent can directly analyze STEP files using OpenCASCADE WASM:
+
+### Features
+
+- **Direct STEP file import** without manual STL conversion
+- **Accurate geometry extraction** with proper B-REP to mesh conversion
+- **Metadata extraction** from STEP headers (author, organization, etc.)
+- **Configurable tessellation** (linear/angular deflection)
+
+### API
+
+```bash
+# Health check
+curl http://localhost:3001/api/step/health
+
+# Parse a STEP file
+curl -X POST http://localhost:3001/api/step \
+  -H "Content-Type: application/json" \
+  -d '{"stepBase64": "<base64-encoded-step>"}'
+```
+
+---
+
+## Thermal Analysis (S2)
+
+Advanced thermal behavior prediction for FDM printing:
+
+### Material Database
+
+| Material | Glass Transition | Thermal Conductivity | Shrinkage |
+|----------|------------------|---------------------|-----------|
+| PLA | 60°C | 0.13 W/m·K | 0.2% |
+| ABS | 105°C | 0.17 W/m·K | 0.8% |
+| PETG | 80°C | 0.24 W/m·K | 0.4% |
+| TPU | -40°C | 0.15 W/m·K | 0.3% |
+| Nylon | 50°C | 0.25 W/m·K | 1.0% |
+| PC | 147°C | 0.20 W/m·K | 0.7% |
+
+### Capabilities
+
+- **Per-layer thermal modeling** using Newton's law of cooling
+- **Warping risk assessment** based on material shrinkage and geometry
+- **Heat accumulation detection** for thin sections and bridges
+- **Material-specific recommendations** (bed temp, enclosure, orientation)
+
+---
+
 ## Architecture
 
 ```mermaid
 flowchart LR
 
-User --> STL
+User --> STL[STL/STEP]
 
 STL --> Analysis
 
@@ -139,11 +225,15 @@ Analysis --> Geometry
 Analysis --> Printability
 Analysis --> Failure
 Analysis --> Optimization
+Analysis --> Slicer[Slicer Bridge]
+Analysis --> Thermal[Thermal Analysis]
 
 Geometry --> Consensus
 Printability --> Consensus
 Failure --> Consensus
 Optimization --> Consensus
+Slicer --> GCode[G-code + Metadata]
+Thermal --> ThermalResult[Thermal Insights]
 
 Consensus --> Causality
 
@@ -168,6 +258,15 @@ AI providers:
 - OpenAI
 - Claude
 - Gemini
+
+Slicer backends:
+
+- PrusaSlicer 2.9+
+- OrcaSlicer 2.4+
+
+CAD parsing:
+
+- OpenCASCADE WASM (via occt-wasm)
 
 Provider keys remain client-side.
 
@@ -213,23 +312,35 @@ pnpm dev:server
 
 Open http://localhost:3000.
 
-> **CAD Studio "Generate"** requires the API server (terminal 2) to be
-> running. It also depends on the local `cad` skill
-> (`earthtojake/text-to-cad`) at `~/.agents/skills/cad` plus a Python venv at
-> `.cad-bridge/.venv` — verify with
-> `curl http://localhost:3001/api/cad/generate/health` (expect `ready: true`).
->
-> **Mesh Studio** works fully in the browser in mock mode (procedural
-> primitives, no API server). Its optional "REPAIR & PROCESS" step needs the
-> API server (mesh diagnostics/decimate/place-on-plate) and, for watertight
-> repair, an isolated mesh venv (numpy 1.x + pymeshfix, separate from the
-> build123d venv which needs numpy 2.x):
->
-> ```bash
-> .cad-bridge/.venv/bin/python -m venv .cad-bridge/mesh-venv
-> .cad-bridge/mesh-venv/bin/pip install "numpy<2" trimesh pymeshfix \
->   fast-simplification networkx manifold3d
-> ```
+### Slicer Setup
+
+For real slicer integration, install one of the supported slicers:
+
+**PrusaSlicer (recommended):**
+```bash
+# macOS
+brew install --cask prusaslicer
+
+# Or download from https://www.prusa3d.com/prusaslicer/
+```
+
+**OrcaSlicer:**
+```bash
+# macOS
+brew install --cask orcaslicer
+
+# Or download from https://orcaslicer.com
+```
+
+The slicer will be auto-discovered at:
+- `/Applications/PrusaSlicer.app/Contents/MacOS/PrusaSlicer`
+- `/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer`
+
+### STEP File Support
+
+STEP file analysis uses OpenCASCADE WASM (automatically installed with `pnpm install`).
+
+No additional setup required.
 
 ---
 
@@ -251,6 +362,8 @@ API endpoints (dev, all proxied to the server on :3001):
 - `GET  /api/cad/generate/:id/step` — exact STEP file (CNC / machining).
 - `POST /api/mesh/process` — STL diagnostics, best-effort watertight repair,
   decimation, and placement on the build plate.
+- `POST /api/slice` — STL → G-code via PrusaSlicer/OrcaSlicer.
+- `POST /api/step` — STEP file → geometry + metadata.
 
 Optional env: `VITE_TRIPO_API_KEY` (hosted Tripo text→3D in Mesh Studio).
 
@@ -260,8 +373,15 @@ Optional env: `VITE_TRIPO_API_KEY` (hosted Tripo text→3D in Mesh Studio).
 
 ```bash
 pnpm check   # tsc --noEmit
-pnpm test    # vitest
+pnpm test    # vitest (580+ tests)
 ```
+
+### Test Coverage
+
+- **Unit tests** for all analysis modules
+- **Integration tests** for slicer CLI bridge
+- **Performance benchmarks** for analysis pipeline
+- **Validation harness** with 20+ test cases
 
 ---
 
@@ -280,12 +400,15 @@ docker run \
 
 ## Roadmap
 
-- PDF Export
-- Slicer Presets
-- Batch Analysis
-- Cost Estimation
-- Manufacturing Knowledge Graph
-- Historical Failure Memory
+- [x] Slicer Integration (PrusaSlicer, OrcaSlicer)
+- [x] STEP File Support (OpenCASCADE WASM)
+- [x] Thermal Analysis (Material-specific)
+- [x] Large-format Printer Support
+- [ ] PDF Export
+- [ ] Batch Analysis
+- [ ] Cost Estimation
+- [ ] Manufacturing Knowledge Graph
+- [ ] Historical Failure Memory
 
 ---
 
