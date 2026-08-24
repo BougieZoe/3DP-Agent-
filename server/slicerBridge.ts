@@ -298,10 +298,18 @@ export function parseGCodeMetadata(gcode: string): GCodeMetadata {
   let filamentGrams = 0;
   const filamentGMatch = gcode.match(/filament used \[g\]\s*=\s*([\d.]+)/);
   const filamentTotalGMatch = gcode.match(/total filament used \[g\]\s*=\s*([\d.]+)/);
+  const filamentCm3Match = gcode.match(/filament used \[cm3\]\s*=\s*([\d.]+)/);
+
   if (filamentGMatch) {
     filamentGrams = parseFloat(filamentGMatch[1]);
   } else if (filamentTotalGMatch) {
     filamentGrams = parseFloat(filamentTotalGMatch[1]);
+  }
+
+  // If grams is 0, try to calculate from volume (PLA density ~1.24 g/cm³)
+  if (filamentGrams === 0 && filamentCm3Match) {
+    const filamentCm3 = parseFloat(filamentCm3Match[1]);
+    filamentGrams = Math.round(filamentCm3 * 1.24 * 100) / 100;
   }
 
   const layerCountMatch = gcode.match(/(?:total layers count|layer_count)\s*=\s*(\d+)/);
