@@ -6,6 +6,7 @@ import { currentDir as __dirname } from "./currentDir";
 import { createCadBridgeRouter } from "./cadBridge";
 import { createMeshProcessRouter } from "./meshProcess";
 import { createSlicerRouter } from "./slicerRouter";
+import { createStepRouter } from "./stepRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
 import { relayLLM } from "./llmRelay";
@@ -164,6 +165,9 @@ export function createApp() {
 
     // Slicer bridge: STL → G-code via a local slicer CLI.
     app.use("/api/slice", ...amdProxy, createSlicerRouter());
+
+    // STEP file parser: STEP → geometry + metadata via OpenCASCADE WASM.
+    app.use("/api/step", ...amdProxy, createStepRouter());
 
     // Tripo text-to-3D relay: the API key stays server-side; the browser only
     // talks to this proxy. Mounted under the same bridge guards as the other
