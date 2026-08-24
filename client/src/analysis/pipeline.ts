@@ -8,6 +8,7 @@ import { computeFgfMetrics, type FgfResult } from './fgf';
 import { computePbfMetrics, type PbfResult, type PbfKind } from './pbf';
 import { computeConcreteMetrics, type ConcreteResult } from './concrete';
 import { computeEcoMetrics, type EcoResult } from './eco';
+import { computeThermalMetrics, type ThermalFieldResult } from './thermal';
 import { checkBedFit } from './bedFit';
 import { estimateSupportVolume } from './support';
 import { estimatePrintTime } from './printTime';
@@ -188,7 +189,29 @@ export function runAnalysisPipeline(
     }
   });
 
-  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco]
+  // Thermal field & warping analysis (S2) — heat transfer + warping prediction.
+  // Runs when material has thermal properties (FDM default, SLS/SLM optional).
+  const EMPTY_THERMAL: ThermalFieldResult = { layers: [], thermalRiskScore: 0, maxThermalGradientCPerMm: 0, warpingRiskScore: 0, warpingHotspots: [], recommendations: [] };
+  const thermal = time('thermal', () => {
+    try {
+      if (!mat) return null;
+      // Only run for technologies that have thermal properties
+      const family = options.materialFamily ?? 'fdm';
+      const hasThermalProps = mat.shrinkagePercent != null || mat.glassTransitionTempC != null;
+      if (!hasThermalProps) return null;
+      return moduleResult('thermal', 0.6 as Confidence, 0, computeThermalMetrics(model, {
+        material: mat,
+        materialFamily: family,
+        layerHeightMm: options.layerHeightMm,
+        layerCount: options.slicer?.layerCount,
+        printTimeMinutes: options.slicer?.printTimeMinutes,
+      }), 'Thermal field and warping prediction (analytical model, not FEA).');
+    } catch (e) {
+      return failResult('thermal', e, EMPTY_THERMAL);
+    }
+  });
+
+  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, thermal]
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .map(m => m.confidence);
   const overallConfidence = confidences.length > 0
@@ -207,6 +230,7 @@ export function runAnalysisPipeline(
     pbf,
     concrete,
     eco,
+    thermal,
     timestamp: now,
     modelFileName: fileName,
     overallConfidence,
