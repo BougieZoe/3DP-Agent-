@@ -166,14 +166,17 @@ export function compareModule(
     return { moduleName, passed: false, fields };
   }
 
+  // Get the actual result data (nested under .result)
+  const actualResult = moduleResult.result;
+
   // Compare each field
-  for (const [fieldPath, expectation] of Object.entries(expectation.fields)) {
-    const actual = getNestedValue(moduleResult.result, fieldPath);
-    const comparison = compareValue(actual, expectation);
+  for (const [fieldPath, fieldExpectation] of Object.entries(expectation.fields)) {
+    const actual = getNestedValue(actualResult, fieldPath);
+    const comparison = compareValue(actual, fieldExpectation);
     fields.push({
       field: fieldPath,
       actual,
-      expected: expectation.value ?? expectation.range ?? expectation.exists,
+      expected: fieldExpectation.value ?? fieldExpectation.range ?? fieldExpectation.exists,
       passed: comparison.passed,
       message: comparison.message,
     });
@@ -186,16 +189,6 @@ export function compareModule(
         constraint.field === "confidence" ? moduleResult : moduleResult.result,
         constraint.field
       );
-      if (typeof actual !== "number") {
-        fields.push({
-          field: constraint.field,
-          actual,
-          expected: `constraint: ${constraint.field} ${constraint.op} ${constraint.value}`,
-          passed: false,
-          message: `expected number, got ${typeof actual}`,
-        });
-        continue;
-      }
 
       let passed = false;
       switch (constraint.op) {

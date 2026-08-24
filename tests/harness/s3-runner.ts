@@ -9,15 +9,15 @@ import type {
   S3TestCaseInput,
   S3TestCaseResult,
   ModuleComparison,
-} from "../s3-schema";
+} from "./s3-schema";
 import type {
   UnifiedAnalysis,
   Confidence,
 } from "../../client/src/analysis/types";
-import { generateMesh } from "../fixtures/generators";
-import { compareModule, compareConfidence } from "../s3-compare";
-import { runPipeline } from "../../client/src/analysis/pipeline";
-import type { AnalysisOptions } from "../../client/src/analysis/pipeline";
+import { generateMesh } from "./fixtures/generators";
+import { compareModule, compareConfidence } from "./s3-compare";
+import { runAnalysisPipeline } from "../../client/src/analysis/pipeline";
+import type { PipelineOptions } from "../../client/src/analysis/pipeline";
 
 export interface RunOptions {
   /** Skip modules not in this list (optional) */
@@ -55,17 +55,17 @@ export async function runSingleCase(
   const geometryModel = generateMesh(testCase.input.mesh);
 
   // Configure analysis options
-  const analysisOptions: AnalysisOptions = {
+  const pipelineOptions: PipelineOptions = {
     material: testCase.input.material.material,
     printerId: testCase.input.material.printerId,
     layerHeightMm: testCase.input.material.layerHeightMm,
-    thresholdsOverride: testCase.input.thresholds,
+    thresholds: testCase.input.thresholds,
   };
 
   // Run analysis pipeline
   let analysis: UnifiedAnalysis;
   try {
-    analysis = await runPipeline(geometryModel, analysisOptions);
+    analysis = runAnalysisPipeline(geometryModel, pipelineOptions);
   } catch (error) {
     const duration = performance.now() - startTime;
     return {

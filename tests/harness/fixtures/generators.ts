@@ -9,7 +9,7 @@ import * as THREE from "three";
 import {
   createGeometryModel,
   type GeometryModel,
-} from "../../client/src/analysis/geometryModel";
+} from "../../../client/src/analysis/geometryModel";
 import type { MeshGenerationParams } from "../s3-schema";
 
 /**
@@ -93,69 +93,131 @@ function geometryToModel(geometry: THREE.BufferGeometry): GeometryModel {
   const positions = geo.attributes.position as THREE.BufferAttribute;
   const normals = geo.attributes.normal as THREE.BufferAttribute;
 
-  return createGeometryModel({
-    positions: new Float32Array(positions.array),
-    normals: normals
+  return createGeometryModel(
+    new Float32Array(positions.array),
+    normals
       ? new Float32Array(normals.array)
       : new Float32Array(positions.count * 3),
-    indices: geo.index
+    geo.index
       ? new Uint32Array((geo.index as THREE.BufferAttribute).array)
       : new Uint32Array(Array.from({ length: positions.count }, (_, i) => i)),
-  });
+  );
 }
 
 function createWatertightCube(size: number): GeometryModel {
-  const geometry = new THREE.BoxGeometry(size, size, size);
-  return geometryToModel(geometry);
+  const half = size / 2;
+  const vertices = new Float32Array([
+    -half, -half, -half,  // 0
+    half, -half, -half,  // 1
+    half, half, -half,   // 2
+    -half, half, -half,  // 3
+    -half, -half, half,  // 4
+    half, -half, half,   // 5
+    half, half, half,    // 6
+    -half, half, half,   // 7
+  ]);
+  const indices = new Uint32Array([
+    0, 2, 1, 0, 3, 2,  // Bottom
+    4, 5, 6, 4, 6, 7,  // Top
+    3, 7, 6, 3, 6, 2,  // Back
+    0, 1, 5, 0, 5, 4,  // Front
+    0, 4, 7, 0, 7, 3,  // Left
+    1, 2, 6, 1, 6, 5,  // Right
+  ]);
+  const normals = new Float32Array(vertices.length);
+  return createGeometryModel(vertices, normals, indices);
 }
 
 function createOpenCube(size: number): GeometryModel {
-  const geometry = new THREE.BoxGeometry(size, size, size);
-  // Remove top face (indices 12-17 for a box)
-  const positions = geometry.attributes.position as THREE.BufferAttribute;
-  const indices = geometry.index as THREE.BufferAttribute;
-  const newIndices: number[] = [];
-  for (let i = 0; i < indices.count; i += 3) {
-    const a = indices.getX(i);
-    const b = indices.getX(i + 1);
-    const c = indices.getX(i + 2);
-    // Get z-coordinates of triangle vertices
-    const az = positions.getZ(a);
-    const bz = positions.getZ(b);
-    const cz = positions.getZ(c);
-    // Skip top face (all z > size/2 - epsilon)
-    if (
-      az > size / 2 - 0.001 &&
-      bz > size / 2 - 0.001 &&
-      cz > size / 2 - 0.001
-    ) {
-      continue;
-    }
-    newIndices.push(a, b, c);
-  }
-  geometry.setIndex(newIndices);
-  return geometryToModel(geometry);
+  const half = size / 2;
+  const vertices = new Float32Array([
+    -half, -half, -half,  // 0
+    half, -half, -half,  // 1
+    half, half, -half,   // 2
+    -half, half, -half,  // 3
+    -half, -half, half,  // 4
+    half, -half, half,   // 5
+    half, half, half,    // 6
+    -half, half, half,   // 7
+  ]);
+  // Cube without top face (indices 12-17 removed)
+  const indices = new Uint32Array([
+    0, 2, 1, 0, 3, 2,  // Bottom
+    3, 7, 6, 3, 6, 2,  // Back
+    0, 1, 5, 0, 5, 4,  // Front
+    0, 4, 7, 0, 7, 3,  // Left
+    1, 2, 6, 1, 6, 5,  // Right
+  ]);
+  const normals = new Float32Array(vertices.length);
+  return createGeometryModel(vertices, normals, indices);
 }
 
 function createInvertedNormalsCube(size: number): GeometryModel {
-  const geometry = new THREE.BoxGeometry(size, size, size);
-  geometry.computeVertexNormals();
-  // Flip normals
-  const normals = geometry.attributes.normal as THREE.BufferAttribute;
-  for (let i = 0; i < normals.count; i++) {
-    normals.setXYZ(i, -normals.getX(i), -normals.getY(i), -normals.getZ(i));
-  }
-  return geometryToModel(geometry);
+  const half = size / 2;
+  const vertices = new Float32Array([
+    -half, -half, -half,  // 0
+    half, -half, -half,  // 1
+    half, half, -half,   // 2
+    -half, half, -half,  // 3
+    -half, -half, half,  // 4
+    half, -half, half,   // 5
+    half, half, half,    // 6
+    -half, half, half,   // 7
+  ]);
+  // Cube with inverted winding order (flipped normals)
+  const indices = new Uint32Array([
+    0, 1, 2, 0, 2, 3,  // Bottom (inverted)
+    4, 6, 5, 4, 7, 6,  // Top (inverted)
+    3, 6, 7, 3, 2, 6,  // Back (inverted)
+    0, 5, 1, 0, 4, 5,  // Front (inverted)
+    0, 7, 4, 0, 3, 7,  // Left (inverted)
+    1, 6, 2, 1, 5, 6,  // Right (inverted)
+  ]);
+  const normals = new Float32Array(vertices.length);
+  return createGeometryModel(vertices, normals, indices);
 }
 
 function createDisconnectedShells(size: number): GeometryModel {
-  const geo1 = new THREE.BoxGeometry(size, size, size);
-  geo1.translate(-size, 0, 0);
-  const geo2 = new THREE.BoxGeometry(size, size, size);
-  geo2.translate(size, 0, 0);
-
-  const merged = mergeGeometries([geo1, geo2]);
-  return geometryToModel(merged);
+  const half = size / 2;
+  const offset = size * 2;
+  const vertices = new Float32Array([
+    // Cube 1
+    -half - offset, -half, -half,  // 0
+    half - offset, -half, -half,  // 1
+    half - offset, half, -half,   // 2
+    -half - offset, half, -half,  // 3
+    -half - offset, -half, half,  // 4
+    half - offset, -half, half,   // 5
+    half - offset, half, half,    // 6
+    -half - offset, half, half,   // 7
+    // Cube 2
+    -half + offset, -half, -half,  // 8
+    half + offset, -half, -half,  // 9
+    half + offset, half, -half,   // 10
+    -half + offset, half, -half,  // 11
+    -half + offset, -half, half,  // 12
+    half + offset, -half, half,   // 13
+    half + offset, half, half,    // 14
+    -half + offset, half, half,   // 15
+  ]);
+  const indices = new Uint32Array([
+    // Cube 1
+    0, 2, 1, 0, 3, 2,  // Bottom
+    4, 5, 6, 4, 6, 7,  // Top
+    3, 7, 6, 3, 6, 2,  // Back
+    0, 1, 5, 0, 5, 4,  // Front
+    0, 4, 7, 0, 7, 3,  // Left
+    1, 2, 6, 1, 6, 5,  // Right
+    // Cube 2
+    8, 10, 9, 8, 11, 10,  // Bottom
+    12, 13, 14, 12, 14, 15,  // Top
+    11, 15, 14, 11, 14, 10,  // Back
+    8, 9, 13, 8, 13, 12,  // Front
+    8, 12, 15, 8, 15, 11,  // Left
+    9, 10, 14, 9, 14, 13,  // Right
+  ]);
+  const normals = new Float32Array(vertices.length);
+  return createGeometryModel(vertices, normals, indices);
 }
 
 function createNonManifoldEdge(size: number): GeometryModel {
@@ -335,11 +397,11 @@ function createDegenerateMesh(): GeometryModel {
 }
 
 function createEmptyMesh(): GeometryModel {
-  return createGeometryModel({
-    positions: new Float32Array(0),
-    normals: new Float32Array(0),
-    indices: new Uint32Array(0),
-  });
+  return createGeometryModel(
+    new Float32Array(0),
+    new Float32Array(0),
+    new Uint32Array(0),
+  );
 }
 
 function mergeGeometries(
