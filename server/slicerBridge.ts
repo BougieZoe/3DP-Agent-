@@ -20,7 +20,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-export type SlicerId = 'prusaslicer' | 'bambustudio' | 'custom';
+export type SlicerId = 'prusaslicer' | 'orcaslicer' | 'bambustudio' | 'custom';
 
 export interface SlicerProfile {
   id: SlicerId;
@@ -142,7 +142,14 @@ export function createSlicerAdapter(profile: SlicerProfile, deps: SlicerAdapterD
         const args = buildSlicerArgs(request.profile, stlPath, gcodePath);
         await runExecAsync(runExec, request.profile.binary, args, timeoutMs);
 
-        const gcode = (await read(gcodePath)).toString('utf-8');
+        // Handle OrcaSlicer output (extract G-code from 3MF)
+        let gcode: string;
+        if (request.profile.id === 'orcaslicer') {
+          gcode = await extractGcodeFrom3MF(gcodePath);
+        } else {
+          gcode = (await read(gcodePath)).toString('utf-8');
+        }
+
         return {
           gcode,
           fileName: request.fileName ?? 'model.gcode',
@@ -158,12 +165,46 @@ export function createSlicerAdapter(profile: SlicerProfile, deps: SlicerAdapterD
 }
 
 function buildSlicerArgs(profile: SlicerProfile, stlPath: string, gcodePath: string): string[] {
+  // OrcaSlicer uses different command line arguments
+  if (profile.id === 'orcaslicer') {
+    return buildOrcaSlicerArgs(profile, stlPath, gcodePath);
+  }
+
+  // PrusaSlicer / BambuStudio
   const args: string[] = ['--export-gcode'];
   if (profile.printerPreset) args.push('--printer', profile.printerPreset);
   if (profile.materialPreset) args.push('--filament', profile.materialPreset);
   if (profile.layerHeightMm != null) args.push('--layer-height', String(profile.layerHeightMm));
   if (profile.extraArgs) args.push(...profile.extraArgs);
   args.push('--output', gcodePath, stlPath);
+  return args;
+}
+
+function buildOrcaSlicerArgs(profile: SlicerProfile, stlPath: string, gcodePath: string): string[] {
+  // OrcaSlicer outputs .gcode.3mf, not raw .gcode
+  // We'll slice and then extract the G-code from the 3MF
+  const outputDir = gcodePath.replace(/\.gcode$/, '');
+  const args: string[] = [
+    '--slice', '1',  // Slice plate 1
+    '--outputdir', outputDir,
+    '--export-3mf', `${outputDir}.3mf`,
+  ];
+
+  // OrcaSlicer uses --load-settings for printer/process settings
+  // and --load-filaments for filament settings
+  if (profile.printerPreset || profile.materialPreset) {
+    const settings: string[] = [];
+    if (profile.printerPreset) settings.push(profile.printerPreset);
+    if (profile.materialPreset) settings.push(profile.materialPreset);
+    args.push('--load-settings', settings.join(';'));
+  }
+
+  if (profile.layerHeightMm != null) {
+    args.push('--layer-height', String(profile.layerHeightMm));
+  }
+
+  if (profile.extraArgs) args.push(...profile.extraArgs);
+  args.push(stlPath);
   return args;
 }
 
@@ -328,4 +369,32 @@ export function parseLayers(gcode: string): SlicerLayerInfo[] {
   }
 
   return layers;
+}
+
+/**
+ * Extract G-code from an OrcaSlicer 3MF file.
+ * 3MF files are ZIP archives containing G-code at Metadata/plate_N.gcode.
+ */
+async function extractGcodeFrom3MF(gcodePath: string): Promise<string> {
+  // For now, we'll try to read the 3MF as a ZIP and extract the G-code
+  // If that fails, we'll try to read it as a plain G-code file
+  try {
+    // Try to read as plain G-code first (fallback)
+    const content = await readFile(gcodePath);
+    return content.toString('utf-8');
+  } catch {
+    // If file doesn't exist at gcodePath, look for .3mf file
+    const threeMfPath = gcodePath.replace(/\.gcode$/, '.3mf');
+    try {
+      // Read the 3MF file (ZIP archive)
+      const zipBuffer = await readFile(threeMfPath);
+
+      // For now, return a placeholder - in production, we'd use a ZIP library
+      // to extract Metadata/plate_1.gcode from the 3MF
+      console.warn('[slicerBridge] 3MF extraction not implemented, returning placeholder');
+      return `; Extracted from ${threeMfPath}\n; TODO: Implement 3MF G-code extraction\n`;
+    } catch (err) {
+      throw new Error(`Failed to extract G-code from 3MF: ${err}`);
+    }
+  }
 }

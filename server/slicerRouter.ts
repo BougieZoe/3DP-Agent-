@@ -22,6 +22,7 @@ import {
 // known absolute install locations.
 const SLICER_APP_PATHS: Record<SlicerId, string[]> = {
   prusaslicer: ['/Applications/PrusaSlicer.app/Contents/MacOS/PrusaSlicer'],
+  orcaslicer: ['/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer'],
   bambustudio: [
     '/Applications/BambuStudio.app/Contents/MacOS/BambuStudio',
     '/Applications/BambuStudio.app/Contents/MacOS/bambu-studio',
@@ -80,11 +81,12 @@ export function createSlicerRouter(): Router {
   router.use(express.json({ limit: '30mb' }));
 
   router.get('/health', async (_req: Request, res: Response) => {
-    const [prusaslicer, bambustudio] = await Promise.all([
+    const [prusaslicer, orcaslicer, bambustudio] = await Promise.all([
       discoverSlicer('prusaslicer'),
+      discoverSlicer('orcaslicer'),
       discoverSlicer('bambustudio'),
     ]);
-    res.json({ ok: true, slicers: { prusaslicer, bambustudio } });
+    res.json({ ok: true, slicers: { prusaslicer, orcaslicer, bambustudio } });
   });
 
   router.post('/', async (req: Request, res: Response) => {
