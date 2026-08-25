@@ -32,6 +32,7 @@ export interface OverlayParams {
   };
   wallThickness: {
     minThickness: number;
+    maxThickness: number;
     showThinOnly: boolean;
   };
 }

@@ -40,11 +40,6 @@ const COLUMN_ALIASES: Record<string, keyof SupplierPriceList> = {
   'lead_time': 'leadTimeDays',
   '交期': 'leadTimeDays',
   '納期': 'leadTimeDays',
-  'shippingddp': 'shippingDDP',
-  'ddp': 'shippingDDP',
-  'ddp_rate': 'shippingDDP',
-  '到门价': 'shippingDDP',
-  '持込渡し': 'shippingDDP',
 };
 
 function normalizeColumnName(name: string): keyof SupplierPriceList | null {
@@ -122,10 +117,6 @@ export function parsePriceListCSV(csvContent: string, supplierId: string): Parse
 
       if (field === 'material' || field === 'technology') {
         (record as any)[field] = value.toUpperCase();
-      } else if (field === 'shippingDDP') {
-        // Store DDP rate in shippingRates
-        if (!record.shippingRates) record.shippingRates = {} as any;
-        (record.shippingRates as any).DDP = parseFloat(value) || 0;
       } else {
         (record as any)[field] = parseFloat(value) || 0;
       }

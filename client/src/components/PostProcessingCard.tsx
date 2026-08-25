@@ -27,13 +27,12 @@ export function PostProcessingCard({ unifiedAnalysis, material, language }: Prop
   const steps = useMemo<Step[]>(() => {
     const m = unifiedAnalysis.metrics?.result;
     const support = unifiedAnalysis.support?.result;
-    const wt = unifiedAnalysis.wallThickness?.result;
     if (!m || m.meshVolumeMm3 <= 0) return [];
 
     const s: Step[] = [];
 
-    if (support && support.estimatedSupportVolumeMm3 > 50) {
-      s.push({ icon: '✂', label: language === 'zh' ? '去支撑' : language === 'ja' ? 'サポート除去' : 'Remove supports', time: support.estimatedSupportVolumeMm3 > 1000 ? '30-60m' : '10-30m', required: true });
+    if (support && support.totalSupportVolumeMm3 > 50) {
+      s.push({ icon: '✂', label: language === 'zh' ? '去支撑' : language === 'ja' ? 'サポート除去' : 'Remove supports', time: support.totalSupportVolumeMm3 > 1000 ? '30-60m' : '10-30m', required: true });
     }
 
     if (material.technology === 'fdm' && m.surfaceAreaMm2 > 3000) {
@@ -48,7 +47,7 @@ export function PostProcessingCard({ unifiedAnalysis, material, language }: Prop
       s.push({ icon: '☀', label: language === 'zh' ? 'UV固化' : language === 'ja' ? 'UV硬化' : 'UV cure', time: '10-30m', required: true });
     }
 
-    if (wt && wt.minWidth < 1.0) {
+    if (m.minWallThicknessMm && m.minWallThicknessMm < 1.0) {
       s.push({ icon: '⚙', label: language === 'zh' ? 'CNC精加工' : language === 'ja' ? 'CNC精密加工' : 'CNC finish', time: '1-4h', required: false });
     }
 
