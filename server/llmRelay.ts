@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { verifyUser, consumeUsage } from './supabase';
+import { verifyUser, consumeUsage, getUserPlan } from './supabase';
 
 // Shared /api/llm relay logic — used by BOTH the Express server (local/Electron)
 // and the Vercel serverless function (api/llm.ts) so behavior is identical.
@@ -32,7 +32,12 @@ const SERVER_KEY_ENV: Record<string, string | undefined> = {
   gemini: process.env.GEMINI_API_KEY,
   zhipu: process.env.GLM_API_KEY,
 };
-const FREE_MONTHLY_LIMIT = Number(process.env.FREE_MONTHLY_LIMIT || 100);
+
+// Plan-based monthly limits
+const PLAN_LIMITS: Record<string, number> = {
+  free: Number(process.env.FREE_MONTHLY_LIMIT || 100),
+  pro: Number(process.env.PRO_MONTHLY_LIMIT || 1000),
+};
 
 export interface RelayResult {
   status: number;
@@ -61,8 +66,11 @@ export async function relayLLM(params: {
       const serverKey = SERVER_KEY_ENV[provider];
       if (!serverKey) return { status: 503, text: json({ error: "provider_not_configured" }) };
       effectiveKey = serverKey;
-      const remaining = await consumeUsage(user.id, FREE_MONTHLY_LIMIT);
-      if (remaining !== null && remaining <= 0) return { status: 429, text: json({ error: "quota_exceeded" }) };
+      // Get user's plan and apply the corresponding limit
+      const plan = await getUserPlan(user.id);
+      const monthlyLimit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
+      const remaining = await consumeUsage(user.id, monthlyLimit);
+      if (remaining !== null && remaining <= 0) return { status: 429, text: json({ error: "quota_exceeded", remaining: 0, limit: monthlyLimit, plan }) };
     }
     if (effectiveKey.length === 0)
       return { status: 400, text: json({ error: "provider and apiKey are required" }) };
@@ -121,14 +129,16 @@ export async function relayLLMStream(req: Request, res: Response): Promise<void>
     }
 
     let effectiveKey = typeof apiKey === "string" && apiKey.length > 0 ? apiKey : "";
-    if (bearer) {
+    if (typeof bearer === "string" && bearer) {
       const user = await verifyUser(bearer);
       if (!user) { res.status(401).json({ error: "invalid or expired session" }); return; }
       const serverKey = SERVER_KEY_ENV[provider];
       if (!serverKey) { res.status(503).json({ error: "provider_not_configured" }); return; }
       effectiveKey = serverKey;
-      const remaining = await consumeUsage(user.id, FREE_MONTHLY_LIMIT);
-      if (remaining !== null && remaining <= 0) { res.status(429).json({ error: "quota_exceeded" }); return; }
+      const plan = await getUserPlan(user.id);
+      const monthlyLimit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
+      const remaining = await consumeUsage(user.id, monthlyLimit);
+      if (remaining !== null && remaining <= 0) { res.status(429).json({ error: "quota_exceeded", remaining: 0, limit: monthlyLimit, plan }); return; }
     }
     if (effectiveKey.length === 0) {
       res.status(400).json({ error: "provider and apiKey are required" }); return;

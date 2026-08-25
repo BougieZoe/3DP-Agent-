@@ -64,3 +64,24 @@ export async function consumeUsage(userId: string, limit: number): Promise<numbe
     return null;
   }
 }
+
+/**
+ * Get the user's subscription plan from the profiles table.
+ * Returns 'free' if Supabase is unavailable or the user has no profile.
+ */
+export async function getUserPlan(userId: string): Promise<'free' | 'pro'> {
+  const url = process.env.SUPABASE_URL;
+  const role = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !role) return 'free';
+  try {
+    const res = await fetch(
+      `${url}/rest/v1/profiles?select=plan&id=eq.${userId}`,
+      { headers: { apikey: role, Authorization: `Bearer ${role}` } },
+    );
+    if (!res.ok) return 'free';
+    const rows = await res.json() as Array<{ plan: string }>;
+    return rows[0]?.plan === 'pro' ? 'pro' : 'free';
+  } catch {
+    return 'free';
+  }
+}
