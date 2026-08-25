@@ -9,6 +9,7 @@ import { computePbfMetrics, type PbfResult, type PbfKind } from './pbf';
 import { computeConcreteMetrics, type ConcreteResult } from './concrete';
 import { computeEcoMetrics, type EcoResult } from './eco';
 import { computeThermalMetrics, type ThermalFieldResult } from './thermal';
+import { computeMetalAnalysis, type MetalAnalysisResult } from './metalAnalysis';
 import { checkBedFit } from './bedFit';
 import { estimateSupportVolume } from './support';
 import { estimatePrintTime } from './printTime';
@@ -211,7 +212,30 @@ export function runAnalysisPipeline(
     }
   });
 
-  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, thermal]
+  // Metal printing analysis (SLM/DMLS) — thermal stress, residual stress, distortion
+  const EMPTY_METAL: MetalAnalysisResult = {
+    thermalStress: { maxThermalGradientCPerMm: 0, thermalStressRisk: 0, hotspots: [] },
+    residualStress: { residualStressLevel: 0, crackingRisk: 0, delaminationRisk: 0, stressConcentrationFactor: 1 },
+    distortion: { distortionRisk: 0, warpingDirection: 'none', magnitudeMm: 0, criticalZones: [] },
+    support: { supportVolumeMm3: 0, supportCount: 0, supportDensity: 0, areas: [] },
+    buildOrientation: { rotateX: 0, rotateY: 0, supportReduction: 0, distortionReduction: 0, reason: '' },
+    overallRiskScore: 0,
+    recommendations: [],
+  };
+  const metal = time('metal', () => {
+    try {
+      if (options.materialFamily !== 'slm') return null;
+      if (!mat) return null;
+      return computeMetalAnalysis(model, {
+        material: mat,
+        layerHeightMm: options.layerHeightMm,
+      });
+    } catch (e) {
+      return options.materialFamily === 'slm' ? failResult('metal', e, EMPTY_METAL) : null;
+    }
+  });
+
+  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, thermal, metal]
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .map(m => m.confidence);
   const overallConfidence = confidences.length > 0
@@ -231,6 +255,7 @@ export function runAnalysisPipeline(
     concrete,
     eco,
     thermal,
+    metal,
     timestamp: now,
     modelFileName: fileName,
     overallConfidence,
