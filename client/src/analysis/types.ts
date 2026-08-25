@@ -306,6 +306,8 @@ export interface UnifiedAnalysis {
   thermal?: AnalysisModuleResult<import('./thermal').ThermalFieldResult> | null;
   /** Metal printing analysis — present when materialFamily === 'slm'. */
   metal?: AnalysisModuleResult<import('./metalAnalysis').MetalAnalysisResult> | null;
+  /** Multi-material analysis — present when secondaryMaterial or fiberReinforced is specified. */
+  multiMaterial?: AnalysisModuleResult<import('./multiMaterial').MultiMaterialAnalysisResult> | null;
   /** ISO timestamp of when analysis was run */
   timestamp: string;
   modelFileName: string;

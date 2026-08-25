@@ -10,6 +10,7 @@ import { computeConcreteMetrics, type ConcreteResult } from './concrete';
 import { computeEcoMetrics, type EcoResult } from './eco';
 import { computeThermalMetrics, type ThermalFieldResult } from './thermal';
 import { computeMetalAnalysis, type MetalAnalysisResult } from './metalAnalysis';
+import { computeMultiMaterialAnalysis, type MultiMaterialAnalysisResult } from './multiMaterial';
 import { checkBedFit } from './bedFit';
 import { estimateSupportVolume } from './support';
 import { estimatePrintTime } from './printTime';
@@ -46,6 +47,12 @@ export interface PipelineOptions {
    * without a slicer binary — the estimate path stays honest (source: 'estimate').
    */
   slicer?: SlicerBackedMetrics;
+  /** Secondary material for dual-color printing */
+  secondaryMaterial?: Material;
+  /** Whether to use continuous fiber reinforcement */
+  fiberReinforced?: boolean;
+  /** Fiber type for composite materials */
+  fiberType?: 'carbon' | 'glass' | 'aramid' | 'basalt';
 }
 
 export function runAnalysisPipeline(
@@ -235,7 +242,53 @@ export function runAnalysisPipeline(
     }
   });
 
-  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, thermal, metal]
+  // Multi-material analysis (dual-color, composite)
+  const EMPTY_MULTI_MATERIAL: MultiMaterialAnalysisResult = {
+    dualColor: {
+      feasible: false,
+      feasibilityScore: 0,
+      interfaces: [],
+      totalInterfaceAreaMm2: 0,
+      printTimeIncrease: 0,
+      materialCostIncrease: 0,
+      recommendations: [],
+    },
+    composite: {
+      feasible: false,
+      feasibilityScore: 0,
+      compositeType: 'multi_layer',
+      fiberMatrixInterface: {
+        fiberType: 'none',
+        matrixMaterial: '',
+        adhesionEstimate: 0,
+        thermalMismatchRisk: 0,
+        moistureAbsorptionRisk: 0,
+      },
+      structuralConsiderations: [],
+      recommendations: [],
+    },
+    overallFeasibility: 0,
+    recommendations: [],
+  };
+  const multiMaterial = time('multiMaterial', () => {
+    try {
+      // Only run if secondary material is specified or fiber reinforcement is enabled
+      if (!options.secondaryMaterial && !options.fiberReinforced) return null;
+      if (!mat) return null;
+      return computeMultiMaterialAnalysis(model, {
+        primaryMaterial: mat,
+        secondaryMaterial: options.secondaryMaterial,
+        technology: options.materialFamily ?? 'fdm',
+        layerHeightMm: options.layerHeightMm,
+        fiberReinforced: options.fiberReinforced,
+        fiberType: options.fiberType,
+      });
+    } catch (e) {
+      return failResult('multiMaterial', e, EMPTY_MULTI_MATERIAL);
+    }
+  });
+
+  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, thermal, metal, multiMaterial]
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .map(m => m.confidence);
   const overallConfidence = confidences.length > 0
@@ -256,6 +309,7 @@ export function runAnalysisPipeline(
     eco,
     thermal,
     metal,
+    multiMaterial,
     timestamp: now,
     modelFileName: fileName,
     overallConfidence,
