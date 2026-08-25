@@ -1,18 +1,11 @@
 import { useMaterial, type MaterialName } from "@/contexts/MaterialContext";
 import { MATERIALS, defaultMaterialKeyFor, type Material } from "@shared/domain/material";
-import { ReportGenerator } from "@/components/ReportGenerator";
-import { ExpertReviewPanel } from '@/components/ExpertReviewPanel';
-import { BatchReport } from '@/components/BatchReport';
-import { ProductionCard } from '@/components/ProductionCard';
-import { DiagnosisPanel } from '@/components/DiagnosisPanel';
-import { DiagnosisModal } from '@/components/DiagnosisModal';
 import { lazy, Suspense, useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
 import { PRINT_TECHNOLOGIES, PRINT_TECH_BY_ID, type PrintTechnology } from '@/lib/technologies';
-import { APIKeyModal } from '@/components/APIKeyModal';
 
 // Heavy alternate modes / tab panels — dynamic imports keep the initial
 // bundle lean on mobile. Each wraps a named export into a default for React.lazy.
@@ -22,6 +15,7 @@ const ChatPanel = lazy(() => import('@/components/ChatPanel').then(m => ({ defau
 import { AccountModal } from '@/components/AccountModal';
 import { PrivacyModal } from '@/components/PrivacyModal';
 import { InstallButton } from '@/components/InstallButton';
+import { APIKeyModal } from '@/components/APIKeyModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/useMobile';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
@@ -39,34 +33,8 @@ import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
 import { isWallConfidenceTrusted } from '@/lib/lowConfidence';
 import { Language, getTranslation } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
-import { AgentOrchestrator, AgentRunSummary, getAgentLabel, getAgentDescription, runDeepAnalysis } from '@/agents';
 import type { AgentId } from '@shared/domain/agent';
-import { OverhangHeatmap } from '@/components/3D/OverhangHeatmap';
-import { SupportGhosts } from '@/components/3D/SupportGhosts';
-import { RiskAnimation } from '@/components/3D/RiskAnimation';
-import { VisualizationToolbar } from '@/components/3D/VisualizationToolbar';
-import { OptimizeButton } from '@/components/3D/OptimizeButton';
-import { PrintPathPreview } from '@/components/3D/PrintPathPreview';
-import { LayerReveal } from '@/components/3D/LayerReveal';
-import { FailureEmergence } from '@/components/3D/FailureEmergence';
-import { ThermalField } from '@/components/3D/ThermalField';
-import { WallThicknessHeatmap } from '@/components/3D/WallThicknessHeatmap';
-import { CausalityHighlight } from '@/components/3D/CausalityHighlight';
 import { deriveSupportStatus } from '@/analysis/metrics';
-import { buildCausalityGraph, CausalityGraph } from '@/components/causality/causalityEngine';
-import { ManufacturingTimeline } from '@/components/causality/ManufacturingTimeline';
-import { detectPatterns, PatternMatch } from '@/components/causality/topologyPatternEngine';
-import { evaluateCounterfactuals, GeometrySuggestion } from '@/components/causality/counterfactualEngine';
-import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
-
-// Causality panels render only in the causality tab — lazy so the engines
-// (eager, they feed the viewport highlights) don't drag the panel UI into the
-// initial bundle.
-const CausalityPanel = lazy(() => import('@/components/causality/CausalityPanel').then(m => ({ default: m.CausalityPanel })));
-const PatternMemoryPanel = lazy(() => import('@/components/causality/PatternMemoryPanel').then(m => ({ default: m.PatternMemoryPanel })));
-const GeometrySuggestionPanel = lazy(() => import('@/components/causality/GeometrySuggestionPanel').then(m => ({ default: m.GeometrySuggestionPanel })));
-import { CognitiveScan } from '@/components/3D/CognitiveScan';
-import { AttentionPulse } from '@/components/3D/AttentionPulse';
 import { ViewfinderCorners } from '@/components/decorative/ViewfinderCorners';
 import { ScanlineSweep } from '@/components/decorative/ScanlineSweep';
 import { BedStatusTicker } from '@/components/decorative/BedStatusTicker';
@@ -74,11 +42,48 @@ import { LayerHeightLabel } from '@/components/decorative/LayerHeightLabel';
 import { FeaturesSection } from '@/pages/home/FeaturesSection';
 import type { FeatureDestination } from '@/pages/home/featuresNavigation';
 import { toast } from 'sonner';
-import { WebGPUOverlay } from '@/components/3D/WebGPUOverlay';
-import { PrintDashboard } from '@/components/PrintDashboard';
-import { VoiceControl } from '@/components/VoiceControl';
-import { AgentExecutionGraph } from '@/components/AgentExecutionGraph';
-import { runAgentWorkflow } from '@/agents/agentGraph';
+import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
+
+// Lazy-loaded 3D visualization components (code splitting)
+const OverhangHeatmap = lazy(() => import('@/components/3D/OverhangHeatmap').then(m => ({ default: m.OverhangHeatmap })));
+const SupportGhosts = lazy(() => import('@/components/3D/SupportGhosts').then(m => ({ default: m.SupportGhosts })));
+const RiskAnimation = lazy(() => import('@/components/3D/RiskAnimation').then(m => ({ default: m.RiskAnimation })));
+const VisualizationToolbar = lazy(() => import('@/components/3D/VisualizationToolbar').then(m => ({ default: m.VisualizationToolbar })));
+const OptimizeButton = lazy(() => import('@/components/3D/OptimizeButton').then(m => ({ default: m.OptimizeButton })));
+const PrintPathPreview = lazy(() => import('@/components/3D/PrintPathPreview').then(m => ({ default: m.PrintPathPreview })));
+const LayerReveal = lazy(() => import('@/components/3D/LayerReveal').then(m => ({ default: m.LayerReveal })));
+const FailureEmergence = lazy(() => import('@/components/3D/FailureEmergence').then(m => ({ default: m.FailureEmergence })));
+const ThermalField = lazy(() => import('@/components/3D/ThermalField').then(m => ({ default: m.ThermalField })));
+const WallThicknessHeatmap = lazy(() => import('@/components/3D/WallThicknessHeatmap').then(m => ({ default: m.WallThicknessHeatmap })));
+const CausalityHighlight = lazy(() => import('@/components/3D/CausalityHighlight').then(m => ({ default: m.CausalityHighlight })));
+const CognitiveScan = lazy(() => import('@/components/3D/CognitiveScan').then(m => ({ default: m.CognitiveScan })));
+const AttentionPulse = lazy(() => import('@/components/3D/AttentionPulse').then(m => ({ default: m.AttentionPulse })));
+const WebGPUOverlay = lazy(() => import('@/components/3D/WebGPUOverlay').then(m => ({ default: m.WebGPUOverlay })));
+
+// Lazy-loaded tab panels and features
+const ReportGenerator = lazy(() => import('@/components/ReportGenerator').then(m => ({ default: m.ReportGenerator })));
+const ExpertReviewPanel = lazy(() => import('@/components/ExpertReviewPanel').then(m => ({ default: m.ExpertReviewPanel })));
+const BatchReport = lazy(() => import('@/components/BatchReport').then(m => ({ default: m.BatchReport })));
+const ProductionCard = lazy(() => import('@/components/ProductionCard').then(m => ({ default: m.ProductionCard })));
+const DiagnosisPanel = lazy(() => import('@/components/DiagnosisPanel').then(m => ({ default: m.DiagnosisPanel })));
+const DiagnosisModal = lazy(() => import('@/components/DiagnosisModal').then(m => ({ default: m.DiagnosisModal })));
+const PrintDashboard = lazy(() => import('@/components/PrintDashboard').then(m => ({ default: m.PrintDashboard })));
+const VoiceControl = lazy(() => import('@/components/VoiceControl').then(m => ({ default: m.VoiceControl })));
+const AgentExecutionGraph = lazy(() => import('@/components/AgentExecutionGraph').then(m => ({ default: m.AgentExecutionGraph })));
+const ManufacturingTimeline = lazy(() => import('@/components/causality/ManufacturingTimeline').then(m => ({ default: m.ManufacturingTimeline })));
+
+// Lazy-loaded agents and causality engines
+const loadAgents = () => import('@/agents');
+const loadCausalityEngines = () => Promise.all([
+  import('@/components/causality/causalityEngine'),
+  import('@/components/causality/topologyPatternEngine'),
+  import('@/components/causality/counterfactualEngine'),
+]);
+
+// Lazy-loaded causality panels
+const CausalityPanel = lazy(() => import('@/components/causality/CausalityPanel').then(m => ({ default: m.CausalityPanel })));
+const PatternMemoryPanel = lazy(() => import('@/components/causality/PatternMemoryPanel').then(m => ({ default: m.PatternMemoryPanel })));
+const GeometrySuggestionPanel = lazy(() => import('@/components/causality/GeometrySuggestionPanel').then(m => ({ default: m.GeometrySuggestionPanel })));
 
 function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -339,13 +344,13 @@ export default function Home() {
   const [models, setModels] = useState<UploadedModel[]>([]);
   const [activeFileName, setActiveFileName] = useState<string | null>(null);
   const [quickReport, setQuickReport] = useState('');
-  const [agentRun, setAgentRun] = useState<AgentRunSummary | null>(null);
-  const [deepAgentRun, setDeepAgentRun] = useState<AgentRunSummary | null>(null);
+  const [agentRun, setAgentRun] = useState<any | null>(null);
+  const [deepAgentRun, setDeepAgentRun] = useState<any | null>(null);
   const [agentLoading, setAgentLoading] = useState(false);
   const [deepAnalysisLoading, setDeepAnalysisLoading] = useState(false);
   const [deepSteps, setDeepSteps] = useState<Array<{ index: number; label: string; raw: string }>>([]);
   const [deepError, setDeepError] = useState<string | null>(null);
-  const [expertReview, setExpertReview] = useState<import('@/agents').ExpertReview | null>(null);
+  const [expertReview, setExpertReview] = useState<any | null>(null);
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showGhosts, setShowGhosts] = useState(false);
   const [showRisks, setShowRisks] = useState(false);
@@ -364,7 +369,7 @@ export default function Home() {
   const unitRequestSeq = useRef(0);
   // Shared ref into the drei OrbitControls instance (has .target/.update()).
   const controlsRef = useRef<any>(null);
-  const orchestratorRef = useRef<AgentOrchestrator | null>(null);
+  const orchestratorRef = useRef<any>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isMobile = useIsMobile();
   const { user } = useAuth();
@@ -374,9 +379,33 @@ export default function Home() {
   const [showAgentGraph, setShowAgentGraph] = useState(false);
   const [showWebGPU, setShowWebGPU] = useState(false);
 
-  if (!orchestratorRef.current) {
-    orchestratorRef.current = new AgentOrchestrator();
-  }
+  // Lazy-loaded agent label functions
+  const [agentLabelFns, setAgentLabelFns] = useState<{
+    getAgentLabel: (id: any, lang?: any) => string;
+    getAgentDescription: (id: any, lang?: any) => string;
+  } | null>(null);
+
+  // Lazy-load orchestrator and agent utilities on first use
+  useEffect(() => {
+    loadAgents().then(m => {
+      orchestratorRef.current = new m.AgentOrchestrator();
+      setAgentLabelFns({
+        getAgentLabel: m.getAgentLabel,
+        getAgentDescription: m.getAgentDescription,
+      });
+    });
+  }, []);
+
+  // Wrapper functions that handle lazy loading
+  const getAgentLabelLazy = (id: any, lang?: any): string => {
+    if (agentLabelFns) return agentLabelFns.getAgentLabel(id, lang);
+    return id; // Fallback while loading
+  };
+
+  const getAgentDescriptionLazy = (id: any, lang?: any): string => {
+    if (agentLabelFns) return agentLabelFns.getAgentDescription(id, lang);
+    return '';
+  };
 
   /** Set the working model and regenerate everything that derives from it. */
   const activateModel = (model: UploadedModel) => {
@@ -474,15 +503,19 @@ export default function Home() {
     setDeepError(null);
     const md = unifiedToModelData(model.unifiedAnalysis, model.fileName, mat.overhangThreshold);
     try {
-      const result = await runDeepAnalysis(md, language, (step, index) => {
+      // Lazy-load agents module
+      const agentsModule = await loadAgents();
+      const { runDeepAnalysis, getAgentLabel } = agentsModule;
+      
+      const result = await runDeepAnalysis(md, language, (step: any, index: number) => {
         if (seq !== deepAnalysisSeq.current) return;
         const agentId = DEEP_STEP_AGENTS[index];
         setDeepSteps((prev) => [...prev, {
           index,
-          label: agentId ? getAgentLabel(agentId, language as 'en' | 'ja' | 'zh') : t('deepAnalysis'),
+          label: agentId ? getAgentLabelLazy(agentId, language as 'en' | 'ja' | 'zh') : t('deepAnalysis'),
           raw: step.raw,
         }]);
-      }, mat, (trace) => {
+      }, mat, (trace: any) => {
         // Fire-and-forget: persist this step's I/O for fine-tuning data
         // collection (server appends to deploy/amd/agent-traces.jsonl).
         if (seq !== deepAnalysisSeq.current) return;
@@ -728,18 +761,38 @@ deepAnalysisSeq.current += 1;
   const supportDecision = unifiedAnalysis?.support?.result
     ? deriveSupportStatus(unifiedAnalysis.support.result)
     : null;
-  const causalityGraph = useMemo(() => agentMarkers.length > 0
-    ? buildCausalityGraph(agentMarkers, supportDecision?.status, language)
-    : null, [agentMarkers, supportDecision?.status, language]);
-  const patternMatches: PatternMatch[] = useMemo(() =>
-    agentMarkers.length > 0 ? detectPatterns(agentMarkers, language) : [],
-    [agentMarkers, language],
-  );
 
-  const counterfactualSuggestions: GeometrySuggestion[] = useMemo(() =>
-    agentMarkers.length > 0 ? evaluateCounterfactuals(agentMarkers, patternMatches, language) : [],
-    [agentMarkers, patternMatches, language],
-  );
+  // Lazy-load causality engines
+  const [causalityEngines, setCausalityEngines] = useState<{
+    buildCausalityGraph: any;
+    detectPatterns: any;
+    evaluateCounterfactuals: any;
+  } | null>(null);
+
+  useEffect(() => {
+    loadCausalityEngines().then(([causality, pattern, counterfactual]) => {
+      setCausalityEngines({
+        buildCausalityGraph: causality.buildCausalityGraph,
+        detectPatterns: pattern.detectPatterns,
+        evaluateCounterfactuals: counterfactual.evaluateCounterfactuals,
+      });
+    });
+  }, []);
+
+  const causalityGraph = useMemo(() => {
+    if (!causalityEngines || agentMarkers.length === 0) return null;
+    return causalityEngines.buildCausalityGraph(agentMarkers, supportDecision?.status, language);
+  }, [causalityEngines, agentMarkers, supportDecision?.status, language]);
+
+  const patternMatches: any[] = useMemo(() => {
+    if (!causalityEngines || agentMarkers.length === 0) return [];
+    return causalityEngines.detectPatterns(agentMarkers, language);
+  }, [causalityEngines, agentMarkers, language]);
+
+  const counterfactualSuggestions: any[] = useMemo(() => {
+    if (!causalityEngines || agentMarkers.length === 0) return [];
+    return causalityEngines.evaluateCounterfactuals(agentMarkers, patternMatches, language);
+  }, [causalityEngines, agentMarkers, patternMatches, language]);
 
   const selectedSuggestionPositions = useMemo(() => {
     if (!selectedSuggestionId) return [];
@@ -1400,7 +1453,7 @@ deepAnalysisSeq.current += 1;
                         <div className="text-xs font-mono text-primary animate-pulse mb-2">\u258b {t('multiAgentRunning')}</div>
                         <div className="text-xs text-muted-foreground/50">
                           {['geometry_analyst', 'printability_scorer', 'failure_predictor', 'optimization_advisor']
-                            .map((id) => getAgentLabel(id as AgentId, language))
+                            .map((id) => getAgentLabelLazy(id as AgentId, language))
                             .join(' \u2022 ')}
                         </div>
                         <div className="flex justify-center gap-2 mt-3">
@@ -1448,8 +1501,8 @@ deepAnalysisSeq.current += 1;
                           <div key={result.agentId} className="border border-border rounded-sm bg-card p-4">
                             <div className="flex items-center justify-between mb-2">
                               <div>
-                                <span className="text-xs font-mono text-primary">{getAgentLabel(result.agentId, language)}</span>
-                                <span className="ml-2 text-xs text-muted-foreground/50">{getAgentDescription(result.agentId, language)}</span>
+                                <span className="text-xs font-mono text-primary">{getAgentLabelLazy(result.agentId, language)}</span>
+                                <span className="ml-2 text-xs text-muted-foreground/50">{getAgentDescriptionLazy(result.agentId, language)}</span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className={`text-xs font-mono px-2 py-0.5 border rounded-sm ${
@@ -1482,7 +1535,7 @@ deepAnalysisSeq.current += 1;
                           <div className="mt-2 space-y-1">
                             {agentRun.votingRecords.map(record => (
                               <div key={record.agentId} className="flex justify-between text-xs font-mono text-muted-foreground/70">
-                                <span>{getAgentLabel(record.agentId, language)}</span>
+                                <span>{getAgentLabelLazy(record.agentId, language)}</span>
                                 <span>{translate(CONTENT, 'agent.weight', language)}: {(record.weight * 100).toFixed(0)}% | {translate(CONTENT, 'agent.score', language)}: {record.adjustedScore !== record.initialScore ? `${Math.round(record.initialScore)} → ${Math.round(record.adjustedScore)}` : Math.round(record.adjustedScore)} | {translate(CONTENT, 'agent.confidence', language)}: {(record.confidence * 100).toFixed(0)}%</span>
                               </div>
                             ))}
