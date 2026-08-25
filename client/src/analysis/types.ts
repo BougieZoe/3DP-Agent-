@@ -304,6 +304,8 @@ export interface UnifiedAnalysis {
   eco?: AnalysisModuleResult<import('./eco').EcoResult> | null;
   /** Thermal field & warping analysis — present when material has thermal properties. */
   thermal?: AnalysisModuleResult<import('./thermal').ThermalFieldResult> | null;
+  /** Metal printing analysis — present when materialFamily === 'slm'. */
+  metal?: AnalysisModuleResult<import('./metalAnalysis').MetalAnalysisResult> | null;
   /** ISO timestamp of when analysis was run */
   timestamp: string;
   modelFileName: string;
