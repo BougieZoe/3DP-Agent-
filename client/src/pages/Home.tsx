@@ -6,6 +6,7 @@ import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
 import { PRINT_TECHNOLOGIES, PRINT_TECH_BY_ID, type PrintTechnology } from '@/lib/technologies';
+import { useOrders } from '@/hooks/useOrders';
 // Hooks available for future refactoring:
 // import { useOverlays } from '@/hooks/useOverlays';
 // import { useModelManagement } from '@/hooks/useModelManagement';
@@ -74,6 +75,8 @@ const ProductionCard = lazy(() => import('@/components/ProductionCard').then(m =
 const CostCard = lazy(() => import('@/components/CostCard').then(m => ({ default: m.CostCard })));
 const PostProcessingCard = lazy(() => import('@/components/PostProcessingCard').then(m => ({ default: m.PostProcessingCard })));
 const SustainabilityCard = lazy(() => import('@/components/SustainabilityCard').then(m => ({ default: m.SustainabilityCard })));
+const OrderCard = lazy(() => import('@/components/OrderCard').then(m => ({ default: m.OrderCard })));
+const OrderForm = lazy(() => import('@/components/OrderForm').then(m => ({ default: m.OrderForm })));
 const DiagnosisPanel = lazy(() => import('@/components/DiagnosisPanel').then(m => ({ default: m.DiagnosisPanel })));
 const DiagnosisModal = lazy(() => import('@/components/DiagnosisModal').then(m => ({ default: m.DiagnosisModal })));
 const PrintDashboard = lazy(() => import('@/components/PrintDashboard').then(m => ({ default: m.PrintDashboard })));
@@ -343,11 +346,13 @@ export default function Home() {
   const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
-  const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality'>('geometry');
+  const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality' | 'orders'>('geometry');
   const [showAPIModal, setShowAPIModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showDiagnosis, setShowDiagnosis] = useState(false);
+  const [showOrderForm, setShowOrderForm] = useState(false);
+  const orders = useOrders();
   // Multi-file: the full set of loaded models + which one is active. The active
   // model is still `uploadedModel` — switching just swaps it in.
   const [models, setModels] = useState<UploadedModel[]>([]);
@@ -849,6 +854,25 @@ deepAnalysisSeq.current += 1;
           onClose={() => setShowDiagnosis(false)}
         />
       )}
+      {showOrderForm && uploadedModel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <Suspense fallback={null}>
+              <OrderForm
+                model={uploadedModel}
+                material={material}
+                language={language}
+                onSubmit={(partial) => {
+                  orders.createOrder(partial);
+                  setShowOrderForm(false);
+                  toast.success('Order created');
+                }}
+                onCancel={() => setShowOrderForm(false)}
+              />
+            </Suspense>
+          </div>
+        </div>
+      )}
 
       {/* ── Header ── */}
       <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 sm:px-5 py-3 border-b border-border bg-background/95 backdrop-blur-sm">
@@ -1108,7 +1132,7 @@ deepAnalysisSeq.current += 1;
                 feature cards (diagnosis opens as a modal) instead */}
             {modelData && (
               <div className="flex border-b border-border">
-                {(['geometry', 'report', 'agents', 'chat', 'causality'] as const).map(tabKey => (
+                {(['geometry', 'report', 'agents', 'chat', 'causality', 'orders'] as const).map(tabKey => (
                   <button key={tabKey} onClick={() => setTab(tabKey)}
                     className={`text-xs font-mono px-4 py-2.5 border-b-2 transition-all ${
                       tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -1117,7 +1141,13 @@ deepAnalysisSeq.current += 1;
                       : tabKey === 'report' ? t('report').toUpperCase()
                       : tabKey === 'agents' ? t('agents').toUpperCase()
                       : tabKey === 'causality' ? t('causality').toUpperCase()
+                      : tabKey === 'orders' ? 'ORDERS'
                       : t('chatAI').toUpperCase()}
+                    {tabKey === 'orders' && orders.orders.length > 0 && (
+                      <span className="ml-1 px-1 py-0.5 text-[8px] rounded-full bg-cyan-400/20 text-cyan-400">
+                        {orders.orders.length}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -1370,6 +1400,12 @@ deepAnalysisSeq.current += 1;
                         3MF
                       </button>
                     </div>
+                    {uploadedModel && (
+                      <button onClick={() => setShowOrderForm(true)}
+                        className="w-full py-2.5 text-xs font-mono border border-cyan-400/40 text-cyan-400 hover:bg-cyan-400 hover:text-black rounded-sm transition-all">
+                        + Create Order
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -1703,6 +1739,29 @@ deepAnalysisSeq.current += 1;
                       />
                     </div>
                   </Suspense>
+                )}
+
+                {/* ORDERS TAB */}
+                {tab === 'orders' && (
+                  <div className="pt-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono text-primary tracking-widest">ORDERS</span>
+                      <span className="text-xs font-mono text-muted-foreground/40">{orders.orders.length}</span>
+                    </div>
+                    {orders.orders.length === 0 ? (
+                      <div className="text-center py-8 text-xs font-mono text-muted-foreground/40">
+                        No orders yet. Create one from the Geometry tab.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {orders.orders.map(order => (
+                          <Suspense key={order.id} fallback={null}>
+                            <OrderCard order={order} language={language} />
+                          </Suspense>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
 
               </div>
