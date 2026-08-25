@@ -174,7 +174,7 @@ export function VisualizationToolbar({
   return (
     <>
       {/* Desktop icon bar */}
-      <div className={`hidden lg:flex absolute right-0 top-[20%] z-20
+      <div className={`hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 z-20
         flex-col items-center gap-1.5 w-10 py-2.5
         backdrop-blur-sm bg-background/30 border-l border-border/20 rounded-l-xl`}>
         {OVERLAY_ITEMS.map(({ icon, labelKey, key }) => (
