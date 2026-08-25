@@ -88,7 +88,32 @@ class WorkerPool {
   /**
    * Handle message from worker
    */
-  private handleWorkerMessage(worker: Worker, result: UnifiedAnalysis): void {
+  private handleWorkerMessage(worker: Worker, msg: UnifiedAnalysis | { type: string; result?: UnifiedAnalysis; error?: string; stage?: string; progress?: number }): void {
+    // Progress messages — forward to console for now, keep worker active
+    if (msg && typeof msg === 'object' && 'type' in msg && msg.type === 'progress') {
+      return;
+    }
+
+    // Error from worker
+    if (msg && typeof msg === 'object' && 'type' in msg && msg.type === 'error') {
+      const job = this.pendingJobs.find(j => j.reject);
+      if (job) {
+        clearTimeout(job.id as any);
+        job.reject(new Error((msg as { error: string }).error));
+        this.pendingJobs = this.pendingJobs.filter(j => j !== job);
+      }
+      // Replace failed worker
+      this.workers = this.workers.filter(w => w !== worker);
+      worker.terminate();
+      this.createWorker();
+      return;
+    }
+
+    // Completion — extract result from envelope
+    const result = (msg && typeof msg === 'object' && 'type' in msg && msg.type === 'complete')
+      ? (msg as { type: string; result: UnifiedAnalysis }).result
+      : msg as UnifiedAnalysis;
+
     const job = this.pendingJobs.find(j => j.resolve);
     if (job) {
       clearTimeout(job.id as any);
