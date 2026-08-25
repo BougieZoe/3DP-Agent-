@@ -77,6 +77,8 @@ const PostProcessingCard = lazy(() => import('@/components/PostProcessingCard').
 const SustainabilityCard = lazy(() => import('@/components/SustainabilityCard').then(m => ({ default: m.SustainabilityCard })));
 const OrderCard = lazy(() => import('@/components/OrderCard').then(m => ({ default: m.OrderCard })));
 const OrderForm = lazy(() => import('@/components/OrderForm').then(m => ({ default: m.OrderForm })));
+const OrderListView = lazy(() => import('@/components/OrderListView').then(m => ({ default: m.OrderListView })));
+const PriceListManager = lazy(() => import('@/components/PriceListManager').then(m => ({ default: m.PriceListManager })));
 const DiagnosisPanel = lazy(() => import('@/components/DiagnosisPanel').then(m => ({ default: m.DiagnosisPanel })));
 const DiagnosisModal = lazy(() => import('@/components/DiagnosisModal').then(m => ({ default: m.DiagnosisModal })));
 const PrintDashboard = lazy(() => import('@/components/PrintDashboard').then(m => ({ default: m.PrintDashboard })));
@@ -1744,23 +1746,19 @@ deepAnalysisSeq.current += 1;
                 {/* ORDERS TAB */}
                 {tab === 'orders' && (
                   <div className="pt-4 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono text-primary tracking-widest">ORDERS</span>
-                      <span className="text-xs font-mono text-muted-foreground/40">{orders.orders.length}</span>
+                    <Suspense fallback={null}>
+                      <OrderListView
+                        orders={orders.orders}
+                        language={language}
+                        onSelectOrder={(id) => console.log('Selected order:', id)}
+                        onUpdateStatus={orders.updateStatus}
+                      />
+                    </Suspense>
+                    <div className="border-t border-border/20 pt-4">
+                      <Suspense fallback={null}>
+                        <PriceListManager language={language} />
+                      </Suspense>
                     </div>
-                    {orders.orders.length === 0 ? (
-                      <div className="text-center py-8 text-xs font-mono text-muted-foreground/40">
-                        No orders yet. Create one from the Geometry tab.
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {orders.orders.map(order => (
-                          <Suspense key={order.id} fallback={null}>
-                            <OrderCard order={order} language={language} />
-                          </Suspense>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -1776,13 +1774,15 @@ deepAnalysisSeq.current += 1;
               </div>
             )}
 
-            <div className="pt-2 border-t border-border/30 text-xs text-muted-foreground/20 font-mono text-center flex items-center justify-center gap-4">
-              <span>{'\u00a9 2026'}</span>
-              <button onClick={() => setShowPrivacy(true)} className="hover:text-muted-foreground transition-colors">
-                {t('privacyTitle')}
-              </button>
-            </div>
           </div>
+        </div>
+
+        {/* Fixed footer — stays at bottom, never scrolls */}
+        <div className="fixed bottom-0 left-0 right-0 z-10 py-2 border-t border-border/30 text-xs text-muted-foreground/20 font-mono text-center flex items-center justify-center gap-4 bg-background/80 backdrop-blur-sm">
+          <span>{'\u00a9 2026'}</span>
+          <button onClick={() => setShowPrivacy(true)} className="hover:text-muted-foreground transition-colors">
+            {t('privacyTitle')}
+          </button>
         </div>
       </div>}
       </Suspense>
