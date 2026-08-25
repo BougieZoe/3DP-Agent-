@@ -11,6 +11,7 @@ import { computeEcoMetrics, type EcoResult } from './eco';
 import { computeThermalMetrics, type ThermalFieldResult } from './thermal';
 import { computeMetalAnalysis, type MetalAnalysisResult } from './metalAnalysis';
 import { computeMultiMaterialAnalysis, type MultiMaterialAnalysisResult } from './multiMaterial';
+import { computeAISuggestions, type AISuggestionResult } from './aiSuggestions';
 import { checkBedFit } from './bedFit';
 import { estimateSupportVolume } from './support';
 import { estimatePrintTime } from './printTime';
@@ -288,7 +289,35 @@ export function runAnalysisPipeline(
     }
   });
 
-  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, thermal, metal, multiMaterial]
+  // AI Suggestions (always runs - provides recommendations based on patterns)
+  const EMPTY_AI_SUGGESTIONS: AISuggestionResult = {
+    suggestions: [],
+    patterns: [],
+    similarGeometries: [],
+    overallConfidence: 0,
+    learningData: {
+      geometryFeatures: [],
+      materialProperties: {},
+      analysisResults: {},
+      timestamp: now,
+    },
+  };
+  const aiSuggestions = time('aiSuggestions', () => {
+    try {
+      if (!mat) return null;
+      return computeAISuggestions(model, {
+        material: mat,
+        printerId: options.printerId,
+        enableLearning: true,
+        maxSuggestions: 10,
+        minConfidence: 0.5,
+      });
+    } catch (e) {
+      return failResult('aiSuggestions', e, EMPTY_AI_SUGGESTIONS);
+    }
+  });
+
+  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, thermal, metal, multiMaterial, aiSuggestions]
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .map(m => m.confidence);
   const overallConfidence = confidences.length > 0
@@ -310,6 +339,7 @@ export function runAnalysisPipeline(
     thermal,
     metal,
     multiMaterial,
+    aiSuggestions,
     timestamp: now,
     modelFileName: fileName,
     overallConfidence,
