@@ -119,7 +119,14 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
     const results: UploadedModel[] = [];
     const startTime = Date.now();
     for (const file of supported) {
-      setProgress([`> ${t.loading} ${file.name}`, `> ${t.fileSize}: ${(file.size / 1024).toFixed(1)} KB`]);
+      const sizeMB = file.size / (1024 * 1024);
+      const sizeLabel = sizeMB >= 1
+        ? `${sizeMB.toFixed(1)} MB`
+        : `${(file.size / 1024).toFixed(1)} KB`;
+      setProgress([`> ${t.loading} ${file.name}`, `> ${t.fileSize}: ${sizeLabel}`]);
+      if (sizeMB > 50) {
+        setProgress(p => [...p, `> ⚠ Large file — analysis may take a while`]);
+      }
       try {
         // Read raw bytes for cache key + geometry loading
         const arrayBuffer = await file.arrayBuffer();
@@ -220,10 +227,25 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
   };
 
   if (isLoading) {
+    // Compute a rough progress estimate from the log messages
+    const total = progress.length;
+    const done = progress.filter(m => m.includes('✓') || m.includes('COMPLETE') || m.includes('CACHE HIT')).length;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
     return (
-      <div className="border border-primary/30 rounded-sm p-5 bg-card font-mono space-y-1 border-glow">
+      <div className="border border-primary/30 rounded-sm p-5 bg-card font-mono space-y-2 border-glow">
+        {/* Progress bar */}
+        <div className="w-full h-1.5 bg-border/30 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary/70 rounded-full transition-all duration-300"
+            style={{ width: `${Math.max(pct, 5)}%` }}
+          />
+        </div>
+        <div className="text-[10px] text-muted-foreground/50 text-right">{pct}%</div>
+
+        {/* Log lines */}
         {progress.map((msg, i) => (
-          <div key={i} className={`text-xs ${msg.includes(t.error) ? 'text-red-400' : msg.includes('✓') ? 'text-emerald-400' : 'text-muted-foreground'}`}>
+          <div key={i} className={`text-xs ${msg.includes(t.error) ? 'text-red-400' : msg.includes('✓') || msg.includes('CACHE HIT') ? 'text-emerald-400' : 'text-muted-foreground'}`}>
             {msg}
           </div>
         ))}

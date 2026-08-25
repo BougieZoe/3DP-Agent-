@@ -3,6 +3,7 @@ import { CONTENT, translate, type ContentLang } from "@shared/i18n/content";
 import type { UnifiedAnalysis, NormalOrientation } from "../analysis/types";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
 import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
+import { createShareLink, copyShareLink } from "@/lib/shareReport";
 import type { ExpertReview } from "@/agents/expertReview";
 import type { ProductionSuitability } from "@/analysis/production";
 
@@ -1262,6 +1263,21 @@ export function ReportGenerator({
   };
 
   const [tier, setTier] = useState<PdfTier>("client");
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareLoading, setShareLoading] = useState(false);
+
+  const handleShare = useCallback(async () => {
+    setShareLoading(true);
+    try {
+      const result = await createShareLink(analysis, fileName, "FDM", expertReview);
+      setShareUrl(result.url);
+      await copyShareLink(result.url);
+    } catch (err) {
+      console.error('Share failed:', err);
+    } finally {
+      setShareLoading(false);
+    }
+  }, [analysis, fileName, expertReview]);
 
   return (
     <div className="space-y-2">
@@ -1304,6 +1320,22 @@ export function ReportGenerator({
           <option value="factory">{translate(CONTENT, 'pdf.tier.factory', language)}</option>
         </select>
       </div>
+
+      {/* Share button */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleShare}
+          disabled={shareLoading}
+          className="flex-1 py-2 text-[11px] font-mono border border-border/50 text-muted-foreground hover:text-foreground hover:border-border rounded-sm transition-all disabled:opacity-50"
+        >
+          {shareLoading ? '...' : shareUrl ? '✓ Link Copied' : 'Share Report'}
+        </button>
+      </div>
+      {shareUrl && (
+        <div className="text-[10px] font-mono text-muted-foreground/50 break-all">
+          {shareUrl}
+        </div>
+      )}
     </div>
   );
 }
