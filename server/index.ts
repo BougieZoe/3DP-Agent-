@@ -10,6 +10,7 @@ import { createStepRouter } from "./stepRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
 import { relayLLM, relayLLMStream } from "./llmRelay";
+import { createShareRouter } from "./shareRouter";
 import { logger } from "./logger";
 import { requestContext, errorHandler, notFoundHandler } from "./requestContext";
 import healthRouter from "./healthRouter";
@@ -257,6 +258,9 @@ export function createApp() {
     (req.body as Record<string, unknown>).bearer = bearer;
     await relayLLMStream(req, res);
   });
+
+  // Share report links — public, no auth required
+  app.use("/api/share", express.json({ limit: "5mb" }), createShareRouter());
 
   // Serve static files from dist/public in production
   const staticPath =
