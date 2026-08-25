@@ -2,7 +2,8 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type { UploadedModel } from '@/components/STLUploadHandler';
 import { type Material } from '@shared/domain/material';
 import { type AgentId } from '@shared/domain/agent';
-import { generateQuickReport, type ModelData } from '@/lib/ruleEngine';
+import { generateQuickReport } from '@/lib/ruleEngine';
+import { unifiedToModelData } from '@/lib/unifiedToModelData';
 
 const DEEP_STEP_AGENTS: AgentId[] = ['geometry_analyst', 'failure_predictor', 'optimization_advisor', 'printability_scorer'];
 
@@ -85,7 +86,8 @@ export function useAnalysis({ language, material }: UseAnalysisProps) {
       const agentsModule = await import('@/agents');
       const { runDeepAnalysis } = agentsModule;
 
-      const result = await runDeepAnalysis(model.unifiedAnalysis, language, (step: any, index: number) => {
+      const modelData = unifiedToModelData(model.unifiedAnalysis, model.fileName, mat.overhangThreshold);
+      const result = await runDeepAnalysis(modelData, language, (step: any, index: number) => {
         if (seq !== deepAnalysisSeq.current) return;
         const agentId = DEEP_STEP_AGENTS[index];
         setDeepSteps(prev => [...prev, {

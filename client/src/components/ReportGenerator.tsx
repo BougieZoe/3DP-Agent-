@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { CONTENT, translate, type ContentLang } from "@shared/i18n/content";
 import type { UnifiedAnalysis, NormalOrientation } from "../analysis/types";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
+import { getTrafficLight } from "./reportUtils";
 import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
 import { createShareLink, copyShareLink } from "@/lib/shareReport";
 import type { ExpertReview } from "@/agents/expertReview";
@@ -69,48 +70,6 @@ function detectTone(messages: ChatMessage[]): ToneMode {
   if (expertScore >= 2 || avgWordLength > 8) return "expert";
   if (casualScore >= 2 || avgWordLength < 4) return "friendly";
   return "professional";
-}
-
-// ─── Traffic Light Score ───────────────────────────────────────────────────────
-
-export function getTrafficLight(analysis: UnifiedAnalysis): {
-  light: TrafficLight;
-  score: number;
-} {
-  let score = 100;
-  const v = analysis.validation?.result;
-  const m = analysis.metrics?.result;
-  const s = analysis.support?.result;
-
-  if (v) {
-    if (!v.isWatertight) score -= 30;
-    if (v.holeCount > 0) score -= v.holeCount * 8;
-    if (v.flippedNormalRatio > 0.1) score -= 15;
-    if (v.degenerateFaceCount > 10) score -= 10;
-  }
-
-  if (m) {
-    const wtStatus = deriveWtStatus(m.thinWallRatio ?? 0, m.p5WallThicknessMm);
-    if (wtStatus === 'critical') score -= 30;
-    else if (wtStatus === 'warning') score -= 15;
-    if ((m.averageConfidence ?? 0) < 0.3 && (m.thinWallRatio ?? 0) < 0.02) score -= 3;
-    const ohStatus = deriveOhStatus(m.overhang.ratio);
-    if (ohStatus === 'critical') score -= 20;
-    else if (ohStatus === 'warning') score -= 10;
-  }
-
-  if (s) {
-    const supportStatus = deriveSupportStatus(s);
-    if (supportStatus.status === 'critical') score -= 20;
-    else if (supportStatus.status === 'warning') score -= 10;
-  }
-
-  score = Math.max(0, Math.min(100, score));
-
-  const light: TrafficLight =
-    score >= 75 ? "green" : score >= 45 ? "yellow" : "red";
-
-  return { light, score };
 }
 
 // ─── Weight / Time ranges ──────────────────────────────────────────────────────

@@ -26,6 +26,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useIsMobile } from '@/hooks/useMobile';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
+import { unifiedToModelData } from '@/lib/unifiedToModelData';
 import { fromThreeBufferGeometry, runAnalysisInWorker, assessContext, liquidCoolingFromUnified, productionFromUnified, type ObjectContext } from '@/analysis';
 import { normalizeModelGeometry, fitCameraToGeometry } from '@/lib/modelNormalization';
 import { autoOrientGeometry } from '@/lib/autoOrient';
@@ -106,51 +107,6 @@ function downloadBlob(filename: string, blob: Blob) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
-}
-
-function unifiedToModelData(
-  unifiedAnalysis: import('@/analysis').UnifiedAnalysis,
-  fileName: string,
-  overhangThreshold: number = 50,
-): ModelData {
-  const metrics = unifiedAnalysis.metrics.result;
-  const topology = unifiedAnalysis.topology.result;
-  const triCount = topology?.triangleCount ?? 0;
-  const volume = metrics?.meshVolumeMm3 ?? metrics?.boundingBoxVolumeMm3 ?? 0;
-  const surfaceArea = metrics?.surfaceAreaMm2 ?? 0;
-  const oh = metrics?.overhang;
-  const dims = metrics?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
-  const thinWallRatio = metrics?.thinWallRatio ?? 0;
-  const p5Thickness = metrics?.p5WallThicknessMm;
-  const minWall = metrics?.minWallThicknessMm;
-  const wtStatus = deriveWtStatus(thinWallRatio, p5Thickness);
-  const wtAreas = Math.floor(triCount * 0.15);
-
-  return {
-    fileName,
-    wallThickness: {
-      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall,
-      p1Thickness: metrics?.p1WallThicknessMm ?? null,
-      p5Thickness: metrics?.p5WallThicknessMm ?? null,
-      p10Thickness: metrics?.p10WallThicknessMm ?? null,
-      medianThickness: metrics?.medianWallThicknessMm ?? null,
-      avgThickness: metrics?.avgWallThicknessMm ?? null,
-      thinWallCount: metrics?.thinWallCount ?? 0,
-      thinWallPercentage: metrics?.thinWallPercentage ?? 0,
-      thinWallRatio: metrics?.thinWallRatio ?? 0,
-      averageConfidence: metrics?.averageConfidence ?? 0,
-      areas: wtAreas,
-      status: wtStatus,
-    },
-    overhang: {
-      angle: overhangThreshold,
-      areas: oh?.faceCount ?? 0,
-      status: deriveOhStatus(oh?.ratio ?? 0),
-    },
-    volume,
-    surfaceArea,
-    dims,
-  };
 }
 
 /**
@@ -1571,6 +1527,18 @@ deepAnalysisSeq.current += 1;
                             {' \u2022 '}{agentRun.totalDurationMs}ms
                           </div>
                         </div>
+
+                        {/* Score methodology explanation — shown when both scores exist */}
+                        {deepAgentRun && (
+                          <details className="border border-border/30 rounded-sm bg-muted/5 p-3">
+                            <summary className="text-xs font-mono text-muted-foreground/60 cursor-pointer hover:text-muted-foreground/80">
+                              {t('scoreComparison')}
+                            </summary>
+                            <p className="mt-2 text-[10px] text-muted-foreground/50 leading-relaxed">
+                              {t('scoreComparisonDesc')}
+                            </p>
+                          </details>
+                        )}
 
                         {/* Per-Agent Cards */}
                         {agentRun.results.map(result => (

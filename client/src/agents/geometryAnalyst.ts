@@ -175,15 +175,17 @@ export class GeometryAnalyst extends BaseAgent {
     const threshold = ctx.material.overhangThreshold;
 
     for (let i = 0; i < Math.min(normals.length, 300); i += 3) {
-      const ny = normals[i + 1];
-      const angle = Math.acos(Math.max(-1, Math.min(1, ny))) * (180 / Math.PI);
-      if (angle > threshold && i * 3 + 2 < positions.length) {
+      const nz = normals[i + 2];
+      if (nz >= 0) continue;
+      const angle = Math.acos(Math.max(-1, Math.min(1, nz))) * (180 / Math.PI);
+      const tiltBelow = angle - 90;
+      if (tiltBelow > threshold && i * 3 + 2 < positions.length) {
         const idx = Math.min(Math.floor(i / 3) * step, positions.length - 3);
         markers.push({
           position: { x: positions[idx], y: positions[idx + 1], z: positions[idx + 2] },
           type: 'overhang',
-          severity: Math.min(1, (angle - threshold) / (90 - threshold) * 2),
-          description: translate(CONTENT, 'geometryAnalyst.markerOverhang', ctx.language, { angle: angle.toFixed(1) }),
+          severity: Math.min(1, tiltBelow / (90 - threshold) * 2),
+          description: translate(CONTENT, 'geometryAnalyst.markerOverhang', ctx.language, { angle: tiltBelow.toFixed(1) }),
         });
         if (markers.length >= 20) break;
       }

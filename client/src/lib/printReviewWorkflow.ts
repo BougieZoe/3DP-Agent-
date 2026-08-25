@@ -3,7 +3,6 @@ import type { AnalysisReport, ModelAnalysis } from '@shared/domain/analysis';
 import type { AdvisorLanguage } from '@shared/domain/advisor';
 import { createGeometryBounds } from '@shared/domain/geometry';
 import type { PrintabilityFinding } from '@shared/domain/printability';
-import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 import {
   completeStage,
   createPendingStage,
@@ -18,45 +17,7 @@ import { runAnalysisInWorker, fromThreeBufferGeometry, type UnifiedAnalysis } fr
 import type { Material } from '@shared/domain/material';
 import { DEFAULT_MATERIAL } from '@shared/domain/material';
 
-function unifiedToModelData(unifiedAnalysis: UnifiedAnalysis, fileName: string, material: Material = DEFAULT_MATERIAL): ModelData {
-  const metrics = unifiedAnalysis.metrics.result;
-  const topology = unifiedAnalysis.topology.result;
-  const triCount = topology?.triangleCount ?? 0;
-  const volume = metrics?.meshVolumeMm3 ?? metrics?.boundingBoxVolumeMm3 ?? 0;
-  const surfaceArea = metrics?.surfaceAreaMm2 ?? 0;
-  const oh = metrics?.overhang;
-  const dims = metrics?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
-  const thinWallRatio = metrics?.thinWallRatio ?? 0;
-  const p5Thickness = metrics?.p5WallThicknessMm;
-  const minWall = metrics?.minWallThicknessMm;
-  const wtStatus = deriveWtStatus(thinWallRatio, p5Thickness);
-
-  return {
-    fileName,
-    wallThickness: {
-      minThickness: p5Thickness ?? metrics?.avgWallThicknessMm ?? metrics?.medianWallThicknessMm ?? minWall,
-      p1Thickness: metrics?.p1WallThicknessMm ?? null,
-      p5Thickness: metrics?.p5WallThicknessMm ?? null,
-      p10Thickness: metrics?.p10WallThicknessMm ?? null,
-      medianThickness: metrics?.medianWallThicknessMm ?? null,
-      avgThickness: metrics?.avgWallThicknessMm ?? null,
-      thinWallCount: metrics?.thinWallCount ?? 0,
-      thinWallPercentage: metrics?.thinWallPercentage ?? 0,
-      thinWallRatio: metrics?.thinWallRatio ?? 0,
-      averageConfidence: metrics?.averageConfidence ?? 0,
-      areas: Math.floor(triCount * 0.15),
-      status: wtStatus,
-    },
-    overhang: {
-      angle: material.overhangThreshold,
-      areas: oh?.faceCount ?? 0,
-      status: deriveOhStatus(oh?.ratio ?? 0),
-    },
-    volume,
-    surfaceArea,
-    dims,
-  };
-}
+import { unifiedToModelData } from './unifiedToModelData';
 
 /**
  * Build a real ModelAnalysis from pipeline output. Previously this stage was
