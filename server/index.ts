@@ -9,7 +9,7 @@ import { createSlicerRouter } from "./slicerRouter";
 import { createStepRouter } from "./stepRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
-import { relayLLM } from "./llmRelay";
+import { relayLLM, relayLLMStream } from "./llmRelay";
 import { logger } from "./logger";
 import { requestContext, errorHandler, notFoundHandler } from "./requestContext";
 import healthRouter from "./healthRouter";
@@ -247,6 +247,15 @@ export function createApp() {
     const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
     const result = await relayLLM({ provider: provider as string, apiKey, body, bearer });
     res.status(result.status).set("Content-Type", "application/json").send(result.text);
+  });
+
+  // Streaming LLM endpoint — SSE passthrough for real-time token output
+  app.post("/api/llm/stream", express.json({ limit: "2mb" }), rateLimit, async (req: Request, res: Response) => {
+    const authHeader = typeof req.headers.authorization === "string" ? req.headers.authorization : "";
+    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    // Inject bearer into req.body for the relay
+    (req.body as Record<string, unknown>).bearer = bearer;
+    await relayLLMStream(req, res);
   });
 
   // Serve static files from dist/public in production
