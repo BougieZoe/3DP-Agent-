@@ -23,6 +23,7 @@ export interface WorkerPoolOptions {
 
 interface PendingJob {
   id: string;
+  workerIndex: number;
   resolve: (result: UnifiedAnalysis) => void;
   reject: (error: Error) => void;
   abortController: AbortController;
@@ -94,9 +95,11 @@ class WorkerPool {
       return;
     }
 
+    const workerIdx = this.workers.indexOf(worker);
+
     // Error from worker
     if (msg && typeof msg === 'object' && 'type' in msg && msg.type === 'error') {
-      const job = this.pendingJobs.find(j => j.reject);
+      const job = this.pendingJobs.find(j => j.workerIndex === workerIdx);
       if (job) {
         clearTimeout(job.id as any);
         job.reject(new Error((msg as { error: string }).error));
@@ -114,7 +117,7 @@ class WorkerPool {
       ? (msg as { type: string; result: UnifiedAnalysis }).result
       : msg as UnifiedAnalysis;
 
-    const job = this.pendingJobs.find(j => j.resolve);
+    const job = this.pendingJobs.find(j => j.workerIndex === workerIdx);
     if (job) {
       clearTimeout(job.id as any);
       job.resolve(result);
@@ -129,7 +132,8 @@ class WorkerPool {
    * Handle worker error
    */
   private handleWorkerError(worker: Worker, error: Error): void {
-    const job = this.pendingJobs.find(j => j.reject);
+    const workerIdx = this.workers.indexOf(worker);
+    const job = this.pendingJobs.find(j => j.workerIndex === workerIdx);
     if (job) {
       clearTimeout(job.id as any);
       job.reject(error);
@@ -149,6 +153,7 @@ class WorkerPool {
     while (this.jobQueue.length > 0 && this.availableWorkers.length > 0) {
       const { model, options, job } = this.jobQueue.shift()!;
       const worker = this.availableWorkers.pop()!;
+      const workerIdx = this.workers.indexOf(worker);
 
       const timeoutId = setTimeout(() => {
         job.reject(new Error('Analysis timeout'));
@@ -159,7 +164,7 @@ class WorkerPool {
         this.createWorker();
       }, this.timeoutMs);
 
-      this.pendingJobs.push({ ...job, id: timeoutId as any });
+      this.pendingJobs.push({ ...job, id: timeoutId as any, workerIndex: workerIdx });
       worker.postMessage({ model, options });
     }
   }
@@ -180,6 +185,7 @@ class WorkerPool {
     return new Promise((resolve, reject) => {
       const job: PendingJob = {
         id: '',
+        workerIndex: -1, // Will be set when assigned to a worker in processQueue
         resolve,
         reject,
         abortController: abortController ?? new AbortController(),

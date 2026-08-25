@@ -29,7 +29,10 @@ export function initShutdown(srv: Server): void {
       context: 'shutdown',
       error,
     });
-    handleShutdown('uncaughtException');
+    // Give the logger time to write before exiting
+    setTimeout(() => {
+      process.exit(1);
+    }, 100);
   });
   process.on('unhandledRejection', (reason) => {
     logger.error('Unhandled rejection', {

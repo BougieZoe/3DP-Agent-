@@ -28,6 +28,7 @@ class PerformanceMonitor {
   private metrics: PerformanceMetric[] = [];
   private apiCalls: ApiCallMetric[] = [];
   private observers: PerformanceObserver[] = [];
+  private memoryInterval: ReturnType<typeof setInterval> | null = null;
   private initialized = false;
 
   /**
@@ -213,7 +214,7 @@ class PerformanceMonitor {
     };
 
     // Track every 30 seconds
-    setInterval(trackMemory, 30000);
+    this.memoryInterval = setInterval(trackMemory, 30000);
     trackMemory();
   }
 
@@ -223,6 +224,10 @@ class PerformanceMonitor {
   destroy(): void {
     this.observers.forEach(obs => obs.disconnect());
     this.observers = [];
+    if (this.memoryInterval !== null) {
+      clearInterval(this.memoryInterval);
+      this.memoryInterval = null;
+    }
     this.initialized = false;
   }
 }
