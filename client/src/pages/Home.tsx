@@ -512,7 +512,11 @@ export default function Home() {
     setDeepAgentRun(null);
 
     const model = fromThreeBufferGeometry(uploadedModel.geometry);
-    const newUnified = await runAnalysisInWorker(model, { fileName: uploadedModel.fileName, material: newMat });
+    const newUnified = await runAnalysisInWorker(model, { 
+      fileName: uploadedModel.fileName, 
+      material: newMat,
+      materialFamily: newMat.technology,
+    });
 
     if (currentSeq !== materialRequestSeq.current) return;
 
