@@ -40,6 +40,15 @@ async function getStripe() {
 export function createStripeRouter(): Router {
   const router = Router();
 
+  /** Return 503 if Supabase is not configured */
+  function requireSb(res: any): boolean {
+    if (!sb) {
+      res.status(503).json({ error: 'Database not configured' });
+      return false;
+    }
+    return true;
+  }
+
   /**
    * Create a Stripe Checkout session for Pro plan upgrade.
    * Requires authenticated user (bearer token).
@@ -51,6 +60,7 @@ export function createStripeRouter(): Router {
         res.status(503).json({ error: 'Stripe not configured' });
         return;
       }
+      if (!requireSb(res)) return;
 
       // Get user from bearer token
       const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
@@ -115,6 +125,7 @@ export function createStripeRouter(): Router {
         res.status(503).json({ error: 'Stripe not configured' });
         return;
       }
+      if (!requireSb(res)) return;
 
       const sig = req.headers['stripe-signature'];
       if (!sig || typeof sig !== 'string') {
@@ -192,6 +203,7 @@ export function createStripeRouter(): Router {
         res.status(503).json({ error: 'Stripe not configured' });
         return;
       }
+      if (!requireSb(res)) return;
 
       const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
       const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';

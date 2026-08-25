@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { usePersistFn } from "./usePersistFn";
 
 export interface UseCompositionReturn<
@@ -32,6 +32,14 @@ export function useComposition<
   const c = useRef(false);
   const timer = useRef<TimerResponse | null>(null);
   const timer2 = useRef<TimerResponse | null>(null);
+
+  // Cleanup timers on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+      if (timer2.current) clearTimeout(timer2.current);
+    };
+  }, []);
 
   const onCompositionStart = usePersistFn((e: React.CompositionEvent<T>) => {
     if (timer.current) {

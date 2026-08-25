@@ -52,6 +52,21 @@ export interface NotificationResult {
 
 const STORAGE_KEY = '3dp_agent_notifications';
 
+/** Escape HTML special characters to prevent XSS injection */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Escape string for use in email subject (prevents header injection) */
+function escapeSubject(str: string): string {
+  return str.replace(/[\r\n]/g, '_');
+}
+
 export function getNotificationConfig(): NotificationConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -142,13 +157,13 @@ async function sendEmail(
   try {
     const statusEmoji = payload.status === 'green' ? '✅' : payload.status === 'yellow' ? '⚠️' : '❌';
     const findingsList = payload.findings.length > 0
-      ? payload.findings.map(f => `• ${f}`).join('\n')
+      ? payload.findings.map(f => `• ${escapeHtml(f)}`).join('\n')
       : 'No issues found';
 
     const html = `
-      <h2>${statusEmoji} Analysis Complete: ${payload.fileName}</h2>
+      <h2>${statusEmoji} Analysis Complete: ${escapeHtml(payload.fileName)}</h2>
       <p><strong>Score:</strong> ${payload.score}/100</p>
-      <p><strong>Material:</strong> ${payload.material}</p>
+      <p><strong>Material:</strong> ${escapeHtml(payload.material)}</p>
       <p><strong>Status:</strong> ${payload.status.toUpperCase()}</p>
       <h3>Findings</h3>
       <pre>${findingsList}</pre>
@@ -167,7 +182,7 @@ async function sendEmail(
       body: JSON.stringify({
         from: '3DP Agent <noreply@3dp-agent.com>',
         to,
-        subject: `${statusEmoji} Analysis: ${payload.fileName} — Score ${payload.score}/100`,
+        subject: `${statusEmoji} Analysis: ${escapeSubject(escapeHtml(payload.fileName))} — Score ${payload.score}/100`,
         html,
       }),
       signal: AbortSignal.timeout(10_000),
