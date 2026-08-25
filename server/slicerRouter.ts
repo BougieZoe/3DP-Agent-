@@ -78,9 +78,152 @@ interface SliceBody {
  * These extend the standard Bambu Lab profiles with larger bed dimensions.
  */
 const LARGE_FORMAT_PROFILES: Record<string, { widthMm: number; depthMm: number; heightMm: number }> = {
+  // Bambu Lab FDM
   'bambu_h2d': { widthMm: 350, depthMm: 350, heightMm: 350 },
   'bambu_h2d_pro': { widthMm: 350, depthMm: 350, heightMm: 350 },
   'bambu_x1c': { widthMm: 256, depthMm: 256, heightMm: 256 },
+  'bambu_p1s': { widthMm: 256, depthMm: 256, heightMm: 256 },
+  'bambu_a1': { widthMm: 256, depthMm: 256, heightMm: 256 },
+  'bambu_a1_mini': { widthMm: 180, depthMm: 180, heightMm: 180 },
+};
+
+/**
+ * Industrial SLA/SLS printer profiles.
+ * These are for reference and UI display - actual slicing requires vendor software.
+ */
+export const INDUSTRIAL_PRINTER_PROFILES: Record<string, {
+  name: string;
+  technology: string;
+  widthMm: number;
+  depthMm: number;
+  heightMm: number;
+  layerRangeMm: { min: number; max: number };
+  vendor: string;
+}> = {
+  // Formlabs SLA
+  'formlabs.form3': {
+    name: 'Form 3',
+    technology: 'sla',
+    widthMm: 145,
+    depthMm: 145,
+    heightMm: 185,
+    layerRangeMm: { min: 0.025, max: 0.1 },
+    vendor: 'Formlabs',
+  },
+  'formlabs.form3l': {
+    name: 'Form 3L',
+    technology: 'sla',
+    widthMm: 335,
+    depthMm: 200,
+    heightMm: 300,
+    layerRangeMm: { min: 0.025, max: 0.1 },
+    vendor: 'Formlabs',
+  },
+  'formlabs.form4': {
+    name: 'Form 4',
+    technology: 'sla',
+    widthMm: 200,
+    depthMm: 125,
+    heightMm: 210,
+    layerRangeMm: { min: 0.025, max: 0.1 },
+    vendor: 'Formlabs',
+  },
+  // EOS SLS
+  'eos.p396': {
+    name: 'EOS P 396',
+    technology: 'sls',
+    widthMm: 340,
+    depthMm: 340,
+    heightMm: 620,
+    layerRangeMm: { min: 0.06, max: 0.12 },
+    vendor: 'EOS',
+  },
+  'eos.p770': {
+    name: 'EOS P 770',
+    technology: 'sls',
+    widthMm: 700,
+    depthMm: 380,
+    heightMm: 580,
+    layerRangeMm: { min: 0.06, max: 0.12 },
+    vendor: 'EOS',
+  },
+  'eos.m290': {
+    name: 'EOS M 290',
+    technology: 'slm',
+    widthMm: 250,
+    depthMm: 250,
+    heightMm: 325,
+    layerRangeMm: { min: 0.02, max: 0.08 },
+    vendor: 'EOS',
+  },
+  // Desktop Metal
+  'desktop_metal.shop_system': {
+    name: 'Shop System',
+    technology: 'binder_jetting',
+    widthMm: 300,
+    depthMm: 200,
+    heightMm: 200,
+    layerRangeMm: { min: 0.05, max: 0.1 },
+    vendor: 'Desktop Metal',
+  },
+  'desktop_metal.production': {
+    name: 'Production System',
+    technology: 'binder_jetting',
+    widthMm: 600,
+    depthMm: 400,
+    heightMm: 400,
+    layerRangeMm: { min: 0.05, max: 0.1 },
+    vendor: 'Desktop Metal',
+  },
+  // HP MJF
+  'hp.mjf5200': {
+    name: 'HP Jet Fusion 5200',
+    technology: 'mjf',
+    widthMm: 380,
+    depthMm: 285,
+    heightMm: 380,
+    layerRangeMm: { min: 0.07, max: 0.1 },
+    vendor: 'HP',
+  },
+  // Markforged
+  'markforged.fx20': {
+    name: 'FX20',
+    technology: 'fff',
+    widthMm: 525,
+    depthMm: 400,
+    heightMm: 400,
+    layerRangeMm: { min: 0.1, max: 0.2 },
+    vendor: 'Markforged',
+  },
+  'markforged.x7': {
+    name: 'X7',
+    technology: 'continuous_fiber',
+    widthMm: 330,
+    depthMm: 270,
+    heightMm: 200,
+    layerRangeMm: { min: 0.1, max: 0.2 },
+    vendor: 'Markforged',
+  },
+  // Ultimaker
+  'ultimaker.s5': {
+    name: 'Ultimaker S5',
+    technology: 'fff',
+    widthMm: 330,
+    depthMm: 240,
+    heightMm: 300,
+    layerRangeMm: { min: 0.02, max: 0.6 },
+    vendor: 'Ultimaker',
+  },
+  // Raise3D
+  'raise3d.pro3': {
+    name: 'Pro3',
+    technology: 'fff',
+    widthMm: 300,
+    depthMm: 300,
+    heightMm: 300,
+    layerRangeMm: { min: 0.01, max: 0.5 },
+    vendor: 'Raise3D',
+  },
 };
 
 function sendError(res: Response, status: number, code: string, detail: string): void {
@@ -99,6 +242,15 @@ export function createSlicerRouter(): Router {
       discoverSlicer('bambustudio'),
     ]);
     res.json({ ok: true, slicers: { prusaslicer, orcaslicer, bambustudio } });
+  });
+
+  // List available printer profiles
+  router.get('/profiles', (_req: Request, res: Response) => {
+    res.json({ 
+      ok: true, 
+      profiles: INDUSTRIAL_PRINTER_PROFILES,
+      largeFormatProfiles: LARGE_FORMAT_PROFILES,
+    });
   });
 
   router.post('/', async (req: Request, res: Response) => {
