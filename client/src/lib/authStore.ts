@@ -6,6 +6,21 @@ export interface Profile {
   plan: "free" | "pro";
   usage_count: number;
   quota_month: string | null;
+  /** Prepaid credits for LLM calls (deducted per call). */
+  credits: number;
+}
+
+/** Per-plan monthly quotas and pricing */
+export const PLAN_LIMITS = {
+  free: { monthlyCalls: 100, label: "Free" },
+  pro:  { monthlyCalls: 1000, label: "Pro ($19/mo)" },
+} as const;
+
+/** Remaining calls for the current billing period */
+export function getRemainingCalls(profile: Profile | null): number {
+  if (!profile) return 0;
+  const limit = PLAN_LIMITS[profile.plan]?.monthlyCalls ?? PLAN_LIMITS.free.monthlyCalls;
+  return Math.max(0, limit - profile.usage_count);
 }
 
 export interface AuthSnapshot {

@@ -4,6 +4,7 @@ import { GoogleIcon } from "./GoogleIcon";
 import { getTranslation } from "@/lib/i18n";
 import type { Language } from "@/lib/i18n";
 import { useAuth } from "@/contexts/AuthContext";
+import { PLAN_LIMITS, getRemainingCalls } from "@/lib/authStore";
 
 // Account / sign-in modal. Signed-in users see their plan + monthly usage.
 // Hosted LLM means no API key to configure — just an account.
@@ -31,6 +32,11 @@ export function AccountModal({ language, onClose }: { language: Language; onClos
     else if (mode === "signup") setMode("signin"); // switch to sign-in after registering
   };
 
+  const plan = profile?.plan ?? "free";
+  const planLimit = PLAN_LIMITS[plan]?.monthlyCalls ?? PLAN_LIMITS.free.monthlyCalls;
+  const remaining = getRemainingCalls(profile);
+  const usagePct = planLimit > 0 ? Math.round(((profile?.usage_count ?? 0) / planLimit) * 100) : 0;
+
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex overflow-y-auto" onClick={onClose}>
       <div
@@ -47,14 +53,47 @@ export function AccountModal({ language, onClose }: { language: Language; onClos
               </button>
             </div>
             <div className="space-y-3 mb-5">
+              {/* Plan */}
               <div className="flex items-center justify-between text-sm font-mono">
                 <span className="text-muted-foreground/50">{t("planFree")}</span>
-                <span className="text-primary uppercase">{(profile?.plan ?? "free").toUpperCase()}</span>
+                <span className={`uppercase font-semibold ${plan === 'pro' ? 'text-amber-400' : 'text-primary'}`}>
+                  {PLAN_LIMITS[plan]?.label ?? plan.toUpperCase()}
+                </span>
               </div>
-              <div className="flex items-center justify-between text-sm font-mono">
-                <span className="text-muted-foreground/50">{t("aiCallsLeft")}</span>
-                <span className="text-foreground tabular-nums">{profile?.usage_count ?? 0}</span>
+
+              {/* Usage bar */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-sm font-mono">
+                  <span className="text-muted-foreground/50">{t("aiCallsLeft")}</span>
+                  <span className="text-foreground tabular-nums">
+                    {remaining} / {planLimit}
+                  </span>
+                </div>
+                <div className="w-full h-1.5 bg-border/30 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      usagePct > 90 ? 'bg-red-500' : usagePct > 70 ? 'bg-amber-500' : 'bg-primary/70'
+                    }`}
+                    style={{ width: `${Math.min(usagePct, 100)}%` }}
+                  />
+                </div>
+                <div className="text-[10px] font-mono text-muted-foreground/40 text-right">
+                  {usagePct}% used this month
+                </div>
               </div>
+
+              {/* Upgrade prompt for free users */}
+              {plan === 'free' && (
+                <div className="border border-amber-500/30 rounded-sm p-3 bg-amber-500/5">
+                  <div className="text-xs font-mono text-amber-400 mb-1">Upgrade to Pro</div>
+                  <div className="text-[10px] font-mono text-muted-foreground/50">
+                    10x more LLM calls, priority support, all providers
+                  </div>
+                  <button className="mt-2 w-full py-1.5 text-[11px] font-mono border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 rounded-sm transition-all">
+                    Upgrade — $19/mo
+                  </button>
+                </div>
+              )}
             </div>
             <button
               onClick={async () => { await signOut(); onClose(); }}
