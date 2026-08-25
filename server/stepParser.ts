@@ -9,7 +9,18 @@
  * - Geometry extraction (positions, normals, indices)
  * - Integration with existing GeometryModel interface
  */
-import { OcctKernel } from 'occt-wasm';
+// Lazy import — occt-wasm has no CJS exports main, so a static import
+// crashes the server at startup with ERR_PACKAGE_PATH_NOT_EXPORTED.
+// Dynamic import defers the failure to actual STEP-parse calls where we
+// can catch and surface it gracefully.
+let _OcctKernel: typeof import('occt-wasm').OcctKernel | null = null;
+async function getOcctKernel() {
+  if (!_OcctKernel) {
+    const mod = await import('occt-wasm');
+    _OcctKernel = mod.OcctKernel;
+  }
+  return _OcctKernel;
+}
 
 export interface GeometryModel {
   positions: Float32Array;
@@ -65,7 +76,8 @@ export async function parseStepFile(
 
   const warnings: string[] = [];
 
-  // Initialize OCCT kernel
+  // Initialize OCCT kernel (lazy-loaded to avoid startup crash)
+  const OcctKernel = await getOcctKernel();
   using kernel = await OcctKernel.init();
 
   // Import STEP file
