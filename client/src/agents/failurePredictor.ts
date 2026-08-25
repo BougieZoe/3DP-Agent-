@@ -319,14 +319,16 @@ export class FailurePredictor extends BaseAgent {
     let count = 0;
 
     for (let i = 0; i < Math.min(normals.length, 600); i += 3) {
-      const ny = normals[i + 1];
-      const angle = Math.acos(Math.max(-1, Math.min(1, ny))) * (180 / Math.PI);
-      if (angle > threshold && i + 2 < positions.length) {
+      const nz = normals[i + 2];
+      if (nz >= 0) continue;
+      const angle = Math.acos(Math.max(-1, Math.min(1, nz))) * (180 / Math.PI);
+      const tiltBelow = angle - 90;
+      if (tiltBelow > threshold && i + 2 < positions.length) {
         markers.push({
           position: { x: positions[i * 3], y: positions[i * 3 + 1], z: positions[i * 3 + 2] },
           type: 'support_needed',
           severity: severity === 'critical' ? 0.9 : severity === 'high' ? 0.7 : 0.5,
-          description: translate(CONTENT, 'failurePredictor.markerOverhang', ctx.language, { angle: angle.toFixed(1) }),
+          description: translate(CONTENT, 'failurePredictor.markerOverhang', ctx.language, { angle: tiltBelow.toFixed(1) }),
         });
         count++;
         if (count >= 25) break;

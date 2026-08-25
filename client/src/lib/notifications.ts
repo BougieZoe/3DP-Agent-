@@ -13,7 +13,7 @@
 
 import type { UnifiedAnalysis } from '@/analysis/types';
 import type { Material } from '@shared/domain/material';
-import { getTrafficLight } from '@/components/ReportGenerator';
+import { getTrafficLight } from '@/components/reportUtils';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 

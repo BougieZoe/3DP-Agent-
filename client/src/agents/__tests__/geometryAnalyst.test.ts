@@ -48,8 +48,14 @@ describe('GeometryAnalyst', () => {
   });
 
   it('generates overhang markers when overhangs exist', async () => {
+    const downwardNormals = new Float32Array([
+      0, 0, -1, 0, 0, -1, 0, 0, -1,
+      0, 0, -1, 0, 0, -1, 0, 0, -1,
+      0, 0, -1, 0, 0, -1, 0, 0, -1,
+    ]);
     const ctx = buildAgentContext({
       unifiedAnalysis: buildMockUnifiedAnalysis({ metrics: overhangMetrics() }),
+      vertexNormals: downwardNormals,
     });
     const output = await analyst.execute(ctx);
     const overhangMarkers = output.markers.filter(m => m.type === 'overhang');

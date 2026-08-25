@@ -51,9 +51,15 @@ describe('FailurePredictor', () => {
   });
 
   it('produces overhang markers for critical overhangs', async () => {
+    const downwardNormals = new Float32Array([
+      0, 0, -1, 0, 0, -1, 0, 0, -1,
+      0, 0, -1, 0, 0, -1, 0, 0, -1,
+      0, 0, -1, 0, 0, -1, 0, 0, -1,
+    ]);
     const ctx = buildAgentContext({
       unifiedAnalysis: buildMockUnifiedAnalysis({ metrics: overhangMetrics() }),
       material: mockMaterial({ overhangThreshold: 45 }),
+      vertexNormals: downwardNormals,
     });
     const output = await predictor.execute(ctx);
     const supportMarkers = output.markers.filter(m => m.type === 'support_needed');

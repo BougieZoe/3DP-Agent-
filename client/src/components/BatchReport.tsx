@@ -1,4 +1,4 @@
-import { getTrafficLight } from './ReportGenerator';
+import { getTrafficLight } from './reportUtils';
 import type { UploadedModel } from './STLUploadHandler';
 import type { UnifiedAnalysis } from '@/analysis/types';
 import { deriveWtStatus, deriveOhStatus, deriveSupportStatus } from '@/analysis/metrics';
