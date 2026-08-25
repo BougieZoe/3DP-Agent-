@@ -2,14 +2,10 @@
  * OrderCard — 3D Print Order Summary
  *
  * Shows STL preview, specs, pricing, and status.
- * Designed for quick scanning at a glance.
+ * Supports single delete and batch-select mode.
  */
 
-import { Suspense, useMemo } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { PerspectiveCamera } from '@react-three/drei';
-import * as THREE from 'three';
-import { parseSTL } from '@/lib/stlParser';
+import { useMemo } from 'react';
 import type { Order } from '@shared/domain/order';
 import { STATUS_COLORS, SHIPPING_TERMS } from '@shared/domain/order';
 
@@ -18,6 +14,8 @@ interface OrderCardProps {
   language: 'en' | 'ja' | 'zh';
   onSelect?: (orderId: string) => void;
   onDelete?: (orderId: string) => void;
+  selected?: boolean;
+  onToggleSelect?: (orderId: string) => void;
   compact?: boolean;
 }
 
@@ -25,21 +23,21 @@ const L = {
   en: {
     material: 'Material', qty: 'Qty', total: 'Total',
     dims: 'Dims', weight: 'Weight', shipping: 'Shipping',
-    eta: 'ETA', view: 'View Details',
+    eta: 'ETA', view: 'View Details', delete: 'Delete',
   },
   ja: {
     material: '材料', qty: '数量', total: '合計',
     dims: '寸法', weight: '重量', shipping: '配送',
-    eta: '納期', view: '詳細を見る',
+    eta: '納期', view: '詳細を見る', delete: '削除',
   },
   zh: {
     material: '材料', qty: '数量', total: '合计',
     dims: '尺寸', weight: '重量', shipping: '物流',
-    eta: '预计到货', view: '查看详情',
+    eta: '预计到货', view: '查看详情', delete: '删除',
   },
 };
 
-export function OrderCard({ order, language, onSelect, onDelete, compact = false }: OrderCardProps) {
+export function OrderCard({ order, language, onSelect, onDelete, selected, onToggleSelect, compact = false }: OrderCardProps) {
   const t = L[language] || L.en;
 
   const specs = useMemo(() => {
@@ -53,26 +51,48 @@ export function OrderCard({ order, language, onSelect, onDelete, compact = false
 
   const statusColor = STATUS_COLORS[order.status];
   const shippingLabel = SHIPPING_TERMS[order.shipping.terms]?.[language] || order.shipping.terms;
+  const isSelectMode = !!onToggleSelect;
 
   return (
     <div
-      className="border border-border/50 rounded-lg bg-card/30 p-3 hover:bg-card/50 transition-colors cursor-pointer group"
-      onClick={() => onSelect?.(order.id)}
+      className={`border rounded-lg p-3 transition-colors cursor-pointer group ${
+        selected
+          ? 'border-cyan-400/60 bg-cyan-400/5'
+          : 'border-border/50 bg-card/30 hover:bg-card/50'
+      }`}
+      onClick={() => {
+        if (isSelectMode) {
+          onToggleSelect(order.id);
+        } else {
+          onSelect?.(order.id);
+        }
+      }}
     >
-      {/* Header: Status + Price */}
+      {/* Header: Status + Price + Actions */}
       <div className="flex items-start justify-between mb-2">
-        <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full ${statusColor}`}>
-          {order.status.toUpperCase()}
-        </span>
+        <div className="flex items-center gap-2">
+          {isSelectMode && (
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={() => onToggleSelect(order.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="accent-cyan-400 w-3.5 h-3.5"
+            />
+          )}
+          <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full ${statusColor}`}>
+            {order.status.toUpperCase()}
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-lg font-mono font-bold text-primary">
             ${order.price.total.toFixed(2)}
           </span>
-          {onDelete && (
+          {onDelete && !isSelectMode && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(order.id); }}
-              className="text-muted-foreground/20 hover:text-red-400 transition-colors text-xs"
-              title="Delete"
+              className="text-muted-foreground/40 hover:text-red-400 hover:bg-red-400/10 transition-colors text-[10px] font-mono px-1.5 py-0.5 rounded"
+              title={t.delete}
             >
               ×
             </button>
@@ -135,11 +155,13 @@ export function OrderCard({ order, language, onSelect, onDelete, compact = false
       </div>
 
       {/* View button */}
-      <div className="mt-2 text-center">
-        <span className="text-[10px] font-mono text-primary/60 group-hover:text-primary transition-colors">
-          {t.view} →
-        </span>
-      </div>
+      {!isSelectMode && (
+        <div className="mt-2 text-center">
+          <span className="text-[10px] font-mono text-primary/60 group-hover:text-primary transition-colors">
+            {t.view} →
+          </span>
+        </div>
+      )}
     </div>
   );
 }

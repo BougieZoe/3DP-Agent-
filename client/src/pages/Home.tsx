@@ -1728,6 +1728,7 @@ deepAnalysisSeq.current += 1;
                         onSelectOrder={(id) => console.log('Selected order:', id)}
                         onUpdateStatus={orders.updateStatus}
                         onDeleteOrder={orders.deleteOrder}
+                        onDeleteOrders={orders.deleteOrders}
                       />
                     </Suspense>
                     <div className="border-t border-border/20 pt-4">
