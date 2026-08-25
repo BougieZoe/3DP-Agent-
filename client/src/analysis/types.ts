@@ -308,6 +308,8 @@ export interface UnifiedAnalysis {
   metal?: AnalysisModuleResult<import('./metalAnalysis').MetalAnalysisResult> | null;
   /** Multi-material analysis — present when secondaryMaterial or fiberReinforced is specified. */
   multiMaterial?: AnalysisModuleResult<import('./multiMaterial').MultiMaterialAnalysisResult> | null;
+  /** AI suggestions — always present when material is specified. */
+  aiSuggestions?: AnalysisModuleResult<import('./aiSuggestions').AISuggestionResult> | null;
   /** ISO timestamp of when analysis was run */
   timestamp: string;
   modelFileName: string;
