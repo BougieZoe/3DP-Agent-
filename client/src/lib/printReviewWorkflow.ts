@@ -17,7 +17,7 @@ import { runAnalysisInWorker, fromThreeBufferGeometry, type UnifiedAnalysis } fr
 import type { Material } from '@shared/domain/material';
 import { DEFAULT_MATERIAL } from '@shared/domain/material';
 
-import { unifiedToModelData } from './unifiedToModelData';
+import { unifiedToModelDataFromMaterial } from './unifiedToModelData';
 
 /**
  * Build a real ModelAnalysis from pipeline output. Previously this stage was
@@ -178,7 +178,7 @@ export async function executeLocalPrintReviewWorkflow(
     );
 
     stages.evaluatePrintability = startStage(stages.evaluatePrintability, now());
-    const modelData = unifiedToModelData(unifiedAnalysis, file.name, options.material);
+    const modelData = unifiedToModelDataFromMaterial(unifiedAnalysis, file.name, options.material ?? DEFAULT_MATERIAL);
     const modelAnalysis = buildModelAnalysis(unifiedAnalysis, file.name, file.size, modelData);
     result.modelAnalysis = modelAnalysis;
     stages.evaluatePrintability = completeStage(stages.evaluatePrintability, modelAnalysis, now());
