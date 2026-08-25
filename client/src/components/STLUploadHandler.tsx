@@ -6,6 +6,7 @@ import { runAnalysisInWorker, fromThreeBufferGeometry, type UnifiedAnalysis } fr
 import { normalizeModelGeometry } from '@/lib/modelNormalization';
 import { geometryToStl } from '@/lib/meshOps';
 import { sliceSTL, type SliceMetadata, type SliceProvenance, type SlicerId } from '@/lib/sliceClient';
+import { getCachedAnalysis, setCachedAnalysis } from '@/lib/analysisCache';
 import type { LengthUnit } from '@shared/domain/geometry';
 import * as THREE from 'three';
 
@@ -117,17 +118,29 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
     for (const file of supported) {
       setProgress([`> ${t.loading} ${file.name}`, `> ${t.fileSize}: ${(file.size / 1024).toFixed(1)} KB`]);
       try {
-        // loadModelFile returns the pristine geometry; normalization clones it.
-        // 3MF declares its unit in the package — use it instead of the user's
-        // pick, so a millimeter 3MF never gets misread as inches.
+        // Read raw bytes for cache key + geometry loading
+        const arrayBuffer = await file.arrayBuffer();
+        const pipelineOptions = { fileName: file.name, materialFamily };
+
+        // Geometry + analysis — cache hit skips the pipeline but still needs
+        // the BufferGeometry for slicing and 3-D display.
         const loaded = await loadModelFile(file);
         const effectiveUnits = loaded.units ?? units;
-        // Explicit unit contract + viewport centering: scale non-mm models to
-        // millimeters, center on the build plate (minZ = 0, XY center = 0), and
-        // recompute bounding box / bounding sphere so the camera can frame it.
         const { geometry, rawGeometry } = normalizeModelGeometry(loaded.geometry, effectiveUnits);
-        const model = fromThreeBufferGeometry(geometry);
-        const unifiedAnalysis = await runAnalysisInWorker(model, { fileName: file.name, materialFamily });
+
+        // Check analysis cache before running pipeline
+        const cached = await getCachedAnalysis(arrayBuffer, pipelineOptions);
+        let unifiedAnalysis: UnifiedAnalysis;
+        if (cached) {
+          log(`> CACHE HIT — reusing cached result for ${file.name}`);
+          unifiedAnalysis = cached.result;
+        } else {
+          const model = fromThreeBufferGeometry(geometry);
+          log(`> ANALYZING ${file.name}...`);
+          unifiedAnalysis = await runAnalysisInWorker(model, pipelineOptions);
+          // Cache the result for future uploads
+          await setCachedAnalysis(arrayBuffer, pipelineOptions, unifiedAnalysis, file.name, file.size);
+        }
 
         // Slice STL to get ground-truth print metrics (time, filament, layers).
         // Only for STL files (binary format) — OBJ/3MF go through estimate path.
