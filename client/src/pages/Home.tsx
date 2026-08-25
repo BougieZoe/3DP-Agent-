@@ -1720,6 +1720,7 @@ deepAnalysisSeq.current += 1;
                         language={language}
                         onSelectOrder={(id) => console.log('Selected order:', id)}
                         onUpdateStatus={orders.updateStatus}
+                        onDeleteOrder={orders.deleteOrder}
                       />
                     </Suspense>
                     <div className="border-t border-border/20 pt-4">

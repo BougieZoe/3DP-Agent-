@@ -14,6 +14,7 @@ interface OrderListViewProps {
   language: 'en' | 'ja' | 'zh';
   onSelectOrder?: (orderId: string) => void;
   onUpdateStatus?: (orderId: string, status: OrderStatus) => void;
+  onDeleteOrder?: (orderId: string) => void;
 }
 
 const L = {
@@ -33,7 +34,7 @@ const STATUS_LABELS: Record<OrderStatus, Record<string, string>> = {
   cancelled: { en: 'Cancelled', ja: 'キャンセル', zh: '已取消' },
 };
 
-export function OrderListView({ orders, language, onSelectOrder, onUpdateStatus }: OrderListViewProps) {
+export function OrderListView({ orders, language, onSelectOrder, onUpdateStatus, onDeleteOrder }: OrderListViewProps) {
   const t = L[language] || L.en;
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
 
@@ -96,6 +97,7 @@ export function OrderListView({ orders, language, onSelectOrder, onUpdateStatus 
                 order={order}
                 language={language}
                 onSelect={onSelectOrder}
+                onDelete={onDeleteOrder}
               />
               {/* Status advance button */}
               {order.status !== 'delivered' && order.status !== 'cancelled' && onUpdateStatus && (
