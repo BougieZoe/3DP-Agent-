@@ -10,6 +10,10 @@ import { createStepRouter } from "./stepRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
 import { relayLLM } from "./llmRelay";
+import { logger } from "./logger";
+import { requestContext, errorHandler, notFoundHandler } from "./requestContext";
+import healthRouter from "./healthRouter";
+import { initShutdown } from "./shutdown";
 
 // Real address of the AMD machine, read from an environment variable instead
 // of hardcoded. Every time a new Droplet is spun up, only this env var in the
@@ -206,13 +210,13 @@ export function createApp() {
       },
     );
 
-    console.log(
-      `[server] bridges mounted${BRIDGE_TOKEN ? " (BRIDGE_TOKEN auth)" : " (NODE_ENV != production)"}`,
-    );
+    logger.info(`Bridges mounted${BRIDGE_TOKEN ? ' (BRIDGE_TOKEN auth)' : ' (NODE_ENV != production)'}`, {
+      context: 'server',
+    });
   } else {
-    console.warn(
-      "[server] production without BRIDGE_TOKEN — cad/mesh/slice/amd-proxy routes NOT mounted",
-    );
+    logger.warn('Production without BRIDGE_TOKEN — cad/mesh/slice/amd-proxy routes NOT mounted', {
+      context: 'server',
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -231,6 +235,12 @@ export function createApp() {
   // -------------------------------------------------------------------------
   // The /api/llm relay logic lives in server/llmRelay.ts (shared with the Vercel
   // function api/llm.ts) so local and deployed behavior stay identical.
+  // Request context middleware - adds request ID and timing
+  app.use(requestContext);
+
+  // Health check routes (no auth required)
+  app.use(healthRouter);
+
   app.post("/api/llm", express.json({ limit: "2mb" }), rateLimit, async (req: Request, res: Response) => {
     const { provider, apiKey, body } = (req.body ?? {}) as Record<string, unknown>;
     const authHeader = typeof req.headers.authorization === "string" ? req.headers.authorization : "";
@@ -247,17 +257,14 @@ export function createApp() {
 
   app.use(express.static(staticPath));
 
-  // Unauthenticated liveness probe — used by the Electron main process to wait
-  // for the local server before opening the window. Must be before the SPA
-  // catch-all (which would otherwise answer with index.html).
-  app.get("/health", (_req, res) => {
-    res.json({ ok: true, pid: process.pid });
-  });
-
   // Handle client-side routing - serve index.html for all routes
   app.get("*", (_req, res) => {
     res.sendFile(path.join(staticPath, "index.html"));
   });
+
+  // Error handling middleware (must be last)
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   return app;
 }
@@ -267,8 +274,20 @@ function startServer() {
   const app = createApp();
   const server = createServer(app);
   const port = process.env.PORT || 3000;
+  
+  // Initialize graceful shutdown
+  initShutdown(server);
+  
   server.listen(Number(port), HOST as string | undefined, () => {
-    console.log(`Server running on http://${HOST ?? "0.0.0.0"}:${port}/`);
+    logger.info(`Server running on http://${HOST ?? '0.0.0.0'}:${port}/`, {
+      context: 'server',
+      metadata: {
+        port,
+        host: HOST ?? '0.0.0.0',
+        nodeEnv: process.env.NODE_ENV ?? 'development',
+        pid: process.pid,
+      },
+    });
   });
 }
 
