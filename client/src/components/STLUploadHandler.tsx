@@ -4,6 +4,7 @@ import { loadModelFile } from '@/lib/modelLoader';
 import { Language } from '@/lib/i18n';
 import { runAnalysisInWorker, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
 import { normalizeModelGeometry } from '@/lib/modelNormalization';
+import { autoOrientGeometry } from '@/lib/autoOrient';
 import { geometryToStl } from '@/lib/meshOps';
 import { sliceSTL, type SliceMetadata, type SliceProvenance, type SlicerId } from '@/lib/sliceClient';
 import { getCachedAnalysis, setCachedAnalysis } from '@/lib/analysisCache';
@@ -136,7 +137,9 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
         // the BufferGeometry for slicing and 3-D display.
         const loaded = await loadModelFile(file);
         const effectiveUnits = loaded.units ?? units;
-        const { geometry, rawGeometry } = normalizeModelGeometry(loaded.geometry, effectiveUnits);
+        const { geometry: normalizedGeometry, rawGeometry } = normalizeModelGeometry(loaded.geometry, effectiveUnits);
+        // Auto-orient so the model sits naturally on the build plate
+        const geometry = autoOrientGeometry(normalizedGeometry);
 
         // Check analysis cache before running pipeline
         const cached = await getCachedAnalysis(arrayBuffer, pipelineOptions);
