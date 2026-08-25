@@ -85,6 +85,11 @@ export function useOrders() {
     setOrders(prev => prev.filter(o => o.id !== id));
   }, []);
 
+  const deleteOrders = useCallback((ids: string[]) => {
+    const idSet = new Set(ids);
+    setOrders(prev => prev.filter(o => !idSet.has(o.id)));
+  }, []);
+
   const getNextStatus = useCallback((current: OrderStatus): OrderStatus | null => {
     const idx = ORDER_STATUS_FLOW.indexOf(current);
     return idx < ORDER_STATUS_FLOW.length - 1 ? ORDER_STATUS_FLOW[idx + 1] : null;
@@ -100,6 +105,7 @@ export function useOrders() {
     updateOrder,
     updateStatus,
     deleteOrder,
+    deleteOrders,
     getNextStatus,
     ordersByStatus,
   };
