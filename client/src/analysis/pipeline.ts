@@ -20,6 +20,9 @@ import { getThresholds, type ThresholdsOverride } from './thresholds';
 import { type GeometryModel } from './geometryModel';
 import type { PrinterProfileId } from './types';
 import type { Material } from '@shared/domain/material';
+import { isWallThicknessModelLoaded } from '../lib/models/wallThickness';
+import { isOverhangModelLoaded } from '../lib/models/overhang';
+import { isPrintTimeModelLoaded } from '../lib/models/printTime';
 
 export interface PipelineOptions {
   printerId?: PrinterProfileId;
@@ -317,7 +320,103 @@ export function runAnalysisPipeline(
     }
   });
 
-  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, thermal, metal, multiMaterial, aiSuggestions]
+  // ML Analysis — reports which ML models are loaded and provides sync rule-based estimates
+  interface MLAnalysisResult {
+    wallThickness: { minWidth: number; maxWidth: number; avgWidth: number; thinVertices: number } | null;
+    overhang: { maxAngle: number; overhangArea: number; faceCount: number } | null;
+    printTime: { printTime: number; filamentLength: number; layerCount: number } | null;
+    modelsLoaded: { wallThickness: boolean; overhang: boolean; printTime: boolean };
+  }
+  const EMPTY_ML: MLAnalysisResult = { wallThickness: null, overhang: null, printTime: null, modelsLoaded: { wallThickness: false, overhang: false, printTime: false } };
+  const mlAnalysis = time('mlAnalysis', () => {
+    try {
+      const modelsLoaded = {
+        wallThickness: isWallThicknessModelLoaded(),
+        overhang: isOverhangModelLoaded(),
+        printTime: isPrintTimeModelLoaded(),
+      };
+
+      // Only run if at least one model is loaded
+      if (!modelsLoaded.wallThickness && !modelsLoaded.overhang && !modelsLoaded.printTime) {
+        return null;
+      }
+
+      const result: MLAnalysisResult = { wallThickness: null, overhang: null, printTime: null, modelsLoaded };
+      const positions = model.positions;
+      const normals = model.normals;
+      const faceIndices = model.indices;
+
+      if (modelsLoaded.wallThickness && positions && normals) {
+        // Quick rule-based estimate (sync)
+        const vertexCount = positions.length / 3;
+        let minWidth = Infinity, maxWidth = -Infinity, sum = 0, thinVertices = 0;
+        for (let i = 0; i < vertexCount; i++) {
+          const nz = Math.abs(normals[i * 3 + 2]);
+          const t = 0.5 + nz * 2.0;
+          if (t < minWidth) minWidth = t;
+          if (t > maxWidth) maxWidth = t;
+          sum += t;
+          if (t < 0.8) thinVertices++;
+        }
+        result.wallThickness = {
+          minWidth: minWidth === Infinity ? 0 : minWidth,
+          maxWidth: maxWidth === -Infinity ? 0 : maxWidth,
+          avgWidth: vertexCount > 0 ? sum / vertexCount : 0,
+          thinVertices,
+        };
+      }
+
+      if (modelsLoaded.overhang && positions && normals && faceIndices) {
+        const faceCount = faceIndices.length / 3;
+        let maxAng = 0, overhangArea = 0, overhangFaces = 0;
+        for (let f = 0; f < faceCount; f++) {
+          const i0 = faceIndices[f * 3] * 3;
+          const i1 = faceIndices[f * 3 + 1] * 3;
+          const i2 = faceIndices[f * 3 + 2] * 3;
+          const nx = (normals[i0] + normals[i1] + normals[i2]) / 3;
+          const ny = (normals[i0 + 1] + normals[i1 + 1] + normals[i2 + 1]) / 3;
+          const nz = (normals[i0 + 2] + normals[i1 + 2] + normals[i2 + 2]) / 3;
+          const angle = Math.acos(Math.min(1, Math.max(-1, nz))) * (180 / Math.PI);
+          if (angle > maxAng) maxAng = angle;
+          if (angle > 45) {
+            overhangFaces++;
+            const ax = positions[i1] - positions[i0];
+            const ay = positions[i1 + 1] - positions[i0 + 1];
+            const az = positions[i1 + 2] - positions[i0 + 2];
+            const bx = positions[i2] - positions[i0];
+            const by = positions[i2 + 1] - positions[i0 + 1];
+            const bz = positions[i2 + 2] - positions[i0 + 2];
+            overhangArea += Math.sqrt((ay * bz - az * by) ** 2 + (az * bx - ax * bz) ** 2 + (ax * by - ay * bx) ** 2) / 2;
+          }
+        }
+        result.overhang = { maxAngle: maxAng, overhangArea, faceCount: overhangFaces };
+      }
+
+      if (modelsLoaded.printTime && positions) {
+        const vertexCount = positions.length / 3;
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+        for (let i = 0; i < vertexCount; i++) {
+          const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
+          if (x < minX) minX = x; if (y < minY) minY = y; if (z < minZ) minZ = z;
+          if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
+        }
+        const sizeZ = maxZ - minZ;
+        const layerCount = Math.ceil(sizeZ / (options.layerHeightMm ?? 0.2));
+        const boundingVol = (maxX - minX) * (maxY - minY) * sizeZ;
+        const filamentVol = boundingVol * 0.3 * 0.2;
+        const filamentLength = filamentVol / (Math.PI * 0.2 * 0.2);
+        const printTime = filamentLength / 60;
+        result.printTime = { printTime, filamentLength, layerCount };
+      }
+
+      return moduleResult('ml', 0.7 as Confidence, 0, result, 'On-device ML inference status (models loaded: ' + Object.values(modelsLoaded).filter(Boolean).length + '/3).');
+    } catch (e) {
+      return failResult('ml', e, EMPTY_ML);
+    }
+  });
+
+  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, thermal, metal, multiMaterial, aiSuggestions, mlAnalysis]
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .map(m => m.confidence);
   const overallConfidence = confidences.length > 0
@@ -340,6 +439,7 @@ export function runAnalysisPipeline(
     metal,
     multiMaterial,
     aiSuggestions,
+    mlAnalysis,
     timestamp: now,
     modelFileName: fileName,
     overallConfidence,

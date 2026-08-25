@@ -16,6 +16,7 @@ import { logger } from "./logger";
 import { requestContext, errorHandler, notFoundHandler } from "./requestContext";
 import healthRouter from "./healthRouter";
 import { initShutdown } from "./shutdown";
+import { setupWebSocketServer } from "./websocket";
 
 // Real address of the AMD machine, read from an environment variable instead
 // of hardcoded. Every time a new Droplet is spun up, only this env var in the
@@ -297,6 +298,9 @@ function startServer() {
   const app = createApp();
   const server = createServer(app);
   const port = process.env.PORT || 3000;
+  
+  // Initialize WebSocket server for real-time collaboration
+  setupWebSocketServer(server);
   
   // Initialize graceful shutdown
   initShutdown(server);
