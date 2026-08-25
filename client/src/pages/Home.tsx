@@ -6,6 +6,11 @@ import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
 import { PRINT_TECHNOLOGIES, PRINT_TECH_BY_ID, type PrintTechnology } from '@/lib/technologies';
+// Hooks available for future refactoring:
+// import { useOverlays } from '@/hooks/useOverlays';
+// import { useModelManagement } from '@/hooks/useModelManagement';
+// import { useAnalysis } from '@/hooks/useAnalysis';
+// import { useCausality } from '@/hooks/useCausality';
 
 // Heavy alternate modes / tab panels — dynamic imports keep the initial
 // bundle lean on mobile. Each wraps a named export into a default for React.lazy.
@@ -66,6 +71,9 @@ const ReportGenerator = lazy(() => import('@/components/ReportGenerator').then(m
 const ExpertReviewPanel = lazy(() => import('@/components/ExpertReviewPanel').then(m => ({ default: m.ExpertReviewPanel })));
 const BatchReport = lazy(() => import('@/components/BatchReport').then(m => ({ default: m.BatchReport })));
 const ProductionCard = lazy(() => import('@/components/ProductionCard').then(m => ({ default: m.ProductionCard })));
+const CostCard = lazy(() => import('@/components/CostCard').then(m => ({ default: m.CostCard })));
+const PostProcessingCard = lazy(() => import('@/components/PostProcessingCard').then(m => ({ default: m.PostProcessingCard })));
+const SustainabilityCard = lazy(() => import('@/components/SustainabilityCard').then(m => ({ default: m.SustainabilityCard })));
 const DiagnosisPanel = lazy(() => import('@/components/DiagnosisPanel').then(m => ({ default: m.DiagnosisPanel })));
 const DiagnosisModal = lazy(() => import('@/components/DiagnosisModal').then(m => ({ default: m.DiagnosisModal })));
 const PrintDashboard = lazy(() => import('@/components/PrintDashboard').then(m => ({ default: m.PrintDashboard })));
@@ -1411,6 +1419,34 @@ deepAnalysisSeq.current += 1;
     material={material}
     language={language}
   />
+)}
+{unifiedAnalysis && (
+  <Suspense fallback={null}>
+    <CostCard
+      unifiedAnalysis={unifiedAnalysis}
+      material={material}
+      units={units}
+      language={language}
+    />
+  </Suspense>
+)}
+{unifiedAnalysis && (
+  <Suspense fallback={null}>
+    <PostProcessingCard
+      unifiedAnalysis={unifiedAnalysis}
+      material={material}
+      language={language}
+    />
+  </Suspense>
+)}
+{unifiedAnalysis && (
+  <Suspense fallback={null}>
+    <SustainabilityCard
+      unifiedAnalysis={unifiedAnalysis}
+      material={material}
+      language={language}
+    />
+  </Suspense>
 )}
                       </div>
                     )}
