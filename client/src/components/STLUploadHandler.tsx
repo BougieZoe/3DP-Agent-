@@ -7,6 +7,8 @@ import { normalizeModelGeometry } from '@/lib/modelNormalization';
 import { geometryToStl } from '@/lib/meshOps';
 import { sliceSTL, type SliceMetadata, type SliceProvenance, type SlicerId } from '@/lib/sliceClient';
 import { getCachedAnalysis, setCachedAnalysis } from '@/lib/analysisCache';
+import { notifyAnalysisComplete } from '@/lib/notifications';
+import { DEFAULT_MATERIAL } from '@shared/domain/material';
 import type { LengthUnit } from '@shared/domain/geometry';
 import * as THREE from 'three';
 
@@ -115,6 +117,7 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
 
     setIsLoading(true);
     const results: UploadedModel[] = [];
+    const startTime = Date.now();
     for (const file of supported) {
       setProgress([`> ${t.loading} ${file.name}`, `> ${t.fileSize}: ${(file.size / 1024).toFixed(1)} KB`]);
       try {
@@ -183,6 +186,10 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
           sliceMetadata,
           sliceProvenance,
         });
+
+        // Fire-and-forget notifications (webhook/email) — don't block the UI
+        notifyAnalysisComplete(file.name, unifiedAnalysis, DEFAULT_MATERIAL, Date.now() - startTime)
+          .catch(() => {});
       } catch (error) {
         log(`> ${t.error} ${file.name}: ${error instanceof Error ? error.message : t.unknownError}`);
       }
