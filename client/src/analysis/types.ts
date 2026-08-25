@@ -310,6 +310,13 @@ export interface UnifiedAnalysis {
   multiMaterial?: AnalysisModuleResult<import('./multiMaterial').MultiMaterialAnalysisResult> | null;
   /** AI suggestions — always present when material is specified. */
   aiSuggestions?: AnalysisModuleResult<import('./aiSuggestions').AISuggestionResult> | null;
+  /** On-device ML analysis — present when ML models are loaded. */
+  mlAnalysis?: AnalysisModuleResult<{
+    wallThickness: { minWidth: number; maxWidth: number; avgWidth: number; thinVertices: number } | null;
+    overhang: { maxAngle: number; overhangArea: number; faceCount: number } | null;
+    printTime: { printTime: number; filamentLength: number; layerCount: number } | null;
+    modelsLoaded: { wallThickness: boolean; overhang: boolean; printTime: boolean };
+  }> | null;
   /** ISO timestamp of when analysis was run */
   timestamp: string;
   modelFileName: string;

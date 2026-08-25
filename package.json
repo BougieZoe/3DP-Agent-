@@ -151,5 +151,8 @@
     "overrides": {
       "tailwindcss>nanoid": "3.3.7"
     }
+  },
+  "optionalDependencies": {
+    "onnxruntime-web": "^1.29.0"
   }
 }
