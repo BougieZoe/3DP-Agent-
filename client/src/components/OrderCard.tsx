@@ -17,6 +17,7 @@ interface OrderCardProps {
   order: Order;
   language: 'en' | 'ja' | 'zh';
   onSelect?: (orderId: string) => void;
+  onDelete?: (orderId: string) => void;
   compact?: boolean;
 }
 
@@ -38,7 +39,7 @@ const L = {
   },
 };
 
-export function OrderCard({ order, language, onSelect, compact = false }: OrderCardProps) {
+export function OrderCard({ order, language, onSelect, onDelete, compact = false }: OrderCardProps) {
   const t = L[language] || L.en;
 
   const specs = useMemo(() => {
@@ -63,9 +64,20 @@ export function OrderCard({ order, language, onSelect, compact = false }: OrderC
         <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-full ${statusColor}`}>
           {order.status.toUpperCase()}
         </span>
-        <span className="text-lg font-mono font-bold text-primary">
-          ${order.price.total.toFixed(2)}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-mono font-bold text-primary">
+            ${order.price.total.toFixed(2)}
+          </span>
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(order.id); }}
+              className="text-muted-foreground/20 hover:text-red-400 transition-colors text-xs"
+              title="Delete"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </div>
 
       {/* STL Preview */}
