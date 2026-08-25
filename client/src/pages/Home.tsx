@@ -74,6 +74,11 @@ import { LayerHeightLabel } from '@/components/decorative/LayerHeightLabel';
 import { FeaturesSection } from '@/pages/home/FeaturesSection';
 import type { FeatureDestination } from '@/pages/home/featuresNavigation';
 import { toast } from 'sonner';
+import { WebGPUOverlay } from '@/components/3D/WebGPUOverlay';
+import { PrintDashboard } from '@/components/PrintDashboard';
+import { VoiceControl } from '@/components/VoiceControl';
+import { AgentExecutionGraph } from '@/components/AgentExecutionGraph';
+import { runAgentWorkflow } from '@/agents/agentGraph';
 
 function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
@@ -364,6 +369,10 @@ export default function Home() {
   const isMobile = useIsMobile();
   const { user } = useAuth();
   const deepAnalysisSeq = useRef(0);
+  // New feature states
+  const [showPrintDashboard, setShowPrintDashboard] = useState(false);
+  const [showAgentGraph, setShowAgentGraph] = useState(false);
+  const [showWebGPU, setShowWebGPU] = useState(false);
 
   if (!orchestratorRef.current) {
     orchestratorRef.current = new AgentOrchestrator();
@@ -925,6 +934,9 @@ deepAnalysisSeq.current += 1;
                 visible
               />
             )}
+            {uploadedModel?.geometry && showWebGPU && (
+              <WebGPUOverlay geometry={uploadedModel.geometry} mode="stress" opacity={overlayOpacity} visible />
+            )}
             <OrbitControls ref={controlsRef} enablePan={false} autoRotate={!uploadedModel} autoRotateSpeed={0.4} />
           </Canvas>
           {uploadedModel && (
@@ -959,6 +971,29 @@ deepAnalysisSeq.current += 1;
               onOpacityChange={setOverlayOpacity}
               t={t}
             />
+          )}
+          {/* Feature buttons */}
+          {uploadedModel && (
+            <div className="absolute bottom-16 right-4 flex flex-col gap-2">
+              <button
+                onClick={() => setShowPrintDashboard(true)}
+                className="w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/30 transition-colors"
+                title="Print Monitor"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setShowAgentGraph(true)}
+                className="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center hover:bg-amber-500/30 transition-colors"
+                title="Agent Graph"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                </svg>
+              </button>
+            </div>
           )}
         </div>
 
@@ -1601,6 +1636,41 @@ deepAnalysisSeq.current += 1;
         </div>
       </div>}
       </Suspense>
+
+      {/* New Feature Components */}
+      <PrintDashboard
+        isOpen={showPrintDashboard}
+        onClose={() => setShowPrintDashboard(false)}
+      />
+      <AgentExecutionGraph
+        isVisible={showAgentGraph}
+        onClose={() => setShowAgentGraph(false)}
+      />
+      {uploadedModel && (
+        <VoiceControl
+          language={language}
+          context={{
+            model: uploadedModel.geometry ? {
+              positions: new Float32Array(),
+              normals: new Float32Array(),
+              indices: new Uint32Array(),
+              vertexCount: 0,
+              triangleCount: 0,
+              units: 'mm',
+            } : null,
+          analysis: unifiedAnalysis ?? null,
+          material: materialFamily,
+          language,
+        }}
+        onResult={(result) => {
+          if (result.action === 'analyze') {
+            toast.info('Starting analysis...');
+          } else if (result.action === 'settings') {
+            toast.success(result.message);
+          }
+        }}
+        />
+      )}
     </div>
     </PrintPlaybackProvider>
   );
