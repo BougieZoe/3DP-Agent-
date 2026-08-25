@@ -1,9 +1,40 @@
-import { useState } from 'react';
+/**
+ * Enhanced Visualization Toolbar
+ *
+ * Features:
+ * - Toggle overlays on/off
+ * - Per-overlay parameter sliders
+ * - Real-time adjustment
+ * - Multi-overlay compositing
+ */
+
+import { useState, useCallback } from 'react';
 import { PANEL, SEMANTIC } from '@/lib/visualLanguage';
 import { useTheme } from '@/lib/ThemeContext';
 import type { translations } from '@/lib/i18n';
 
 type TKey = keyof (typeof translations)['en'];
+
+export interface OverlayParams {
+  heatmap: {
+    overhangThreshold: number;
+    curvatureWeight: number;
+    thicknessWeight: number;
+    detectBridges: boolean;
+  };
+  supports: {
+    maxAngle: number;
+    density: number;
+  };
+  risks: {
+    sensitivity: number;
+    minSeverity: number;
+  };
+  wallThickness: {
+    minThickness: number;
+    showThinOnly: boolean;
+  };
+}
 
 interface VisualizationToolbarProps {
   showHeatmap: boolean;
@@ -15,6 +46,7 @@ interface VisualizationToolbarProps {
   showThermal: boolean;
   showWallThickness: boolean;
   overlayOpacity: number;
+  overlayParams: OverlayParams;
   onToggleHeatmap: () => void;
   onToggleGhosts: () => void;
   onToggleRisks: () => void;
@@ -24,6 +56,7 @@ interface VisualizationToolbarProps {
   onToggleThermal: () => void;
   onToggleWallThickness: () => void;
   onOpacityChange: (value: number) => void;
+  onParamsChange: (params: OverlayParams) => void;
   t: (key: TKey) => string;
 }
 
@@ -48,6 +81,7 @@ export function VisualizationToolbar({
   showThermal,
   showWallThickness,
   overlayOpacity,
+  overlayParams,
   onToggleHeatmap,
   onToggleGhosts,
   onToggleRisks,
@@ -57,10 +91,12 @@ export function VisualizationToolbar({
   onToggleThermal,
   onToggleWallThickness,
   onOpacityChange,
+  onParamsChange,
   t,
 }: VisualizationToolbarProps) {
   const { themeKey, SEMANTIC, toggleTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
+  const [expandedOverlay, setExpandedOverlay] = useState<string | null>(null);
 
   const activeMap: Record<string, boolean> = {
     heatmap: showHeatmap,
@@ -86,6 +122,16 @@ export function VisualizationToolbar({
 
   const colorMap = SEMANTIC.overlay;
 
+  const handleParamChange = useCallback((
+    overlay: keyof OverlayParams,
+    key: string,
+    value: number | boolean,
+  ) => {
+    const newParams = { ...overlayParams };
+    (newParams[overlay] as Record<string, unknown>)[key] = value;
+    onParamsChange(newParams);
+  }, [overlayParams, onParamsChange]);
+
   const panelContent = (
     <>
       <div className={`${PANEL.fontLabel} mb-1`}>{t('overlays')}</div>
@@ -95,19 +141,102 @@ export function VisualizationToolbar({
         active={showHeatmap}
         color={SEMANTIC.overlay.heatmap}
         onClick={onToggleHeatmap}
+        onExpand={() => setExpandedOverlay(expandedOverlay === 'heatmap' ? null : 'heatmap')}
+        expanded={expandedOverlay === 'heatmap'}
       />
+      {expandedOverlay === 'heatmap' && showHeatmap && (
+        <div className="ml-4 space-y-2 py-2">
+          <SliderParam
+            label="Overhang Threshold"
+            value={overlayParams.heatmap.overhangThreshold}
+            min={20} max={70} step={5}
+            unit="°"
+            onChange={v => handleParamChange('heatmap', 'overhangThreshold', v)}
+          />
+          <SliderParam
+            label="Curvature Weight"
+            value={overlayParams.heatmap.curvatureWeight}
+            min={0} max={1} step={0.1}
+            onChange={v => handleParamChange('heatmap', 'curvatureWeight', v)}
+          />
+          <SliderParam
+            label="Thickness Weight"
+            value={overlayParams.heatmap.thicknessWeight}
+            min={0} max={1} step={0.1}
+            onChange={v => handleParamChange('heatmap', 'thicknessWeight', v)}
+          />
+          <ToggleParam
+            label="Bridge Detection"
+            value={overlayParams.heatmap.detectBridges}
+            onChange={v => handleParamChange('heatmap', 'detectBridges', v)}
+          />
+          <LegendHint items={[
+            { color: 'bg-red-500', label: '高风险区域 — 需要优化' },
+            { color: 'bg-orange-500', label: '中风险 — 建议检查' },
+            { color: 'bg-green-500', label: '安全区域 — 没问题' },
+          ]} />
+        </div>
+      )}
+
       <ToggleChip
         label={t('toolbarSupports')}
         active={showGhosts}
         color={SEMANTIC.overlay.supports}
         onClick={onToggleGhosts}
+        onExpand={() => setExpandedOverlay(expandedOverlay === 'supports' ? null : 'supports')}
+        expanded={expandedOverlay === 'supports'}
       />
+      {expandedOverlay === 'supports' && showGhosts && (
+        <div className="ml-4 space-y-2 py-2">
+          <SliderParam
+            label="Max Angle"
+            value={overlayParams.supports.maxAngle}
+            min={30} max={60} step={5}
+            unit="°"
+            onChange={v => handleParamChange('supports', 'maxAngle', v)}
+          />
+          <SliderParam
+            label="Density"
+            value={overlayParams.supports.density}
+            min={0.1} max={1} step={0.1}
+            onChange={v => handleParamChange('supports', 'density', v)}
+          />
+          <LegendHint items={[
+            { color: 'bg-blue-500', label: '悬垂面 — 需要支撑' },
+            { color: 'bg-orange-500', label: '桥接 — 顶部需要支撑' },
+          ]} />
+        </div>
+      )}
+
       <ToggleChip
         label={t('toolbarRisks')}
         active={showRisks}
         color={SEMANTIC.overlay.risks}
         onClick={onToggleRisks}
+        onExpand={() => setExpandedOverlay(expandedOverlay === 'risks' ? null : 'risks')}
+        expanded={expandedOverlay === 'risks'}
       />
+      {expandedOverlay === 'risks' && showRisks && (
+        <div className="ml-4 space-y-2 py-2">
+          <SliderParam
+            label="Sensitivity"
+            value={overlayParams.risks.sensitivity}
+            min={0.1} max={2} step={0.1}
+            onChange={v => handleParamChange('risks', 'sensitivity', v)}
+          />
+          <SliderParam
+            label="Min Severity"
+            value={overlayParams.risks.minSeverity}
+            min={0} max={1} step={0.1}
+            onChange={v => handleParamChange('risks', 'minSeverity', v)}
+          />
+          <LegendHint items={[
+            { color: 'bg-red-500', label: '高风险 — 可能打印失败' },
+            { color: 'bg-yellow-500', label: '中风险 — 需要注意' },
+            { color: 'bg-cyan-400', label: '低风险 — 轻微问题' },
+          ]} />
+        </div>
+      )}
 
       <div className={`${SEMANTIC.overlay.separator}`} />
 
@@ -143,7 +272,38 @@ export function VisualizationToolbar({
         active={showWallThickness}
         color={SEMANTIC.overlay.wallThickness}
         onClick={onToggleWallThickness}
+        onExpand={() => setExpandedOverlay(expandedOverlay === 'wallThickness' ? null : 'wallThickness')}
+        expanded={expandedOverlay === 'wallThickness'}
       />
+      {expandedOverlay === 'wallThickness' && showWallThickness && (
+        <div className="ml-4 space-y-2 py-2">
+          <SliderParam
+            label="Min Thickness"
+            value={overlayParams.wallThickness.minThickness}
+            min={0.2} max={2} step={0.1}
+            unit="mm"
+            onChange={v => handleParamChange('wallThickness', 'minThickness', v)}
+          />
+          <SliderParam
+            label="Max Thickness"
+            value={overlayParams.wallThickness.maxThickness}
+            min={2} max={10} step={0.5}
+            unit="mm"
+            onChange={v => handleParamChange('wallThickness', 'maxThickness', v)}
+          />
+          <ToggleParam
+            label="Show Thin Only"
+            value={overlayParams.wallThickness.showThinOnly}
+            onChange={v => handleParamChange('wallThickness', 'showThinOnly', v)}
+          />
+          <LegendHint items={[
+            { color: 'bg-red-500', label: '太薄 — 容易破裂' },
+            { color: 'bg-yellow-500', label: '偏薄 — 需要注意' },
+            { color: 'bg-green-500', label: '适中 — 正常' },
+            { color: 'bg-cyan-400', label: '较厚 — 安全' },
+          ]} />
+        </div>
+      )}
 
       <button
         onClick={toggleTheme}
@@ -274,23 +434,117 @@ function ToggleChip({
   label,
   active,
   color,
-  onClick
+  onClick,
+  onExpand,
+  expanded,
 }: {
   label: string;
   active: boolean;
   color: string;
   onClick: () => void;
+  onExpand?: () => void;
+  expanded?: boolean;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`${PANEL.fontButton} px-2 py-1 ${PANEL.roundedInner} ${PANEL.borderSubtle} text-left transition-all ${
-        active
-          ? `${color} ${SEMANTIC.toggle.active}`
-          : SEMANTIC.toggle.inactive
-      }`}
-    >
-      {active ? '\u25A3' : '\u25A1'} {label}
-    </button>
+    <div className="flex items-center gap-1">
+      <button
+        onClick={onClick}
+        className={`${PANEL.fontButton} flex-1 px-2 py-1 ${PANEL.roundedInner} ${PANEL.borderSubtle} text-left transition-all ${
+          active
+            ? `${color} ${SEMANTIC.toggle.active}`
+            : SEMANTIC.toggle.inactive
+        }`}
+      >
+        {active ? '\u25A3' : '\u25A1'} {label}
+      </button>
+      {onExpand && (
+        <button
+          onClick={onExpand}
+          className={`w-6 h-6 flex items-center justify-center rounded text-[10px] transition-all ${
+            expanded ? 'bg-foreground/10 text-foreground/70' : 'text-foreground/30 hover:text-foreground/50'
+          }`}
+        >
+          {expanded ? '\u25B2' : '\u25BC'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SliderParam({
+  label,
+  value,
+  min,
+  max,
+  step,
+  unit = '',
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit?: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex justify-between text-[10px] font-mono text-foreground/50">
+        <span>{label}</span>
+        <span>{value}{unit}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={e => onChange(parseFloat(e.target.value))}
+        className="w-full h-0.5 appearance-none bg-border/50 rounded-full cursor-pointer accent-primary"
+      />
+    </div>
+  );
+}
+
+function ToggleParam({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between text-[10px] font-mono text-foreground/50 cursor-pointer">
+      <span>{label}</span>
+      <div
+        onClick={() => onChange(!value)}
+        className={`w-8 h-4 rounded-full transition-colors ${
+          value ? 'bg-primary/60' : 'bg-border/50'
+        }`}
+      >
+        <div className={`w-3 h-3 rounded-full bg-foreground transition-transform mt-0.5 ${
+          value ? 'translate-x-4.5' : 'translate-x-0.5'
+        }`} />
+      </div>
+    </label>
+  );
+}
+
+function LegendHint({ items }: { items: Array<{ color: string; label: string }> }) {
+  return (
+    <div className="mt-2 pt-2 border-t border-border/20">
+      <div className="text-[9px] font-mono text-foreground/30 mb-1.5">图例说明</div>
+      <div className="space-y-1">
+        {items.map((item, i) => (
+          <div key={i} className="flex items-center gap-2 text-[10px] text-foreground/50">
+            <div className={`w-2.5 h-2.5 rounded-sm ${item.color}`} />
+            <span>{item.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
