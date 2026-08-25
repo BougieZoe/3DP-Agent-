@@ -9,12 +9,13 @@ import { PLAN_LIMITS, getRemainingCalls } from "@/lib/authStore";
 // Account / sign-in modal. Signed-in users see their plan + monthly usage.
 // Hosted LLM means no API key to configure — just an account.
 export function AccountModal({ language, onClose }: { language: Language; onClose: () => void }) {
-  const { user, profile, loading, signIn, signUp, signInWithGoogle, signOut } = useAuth();
+  const { user, profile, loading, signIn, signUp, signInWithGoogle, signOut, token } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
 
   const t = (k: "signIn" | "signUp" | "signOut" | "signInWithGoogle" | "email" | "password" | "planFree" | "aiCallsLeft" | "close") =>
     getTranslation(language, k);
@@ -89,8 +90,31 @@ export function AccountModal({ language, onClose }: { language: Language; onClos
                   <div className="text-[10px] font-mono text-muted-foreground/50">
                     10x more LLM calls, priority support, all providers
                   </div>
-                  <button className="mt-2 w-full py-1.5 text-[11px] font-mono border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 rounded-sm transition-all">
-                    Upgrade — $19/mo
+                  <button
+                    onClick={async () => {
+                      if (!token) return;
+                      setUpgrading(true);
+                      try {
+                        const res = await fetch('/api/stripe/checkout', {
+                          method: 'POST',
+                          headers: { Authorization: `Bearer ${token}` },
+                        });
+                        const data = await res.json();
+                        if (data.url) {
+                          window.location.href = data.url;
+                        } else {
+                          setError(data.error || 'Checkout failed');
+                        }
+                      } catch {
+                        setError('Checkout unavailable');
+                      } finally {
+                        setUpgrading(false);
+                      }
+                    }}
+                    disabled={upgrading}
+                    className="mt-2 w-full py-1.5 text-[11px] font-mono border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 rounded-sm transition-all disabled:opacity-50"
+                  >
+                    {upgrading ? '...' : 'Upgrade — $19/mo'}
                   </button>
                 </div>
               )}

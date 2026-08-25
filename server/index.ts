@@ -11,6 +11,7 @@ import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
 import { relayLLM, relayLLMStream } from "./llmRelay";
 import { createShareRouter } from "./shareRouter";
+import { createStripeRouter } from "./stripeRouter";
 import { logger } from "./logger";
 import { requestContext, errorHandler, notFoundHandler } from "./requestContext";
 import healthRouter from "./healthRouter";
@@ -261,6 +262,15 @@ export function createApp() {
 
   // Share report links — public, no auth required
   app.use("/api/share", express.json({ limit: "5mb" }), createShareRouter());
+
+  // Stripe payment — checkout, webhook, portal
+  // Webhook needs raw body for signature verification, so mount it first
+  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), (req, res, next) => {
+    // Pass raw body to the router
+    (req as any).rawBody = req.body;
+    next();
+  });
+  app.use("/api/stripe", express.json({ limit: "1mb" }), createStripeRouter());
 
   // Serve static files from dist/public in production
   const staticPath =
