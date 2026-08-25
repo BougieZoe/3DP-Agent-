@@ -31,7 +31,9 @@ export function VoiceControl({
   const [lastResult, setLastResult] = useState<ActionResult | null>(null);
   const [history, setHistory] = useState<Array<{ intent: UserIntent; result: ActionResult }>>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isHovered, setIsHovered] = useState(false);
   const voiceRef = useRef<VoiceController | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load suggestions
   useEffect(() => {
@@ -101,11 +103,25 @@ export function VoiceControl({
   useEffect(() => {
     return () => {
       voiceRef.current?.stop();
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     };
   }, []);
 
+  const handleMouseEnter = () => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    setIsHovered(true);
+  };
+
+  const handleMouseLeave = () => {
+    hoverTimeoutRef.current = setTimeout(() => setIsHovered(false), 300);
+  };
+
   return (
-    <div className="fixed bottom-6 right-6 z-40">
+    <div
+      className="fixed bottom-6 right-6 z-40"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       {/* Microphone Button */}
       <button
         onClick={isListening ? stopListening : startListening}
@@ -226,8 +242,8 @@ export function VoiceControl({
         </div>
       )}
 
-      {/* Suggested Commands */}
-      {!isListening && !currentIntent && (
+      {/* Suggested Commands - only show on hover */}
+      {!isListening && !currentIntent && isHovered && (
         <div className="absolute bottom-16 right-0 bg-background/95 border border-border/40 rounded-lg p-3 shadow-xl w-64">
           <div className="text-xs text-muted-foreground mb-2">Try saying:</div>
           <div className="space-y-1">

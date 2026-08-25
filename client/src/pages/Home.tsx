@@ -22,6 +22,7 @@ import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 import { fromThreeBufferGeometry, runAnalysisInWorker, assessContext, liquidCoolingFromUnified, productionFromUnified, type ObjectContext } from '@/analysis';
 import { normalizeModelGeometry, fitCameraToGeometry } from '@/lib/modelNormalization';
+import { autoOrientGeometry } from '@/lib/autoOrient';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
 import { parseSTL } from '@/lib/stlParser';
 import { processMesh } from '@/lib/meshProcessClient';
@@ -624,7 +625,8 @@ export default function Home() {
 
     // Re-process the ORIGINAL raw geometry (no stacked scales), re-center on
     // the build plate, recompute bounds, then re-run the analysis pipeline.
-    const { geometry } = normalizeModelGeometry(uploadedModel.rawGeometry, newUnits);
+    const { geometry: normalizedGeometry } = normalizeModelGeometry(uploadedModel.rawGeometry, newUnits);
+    const geometry = autoOrientGeometry(normalizedGeometry);
     const geometryModel = fromThreeBufferGeometry(geometry);
     const newUnified = await runAnalysisInWorker(geometryModel, { fileName: uploadedModel.fileName, material });
 
@@ -1027,7 +1029,7 @@ deepAnalysisSeq.current += 1;
           )}
           {/* Feature buttons */}
           {uploadedModel && (
-            <div className="absolute bottom-16 right-4 flex flex-col gap-2">
+            <div className="absolute bottom-24 right-4 flex flex-col gap-2">
               <button
                 onClick={() => setShowPrintDashboard(true)}
                 className="w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/30 transition-colors"
