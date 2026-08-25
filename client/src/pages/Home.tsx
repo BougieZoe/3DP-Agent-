@@ -1027,9 +1027,9 @@ deepAnalysisSeq.current += 1;
               t={t}
             />
           )}
-          {/* Feature buttons */}
+          {/* Feature buttons - below VisualizationToolbar */}
           {uploadedModel && (
-            <div className="absolute bottom-24 right-16 flex flex-col gap-2">
+            <div className="absolute top-1/3 right-0 flex flex-col gap-2 z-20">
               <button
                 onClick={() => setShowPrintDashboard(true)}
                 className="w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/30 transition-colors"
