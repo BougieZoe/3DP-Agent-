@@ -1358,12 +1358,6 @@ deepAnalysisSeq.current += 1;
                         3MF
                       </button>
                     </div>
-                    {uploadedModel && (
-                      <button onClick={() => setShowOrderForm(true)}
-                        className="w-full py-2.5 text-xs font-mono border border-cyan-400/40 text-cyan-400 hover:bg-cyan-400 hover:text-black rounded-sm transition-all">
-                        + Create Order
-                      </button>
-                    )}
                   </div>
                 )}
 
@@ -1714,6 +1708,19 @@ deepAnalysisSeq.current += 1;
                 {/* ORDERS TAB */}
                 {tab === 'orders' && (
                   <div className="pt-4 space-y-4">
+                    {/* Create Order button */}
+                    {uploadedModel ? (
+                      <button
+                        onClick={() => setShowOrderForm(true)}
+                        className="w-full py-2.5 text-xs font-mono border border-cyan-400/40 text-cyan-400 hover:bg-cyan-400 hover:text-black rounded-sm transition-all"
+                      >
+                        + Create Order
+                      </button>
+                    ) : orders.orders.length === 0 && (
+                      <div className="text-center py-8 text-xs font-mono text-muted-foreground/40">
+                        Upload a model first, then create an order.
+                      </div>
+                    )}
                     <Suspense fallback={null}>
                       <OrderListView
                         orders={orders.orders}
