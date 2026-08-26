@@ -302,6 +302,7 @@ export default function Home() {
   const [materialFamily, setMaterialFamily] = useState<Material['technology']>('fdm');
   const [objectContext, setObjectContext] = useState<ObjectContext>('general');
   const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
+  const [showModeMenu, setShowModeMenu] = useState(false);
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
   const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality' | 'orders'>('geometry');
@@ -903,9 +904,8 @@ deepAnalysisSeq.current += 1;
             )}
           </div>
         </div>
-        {/* Mobile: stacked mode on right */}
+        {/* Mobile: dropdown mode menu */}
         <div className="sm:hidden">
-          {/* Row 1: Brand + icons */}
           <div className="flex items-center justify-between px-3 py-2">
             <div className="flex items-center gap-2 shrink-0">
               <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
@@ -935,55 +935,61 @@ deepAnalysisSeq.current += 1;
               <InstallButton language={language} iconOnly />
             </div>
           </div>
-          {/* Row 2-4: Stacked mode + selects, right aligned */}
-          <div className="flex flex-col items-end gap-0 px-3 pb-2">
-            {/* Row 2: Analyze + selects */}
-            <div className="flex items-center gap-1.5">
-              <div className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm text-primary bg-primary/10">
-                {t('modeAnalyze')}
-              </div>
-              <select
-                value={materialFamily}
-                onChange={(e) => reanalyzeWithFamily(e.target.value as Material['technology'])}
-                className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
-              >
-                {PRINT_TECHNOLOGIES.map(t => (
-                  <option key={t.id} value={t.id} disabled={!t.implemented}>
-                    {t.shortLabel}{t.implemented ? '' : ' (soon)'}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={materialName}
-                onChange={(e) => reanalyzeWithMaterial(e.target.value as MaterialName)}
-                className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer max-w-[5rem]"
-              >
-                {Object.entries(MATERIALS)
-                  .filter(([, m]) => m.technology === materialFamily)
-                  .map(([key, m]) => (
-                    <option key={key} value={key}>{m.name}</option>
+          <div className="flex justify-end gap-1.5 px-3 pb-2">
+            {/* Mode dropdown */}
+            <div className="relative">
+              <button onClick={() => setShowModeMenu(!showModeMenu)}
+                className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm bg-background text-primary flex items-center gap-1">
+                {mode === 'analyze' ? t('modeAnalyze') : mode === 'cad' ? 'CAD' : 'MESH'}
+                <svg className={`w-3 h-3 transition-transform ${showModeMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showModeMenu && (
+                <div className="absolute top-full right-0 mt-0.5 bg-background border border-border rounded-sm shadow-lg z-50 overflow-hidden">
+                  {(['analyze', 'cad', 'mesh'] as const).map(m => (
+                    <button key={m} onClick={() => { setMode(m); setShowModeMenu(false); }}
+                      className={`block w-full text-left text-[11px] font-mono px-3 py-1.5 transition-colors ${
+                        mode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                      }`}>
+                      {m === 'analyze' ? t('modeAnalyze') : m === 'cad' ? 'CAD' : 'MESH'}
+                    </button>
                   ))}
-              </select>
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value as Language)}
-                className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
-              >
-                {SUPPORTED_LANGUAGES.map(lang => (
-                  <option key={lang} value={lang}>{lang.toUpperCase()}</option>
-                ))}
-              </select>
+                </div>
+              )}
             </div>
-            {/* Row 3: CAD */}
-            <button onClick={() => setMode('cad')}
-              className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm text-muted-foreground hover:text-primary text-right w-[52px]">
-              CAD
-            </button>
-            {/* Row 4: MESH */}
-            <button onClick={() => setMode('mesh')}
-              className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm text-muted-foreground hover:text-primary text-right w-[52px]">
-              MESH
-            </button>
+            {/* Selects */}
+            <select
+              value={materialFamily}
+              onChange={(e) => reanalyzeWithFamily(e.target.value as Material['technology'])}
+              className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
+            >
+              {PRINT_TECHNOLOGIES.map(t => (
+                <option key={t.id} value={t.id} disabled={!t.implemented}>
+                  {t.shortLabel}{t.implemented ? '' : ' (soon)'}
+                </option>
+              ))}
+            </select>
+            <select
+              value={materialName}
+              onChange={(e) => reanalyzeWithMaterial(e.target.value as MaterialName)}
+              className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer max-w-[5rem]"
+            >
+              {Object.entries(MATERIALS)
+                .filter(([, m]) => m.technology === materialFamily)
+                .map(([key, m]) => (
+                  <option key={key} value={key}>{m.name}</option>
+                ))}
+            </select>
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as Language)}
+              className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
+            >
+              {SUPPORTED_LANGUAGES.map(lang => (
+                <option key={lang} value={lang}>{lang.toUpperCase()}</option>
+              ))}
+            </select>
           </div>
         </div>
       </header>
