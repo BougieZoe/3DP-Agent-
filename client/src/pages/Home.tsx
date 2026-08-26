@@ -935,16 +935,6 @@ deepAnalysisSeq.current += 1;
             </div>
           </div>
           <div className="flex items-start gap-2 px-3 pb-2 overflow-x-auto scrollbar-hide">
-            <div className="flex flex-col gap-0.5 border border-border rounded overflow-hidden shrink-0">
-              {(['analyze', 'cad', 'mesh'] as const).map(m => (
-                <button key={m} onClick={() => setMode(m)}
-                  className={`text-[11px] font-mono px-2 py-1 transition-all ${
-                    mode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-primary'
-                  }`}>
-                  {m === 'analyze' ? t('modeAnalyze') : m === 'cad' ? 'CAD' : 'MESH'}
-                </button>
-              ))}
-            </div>
             <select
               value={materialFamily}
               onChange={(e) => reanalyzeWithFamily(e.target.value as Material['technology'])}
@@ -977,6 +967,16 @@ deepAnalysisSeq.current += 1;
                 <option key={lang} value={lang}>{lang.toUpperCase()}</option>
               ))}
             </select>
+            <div className="flex flex-col gap-0.5 border border-border rounded overflow-hidden shrink-0 ml-auto">
+              {(['analyze', 'cad', 'mesh'] as const).map(m => (
+                <button key={m} onClick={() => setMode(m)}
+                  className={`text-[11px] font-mono px-2 py-1 transition-all ${
+                    mode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-primary'
+                  }`}>
+                  {m === 'analyze' ? t('modeAnalyze') : m === 'cad' ? 'CAD' : 'MESH'}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </header>
