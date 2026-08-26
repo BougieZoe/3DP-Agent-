@@ -53,7 +53,7 @@ import { toast } from 'sonner';
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
 
 // Lazy-loaded 3D visualization components (code splitting)
-const OverhangHeatmap = lazy(() => import('@/components/3D/AdvancedHeatmap').then(m => ({ default: m.AdvancedHeatmap })));
+const OverhangHeatmap = lazy(() => import('@/components/3D/OverhangHeatmap').then(m => ({ default: m.OverhangHeatmap })));
 const SupportGhosts = lazy(() => import('@/components/3D/SupportGhosts').then(m => ({ default: m.SupportGhosts })));
 const RiskAnimation = lazy(() => import('@/components/3D/RiskAnimation').then(m => ({ default: m.RiskAnimation })));
 const VisualizationToolbar = lazy(() => import('@/components/3D/VisualizationToolbar').then(m => ({ default: m.VisualizationToolbar })));
@@ -62,7 +62,7 @@ const PrintPathPreview = lazy(() => import('@/components/3D/PrintPathPreview').t
 const LayerReveal = lazy(() => import('@/components/3D/LayerReveal').then(m => ({ default: m.LayerReveal })));
 const FailureEmergence = lazy(() => import('@/components/3D/FailureEmergence').then(m => ({ default: m.FailureEmergence })));
 const ThermalField = lazy(() => import('@/components/3D/ThermalField').then(m => ({ default: m.ThermalField })));
-const WallThicknessHeatmap = lazy(() => import('@/components/3D/AdvancedWallThickness').then(m => ({ default: m.AdvancedWallThickness })));
+const WallThicknessHeatmap = lazy(() => import('@/components/3D/WallThicknessHeatmap').then(m => ({ default: m.WallThicknessHeatmap })));
 const CausalityHighlight = lazy(() => import('@/components/3D/CausalityHighlight').then(m => ({ default: m.CausalityHighlight })));
 const CognitiveScan = lazy(() => import('@/components/3D/CognitiveScan').then(m => ({ default: m.CognitiveScan })));
 const AttentionPulse = lazy(() => import('@/components/3D/AttentionPulse').then(m => ({ default: m.AttentionPulse })));
@@ -1057,6 +1057,7 @@ deepAnalysisSeq.current += 1;
             {uploadedModel?.geometry && showWallThickness && (
               <WallThicknessHeatmap
                 geometry={uploadedModel.geometry}
+                samples={unifiedAnalysis?.metrics.result?.wallThicknessSamples ?? null}
                 visible
                 opacity={overlayOpacity}
               />
