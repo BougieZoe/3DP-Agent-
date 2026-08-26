@@ -833,7 +833,7 @@ deepAnalysisSeq.current += 1;
       )}
 
       {/* ── Header ── */}
-      <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 sm:px-5 py-3 border-b border-border bg-background/95 backdrop-blur-sm">
+      <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-3 sm:px-5 py-2 sm:py-3 border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
           <span className="text-sm font-mono text-primary tracking-widest">3DP AGENT</span>
@@ -918,10 +918,10 @@ deepAnalysisSeq.current += 1;
           <span>▋ {t('loading3d')}</span>
         </div>
       }>
-      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-28 sm:pt-14 flex flex-col lg:flex-row min-h-screen">
+      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-20 sm:pt-14 flex flex-col lg:flex-row min-h-screen">
 
         {/* Left: 3D Viewport */}
-        <div className="lg:w-1/2 h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
+        <div className="lg:w-1/2 h-[40vh] sm:h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
           <div className="absolute top-3 left-4 z-10 font-mono text-xs text-muted-foreground/40 space-y-0.5 hidden lg:block">
             <div>// {t('viewport')}</div>
             <div>// {t('viewportHint')}</div>
@@ -1019,22 +1019,22 @@ deepAnalysisSeq.current += 1;
           )}
           {/* Feature buttons - bottom right, below voice control */}
           {uploadedModel && (
-            <div className="absolute bottom-36 right-12 flex flex-row gap-2 z-20">
+            <div className="absolute bottom-3 right-3 flex flex-row gap-1.5 z-20">
               <button
                 onClick={() => setShowPrintDashboard(true)}
-                className="w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/30 transition-colors"
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/30 transition-colors"
                 title="Print Monitor"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
               </button>
               <button
                 onClick={() => setShowAgentGraph(true)}
-                className="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center hover:bg-amber-500/30 transition-colors"
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center hover:bg-amber-500/30 transition-colors"
                 title="Agent Graph"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                 </svg>
               </button>
@@ -1044,7 +1044,7 @@ deepAnalysisSeq.current += 1;
 
         {/* Right: Panel */}
         <div className="lg:w-1/2 lg:h-[calc(100vh-3.5rem)] lg:overflow-y-auto">
-          <div className="pt-4 px-5 pb-5 space-y-8">
+          <div className="pt-3 sm:pt-4 px-4 sm:px-5 pb-5 space-y-6 sm:space-y-8">
 
             {/* Upload */}
             <div>
@@ -1089,10 +1089,10 @@ deepAnalysisSeq.current += 1;
             {/* Tab bar — only when a model is loaded; the empty state uses the
                 feature cards (diagnosis opens as a modal) instead */}
             {modelData && (
-              <div className="flex border-b border-border">
+              <div className="flex overflow-x-auto scrollbar-hide border-b border-border -mx-5 px-5">
                 {(['geometry', 'report', 'agents', 'chat', 'causality', 'orders'] as const).map(tabKey => (
                   <button key={tabKey} onClick={() => setTab(tabKey)}
-                    className={`text-xs font-mono px-4 py-2.5 border-b-2 transition-all ${
+                    className={`text-xs font-mono px-3 sm:px-4 py-2.5 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
                       tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
                     }`}>
                     {tabKey === 'geometry' ? t('geometry').toUpperCase()
