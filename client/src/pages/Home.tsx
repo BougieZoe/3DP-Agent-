@@ -934,7 +934,7 @@ deepAnalysisSeq.current += 1;
               <InstallButton language={language} iconOnly />
             </div>
           </div>
-          <div className="flex flex-col gap-1 px-3 pb-2 overflow-x-auto scrollbar-hide">
+          <div className="flex flex-col gap-1 px-3 pb-2 overflow-x-auto scrollbar-hide items-end">
             <div className="flex items-center gap-2">
               <div className="flex flex-col gap-0.5 border border-border rounded overflow-hidden shrink-0">
                 {(['analyze', 'cad', 'mesh'] as const).map(m => (
