@@ -119,14 +119,32 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
     setIsLoading(true);
     const results: UploadedModel[] = [];
     const startTime = Date.now();
+    
+    // Check device memory — warn on low-memory devices
+    const nav = navigator as Navigator & { deviceMemory?: number };
+    const deviceMemoryGB = nav.deviceMemory ?? 4;
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
     for (const file of supported) {
       const sizeMB = file.size / (1024 * 1024);
       const sizeLabel = sizeMB >= 1
         ? `${sizeMB.toFixed(1)} MB`
         : `${(file.size / 1024).toFixed(1)} KB`;
       setProgress([`> ${t.loading} ${file.name}`, `> ${t.fileSize}: ${sizeLabel}`]);
+      
+      // Warn for large files on mobile
+      if (isMobile && sizeMB > 30) {
+        setProgress(p => [...p, `> ⚠ Large file on mobile — may be slow`]);
+      }
       if (sizeMB > 50) {
         setProgress(p => [...p, `> ⚠ Large file — analysis may take a while`]);
+      }
+      
+      // Check available memory before loading
+      if (isMobile && sizeMB > deviceMemoryGB * 50) {
+        setProgress(p => [...p, `> ⚠ File too large for device memory (${deviceMemoryGB}GB RAM)`]);
+        log(`> SKIPPED ${file.name}: Would exceed device memory`);
+        continue;
       }
       try {
         // Read raw bytes for cache key + geometry loading
@@ -145,7 +163,13 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
         // the BufferGeometry for slicing and 3-D display.
         let loaded;
         try {
-          loaded = await loadModelFile(file);
+          // Add timeout for large files on mobile
+          const loadPromise = loadModelFile(file);
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            const timeoutMs = isMobile ? 60000 : 30000; // 60s mobile, 30s desktop
+            setTimeout(() => reject(new Error(`Loading timed out after ${timeoutMs/1000}s`)), timeoutMs);
+          });
+          loaded = await Promise.race([loadPromise, timeoutPromise]);
         } catch (loadErr) {
           console.error('[STLUploadHandler] loadModelFile failed:', loadErr);
           log(`> ERROR loading ${file.name}: ${loadErr instanceof Error ? loadErr.message : 'Unknown error'}`);
