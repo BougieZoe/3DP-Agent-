@@ -7,7 +7,7 @@ import { normalizeModelGeometry } from '@/lib/modelNormalization';
 import { autoOrientGeometry } from '@/lib/autoOrient';
 import { geometryToStl } from '@/lib/meshOps';
 import { sliceSTL, type SliceMetadata, type SliceProvenance, type SlicerId } from '@/lib/sliceClient';
-import { getCachedAnalysis, setCachedAnalysis } from '@/lib/analysisCache';
+import { getCachedAnalysis, setCachedAnalysis, hashFileBytes, cacheKeyFromParts } from '@/lib/analysisCache';
 import { notifyAnalysisComplete } from '@/lib/notifications';
 import { DEFAULT_MATERIAL } from '@shared/domain/material';
 import type { LengthUnit } from '@shared/domain/geometry';
@@ -49,6 +49,7 @@ const labels = {
     invalidFile: 'Invalid file type — STL, OBJ or 3MF required',
     parseFailed: 'Parse failed: ',
     unknownError: 'Unknown error',
+    uploadFailed: 'Failed to load file — see console for details',
     loading: 'LOADING',
     fileSize: 'FILE SIZE',
     parsing: 'PARSING GEOMETRY...',
@@ -66,6 +67,7 @@ const labels = {
     invalidFile: '無効なファイル形式 — STL・OBJ・3MFが必要です',
     parseFailed: '解析失敗: ',
     unknownError: '不明なエラー',
+    uploadFailed: 'ファイルの読み込みに失敗しました — コンソールを確認してください',
     loading: '読み込み中',
     fileSize: 'ファイルサイズ',
     parsing: 'ジオメトリを解析中...',
@@ -83,6 +85,7 @@ const labels = {
     invalidFile: '无效的文件类型 — 需要 STL、OBJ 或 3MF',
     parseFailed: '解析失败: ',
     unknownError: '未知错误',
+    uploadFailed: '文件加载失败 — 详情见控制台',
     loading: '加载中',
     fileSize: '文件大小',
     parsing: '正在解析几何体...',
@@ -119,19 +122,20 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
     setIsLoading(true);
     const results: UploadedModel[] = [];
     const startTime = Date.now();
-    
+    let lastError: string | null = null;
+
     // Check device memory — warn on low-memory devices
     const nav = navigator as Navigator & { deviceMemory?: number };
     const deviceMemoryGB = nav.deviceMemory ?? 4;
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    
+
     for (const file of supported) {
       const sizeMB = file.size / (1024 * 1024);
       const sizeLabel = sizeMB >= 1
         ? `${sizeMB.toFixed(1)} MB`
         : `${(file.size / 1024).toFixed(1)} KB`;
       setProgress([`> ${t.loading} ${file.name}`, `> ${t.fileSize}: ${sizeLabel}`]);
-      
+
       // Warn for large files on mobile
       if (isMobile && sizeMB > 30) {
         setProgress(p => [...p, `> ⚠ Large file on mobile — may be slow`]);
@@ -139,31 +143,40 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
       if (sizeMB > 50) {
         setProgress(p => [...p, `> ⚠ Large file — analysis may take a while`]);
       }
-      
+
       // Check available memory before loading
       if (isMobile && sizeMB > deviceMemoryGB * 50) {
         setProgress(p => [...p, `> ⚠ File too large for device memory (${deviceMemoryGB}GB RAM)`]);
         log(`> SKIPPED ${file.name}: Would exceed device memory`);
+        lastError = t.uploadFailed;
         continue;
       }
       try {
+        // Read the file ONCE. The buffer is hashed for the cache, then
+        // TRANSFERRED into the parse worker — no second full-size allocation
+        // (the old flow held two copies of every large STL in memory).
         log(`> READING ${file.name}...`);
         const arrayBuffer = await file.arrayBuffer();
         const pipelineOptions = { fileName: file.name, materialFamily };
 
+        // Hash BEFORE transferring the buffer to the worker — after the
+        // transfer the buffer is detached and the hash cannot be recomputed.
+        const fileHash = await hashFileBytes(arrayBuffer);
+        const cacheKey = await cacheKeyFromParts(fileHash, pipelineOptions);
+
         // Geometry + analysis — cache hit skips the pipeline but still needs
         // the BufferGeometry for slicing and 3-D display.
         log(`> PARSING ${file.name}...`);
-        const loaded = await loadModelFile(file);
+        const loaded = await loadModelFile(file, arrayBuffer);
         log(`> PARSED OK`);
-        
+
         const effectiveUnits = loaded.units ?? units;
         const { geometry: normalizedGeometry, rawGeometry } = normalizeModelGeometry(loaded.geometry, effectiveUnits);
         // Auto-orient so the model sits naturally on the build plate
         const geometry = autoOrientGeometry(normalizedGeometry);
 
         // Check analysis cache before running pipeline
-        const cached = await getCachedAnalysis(arrayBuffer, pipelineOptions);
+        const cached = await getCachedAnalysis(null, pipelineOptions, cacheKey);
         let unifiedAnalysis: UnifiedAnalysis;
         if (cached) {
           log(`> CACHE HIT — reusing cached result for ${file.name}`);
@@ -173,7 +186,7 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
           log(`> ANALYZING ${file.name}...`);
           unifiedAnalysis = await runAnalysisInWorker(model, pipelineOptions);
           // Cache the result for future uploads
-          await setCachedAnalysis(arrayBuffer, pipelineOptions, unifiedAnalysis, file.name, file.size);
+          await setCachedAnalysis(null, pipelineOptions, unifiedAnalysis, file.name, file.size, { cacheKey, fileHash });
         }
 
         // Slice STL to get ground-truth print metrics (time, filament, layers).
@@ -223,14 +236,20 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
           .catch(() => {});
       } catch (error) {
         console.error('[STLUploadHandler] processing failed:', error);
-        log(`> ${t.error} ${file.name}: ${error instanceof Error ? error.message : t.unknownError}`);
+        const msg = error instanceof Error ? error.message : t.unknownError;
+        log(`> ${t.error} ${file.name}: ${msg}`);
+        lastError = `${t.parseFailed}${msg}`;
       }
     }
     if (results.length > 0) {
       onModelsLoaded(results, supported.length);
+    } else if (lastError) {
+      // Every file failed — surface a real error instead of silently resetting
+      // to the upload box (the previous "no error message" crash UX).
+      onError(lastError);
     }
     setIsLoading(false);
-  }, [onModelsLoaded, onError, t, units]);
+  }, [onModelsLoaded, onError, t, units, materialFamily]);
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
   const handleDragLeave = () => setIsDragging(false);

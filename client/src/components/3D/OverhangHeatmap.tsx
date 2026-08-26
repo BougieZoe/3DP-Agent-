@@ -7,6 +7,16 @@ interface OverhangHeatmapProps {
   opacity?: number;
 }
 
+/**
+ * Surface-mapped overhang heatmap (mobile).
+ *
+ * Z-up build-axis semantics, matching the analysis pipeline (metrics.ts
+ * overhangTiltBelowHorizontalDeg): only DOWNWARD-facing faces (nz < 0) are
+ * overhangs, and the risk ramps with their tilt below horizontal. The
+ * previous version measured the angle from the Y axis — wrong for the Z-up
+ * models this app normalizes onto, and it colored every vertical wall as an
+ * overhang.
+ */
 export function OverhangHeatmap({ geometry, visible, opacity = 0.7 }: OverhangHeatmapProps) {
   const heatmapGeo = useMemo(() => {
     const srcPos = geometry.getAttribute('position');
@@ -24,9 +34,13 @@ export function OverhangHeatmap({ geometry, visible, opacity = 0.7 }: OverhangHe
       const ny = normals[i * 3 + 1];
       const nz = normals[i * 3 + 2];
       const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-      const normalizedY = len > 0 ? ny / len : ny;
+      const normalizedZ = len > 0 ? nz / len : nz;
 
-      const angle = Math.acos(Math.max(-1, Math.min(1, normalizedY))) * (180 / Math.PI);
+      // Tilt below horizontal, 0..90°: 0 = vertical wall (safe), 90 = ceiling
+      // (worst). Upward or vertical faces are not overhangs at all.
+      const angle = normalizedZ >= 0
+        ? 0
+        : Math.acos(Math.min(1, Math.max(-1, normalizedZ))) * (180 / Math.PI) - 90;
 
       let r: number, g: number, b: number;
       if (angle <= 30) {

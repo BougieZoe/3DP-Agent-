@@ -12,7 +12,11 @@ import * as THREE from 'three';
  * This makes models look natural when first loaded instead of showing their bottom.
  */
 export function autoOrientGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
-  const oriented = geometry.clone();
+  // In-place: callers pass a freshly-normalized geometry they own exclusively
+  // (normalizeModelGeometry already cloned the source), so the extra clone
+  // here was a full duplicate of a potentially huge position/index buffer on
+  // the main thread.
+  const oriented = geometry;
   oriented.computeVertexNormals();
   oriented.computeBoundingBox();
 

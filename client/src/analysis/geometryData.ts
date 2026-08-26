@@ -1,4 +1,3 @@
-import { buildGeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
 
 export interface VertexData {
@@ -8,23 +7,36 @@ export interface VertexData {
   triangleCount: number;
 }
 
+/**
+ * Extract the vertex arrays + bounding-box size for agent analysis.
+ *
+ * The previous implementation built the full geometry graph just to read the
+ * bounding box — on a 1.5M-triangle model that was a ~1.5 GB allocation on the
+ * main thread (agent runs happen on the UI thread). The bounding box is a
+ * trivial O(n) scan; compute it directly.
+ */
 export function extractVertexData(model: GeometryModel): VertexData {
-  const graph = buildGeometryGraph(model);
+  const positions = model.positions;
 
-  if (graph) {
-    const size = graph.boundingBoxDimensions;
-    return {
-      positions: graph.positions,
-      normals: graph.normals,
-      size,
-      triangleCount: graph.triangleCount,
-    };
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i], y = positions[i + 1], z = positions[i + 2];
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
   }
+  const hasData = Number.isFinite(minX) && maxX >= minX;
 
   return {
-    positions: model.positions,
+    positions,
     normals: model.normals,
-    size: { x: 0, y: 0, z: 0 },
-    triangleCount: Math.floor(model.positions.length / 9),
+    size: hasData
+      ? { x: maxX - minX, y: maxY - minY, z: maxZ - minZ }
+      : { x: 0, y: 0, z: 0 },
+    triangleCount: model.triangleCount,
   };
 }

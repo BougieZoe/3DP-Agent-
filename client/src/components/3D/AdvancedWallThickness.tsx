@@ -6,6 +6,12 @@
  * - Smooth gradient: red (thin) → orange → yellow → green → cyan (thick)
  * - Multi-direction spatial sampling for accurate thickness
  * - Triangle-face coloring for smooth interpolation
+ *
+ * When the analysis pipeline provides a precomputed `thicknessMap` (one value
+ * per vertex, computed in the worker — see analysis/surfaceThickness.ts), the
+ * component skips its own per-vertex grid search. That search is the expensive
+ * main-thread pass that crashed low-memory phones on large meshes; the worker
+ * map uses the same algorithm and constants, so colors are identical.
  */
 
 import { useMemo } from 'react';
@@ -18,6 +24,77 @@ interface AdvancedWallThicknessProps {
   minThickness?: number;
   maxThickness?: number;
   showThinOnly?: boolean;
+  /** Optional precomputed per-vertex thickness (mm), from the analysis worker. */
+  thicknessMap?: Float32Array | null;
+}
+
+/**
+ * Per-vertex thickness via opposite-normal nearest-distance over a 4 mm
+ * spatial grid (27-cell neighborhood). This is the fallback path when no
+ * worker-computed map is available; the pipeline normally supplies one.
+ */
+function computePerVertexThickness(
+  positions: Float32Array,
+  normals: Float32Array,
+  vertexCount: number,
+  maxThickness: number,
+): Float32Array {
+  const gridSize = 4;
+  const grid = new Map<string, number[]>();
+  for (let i = 0; i < vertexCount; i++) {
+    const key = `${Math.floor(positions[i * 3] / gridSize)},${Math.floor(positions[i * 3 + 1] / gridSize)},${Math.floor(positions[i * 3 + 2] / gridSize)}`;
+    if (!grid.has(key)) grid.set(key, []);
+    grid.get(key)!.push(i);
+  }
+
+  const thickness = new Float32Array(vertexCount);
+  for (let i = 0; i < vertexCount; i++) {
+    const px = positions[i * 3];
+    const py = positions[i * 3 + 1];
+    const pz = positions[i * 3 + 2];
+    const nx = normals[i * 3];
+    const ny = normals[i * 3 + 1];
+    const nz = normals[i * 3 + 2];
+
+    let minDist = maxThickness;
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const cx = Math.floor(px / gridSize) + dx;
+          const cy = Math.floor(py / gridSize) + dy;
+          const cz = Math.floor(pz / gridSize) + dz;
+          const key = `${cx},${cy},${cz}`;
+          const cell = grid.get(key);
+          if (!cell) continue;
+
+          for (const j of cell) {
+            if (j === i) continue;
+            const jnx = normals[j * 3];
+            const jny = normals[j * 3 + 1];
+            const jnz = normals[j * 3 + 2];
+
+            // Check if normals are roughly opposite (facing each other across thin wall)
+            const dot = nx * jnx + ny * jny + nz * jnz;
+            if (dot > -0.3) continue;
+
+            const dx2 = positions[j * 3] - px;
+            const dy2 = positions[j * 3 + 1] - py;
+            const dz2 = positions[j * 3 + 2] - pz;
+            const dist = Math.sqrt(dx2 * dx2 + dy2 * dy2 + dz2 * dz2);
+
+            if (dist < minDist && dist > 0.1) {
+              minDist = dist;
+            }
+          }
+        }
+      }
+    }
+
+    thickness[i] = minDist;
+  }
+
+  return thickness;
 }
 
 export function AdvancedWallThickness({
@@ -27,6 +104,7 @@ export function AdvancedWallThickness({
   minThickness = 0.8,
   maxThickness = 4.0,
   showThinOnly = false,
+  thicknessMap = null,
 }: AdvancedWallThicknessProps) {
   const coloredGeo = useMemo(() => {
     const srcPos = geometry.getAttribute('position');
@@ -39,63 +117,10 @@ export function AdvancedWallThickness({
     const idx = indices.array as Uint32Array;
     const vertexCount = srcPos.count;
 
-    // Build spatial hash for fast neighbor lookup
-    const gridSize = 4;
-    const grid = new Map<string, number[]>();
-    for (let i = 0; i < vertexCount; i++) {
-      const key = `${Math.floor(positions[i * 3] / gridSize)},${Math.floor(positions[i * 3 + 1] / gridSize)},${Math.floor(positions[i * 3 + 2] / gridSize)}`;
-      if (!grid.has(key)) grid.set(key, []);
-      grid.get(key)!.push(i);
-    }
-
-    // Compute per-vertex thickness via opposite-normal detection
-    const thickness = new Float32Array(vertexCount);
-    for (let i = 0; i < vertexCount; i++) {
-      const px = positions[i * 3];
-      const py = positions[i * 3 + 1];
-      const pz = positions[i * 3 + 2];
-      const nx = normals[i * 3];
-      const ny = normals[i * 3 + 1];
-      const nz = normals[i * 3 + 2];
-
-      let minDist = maxThickness;
-
-      // Search nearby cells
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dz = -1; dz <= 1; dz++) {
-            const cx = Math.floor(px / gridSize) + dx;
-            const cy = Math.floor(py / gridSize) + dy;
-            const cz = Math.floor(pz / gridSize) + dz;
-            const key = `${cx},${cy},${cz}`;
-            const cell = grid.get(key);
-            if (!cell) continue;
-
-            for (const j of cell) {
-              if (j === i) continue;
-              const jnx = normals[j * 3];
-              const jny = normals[j * 3 + 1];
-              const jnz = normals[j * 3 + 2];
-
-              // Check if normals are roughly opposite (facing each other across thin wall)
-              const dot = nx * jnx + ny * jny + nz * jnz;
-              if (dot > -0.3) continue;
-
-              const dx2 = positions[j * 3] - px;
-              const dy2 = positions[j * 3 + 1] - py;
-              const dz2 = positions[j * 3 + 2] - pz;
-              const dist = Math.sqrt(dx2 * dx2 + dy2 * dy2 + dz2 * dz2);
-
-              if (dist < minDist && dist > 0.1) {
-                minDist = dist;
-              }
-            }
-          }
-        }
-      }
-
-      thickness[i] = minDist;
-    }
+    // Worker-computed map wins when present and sized correctly; otherwise
+    // fall back to the local grid search (legacy cached analyses).
+    const provided = thicknessMap && thicknessMap.length === vertexCount ? thicknessMap : null;
+    const thickness = provided ?? computePerVertexThickness(positions, normals, vertexCount, maxThickness);
 
     // Map thickness to vertex colors on the mesh surface
     const colors = new Float32Array(vertexCount * 3);
@@ -130,7 +155,7 @@ export function AdvancedWallThickness({
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     return geo;
-  }, [geometry, minThickness, maxThickness, showThinOnly]);
+  }, [geometry, minThickness, maxThickness, showThinOnly, thicknessMap]);
 
   if (!visible || !coloredGeo) return null;
 

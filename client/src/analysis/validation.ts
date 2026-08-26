@@ -32,25 +32,25 @@ export function validateMesh(
 
   const positions = g.positions;
   const indices = g.indices;
-  const edgeMap = g.edgeMap;
   const totalFaceCount = g.triangleCount;
 
   let boundaryCount = 0;
   let nonManifoldCount = 0;
-  const edgeEntries = Array.from(edgeMap.entries());
-  for (const [, edge] of edgeEntries) {
-    if (edge.faceCount === 1) boundaryCount++;
-    else if (edge.faceCount > 2) nonManifoldCount++;
+  for (let e = 0; e < g.edgeCount; e++) {
+    const faceCount = g.edgeFaceCount[e];
+    if (faceCount === 1) boundaryCount++;
+    else if (faceCount > 2) nonManifoldCount++;
   }
 
   const isWatertight = boundaryCount === 0 && nonManifoldCount === 0;
 
   let boundaryPerimeter = 0;
   let boundaryEdgeSampleCount = 0;
-  for (const [, edge] of edgeEntries) {
-    if (edge.faceCount === 1) {
-      const ax = positions[edge.a * 3], ay = positions[edge.a * 3 + 1], az = positions[edge.a * 3 + 2];
-      const bx = positions[edge.b * 3], by = positions[edge.b * 3 + 1], bz = positions[edge.b * 3 + 2];
+  for (let e = 0; e < g.edgeCount; e++) {
+    if (g.edgeFaceCount[e] === 1) {
+      const a = g.edgeA[e], b = g.edgeB[e];
+      const ax = positions[a * 3], ay = positions[a * 3 + 1], az = positions[a * 3 + 2];
+      const bx = positions[b * 3], by = positions[b * 3 + 1], bz = positions[b * 3 + 2];
       const dx = bx - ax, dy = by - ay, dz = bz - az;
       boundaryPerimeter += Math.sqrt(dx * dx + dy * dy + dz * dz);
       boundaryEdgeSampleCount++;

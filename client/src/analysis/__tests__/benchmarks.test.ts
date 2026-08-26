@@ -22,7 +22,7 @@ describe('GeometryGraph benchmark', () => {
       const graph = buildGeometryGraph(model);
       expect(graph).not.toBeNull();
       expect(graph!.triangleCount).toBe(12);
-      expect(graph!.edgeMap.size).toBe(18);
+      expect(graph!.edgeCount).toBe(18);
     });
 
     console.log(`[bench] buildGeometryGraph (12 tri): ${t.toFixed(3)}ms`);
@@ -168,7 +168,7 @@ describe('Deterministic behavior', () => {
 
     expect(g1!.triangleCount).toBe(g2!.triangleCount);
     expect(g1!.vertexCount).toBe(g2!.vertexCount);
-    expect(g1!.edgeMap.size).toBe(g2!.edgeMap.size);
+    expect(g1!.edgeCount).toBe(g2!.edgeCount);
     expect(g1!.boundingBoxDimensions.x).toBe(g2!.boundingBoxDimensions.x);
   });
 });

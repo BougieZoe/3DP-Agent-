@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { OBJLoader, ThreeMFLoader } from 'three-stdlib';
 import { unzipSync } from 'fflate';
-import { loadSTLFile } from './stlLoader';
+import { loadSTLFromBuffer, loadSTLFile } from './stlLoader';
 import type { LengthUnit } from '@shared/domain/geometry';
 
 export interface LoadedModel {
@@ -77,17 +77,25 @@ export function read3mfUnits(buffer: ArrayBuffer): LengthUnit | undefined {
   }
 }
 
-export async function loadModelFile(file: File): Promise<LoadedModel> {
+/**
+ * Load a model file. For STL, `preReadBuffer` (when provided) is TRANSFERRED
+ * to the parse worker — the caller must hash it for the cache BEFORE calling
+ * this and must not use it afterwards. Passing the already-read buffer avoids
+ * a second full-size file allocation (the previous flow held two copies of
+ * every large STL on the main thread — a 70 MB file cost 140 MB before parsing
+ * even started).
+ */
+export async function loadModelFile(file: File, preReadBuffer?: ArrayBuffer): Promise<LoadedModel> {
   const lower = file.name.toLowerCase();
   if (lower.endsWith('.stl')) {
-    return { geometry: await loadSTLFile(file) };
+    return { geometry: preReadBuffer ? await loadSTLFromBuffer(preReadBuffer) : await loadSTLFile(file) };
   }
   if (lower.endsWith('.obj')) {
     const text = await file.text();
     return { geometry: mergeObject3D(new OBJLoader().parse(text)) };
   }
   if (lower.endsWith('.3mf')) {
-    const buffer = await file.arrayBuffer();
+    const buffer = preReadBuffer ?? await file.arrayBuffer();
     const obj = new ThreeMFLoader().parse(buffer);
     return { geometry: mergeObject3D(obj), units: read3mfUnits(buffer) };
   }

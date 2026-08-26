@@ -1,12 +1,12 @@
 import { moduleResult, type AnalysisModuleResult, type Confidence, type TopologyResult } from './types';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
-import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
+import { buildGeometryGraph, edgeMapFromGraph, type GeometryGraph } from './geometryGraph';
 import { type GeometryModel } from './geometryModel';
 
 export function buildEdgeMap(model: GeometryModel): Map<string, import('./types').MeshEdge> {
   const graph = buildGeometryGraph(model);
   if (graph) {
-    return new Map(graph.edgeMap);
+    return edgeMapFromGraph(graph);
   }
   return new Map();
 }
@@ -29,14 +29,13 @@ export function countShells(model: GeometryModel, graph?: GeometryGraph | null):
     visited.add(i);
     while (queue.length > 0) {
       const current = queue.shift()!;
-      const neighbors = g.faceAdjacency.get(current);
-      if (neighbors) {
-        const neighborArr = Array.from(neighbors);
-        for (const neighbor of neighborArr) {
-          if (!visited.has(neighbor)) {
-            visited.add(neighbor);
-            queue.push(neighbor);
-          }
+      const start = g.faceNeighborStart[current];
+      const end = g.faceNeighborStart[current + 1];
+      for (let k = start; k < end; k++) {
+        const neighbor = g.faceNeighbors[k];
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push(neighbor);
         }
       }
     }
@@ -76,22 +75,22 @@ export function analyzeTopology(
     }, translate(CONTENT, 'topology.nonIndexed', language));
   }
 
-  const edgeCount = g.edgeMap.size;
+  const edgeCount = g.edgeCount;
   let manifoldCount = 0;
   let boundaryCount = 0;
   let nonManifoldCount = 0;
   const problemEdges: Array<{ a: number; b: number; faceCount: number }> = [];
 
-  const edgeArray = Array.from(g.edgeMap.entries());
-  for (const [, edge] of edgeArray) {
-    if (edge.faceCount === 2) {
+  for (let e = 0; e < g.edgeCount; e++) {
+    const faceCount = g.edgeFaceCount[e];
+    if (faceCount === 2) {
       manifoldCount++;
-    } else if (edge.faceCount === 1) {
+    } else if (faceCount === 1) {
       boundaryCount++;
-      problemEdges.push({ a: edge.a, b: edge.b, faceCount: edge.faceCount });
+      problemEdges.push({ a: g.edgeA[e], b: g.edgeB[e], faceCount });
     } else {
       nonManifoldCount++;
-      problemEdges.push({ a: edge.a, b: edge.b, faceCount: edge.faceCount });
+      problemEdges.push({ a: g.edgeA[e], b: g.edgeB[e], faceCount });
     }
   }
 
