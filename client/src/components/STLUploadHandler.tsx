@@ -61,6 +61,8 @@ const labels = {
     releaseToUpload: '— RELEASE TO UPLOAD —',
     dragOrClick: 'DRAG FILE HERE OR CLICK TO BROWSE',
     units: 'UNITS',
+    fileTooLarge: 'File too large — max 50MB on mobile',
+    loadFailed: 'Failed to load file — try a smaller model',
   },
   ja: {
     invalidFile: '無効なファイル形式 — STL・OBJ・3MFが必要です',
@@ -78,6 +80,8 @@ const labels = {
     releaseToUpload: '— リリースしてアップロード —',
     dragOrClick: 'ファイルをドラッグするか、クリックして参照',
     units: '単位',
+    fileTooLarge: 'ファイルが大きすぎます — モバイルでは最大50MB',
+    loadFailed: 'ファイルの読み込みに失敗しました — 小さいモデルをお試しください',
   },
   zh: {
     invalidFile: '无效的文件类型 — 需要 STL、OBJ 或 3MF',
@@ -95,6 +99,8 @@ const labels = {
     releaseToUpload: '— 释放以上传 —',
     dragOrClick: '拖放文件到此处或点击浏览',
     units: '单位',
+    fileTooLarge: '文件过大 — 手机端最大50MB',
+    loadFailed: '文件加载失败 — 请尝试较小的模型',
   },
 };
 
@@ -116,6 +122,18 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
     }
     if (supported.length === 0) return;
 
+    // Check file size limit (50MB for mobile, 200MB for desktop)
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const maxSizeMB = isMobile ? 50 : 200;
+    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+    
+    for (const file of supported) {
+      if (file.size > maxSizeBytes) {
+        onError(t.fileTooLarge);
+        return;
+      }
+    }
+
     setIsLoading(true);
     const results: UploadedModel[] = [];
     const startTime = Date.now();
@@ -135,7 +153,16 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
 
         // Geometry + analysis — cache hit skips the pipeline but still needs
         // the BufferGeometry for slicing and 3-D display.
-        const loaded = await loadModelFile(file);
+        let loaded;
+        try {
+          loaded = await loadModelFile(file);
+        } catch (loadErr) {
+          console.error('[STLUploadHandler] loadModelFile failed:', loadErr);
+          onError(t.loadFailed);
+          setIsLoading(false);
+          return;
+        }
+        
         const effectiveUnits = loaded.units ?? units;
         const { geometry: normalizedGeometry, rawGeometry } = normalizeModelGeometry(loaded.geometry, effectiveUnits);
         // Auto-orient so the model sits naturally on the build plate
