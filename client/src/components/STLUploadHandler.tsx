@@ -147,6 +147,7 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
         continue;
       }
       try {
+        log(`> READING ${file.name}...`);
         // Read raw bytes for cache key + geometry loading
         let arrayBuffer;
         try {
@@ -163,13 +164,9 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
         // the BufferGeometry for slicing and 3-D display.
         let loaded;
         try {
-          // Add timeout for large files on mobile
-          const loadPromise = loadModelFile(file);
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            const timeoutMs = isMobile ? 60000 : 30000; // 60s mobile, 30s desktop
-            setTimeout(() => reject(new Error(`Loading timed out after ${timeoutMs/1000}s`)), timeoutMs);
-          });
-          loaded = await Promise.race([loadPromise, timeoutPromise]);
+          log(`> PARSING ${file.name}...`);
+          loaded = await loadModelFile(file);
+          log(`> PARSED OK`);
         } catch (loadErr) {
           console.error('[STLUploadHandler] loadModelFile failed:', loadErr);
           log(`> ERROR loading ${file.name}: ${loadErr instanceof Error ? loadErr.message : 'Unknown error'}`);
