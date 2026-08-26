@@ -162,3 +162,11 @@ body::before {
 .slide-in { animation: slideIn 0.4s ease forwards; }
 .pulse-glow { animation: pulseGlow 2s ease infinite; }
 .cursor::after { content:'▋'; animation: blink 1s infinite; color: oklch(0.80 0.18 195); margin-left:2px; }
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
