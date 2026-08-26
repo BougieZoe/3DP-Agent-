@@ -11,7 +11,7 @@ import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 //    step-by-step guide directly (Apple has no install API; Huawei's Chromium
 //    fork doesn't reliably honor beforeinstallprompt).
 // Renders nothing when the app is already installed or the browser can't install.
-export function InstallButton({ language }: { language: Language }) {
+export function InstallButton({ language, iconOnly }: { language: Language; iconOnly?: boolean }) {
   const { available, kind, trigger } = useInstallPrompt();
   const [showGuide, setShowGuide] = useState(false);
 
@@ -31,10 +31,10 @@ export function InstallButton({ language }: { language: Language }) {
       <button
         onClick={handleClick}
         title={getTranslation(language, "install")}
-        className="text-[11px] sm:text-xs font-mono px-2 sm:px-3 py-1 border rounded-sm transition-all border-primary/40 text-primary hover:bg-primary/10 shrink-0"
+        className={`${iconOnly ? 'w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center' : 'text-[11px] sm:text-xs font-mono px-2 sm:px-3 py-1'} border rounded-sm transition-all border-primary/40 text-primary hover:bg-primary/10 shrink-0`}
       >
-        <Download className="w-3 h-3 inline-block mr-1 -mt-0.5" />
-        {getTranslation(language, "install")}
+        <Download className={`${iconOnly ? 'w-3.5 h-3.5' : 'w-3 h-3 inline-block mr-1 -mt-0.5'}`} />
+        {!iconOnly && getTranslation(language, "install")}
       </button>
       {showGuide && <InstallGuide language={language} onClose={() => setShowGuide(false)} />}
     </>
