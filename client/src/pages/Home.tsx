@@ -834,14 +834,13 @@ deepAnalysisSeq.current += 1;
 
       {/* ── Header ── */}
       <header className="fixed top-0 left-0 right-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm">
-        {/* Desktop: single row. Mobile: two rows */}
+        {/* Desktop: original single-row */}
         <div className="hidden sm:flex items-center justify-between px-5 py-2.5">
           <div className="flex items-center gap-3 shrink-0">
             <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
             <span className="text-sm font-mono text-primary tracking-widest">3DP AGENT</span>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Mode toggle */}
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
             <div className="flex items-center gap-1">
               {(['analyze', 'cad', 'mesh'] as const).map(m => (
                 <button key={m} onClick={() => setMode(m)}
@@ -852,7 +851,6 @@ deepAnalysisSeq.current += 1;
                 </button>
               ))}
             </div>
-            {/* Print technology */}
             <select
               value={materialFamily}
               onChange={(e) => reanalyzeWithFamily(e.target.value as Material['technology'])}
@@ -865,7 +863,6 @@ deepAnalysisSeq.current += 1;
                 </option>
               ))}
             </select>
-            {/* Material */}
             <select
               value={materialName}
               onChange={(e) => reanalyzeWithMaterial(e.target.value as MaterialName)}
@@ -877,7 +874,6 @@ deepAnalysisSeq.current += 1;
                   <option key={key} value={key} title={`${m.category} — ${m.description}`}>{m.name}</option>
                 ))}
             </select>
-            {/* Language */}
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value as Language)}
@@ -889,14 +885,12 @@ deepAnalysisSeq.current += 1;
               ))}
             </select>
             <InstallButton language={language} />
-            {/* Account */}
             <button onClick={() => setShowAccountModal(true)}
               className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${
                 user ? 'border-primary/40 text-primary' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-primary'
               }`}>
               {user ? t('planFree') : t('signIn')}
             </button>
-            {/* API config */}
             {!user && (
               <button onClick={() => setShowAPIModal(true)}
                 className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${
@@ -909,9 +903,8 @@ deepAnalysisSeq.current += 1;
             )}
           </div>
         </div>
-        {/* Mobile: two rows */}
+        {/* Mobile: two rows — stacked mode + tech + material + icons */}
         <div className="sm:hidden">
-          {/* Row 1: Brand + icon buttons */}
           <div className="flex items-center justify-between px-3 py-2">
             <div className="flex items-center gap-2 shrink-0">
               <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
@@ -941,7 +934,6 @@ deepAnalysisSeq.current += 1;
               <InstallButton language={language} iconOnly />
             </div>
           </div>
-          {/* Row 2: Stacked mode + Tech + Material + Language */}
           <div className="flex items-start gap-2 px-3 pb-2 overflow-x-auto scrollbar-hide">
             <div className="flex flex-col gap-0.5 border border-border rounded overflow-hidden shrink-0">
               {(['analyze', 'cad', 'mesh'] as const).map(m => (
@@ -995,7 +987,7 @@ deepAnalysisSeq.current += 1;
           <span>▋ {t('loading3d')}</span>
         </div>
       }>
-      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-24 sm:pt-14 flex flex-col lg:flex-row min-h-screen">
+      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-28 sm:pt-14 flex flex-col lg:flex-row min-h-screen">
 
         {/* Left: 3D Viewport */}
         <div className="lg:w-1/2 h-[40vh] sm:h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
