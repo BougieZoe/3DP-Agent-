@@ -148,31 +148,14 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
       }
       try {
         log(`> READING ${file.name}...`);
-        // Read raw bytes for cache key + geometry loading
-        let arrayBuffer;
-        try {
-          arrayBuffer = await file.arrayBuffer();
-        } catch (bufErr) {
-          console.error('[STLUploadHandler] arrayBuffer failed:', bufErr);
-          log(`> ERROR reading ${file.name}: Cannot read file`);
-          setIsLoading(false);
-          return;
-        }
+        const arrayBuffer = await file.arrayBuffer();
         const pipelineOptions = { fileName: file.name, materialFamily };
 
         // Geometry + analysis — cache hit skips the pipeline but still needs
         // the BufferGeometry for slicing and 3-D display.
-        let loaded;
-        try {
-          log(`> PARSING ${file.name}...`);
-          loaded = await loadModelFile(file);
-          log(`> PARSED OK`);
-        } catch (loadErr) {
-          console.error('[STLUploadHandler] loadModelFile failed:', loadErr);
-          log(`> ERROR loading ${file.name}: ${loadErr instanceof Error ? loadErr.message : 'Unknown error'}`);
-          setIsLoading(false);
-          return;
-        }
+        log(`> PARSING ${file.name}...`);
+        const loaded = await loadModelFile(file);
+        log(`> PARSED OK`);
         
         const effectiveUnits = loaded.units ?? units;
         const { geometry: normalizedGeometry, rawGeometry } = normalizeModelGeometry(loaded.geometry, effectiveUnits);
