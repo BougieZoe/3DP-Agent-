@@ -11,6 +11,10 @@
  *  2. Canonicalize PipelineOptions into a stable string.
  *  3. Concatenate → SHA-256 → IndexedDB key.
  *  4. Store { result, createdAt, fileName, fileSize } with a configurable TTL.
+ *
+ * The hash/key helpers are split out because the raw file buffer is
+ * TRANSFERRED to the parse worker after hashing (single-read memory flow):
+ * callers compute the key first, then can no longer touch the buffer.
  */
 
 import type { UnifiedAnalysis } from '@/analysis/types';
@@ -47,6 +51,12 @@ const DB_VERSION = 1;
 const STORE_NAME = 'analysis-results';
 const DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MAX_ENTRIES = 50;
+/**
+ * Bump when the stored analysis shape changes incompatibly — old entries lack
+ * new fields (e.g. the per-vertex wallThicknessMap added for surface-mapped
+ * mobile heatmaps) and must be re-analyzed rather than served stale.
+ */
+const CACHE_KEY_PREFIX = 'v2:';
 
 // ── IndexedDB helpers ──────────────────────────────────────────────────────
 
@@ -74,6 +84,11 @@ async function sha256(buffer: ArrayBuffer): Promise<string> {
   return Array.from(new Uint8Array(hash))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+/** Hash the raw file bytes (call BEFORE transferring the buffer to a worker). */
+export async function hashFileBytes(fileBytes: ArrayBuffer): Promise<string> {
+  return sha256(fileBytes);
 }
 
 /**
@@ -105,37 +120,50 @@ function canonicalizeOptions(options: PipelineOptions): string {
 // ── Public API ─────────────────────────────────────────────────────────────
 
 /**
+ * Build the final cache key from a precomputed file hash + options.
+ * `hashFileBytes` must run while the raw buffer is still alive.
+ */
+export async function cacheKeyFromParts(
+  fileHash: string,
+  options: PipelineOptions,
+): Promise<string> {
+  const optionsKey = canonicalizeOptions(options);
+  const combined = `${fileHash}|${optionsKey}`;
+  const hash = await sha256(new TextEncoder().encode(combined));
+  return CACHE_KEY_PREFIX + hash;
+}
+
+/**
  * Generate a cache key from file bytes and analysis options.
- * This is the primary lookup key for the cache.
+ * Convenience wrapper; the split helpers avoid hashing the same buffer twice.
  */
 export async function generateCacheKey(
   fileBytes: ArrayBuffer,
   options: PipelineOptions,
 ): Promise<string> {
-  const [fileHash, optionsKey] = await Promise.all([
-    sha256(fileBytes),
-    Promise.resolve(canonicalizeOptions(options)),
-  ]);
-  // Combine into a single key
-  const combined = `${fileHash}|${optionsKey}`;
-  return sha256(new TextEncoder().encode(combined));
+  const fileHash = await hashFileBytes(fileBytes);
+  return cacheKeyFromParts(fileHash, options);
 }
 
 /**
  * Look up a cached analysis result.
+ * Pass a precomputed `cacheKey` when the file buffer has already been
+ * transferred to a worker (the hash can no longer be recomputed).
  * Returns null if not found or expired.
  */
 export async function getCachedAnalysis(
-  fileBytes: ArrayBuffer,
+  fileBytes: ArrayBuffer | null,
   options: PipelineOptions,
+  cacheKey?: string,
 ): Promise<CachedAnalysis | null> {
   try {
-    const cacheKey = await generateCacheKey(fileBytes, options);
+    const key = cacheKey ?? (fileBytes ? await generateCacheKey(fileBytes, options) : null);
+    if (!key) return null;
     const db = await openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
-      const request = store.get(cacheKey);
+      const request = store.get(key);
       request.onsuccess = () => {
         const entry = request.result as CachedAnalysis | undefined;
         if (!entry) {
@@ -147,7 +175,7 @@ export async function getCachedAnalysis(
         if (age > DEFAULT_TTL_MS) {
           // Expired — delete it asynchronously
           const delTx = db.transaction(STORE_NAME, 'readwrite');
-          delTx.objectStore(STORE_NAME).delete(cacheKey);
+          delTx.objectStore(STORE_NAME).delete(key);
           resolve(null);
           return;
         }
@@ -163,20 +191,22 @@ export async function getCachedAnalysis(
 
 /**
  * Store an analysis result in the cache.
- * Automatically evicts oldest entries when exceeding MAX_ENTRIES.
+ * Pass `precomputed` ({ cacheKey, fileHash }) when the file buffer has already
+ * been transferred to a worker. Automatically evicts oldest entries when
+ * exceeding MAX_ENTRIES.
  */
 export async function setCachedAnalysis(
-  fileBytes: ArrayBuffer,
+  fileBytes: ArrayBuffer | null,
   options: PipelineOptions,
   result: UnifiedAnalysis,
   fileName: string,
   fileSize: number,
+  precomputed?: { cacheKey: string; fileHash: string },
 ): Promise<void> {
   try {
-    const [cacheKey, fileHash] = await Promise.all([
-      generateCacheKey(fileBytes, options),
-      sha256(fileBytes),
-    ]);
+    const cacheKey = precomputed?.cacheKey ?? (fileBytes ? await generateCacheKey(fileBytes, options) : null);
+    if (!cacheKey) return;
+    const fileHash = precomputed?.fileHash ?? (fileBytes ? await hashFileBytes(fileBytes) : '');
     const optionsKey = canonicalizeOptions(options);
 
     const entry: CachedAnalysis & { cacheKey: string } = {

@@ -3,9 +3,14 @@ import { createMeshFromGeometry } from './meshHelpers';
 
 export { createMeshFromGeometry };
 
-export async function loadSTLFile(file: File): Promise<THREE.BufferGeometry> {
-  const arrayBuffer = await file.arrayBuffer();
-
+/**
+ * Parse an STL from a caller-provided ArrayBuffer in a Web Worker.
+ *
+ * The buffer is TRANSFERRED (not copied) to the worker — the caller must not
+ * use it afterwards. This is the memory-safe path: STLUploadHandler reads the
+ * file once, hashes it for the analysis cache, then hands the buffer here.
+ */
+export function loadSTLFromBuffer(arrayBuffer: ArrayBuffer): Promise<THREE.BufferGeometry> {
   const worker = new Worker(
     new URL('./stlWorker.ts', import.meta.url),
     { type: 'module' },
@@ -39,4 +44,9 @@ export async function loadSTLFile(file: File): Promise<THREE.BufferGeometry> {
 
     worker.postMessage(arrayBuffer, [arrayBuffer]);
   });
+}
+
+export async function loadSTLFile(file: File): Promise<THREE.BufferGeometry> {
+  const arrayBuffer = await file.arrayBuffer();
+  return loadSTLFromBuffer(arrayBuffer);
 }

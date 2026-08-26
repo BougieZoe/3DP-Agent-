@@ -15,6 +15,7 @@ import {
   deriveWtStatus,
   sampleWallThickness,
 } from './wallThickness';
+import { computeSurfaceWallThickness } from './surfaceThickness';
 
 // Re-export so existing importers of '@/analysis/metrics' keep working while the
 // implementation lives in the canonical wallThickness module.
@@ -343,6 +344,18 @@ export function computeMetrics(
   ));
   const { samples, minThickness, avgThickness, p1Thickness, p5Thickness, p10Thickness, medianThickness, thinWallCount, thinWallRatio, thinWallPercentage, averageConfidence } = wallThickness;
 
+  // Surface-mapped per-vertex thickness — computed worker-side so mobile can
+  // render the wall-thickness heatmap as a true surface mapping without a
+  // main-thread per-vertex pass (which OOMs on large meshes). Same algorithm
+  // and constants as the desktop AdvancedWallThickness component, so the
+  // numbers match what desktop renders today.
+  let wallThicknessMap: Float32Array | undefined;
+  try {
+    wallThicknessMap = computeSurfaceWallThickness(positions, g.normals, g.vertexCount);
+  } catch {
+    wallThicknessMap = undefined;
+  }
+
   const wallConfidence = computeWallConfidence(
     minThickness, p5Thickness, thinWallCount, thinWallRatio,
     averageConfidence, samples.length, thresholds,
@@ -365,6 +378,7 @@ export function computeMetrics(
     thinWallRatio,
     averageConfidence,
     wallThicknessSamples: samples,
+    wallThicknessMap,
     overhang,
   };
 

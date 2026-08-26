@@ -138,7 +138,7 @@ export function runAnalysisPipeline(
   const resin = time('resin', () => {
     try {
       if (options.materialFamily !== 'sla') return null;
-      return moduleResult('sla', 1.0 as Confidence, 0, computeResinMetrics(model), 'SLA/DLP resin printability metrics (suction, islands, drain holes).');
+      return moduleResult('sla', 1.0 as Confidence, 0, computeResinMetrics(model, graph), 'SLA/DLP resin printability metrics (suction, islands, drain holes).');
     } catch (e) {
       return options.materialFamily === 'sla' ? failResult('sla', e, EMPTY_RESIN) : null;
     }
@@ -162,7 +162,7 @@ export function runAnalysisPipeline(
     try {
       const fam = options.materialFamily;
       if (!fam || !PBF_FAMILIES.includes(fam as PbfKind)) return null;
-      return moduleResult('pbf', 1.0 as Confidence, 0, computePbfMetrics(model, fam as PbfKind), 'Powder Bed Fusion printability metrics (geometric proxies — not thermal simulation).');
+      return moduleResult('pbf', 1.0 as Confidence, 0, computePbfMetrics(model, fam as PbfKind, graph), 'Powder Bed Fusion printability metrics (geometric proxies — not thermal simulation).');
     } catch (e) {
       return PBF_FAMILIES.includes(options.materialFamily as PbfKind) ? failResult('pbf', e, EMPTY_PBF) : null;
     }
@@ -217,7 +217,7 @@ export function runAnalysisPipeline(
         layerHeightMm: options.layerHeightMm,
         layerCount: options.slicer?.layerCount,
         printTimeMinutes: options.slicer?.printTimeMinutes,
-      }), 'Thermal field and warping prediction (analytical model, not FEA).');
+      }, graph), 'Thermal field and warping prediction (analytical model, not FEA).');
     } catch (e) {
       return failResult('thermal', e, EMPTY_THERMAL);
     }

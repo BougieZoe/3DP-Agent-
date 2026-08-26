@@ -1,4 +1,4 @@
-import { buildGeometryGraph } from './geometryGraph';
+import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import type { GeometryModel } from './geometryModel';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -26,9 +26,13 @@ export interface ResinResult {
   footprintAreaMm2: number;
 }
 
-export function computeResinMetrics(model: GeometryModel): ResinResult {
+export function computeResinMetrics(
+  model: GeometryModel,
+  graph?: GeometryGraph | null,
+): ResinResult {
   const { positions, indices, triangleCount, vertexCount } = model;
   const triCount = triangleCount;
+  const g = graph ?? buildGeometryGraph(model);
 
   // Global min/max Z
   let minZ = Infinity;
@@ -42,11 +46,9 @@ export function computeResinMetrics(model: GeometryModel): ResinResult {
   const eps = Math.max(1e-4, height * 0.002); // "touches the plate" tolerance
 
   // Spatially-connected components via the geometry graph's face adjacency.
-  const graph = buildGeometryGraph(model);
-  const faceAdj = graph?.faceAdjacency;
   const visited = new Uint8Array(triCount);
   const components: number[][] = [];
-  if (faceAdj && faceAdj.size > 0) {
+  if (g && g.faceNeighbors.length > 0) {
     for (let t = 0; t < triCount; t++) {
       if (visited[t]) continue;
       visited[t] = 1;
@@ -55,8 +57,12 @@ export function computeResinMetrics(model: GeometryModel): ResinResult {
       while (stack.length) {
         const cur = stack.pop()!;
         comp.push(cur);
-        const nbs = faceAdj.get(cur);
-        if (nbs) for (const nb of nbs) if (!visited[nb]) { visited[nb] = 1; stack.push(nb); }
+        const start = g.faceNeighborStart[cur];
+        const end = g.faceNeighborStart[cur + 1];
+        for (let k = start; k < end; k++) {
+          const nb = g.faceNeighbors[k];
+          if (!visited[nb]) { visited[nb] = 1; stack.push(nb); }
+        }
       }
       components.push(comp);
     }

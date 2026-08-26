@@ -1,6 +1,6 @@
 /**
  * WebWorker Pool Manager
- * 
+ *
  * Manages a pool of reusable workers for analysis:
  * - Reuses workers instead of creating new ones per request
  * - Supports progress reporting
@@ -29,6 +29,17 @@ interface PendingJob {
   abortController: AbortController;
 }
 
+/** Floor for any analysis timeout — even tiny meshes get a grace period. */
+const MIN_TIMEOUT_MS = 30_000;
+/** Ceiling — a stuck worker must still fail eventually. */
+const MAX_TIMEOUT_MS = 600_000;
+/**
+ * µs per triangle budget used to scale the timeout. Measured end-to-end on a
+ * 1.49M-triangle model: ~16 µs/tri on desktop node (wall-thickness raycast
+ * dominates), and phones run 2–4× slower — 150 µs/tri leaves generous headroom.
+ */
+const US_PER_TRIANGLE = 150;
+
 class WorkerPool {
   private workers: Worker[] = [];
   private availableWorkers: Worker[] = [];
@@ -43,8 +54,15 @@ class WorkerPool {
   private workerIndex = 0;
 
   constructor(options: WorkerPoolOptions = {}) {
-    this.maxWorkers = options.maxWorkers ?? Math.min(navigator.hardwareConcurrency ?? 4, 4);
-    this.timeoutMs = options.timeoutMs ?? 30_000;
+    // Cap workers by device memory: each worker is a full JS context (~20–40 MB
+    // baseline) and shares the tab's memory budget on mobile. A 1.5M-triangle
+    // analysis already needs hundreds of MB inside one worker — spawning 4 of
+    // them on a 4 GB phone is what pushed the tab over the edge.
+    const cores = navigator.hardwareConcurrency ?? 4;
+    const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+    const memCap = !mem ? 4 : mem >= 8 ? 4 : mem >= 4 ? 2 : 1;
+    this.maxWorkers = options.maxWorkers ?? Math.min(cores, memCap);
+    this.timeoutMs = options.timeoutMs ?? MIN_TIMEOUT_MS;
   }
 
   /**
@@ -52,7 +70,7 @@ class WorkerPool {
    */
   init(): void {
     if (typeof Worker === 'undefined') return;
-    
+
     for (let i = 0; i < this.maxWorkers; i++) {
       this.createWorker();
     }
@@ -155,6 +173,14 @@ class WorkerPool {
       const worker = this.availableWorkers.pop()!;
       const workerIdx = this.workers.indexOf(worker);
 
+      // Scale the timeout with model size: the analysis pipeline is O(triangles)
+      // dominated (geometry graph + wall-thickness raycast). A flat 30 s timeout
+      // killed every large-mesh analysis mid-flight on slow devices.
+      const jobTimeoutMs = Math.max(
+        this.timeoutMs,
+        Math.min(MAX_TIMEOUT_MS, model.triangleCount * US_PER_TRIANGLE),
+      );
+
       const timeoutId = setTimeout(() => {
         job.reject(new Error('Analysis timeout'));
         this.pendingJobs = this.pendingJobs.filter(j => j !== job);
@@ -162,7 +188,7 @@ class WorkerPool {
         this.workers = this.workers.filter(w => w !== worker);
         worker.terminate();
         this.createWorker();
-      }, this.timeoutMs);
+      }, jobTimeoutMs);
 
       this.pendingJobs.push({ ...job, id: timeoutId as any, workerIndex: workerIdx });
       worker.postMessage({ model, options });
@@ -256,7 +282,7 @@ export function getWorkerPool(options?: WorkerPoolOptions): WorkerPool {
 
 /**
  * Run analysis in a worker (with pool management)
- * 
+ *
  * This is the main API for running analysis in a WebWorker.
  * It automatically manages the worker pool and provides:
  * - Worker reuse for better performance

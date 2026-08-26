@@ -253,6 +253,7 @@ const THERMAL_DEFAULTS: Record<string, Partial<Material>> = MATERIAL_THERMAL_PRO
 export function computeThermalMetrics(
   model: GeometryModel,
   options: ThermalAnalysisOptions,
+  providedGraph?: GeometryGraph | null,
 ): ThermalFieldResult {
   // Get material-specific thermal properties
   const materialKey = options.material.name?.toLowerCase().replace(/\s+/g, '') ?? options.materialFamily;
@@ -260,7 +261,7 @@ export function computeThermalMetrics(
   const mat = { ...matProps, ...options.material };
 
   // Build geometry graph for spatial queries
-  const graph = buildGeometryGraph(model);
+  const graph = providedGraph ?? buildGeometryGraph(model);
   if (!graph) {
     return {
       layers: [],

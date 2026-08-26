@@ -126,7 +126,7 @@ export function estimateSupportVolume(
 
   // ─── BFS clustering of support faces ─────────────────────────────────────────
   const regions: SupportRegion[] = [];
-  if (supportFaceCount > 0 && g.faceAdjacency.size > 0) {
+  if (supportFaceCount > 0 && g.faceNeighbors.length > 0) {
     const supportSet = new Set(supportFaceIndices);
     const visited = new Set<number>();
 
@@ -140,14 +140,14 @@ export function estimateSupportVolume(
       while (queue.length > 0) {
         const cur = queue.shift()!;
         cluster.push(cur);
-        const neighbors = g.faceAdjacency.get(cur);
-        if (neighbors) {
-          neighbors.forEach(nb => {
-            if (!visited.has(nb) && supportSet.has(nb)) {
-              visited.add(nb);
-              queue.push(nb);
-            }
-          });
+        const start = g.faceNeighborStart[cur];
+        const end = g.faceNeighborStart[cur + 1];
+        for (let k = start; k < end; k++) {
+          const nb = g.faceNeighbors[k];
+          if (!visited.has(nb) && supportSet.has(nb)) {
+            visited.add(nb);
+            queue.push(nb);
+          }
         }
       }
 
@@ -161,20 +161,22 @@ export function estimateSupportVolume(
       let sumVol = 0;
 
       for (const fi of cluster) {
-        const c = g.faceCentroids[fi];
-        sumCx += c.x; sumCy += c.y; sumCz += c.z;
-        if (c.x < minRx) minRx = c.x;
-        if (c.x > maxRx) maxRx = c.x;
-        if (c.y < minRy) minRy = c.y;
-        if (c.y > maxRy) maxRy = c.y;
-        if (c.z < minRz) minRz = c.z;
-        if (c.z > maxRz) maxRz = c.z;
+        const c3 = fi * 3;
+        const cx = g.faceCentroids[c3], cy = g.faceCentroids[c3 + 1], cz = g.faceCentroids[c3 + 2];
+        sumCx += cx; sumCy += cy; sumCz += cz;
+        if (cx < minRx) minRx = cx;
+        if (cx > maxRx) maxRx = cx;
+        if (cy < minRy) minRy = cy;
+        if (cy > maxRy) maxRy = cy;
+        if (cz < minRz) minRz = cz;
+        if (cz > maxRz) maxRz = cz;
 
-        const fn = g.faceNormals[fi];
-        const invLen = fn.length > 1e-12 ? 1 / fn.length : 0;
-        sumUnX += fn.nx * invLen;
-        sumUnY += fn.ny * invLen;
-        sumUnZ += fn.nz * invLen;
+        const f4 = fi * 4;
+        const fnLen = g.faceNormals[f4 + 3];
+        const invLen = fnLen > 1e-12 ? 1 / fnLen : 0;
+        sumUnX += g.faceNormals[f4] * invLen;
+        sumUnY += g.faceNormals[f4 + 1] * invLen;
+        sumUnZ += g.faceNormals[f4 + 2] * invLen;
       }
 
       // Map cluster -> supportFaceIndices to retrieve volume/angle
@@ -218,7 +220,7 @@ export function estimateSupportVolume(
 
   for (let k = 0; k < supportFaceIndices.length; k++) {
     const fi = supportFaceIndices[k];
-    const cz = g.faceCentroids[fi].z;
+    const cz = g.faceCentroids[fi * 3 + 2];
     const relZ = (cz - bbox.minZ) / zRange;  // 0–1 from bottom to top
     weightedZSum += relZ;
     if (cz > zMid) tallSupportCount++;
@@ -231,11 +233,12 @@ export function estimateSupportVolume(
   // Directionality: magnitude of summed unit normals / count
   let sumDirX = 0, sumDirY = 0, sumDirZ = 0;
   for (const fi of supportFaceIndices) {
-    const fn = g.faceNormals[fi];
-    const invLen = fn.length > 1e-12 ? 1 / fn.length : 0;
-    sumDirX += fn.nx * invLen;
-    sumDirY += fn.ny * invLen;
-    sumDirZ += fn.nz * invLen;
+    const f4 = fi * 4;
+    const fnLen = g.faceNormals[f4 + 3];
+    const invLen = fnLen > 1e-12 ? 1 / fnLen : 0;
+    sumDirX += g.faceNormals[f4] * invLen;
+    sumDirY += g.faceNormals[f4 + 1] * invLen;
+    sumDirZ += g.faceNormals[f4 + 2] * invLen;
   }
   const dirMag = Math.sqrt(sumDirX * sumDirX + sumDirY * sumDirY + sumDirZ * sumDirZ);
   const directionality = supportFaceCount > 0 ? dirMag / supportFaceCount : 0;

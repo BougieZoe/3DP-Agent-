@@ -171,6 +171,15 @@ export interface MetricsResult {
 
   thinnestWallSample?: WallThicknessSample | null;
 
+  /**
+   * Per-vertex wall thickness (mm), one value per vertex of the position
+   * buffer — drives the surface-mapped heatmap overlay. Computed once in the
+   * analysis worker so mobile never re-runs the per-vertex pass on the main
+   * thread. Absent for very large meshes or legacy cached entries (the heatmap
+   * falls back to the sample point cloud).
+   */
+  wallThicknessMap?: Float32Array;
+
   overhang: OverhangMetrics;
 }
 

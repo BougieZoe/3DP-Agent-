@@ -64,7 +64,6 @@ const LayerReveal = lazy(() => import('@/components/3D/LayerReveal').then(m => (
 const FailureEmergence = lazy(() => import('@/components/3D/FailureEmergence').then(m => ({ default: m.FailureEmergence })));
 const ThermalField = lazy(() => import('@/components/3D/ThermalField').then(m => ({ default: m.ThermalField })));
 const WallThicknessHeatmapDesktop = lazy(() => import('@/components/3D/AdvancedWallThickness').then(m => ({ default: m.AdvancedWallThickness })));
-const WallThicknessHeatmapMobile = lazy(() => import('@/components/3D/WallThicknessHeatmap').then(m => ({ default: m.WallThicknessHeatmap })));
 const CausalityHighlight = lazy(() => import('@/components/3D/CausalityHighlight').then(m => ({ default: m.CausalityHighlight })));
 const CognitiveScan = lazy(() => import('@/components/3D/CognitiveScan').then(m => ({ default: m.CognitiveScan })));
 const AttentionPulse = lazy(() => import('@/components/3D/AttentionPulse').then(m => ({ default: m.AttentionPulse })));
@@ -1059,18 +1058,12 @@ deepAnalysisSeq.current += 1;
               <ThermalField markers={agentMarkers} geometry={uploadedModel.geometry} visible />
             )}
             {uploadedModel?.geometry && showWallThickness && (
-              isMobile
-                ? <WallThicknessHeatmapMobile
-                    geometry={uploadedModel.geometry}
-                    samples={unifiedAnalysis?.metrics.result?.wallThicknessSamples ?? null}
-                    visible
-                    opacity={overlayOpacity}
-                  />
-                : <WallThicknessHeatmapDesktop
-                    geometry={uploadedModel.geometry}
-                    visible
-                    opacity={overlayOpacity}
-                  />
+              <WallThicknessHeatmapDesktop
+                geometry={uploadedModel.geometry}
+                thicknessMap={unifiedAnalysis?.metrics.result?.wallThicknessMap ?? null}
+                visible
+                opacity={overlayOpacity}
+              />
             )}
             {(selectedEventPositions.length > 0 || selectedPatternPositions.length > 0 || selectedSuggestionPositions.length > 0) && (
               <CausalityHighlight

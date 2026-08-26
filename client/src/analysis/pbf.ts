@@ -20,7 +20,7 @@
 // The result carries `selfSupporting` so the caller/UI/LLM interprets the
 // same number correctly per process.
 
-import { buildGeometryGraph } from './geometryGraph';
+import { buildGeometryGraph, type GeometryGraph } from './geometryGraph';
 import { analyzeOverhang } from './metrics';
 import { getThresholds } from './thresholds';
 import type { GeometryModel } from './geometryModel';
@@ -79,15 +79,18 @@ function faceGeometry(
   return { area: len / 2, flat: Math.abs(nzNorm) > FLAT_NZ, nzNorm };
 }
 
-export function computePbfMetrics(model: GeometryModel, kind: PbfKind): PbfResult {
+export function computePbfMetrics(
+  model: GeometryModel,
+  kind: PbfKind,
+  graph?: GeometryGraph | null,
+): PbfResult {
   const { positions, indices, triangleCount } = model;
-  const graph = buildGeometryGraph(model);
-  const faceAdj = graph?.faceAdjacency;
+  const g = graph ?? buildGeometryGraph(model);
 
   // ── Connected components → shell count / powder trap ──────────────────────
   const visited = new Uint8Array(triangleCount);
   const components: number[][] = [];
-  if (faceAdj && faceAdj.size > 0) {
+  if (g && g.faceNeighbors.length > 0) {
     for (let t = 0; t < triangleCount; t++) {
       if (visited[t]) continue;
       const comp: number[] = [];
@@ -96,8 +99,12 @@ export function computePbfMetrics(model: GeometryModel, kind: PbfKind): PbfResul
       while (stack.length) {
         const cur = stack.pop()!;
         comp.push(cur);
-        const nbs = faceAdj.get(cur);
-        if (nbs) for (const nb of nbs) if (!visited[nb]) { visited[nb] = 1; stack.push(nb); }
+        const start = g.faceNeighborStart[cur];
+        const end = g.faceNeighborStart[cur + 1];
+        for (let k = start; k < end; k++) {
+          const nb = g.faceNeighbors[k];
+          if (!visited[nb]) { visited[nb] = 1; stack.push(nb); }
+        }
       }
       components.push(comp);
     }
@@ -112,16 +119,16 @@ export function computePbfMetrics(model: GeometryModel, kind: PbfKind): PbfResul
   let flatArea = 0;
   let footprintArea = 0;
   for (let t = 0; t < triangleCount; t++) {
-    const g = faceGeometry(positions, indices, t);
-    if (!g) continue;
-    faceArea[t] = g.area;
-    totalArea += g.area;
-    if (g.flat) { isFlat[t] = 1; flatArea += g.area; }
-    footprintArea += g.area * Math.abs(g.nzNorm);
+    const fg = faceGeometry(positions, indices, t);
+    if (!fg) continue;
+    faceArea[t] = fg.area;
+    totalArea += fg.area;
+    if (fg.flat) { isFlat[t] = 1; flatArea += fg.area; }
+    footprintArea += fg.area * Math.abs(fg.nzNorm);
   }
 
   let largestFlatPlate = 0;
-  if (faceAdj && faceAdj.size > 0) {
+  if (g && g.faceNeighbors.length > 0) {
     const visitedFlat = new Uint8Array(triangleCount);
     for (let t = 0; t < triangleCount; t++) {
       if (!isFlat[t] || visitedFlat[t]) continue;
@@ -131,8 +138,10 @@ export function computePbfMetrics(model: GeometryModel, kind: PbfKind): PbfResul
       while (stack.length) {
         const cur = stack.pop()!;
         compArea += faceArea[cur];
-        const nbs = faceAdj.get(cur);
-        if (nbs) for (const nb of nbs) {
+        const start = g.faceNeighborStart[cur];
+        const end = g.faceNeighborStart[cur + 1];
+        for (let k = start; k < end; k++) {
+          const nb = g.faceNeighbors[k];
           if (isFlat[nb] && !visitedFlat[nb]) { visitedFlat[nb] = 1; stack.push(nb); }
         }
       }

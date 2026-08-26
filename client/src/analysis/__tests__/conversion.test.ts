@@ -59,7 +59,7 @@ describe('Three.js conversion consistency', () => {
     const graphFromModel = buildGeometryGraph(model);
     expect(graphFromModel).not.toBeNull();
     expect(graphFromModel!.triangleCount).toBe(12);
-    expect(graphFromModel!.edgeMap.size).toBe(18);
+    expect(graphFromModel!.edgeCount).toBe(18);
     expect(graphFromModel!.boundingBoxDimensions.x).toBeCloseTo(1, 5);
     expect(graphFromModel!.boundingBoxDimensions.y).toBeCloseTo(1, 5);
     expect(graphFromModel!.boundingBoxDimensions.z).toBeCloseTo(1, 5);
