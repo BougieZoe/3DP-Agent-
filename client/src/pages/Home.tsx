@@ -53,7 +53,7 @@ import { toast } from 'sonner';
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
 
 // Lazy-loaded 3D visualization components (code splitting)
-const OverhangHeatmap = lazy(() => import('@/components/3D/OverhangHeatmap').then(m => ({ default: m.OverhangHeatmap })));
+const OverhangHeatmap = lazy(() => import('@/components/3D/AdvancedHeatmap').then(m => ({ default: m.AdvancedHeatmap })));
 const SupportGhosts = lazy(() => import('@/components/3D/SupportGhosts').then(m => ({ default: m.SupportGhosts })));
 const RiskAnimation = lazy(() => import('@/components/3D/RiskAnimation').then(m => ({ default: m.RiskAnimation })));
 const VisualizationToolbar = lazy(() => import('@/components/3D/VisualizationToolbar').then(m => ({ default: m.VisualizationToolbar })));
@@ -62,7 +62,7 @@ const PrintPathPreview = lazy(() => import('@/components/3D/PrintPathPreview').t
 const LayerReveal = lazy(() => import('@/components/3D/LayerReveal').then(m => ({ default: m.LayerReveal })));
 const FailureEmergence = lazy(() => import('@/components/3D/FailureEmergence').then(m => ({ default: m.FailureEmergence })));
 const ThermalField = lazy(() => import('@/components/3D/ThermalField').then(m => ({ default: m.ThermalField })));
-const WallThicknessHeatmap = lazy(() => import('@/components/3D/WallThicknessHeatmap').then(m => ({ default: m.WallThicknessHeatmap })));
+const WallThicknessHeatmap = lazy(() => import('@/components/3D/AdvancedWallThickness').then(m => ({ default: m.AdvancedWallThickness })));
 const CausalityHighlight = lazy(() => import('@/components/3D/CausalityHighlight').then(m => ({ default: m.CausalityHighlight })));
 const CognitiveScan = lazy(() => import('@/components/3D/CognitiveScan').then(m => ({ default: m.CognitiveScan })));
 const AttentionPulse = lazy(() => import('@/components/3D/AttentionPulse').then(m => ({ default: m.AttentionPulse })));
@@ -1057,7 +1057,6 @@ deepAnalysisSeq.current += 1;
             {uploadedModel?.geometry && showWallThickness && (
               <WallThicknessHeatmap
                 geometry={uploadedModel.geometry}
-                samples={unifiedAnalysis?.metrics.result?.wallThicknessSamples ?? null}
                 visible
                 opacity={overlayOpacity}
               />
@@ -1114,22 +1113,22 @@ deepAnalysisSeq.current += 1;
           )}
           {/* Feature buttons - bottom right, below voice control */}
           {uploadedModel && (
-            <div className="absolute bottom-3 right-3 flex flex-row gap-1.5 z-20">
+            <div className="absolute bottom-3 right-3 sm:bottom-36 sm:right-12 flex flex-row gap-1.5 sm:gap-2 z-20">
               <button
                 onClick={() => setShowPrintDashboard(true)}
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/30 transition-colors"
+                className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/30 transition-colors"
                 title="Print Monitor"
               >
-                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
               </button>
               <button
                 onClick={() => setShowAgentGraph(true)}
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center hover:bg-amber-500/30 transition-colors"
+                className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center hover:bg-amber-500/30 transition-colors"
                 title="Agent Graph"
               >
-                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                 </svg>
               </button>
