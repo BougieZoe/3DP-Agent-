@@ -935,58 +935,55 @@ deepAnalysisSeq.current += 1;
               <InstallButton language={language} iconOnly />
             </div>
           </div>
-          {/* Row 2-4: Mode stacked left, selects right */}
-          <div className="px-3 pb-2">
-            <div className="flex items-start justify-end gap-1.5">
-              {/* Left: stacked mode buttons */}
-              <div className="flex flex-col gap-0.5 shrink-0">
-                <div className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm text-primary bg-primary/10">
-                  {t('modeAnalyze')}
-                </div>
-                <button onClick={() => setMode('cad')}
-                  className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm text-muted-foreground hover:text-primary w-[52px] text-left">
-                  CAD
-                </button>
-                <button onClick={() => setMode('mesh')}
-                  className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm text-muted-foreground hover:text-primary w-[52px] text-left">
-                  MESH
-                </button>
+          {/* Row 2-4: Stacked mode + selects, right aligned */}
+          <div className="flex flex-col items-end gap-0 px-3 pb-2">
+            {/* Row 2: Analyze + selects */}
+            <div className="flex items-center gap-1.5">
+              <div className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm text-primary bg-primary/10">
+                {t('modeAnalyze')}
               </div>
-              {/* Right: selects on Analyze row only */}
-              <div className="flex items-center gap-1.5">
-                <select
-                  value={materialFamily}
-                  onChange={(e) => reanalyzeWithFamily(e.target.value as Material['technology'])}
-                  className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
-                >
-                  {PRINT_TECHNOLOGIES.map(t => (
-                    <option key={t.id} value={t.id} disabled={!t.implemented}>
-                      {t.shortLabel}{t.implemented ? '' : ' (soon)'}
-                    </option>
+              <select
+                value={materialFamily}
+                onChange={(e) => reanalyzeWithFamily(e.target.value as Material['technology'])}
+                className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
+              >
+                {PRINT_TECHNOLOGIES.map(t => (
+                  <option key={t.id} value={t.id} disabled={!t.implemented}>
+                    {t.shortLabel}{t.implemented ? '' : ' (soon)'}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={materialName}
+                onChange={(e) => reanalyzeWithMaterial(e.target.value as MaterialName)}
+                className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer max-w-[5rem]"
+              >
+                {Object.entries(MATERIALS)
+                  .filter(([, m]) => m.technology === materialFamily)
+                  .map(([key, m]) => (
+                    <option key={key} value={key}>{m.name}</option>
                   ))}
-                </select>
-                <select
-                  value={materialName}
-                  onChange={(e) => reanalyzeWithMaterial(e.target.value as MaterialName)}
-                  className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer max-w-[5rem]"
-                >
-                  {Object.entries(MATERIALS)
-                    .filter(([, m]) => m.technology === materialFamily)
-                    .map(([key, m]) => (
-                      <option key={key} value={key}>{m.name}</option>
-                    ))}
-                </select>
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value as Language)}
-                  className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
-                >
-                  {SUPPORTED_LANGUAGES.map(lang => (
-                    <option key={lang} value={lang}>{lang.toUpperCase()}</option>
-                  ))}
-                </select>
-              </div>
+              </select>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as Language)}
+                className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
+              >
+                {SUPPORTED_LANGUAGES.map(lang => (
+                  <option key={lang} value={lang}>{lang.toUpperCase()}</option>
+                ))}
+              </select>
             </div>
+            {/* Row 3: CAD */}
+            <button onClick={() => setMode('cad')}
+              className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm text-muted-foreground hover:text-primary text-right w-[52px]">
+              CAD
+            </button>
+            {/* Row 4: MESH */}
+            <button onClick={() => setMode('mesh')}
+              className="text-[11px] font-mono px-2 py-1 border border-border rounded-sm text-muted-foreground hover:text-primary text-right w-[52px]">
+              MESH
+            </button>
           </div>
         </div>
       </header>
@@ -997,7 +994,7 @@ deepAnalysisSeq.current += 1;
           <span>▋ {t('loading3d')}</span>
         </div>
       }>
-      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-20 sm:pt-14 flex flex-col lg:flex-row min-h-screen">
+      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-28 sm:pt-14 flex flex-col lg:flex-row min-h-screen">
 
         {/* Left: 3D Viewport */}
         <div className="lg:w-1/2 h-[40vh] sm:h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
