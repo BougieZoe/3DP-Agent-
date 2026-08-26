@@ -44,6 +44,9 @@ export function estimateSupportVolume(
   const supportFaceIndices: number[] = [];
   const supportFaceVolumes: number[] = [];
   const supportFaceAngles: number[] = [];
+  // faceIdx -> position in the arrays above (dense-mesh fix: the old
+  // per-cluster scan over supportFaceIndices was O(supportFaces^2) — minutes
+  // on models with tens of thousands of overhang faces).
 
   const volumeByAngle = new Map<string, { volumeMm3: number; faceCount: number }>();
   const angleBuckets = supportConfig.angleBuckets;
@@ -128,6 +131,8 @@ export function estimateSupportVolume(
   const regions: SupportRegion[] = [];
   if (supportFaceCount > 0 && g.faceNeighbors.length > 0) {
     const supportSet = new Set(supportFaceIndices);
+    const supportIndex = new Int32Array(g.triangleCount).fill(-1);
+    for (let k = 0; k < supportFaceIndices.length; k++) supportIndex[supportFaceIndices[k]] = k;
     const visited = new Set<number>();
 
     for (const faceIdx of supportFaceIndices) {
@@ -179,10 +184,11 @@ export function estimateSupportVolume(
         sumUnZ += g.faceNormals[f4 + 2] * invLen;
       }
 
-      // Map cluster -> supportFaceIndices to retrieve volume/angle
-      const clusterSet = new Set(cluster);
-      for (let k = 0; k < supportFaceIndices.length; k++) {
-        if (clusterSet.has(supportFaceIndices[k])) {
+      // Map cluster faces -> support-array positions (O(cluster) — the old
+      // scan over every support face per cluster was quadratic).
+      for (const fi of cluster) {
+        const k = supportIndex[fi];
+        if (k !== -1) {
           sumAngle += supportFaceAngles[k];
           sumVol += supportFaceVolumes[k];
         }
