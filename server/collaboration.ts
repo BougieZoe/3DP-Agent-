@@ -136,7 +136,11 @@ export function setupCollaborationServer(server: Server) {
 
             broadcastAll(room, {
               type: 'annotation_added',
-              ...annotation,
+              id: annotation.id,
+              position: annotation.position,
+              text: annotation.text,
+              annotationType: annotation.type,
+              timestamp: annotation.timestamp,
             });
             break;
           }
