@@ -336,6 +336,17 @@ export default function Home() {
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
   const [overlayOpacity, setOverlayOpacity] = useState(0.7);
+  const [overlayParams, setOverlayParams] = useState<{
+    heatmap: { overhangThreshold: number; curvatureWeight: number; thicknessWeight: number; detectBridges: boolean };
+    supports: { maxAngle: number; density: number };
+    risks: { sensitivity: number; minSeverity: number };
+    wallThickness: { minThickness: number; maxThickness: number; showThinOnly: boolean };
+  }>({
+    heatmap: { overhangThreshold: 45, curvatureWeight: 0.5, thicknessWeight: 0.5, detectBridges: true },
+    supports: { maxAngle: 45, density: 0.5 },
+    risks: { sensitivity: 0.5, minSeverity: 0.3 },
+    wallThickness: { minThickness: 0.5, maxThickness: 3.0, showThinOnly: false },
+  });
   const [materialLoading, setMaterialLoading] = useState(false);
   const materialRequestSeq = useRef(0);
   const [units, setUnits] = useState<LengthUnit>('mm');
@@ -731,7 +742,7 @@ deepAnalysisSeq.current += 1;
   const toUnit = (mm: number) => mm / mmPerUnit;
   const toUnit2 = (mm2: number) => mm2 / (mmPerUnit ** 2);
   const toUnit3 = (mm3: number) => mm3 / (mmPerUnit ** 3);
-  const agentMarkers = agentRun?.results.flatMap(r => r.markers ?? []) ?? [];
+  const agentMarkers = agentRun?.results.flatMap((r: { markers?: Array<{ x: number; y: number; z: number; type: string }> }) => r.markers ?? []) ?? [];
   const supportDecision = unifiedAnalysis?.support?.result
     ? deriveSupportStatus(unifiedAnalysis.support.result)
     : null;
@@ -786,8 +797,8 @@ deepAnalysisSeq.current += 1;
     return ev ? ev.positions : [];
   }, [selectedEventId, causalityGraph]);
   const optSuggestions = agentRun?.results
-    .filter(r => r.agentId === 'optimization_advisor')
-    .flatMap(r => (r.details?.suggestions ?? []) as Array<{ type: string; priority: string }>) ?? [];
+    .filter((r: { agentId: string }) => r.agentId === 'optimization_advisor')
+    .flatMap((r: { details?: { suggestions?: Array<{ type: string; priority: string }> } }) => (r.details?.suggestions ?? []) as Array<{ type: string; priority: string }>) ?? [];
 
   const totalLayers = useMemo(() => {
     if (!uploadedModel?.geometry) return 50;
@@ -1087,6 +1098,7 @@ deepAnalysisSeq.current += 1;
               showThermal={showThermal}
               showWallThickness={showWallThickness}
               overlayOpacity={overlayOpacity}
+              overlayParams={overlayParams}
               onToggleHeatmap={() => setShowHeatmap(v => !v)}
               onToggleGhosts={() => setShowGhosts(v => !v)}
               onToggleRisks={() => setShowRisks(v => !v)}
@@ -1096,6 +1108,7 @@ deepAnalysisSeq.current += 1;
               onToggleThermal={() => setShowThermal(v => !v)}
               onToggleWallThickness={() => setShowWallThickness(v => !v)}
               onOpacityChange={setOverlayOpacity}
+              onParamsChange={setOverlayParams}
               t={t}
             />
           )}
@@ -1495,7 +1508,6 @@ deepAnalysisSeq.current += 1;
     <CostCard
       unifiedAnalysis={unifiedAnalysis}
       material={material}
-      units={units}
       language={language}
     />
   </Suspense>
@@ -1531,7 +1543,7 @@ deepAnalysisSeq.current += 1;
                         <div className="text-[13px] text-foreground/90 leading-relaxed">{expertReview.plain}</div>
                         {expertReview.findings.length > 0 && (
                           <ul className="mt-3 space-y-1.5">
-                            {expertReview.findings.map((f, i) => (
+                            {expertReview.findings.map((f: { severity: string; what: string; why?: string }, i: number) => (
                               <li key={i} className="text-xs text-muted-foreground/80 leading-relaxed">
                                 <span className={`font-mono uppercase text-[10px] ${f.severity === 'high' ? 'text-red-400' : f.severity === 'medium' ? 'text-yellow-400' : 'text-emerald-400'}`}>
                                   {f.severity}
@@ -1543,7 +1555,7 @@ deepAnalysisSeq.current += 1;
                         )}
                         {expertReview.actions.length > 0 && (
                           <ul className="mt-2 space-y-1">
-                            {expertReview.actions.map((a, i) => (
+                            {expertReview.actions.map((a: { do: string }, i: number) => (
                               <li key={i} className="text-xs text-muted-foreground/70 leading-relaxed">→ {a.do}</li>
                             ))}
                           </ul>
@@ -1617,7 +1629,7 @@ deepAnalysisSeq.current += 1;
                         )}
 
                         {/* Per-Agent Cards */}
-                        {agentRun.results.map(result => (
+                        {agentRun.results.map((result: { agentId: string; status: string; durationMs: number; verdict?: string; score?: number; explanation?: string; details?: Record<string, unknown> }) => (
                           <div key={result.agentId} className="border border-border rounded-sm bg-card p-4">
                             <div className="flex items-center justify-between mb-2">
                               <div>
@@ -1630,16 +1642,16 @@ deepAnalysisSeq.current += 1;
                                     : result.verdict === 'warning' ? 'text-yellow-400 border-yellow-400/30 bg-yellow-400/5'
                                     : 'text-red-400 border-red-400/30 bg-red-400/5'
                                 }`}>{result.verdict}</span>
-                                <span className="text-xs font-mono text-muted-foreground">{Math.round(result.score)}</span>
+                                <span className="text-xs font-mono text-muted-foreground">{Math.round(result.score ?? 0)}</span>
                               </div>
                             </div>
                             <div className="flex items-center gap-2 mb-2">
                               <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
                                 <div className={`h-full rounded-full transition-all ${
-                                  result.score >= 70 ? 'bg-emerald-400'
-                                    : result.score >= 40 ? 'bg-yellow-400'
+                                  (result.score ?? 0) >= 70 ? 'bg-emerald-400'
+                                    : (result.score ?? 0) >= 40 ? 'bg-yellow-400'
                                     : 'bg-red-400'
-                                }`} style={{ width: `${result.score}%` }} />
+                                }`} style={{ width: `${result.score ?? 0}%` }} />
                               </div>
                               <span className="text-xs text-muted-foreground/50">{result.durationMs}ms</span>
                             </div>
@@ -1653,7 +1665,7 @@ deepAnalysisSeq.current += 1;
                         <details className="border border-border rounded-sm bg-card/50 p-3 cursor-pointer">
                           <summary className="text-xs font-mono text-muted-foreground">{translate(CONTENT, 'agent.votingRecord', language)}</summary>
                           <div className="mt-2 space-y-1">
-                            {agentRun.votingRecords.map(record => (
+                            {agentRun.votingRecords.map((record: { agentId: string; vote: string; confidence: number; weight: number; adjustedScore: number; initialScore: number }) => (
                               <div key={record.agentId} className="flex justify-between text-xs font-mono text-muted-foreground/70">
                                 <span>{getAgentLabelLazy(record.agentId, language)}</span>
                                 <span>{translate(CONTENT, 'agent.weight', language)}: {(record.weight * 100).toFixed(0)}% | {translate(CONTENT, 'agent.score', language)}: {record.adjustedScore !== record.initialScore ? `${Math.round(record.initialScore)} → ${Math.round(record.adjustedScore)}` : Math.round(record.adjustedScore)} | {translate(CONTENT, 'agent.confidence', language)}: {(record.confidence * 100).toFixed(0)}%</span>
@@ -1663,7 +1675,7 @@ deepAnalysisSeq.current += 1;
                         </details>
 
                         {/* Optimize Button */}
-                        {uploadedModel && agentRun.results.some(r => r.agentId === 'optimization_advisor') && (
+                        {uploadedModel && agentRun.results.some((r: { agentId: string }) => r.agentId === 'optimization_advisor') && (
                           <OptimizeButton
                             geometry={uploadedModel.geometry}
                             suggestions={optSuggestions}

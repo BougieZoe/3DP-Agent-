@@ -242,6 +242,9 @@ importers:
       '@types/three':
         specifier: ^0.184.0
         version: 0.184.0
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       '@vercel/node':
         specifier: ^5.10.1
         version: 5.10.1(encoding@0.1.13)(rollup@4.62.4)
