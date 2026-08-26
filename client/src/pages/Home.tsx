@@ -833,13 +833,44 @@ deepAnalysisSeq.current += 1;
       )}
 
       {/* ── Header ── */}
-      <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-3 sm:px-5 py-2 sm:py-2.5 border-b border-border bg-background/95 backdrop-blur-sm">
-        {/* Left: Brand + Mode */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-          <span className="text-sm font-mono text-primary tracking-widest">3DP AGENT</span>
-          {/* Mode toggle — grouped with brand */}
-          <div className="flex items-center gap-0.5 border border-border rounded overflow-hidden ml-1">
+      <header className="fixed top-0 left-0 right-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm">
+        {/* Row 1: Brand + Actions */}
+        <div className="flex items-center justify-between px-3 sm:px-5 py-2">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+            <span className="text-sm font-mono text-primary tracking-widest">3DP AGENT</span>
+          </div>
+          <div className="flex items-center gap-1 sm:gap-1.5">
+            {/* API Key */}
+            <button onClick={() => setShowAPIModal(true)}
+              className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded border transition-colors ${
+                hasAnyKey() ? 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10' : 'border-border text-muted-foreground hover:text-primary hover:border-primary/40'
+              }`}
+              title={t('apiKeys')}>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+            </button>
+            {/* Sign In */}
+            <button onClick={() => setShowAccountModal(true)}
+              className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded border transition-colors ${
+                user ? 'border-primary/40 text-primary' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-primary'
+              }`}
+              title={user ? t('planFree') : t('signIn')}>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                {user
+                  ? <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  : <path strokeLinecap="round" strokeLinejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />}
+              </svg>
+            </button>
+            {/* Install (PWA) */}
+            <InstallButton language={language} iconOnly />
+          </div>
+        </div>
+        {/* Row 2: Mode (stacked) + Tech + Material + Language */}
+        <div className="flex items-start gap-2 px-3 sm:px-5 pb-2 overflow-x-auto scrollbar-hide">
+          {/* Mode — stacked vertically */}
+          <div className="flex flex-col gap-0.5 border border-border rounded overflow-hidden shrink-0">
             {(['analyze', 'cad', 'mesh'] as const).map(m => (
               <button key={m} onClick={() => setMode(m)}
                 className={`text-[11px] sm:text-xs font-mono px-2 sm:px-3 py-1 transition-all ${
@@ -849,33 +880,42 @@ deepAnalysisSeq.current += 1;
               </button>
             ))}
           </div>
-        </div>
-        {/* Right: Actions */}
-        <div className="flex items-center gap-1 sm:gap-1.5">
-          {/* API Key */}
-          <button onClick={() => setShowAPIModal(true)}
-            className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded border transition-colors ${
-              hasAnyKey() ? 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10' : 'border-border text-muted-foreground hover:text-primary hover:border-primary/40'
-            }`}
-            title={t('apiKeys')}>
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-            </svg>
-          </button>
-          {/* Sign In */}
-          <button onClick={() => setShowAccountModal(true)}
-            className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded border transition-colors ${
-              user ? 'border-primary/40 text-primary' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-primary'
-            }`}
-            title={user ? t('planFree') : t('signIn')}>
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              {user
-                ? <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                : <path strokeLinecap="round" strokeLinejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />}
-            </svg>
-          </button>
-          {/* Install (PWA) */}
-          <InstallButton language={language} iconOnly />
+          {/* Print technology */}
+          <select
+            value={materialFamily}
+            onChange={(e) => reanalyzeWithFamily(e.target.value as Material['technology'])}
+            title={PRINT_TECH_BY_ID[materialFamily as PrintTechnology]?.label}
+            className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer shrink-0"
+          >
+            {PRINT_TECHNOLOGIES.map(t => (
+              <option key={t.id} value={t.id} disabled={!t.implemented} title={`${t.label} · ${t.processFamily} — ${t.description}`}>
+                {t.shortLabel}{t.implemented ? '' : ' (soon)'}
+              </option>
+            ))}
+          </select>
+          {/* Material */}
+          <select
+            value={materialName}
+            onChange={(e) => reanalyzeWithMaterial(e.target.value as MaterialName)}
+            className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer shrink-0 max-w-[5rem] sm:max-w-none"
+          >
+            {Object.entries(MATERIALS)
+              .filter(([, m]) => m.technology === materialFamily)
+              .map(([key, m]) => (
+                <option key={key} value={key} title={`${m.category} — ${m.description}`}>{m.name}</option>
+              ))}
+          </select>
+          {/* Language */}
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as Language)}
+            title="Language"
+            className="text-[11px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer shrink-0"
+          >
+            {SUPPORTED_LANGUAGES.map(lang => (
+              <option key={lang} value={lang}>{lang.toUpperCase()}</option>
+            ))}
+          </select>
         </div>
       </header>
 
@@ -885,7 +925,7 @@ deepAnalysisSeq.current += 1;
           <span>▋ {t('loading3d')}</span>
         </div>
       }>
-      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-14 sm:pt-14 flex flex-col lg:flex-row min-h-screen">
+      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-24 sm:pt-20 flex flex-col lg:flex-row min-h-screen">
 
         {/* Left: 3D Viewport */}
         <div className="lg:w-1/2 h-[40vh] sm:h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
