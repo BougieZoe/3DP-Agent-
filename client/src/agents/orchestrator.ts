@@ -23,6 +23,7 @@ import {
   type AgentStageConfig,
 } from './types';
 import { getLLMProvider } from '@/lib/llmAccess';
+import { getAgentStateManager } from './agentState';
 
 /**
  * Time budget for the optional vision capture step, aligned with the
@@ -87,6 +88,8 @@ export class AgentOrchestrator {
     material: Material = DEFAULT_MATERIAL,
   ): Promise<AgentRunSummary> {
     const startTime = performance.now();
+    const stateManager = getAgentStateManager();
+    stateManager.reset();
 
     const model = fromThreeBufferGeometry(geometry);
     const vertexData = extractVertexData(model);
@@ -157,16 +160,26 @@ export class AgentOrchestrator {
     ctx: AgentContext,
     agents: BaseAgent[],
   ): Promise<AgentResultWithExplanation[]> {
+    const stateManager = getAgentStateManager();
+
     const tasks = agents.map(async (agent) => {
       const config = this.configs.get(agent.agentId);
       const timeoutMs = config?.timeoutMs ?? 15000;
 
-      const result = await Promise.race([
-        agent.execute(ctx),
-        this.timeout(timeoutMs, agent.agentId, ctx.language),
-      ]);
+      stateManager.setAgentStatus(agent.agentId, 'running');
 
-      return result;
+      try {
+        const result = await Promise.race([
+          agent.execute(ctx),
+          this.timeout(timeoutMs, agent.agentId, ctx.language),
+        ]);
+
+        stateManager.setAgentStatus(agent.agentId, 'done');
+        return result;
+      } catch (err) {
+        stateManager.setAgentStatus(agent.agentId, 'error');
+        throw err;
+      }
     });
 
     return Promise.all(tasks);
