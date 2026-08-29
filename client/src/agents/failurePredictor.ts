@@ -1,24 +1,7 @@
-import type { AgentOutput, AgentVerdict, RiskMarker } from '@shared/domain/agent';
+import type { AgentOutput, AgentVerdict, RiskMarker, PredictedRisk, FailurePredictorDetails } from '@shared/domain/agent';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { BaseAgent, type AgentContext } from './baseAgent';
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from '@/analysis/metrics';
-
-interface PredictedRisk {
-  type: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  confidence: number;
-  description: string;
-  affectedFaces: number;
-  recommendation: string;
-}
-
-interface FailurePredictorDetails {
-  risks: PredictedRisk[];
-  overallRiskLevel: 'low' | 'medium' | 'high' | 'critical';
-  riskCount: number;
-  criticalRiskCount: number;
-  predictedFailureRate: number;
-}
 
 export class FailurePredictor extends BaseAgent {
   private _overallRiskLevel: string = 'low';
