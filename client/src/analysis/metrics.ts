@@ -318,12 +318,9 @@ export function computeMetrics(
 
   const positions = g.positions;
   const indices = g.indices;
-  const bbox = g.boundingBox;
-
-  const dimX = bbox.maxX - bbox.minX;
-  const dimY = bbox.maxY - bbox.minY;
-  const dimZ = bbox.maxZ - bbox.minZ;
-  const bboxDiagonal = Math.sqrt(dimX * dimX + dimY * dimY + dimZ * dimZ);
+  const dimX = g.boundingBoxDimensions.x;
+  const dimY = g.boundingBoxDimensions.y;
+  const dimZ = g.boundingBoxDimensions.z;
 
   const time = <T>(key: string, fn: () => T): T => {
     if (!profiling) return fn();
@@ -340,7 +337,7 @@ export function computeMetrics(
   // parts are measured rather than silently failing the raycast (which used to
   // trigger the report layer's bounding-box substitution).
   const wallThickness = time('sampleWallThickness', () => sampleWallThickness(
-    positions, indices, thresholds.wallThickness.maxSamples, bboxDiagonal * thresholds.wallThickness.rayDistanceDiagonalFactor, thresholds,
+    positions, indices, thresholds.wallThickness.maxSamples, undefined, thresholds, g,
   ));
   const { samples, minThickness, avgThickness, p1Thickness, p5Thickness, p10Thickness, medianThickness, thinWallCount, thinWallRatio, thinWallPercentage, averageConfidence } = wallThickness;
 
@@ -398,4 +395,46 @@ export function computeMetrics(
   }));
 
   return moduleResult('metrics', overallConfidence, Math.round(performance.now() - startTime), result, parts.join('. '));
+}
+
+export interface VolumeCrossCheckResult {
+  /** Whether the two volume values diverge beyond configured thresholds. */
+  diverged: boolean;
+  /** Absolute difference |server − client| in mm³. */
+  absoluteDelta: number;
+  /** Relative difference |server − client| / server. NaN when server is 0. */
+  relativeDelta: number;
+  /** Why the check was skipped (empty string when the check ran). */
+  skipped: string;
+}
+
+/**
+ * Compare server-side (trimesh) and client-side (tetrahedron) volume values.
+ *
+ * Returns a structured result without side effects — the caller decides
+ * whether and how to display it. The check is skipped (diverged=false,
+ * skipped=<reason>) when:
+ *   - serverVolume is null (trimesh couldn't compute, e.g. non-watertight)
+ *   - clientVolume ≤ 0 (client computation failed or degenerate mesh)
+ *   - repaired is true (mesh repair changes topology, divergence is expected)
+ */
+export function checkVolumeCrossConsistency(
+  serverVolumeMm3: number | null | undefined,
+  clientVolumeMm3: number,
+  repaired: boolean,
+  thresholds: AnalysisThresholds = getThresholds(),
+): VolumeCrossCheckResult {
+  const t = thresholds.volumeCrossCheck;
+  const noServer = serverVolumeMm3 == null || !Number.isFinite(serverVolumeMm3);
+  const noClient = clientVolumeMm3 <= 0 || !Number.isFinite(clientVolumeMm3);
+
+  if (noServer) return { diverged: false, absoluteDelta: 0, relativeDelta: NaN, skipped: 'server volume unavailable' };
+  if (noClient) return { diverged: false, absoluteDelta: 0, relativeDelta: NaN, skipped: 'client volume unavailable' };
+  if (repaired) return { diverged: false, absoluteDelta: 0, relativeDelta: NaN, skipped: 'mesh was repaired — divergence expected' };
+
+  const abs = Math.abs(serverVolumeMm3 - clientVolumeMm3);
+  const rel = serverVolumeMm3 !== 0 ? abs / serverVolumeMm3 : NaN;
+  const diverged = abs > t.absoluteThresholdMm3 && (Number.isFinite(rel) ? rel > t.relativeThreshold : true);
+
+  return { diverged, absoluteDelta: abs, relativeDelta: rel, skipped: '' };
 }

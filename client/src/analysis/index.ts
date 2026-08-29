@@ -3,7 +3,7 @@ export { runAnalysisInWorker } from './workerBridge';
 export type { PipelineOptions } from './pipeline';
 export { analyzeTopology, buildEdgeMap, countShells } from './topology';
 export { validateMesh } from './validation';
-export { computeMetrics, computeMeshVolume, computeSurfaceArea, analyzeOverhang, sampleWallThickness } from './metrics';
+export { computeMetrics, computeMeshVolume, computeSurfaceArea, analyzeOverhang, sampleWallThickness, checkVolumeCrossConsistency, type VolumeCrossCheckResult } from './metrics';
 export { computeResinMetrics, type ResinResult } from './resin';
 export { computeFgfMetrics, type FgfResult } from './fgf';
 export { computePbfMetrics, type PbfResult, type PbfKind } from './pbf';

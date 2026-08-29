@@ -52,6 +52,7 @@ export interface GeometryGraph {
   faceCentroids: Float32Array;
   boundingBox: { minX: number; minY: number; minZ: number; maxX: number; maxY: number; maxZ: number };
   boundingBoxDimensions: { x: number; y: number; z: number };
+  boundingBoxDiagonal: number;
 }
 
 /**
@@ -82,6 +83,7 @@ export function buildGeometryGraph(model: GeometryModel): GeometryGraph | null {
       faceCentroids: new Float32Array(0),
       boundingBox: { minX: 0, minY: 0, minZ: 0, maxX: 0, maxY: 0, maxZ: 0 },
       boundingBoxDimensions: { x: 0, y: 0, z: 0 },
+      boundingBoxDiagonal: 0,
     };
   }
 
@@ -218,6 +220,7 @@ export function buildGeometryGraph(model: GeometryModel): GeometryGraph | null {
     faceNormals, faceCentroids,
     boundingBox: { minX, minY, minZ, maxX, maxY, maxZ },
     boundingBoxDimensions: { x: maxX - minX, y: maxY - minY, z: maxZ - minZ },
+    boundingBoxDiagonal: Math.sqrt((maxX - minX) ** 2 + (maxY - minY) ** 2 + (maxZ - minZ) ** 2),
   };
 }
 

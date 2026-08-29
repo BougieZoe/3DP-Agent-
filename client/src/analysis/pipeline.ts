@@ -393,17 +393,10 @@ export function runAnalysisPipeline(
       }
 
       if (modelsLoaded.printTime && positions) {
-        const vertexCount = positions.length / 3;
-        let minX = Infinity, minY = Infinity, minZ = Infinity;
-        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-        for (let i = 0; i < vertexCount; i++) {
-          const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
-          if (x < minX) minX = x; if (y < minY) minY = y; if (z < minZ) minZ = z;
-          if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
-        }
-        const sizeZ = maxZ - minZ;
+        const dims = metrics.result.boundingBoxDimensionsMm;
+        const sizeZ = dims.z;
         const layerCount = Math.ceil(sizeZ / (options.layerHeightMm ?? 0.2));
-        const boundingVol = (maxX - minX) * (maxY - minY) * sizeZ;
+        const boundingVol = dims.x * dims.y * sizeZ;
         const filamentVol = boundingVol * 0.3 * 0.2;
         const filamentLength = filamentVol / (Math.PI * 0.2 * 0.2);
         const printTime = filamentLength / 60;
