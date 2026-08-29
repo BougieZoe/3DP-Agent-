@@ -1,27 +1,7 @@
-import type { AgentOutput, RiskMarker } from '@shared/domain/agent';
+import type { AgentOutput, RiskMarker, GeometryAnalystDetails } from '@shared/domain/agent';
 import { CONTENT, translate } from '@shared/i18n/content';
 import { BaseAgent, type AgentContext } from './baseAgent';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
-
-interface GeometryAnalystDetails {
-  triangleCount: number;
-  surfaceAreaMm2: number;
-  boundingBoxVolumeMm3: number;
-  dimensions: { x: number; y: number; z: number };
-  wallThickness: {
-    minEstimated: number | null;
-    status: string;
-  };
-  overhang: {
-    faceCount: number;
-    totalFaces: number;
-    ratio: number;
-    status: string;
-  };
-  aspectRatio: number;
-  featureDetail: 'high' | 'medium' | 'low';
-  isManifold: boolean;
-}
 
 export class GeometryAnalyst extends BaseAgent {
   constructor() {

@@ -1,26 +1,35 @@
-import type { Vector3Value } from './geometry';
+export {
+  AgentIdSchema,
+  AgentVerdictSchema,
+  RiskMarkerSchema,
+  Vector3ValueSchema,
+  GeometryAnalystDetailsSchema,
+  ScoringBreakdownSchema,
+  PredictedRiskSchema,
+  FailurePredictorDetailsSchema,
+  OptimizedGeometrySuggestionSchema,
+  MaterialRecommendationSchema,
+  OptimizationAdvisorDetailsSchema,
+} from './agentSchemas';
 
-export type AgentId =
-  | 'geometry_analyst'
-  | 'printability_scorer'
-  | 'failure_predictor'
-  | 'optimization_advisor';
+export type {
+  AgentId,
+  AgentVerdict,
+  RiskMarker,
+  GeometryAnalystDetails,
+  ScoringBreakdown,
+  PredictedRisk,
+  FailurePredictorDetails,
+  OptimizedGeometrySuggestion,
+  MaterialRecommendation,
+  OptimizationAdvisorDetails,
+} from './agentSchemas';
 
-export type AgentVerdict = 'pass' | 'warning' | 'fail' | 'inconclusive';
-
-export interface RiskMarker {
-  position: Vector3Value;
-  type:
-    | 'thin_wall'
-    | 'overhang'
-    | 'bridge'
-    | 'sharp_edge'
-    | 'delamination'
-    | 'support_needed'
-    | 'stress_concentration';
-  severity: number;
-  description: string;
-}
+import type {
+  AgentId,
+  AgentVerdict,
+  RiskMarker,
+} from './agentSchemas';
 
 export interface AgentOutput<THelpers = Record<string, unknown>> {
   agentId: AgentId;

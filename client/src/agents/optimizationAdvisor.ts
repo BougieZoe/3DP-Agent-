@@ -1,33 +1,7 @@
-import type { AgentOutput } from '@shared/domain/agent';
+import type { AgentOutput, OptimizedGeometrySuggestion, MaterialRecommendation, OptimizationAdvisorDetails } from '@shared/domain/agent';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { BaseAgent, type AgentContext } from './baseAgent';
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from '@/analysis/metrics';
-
-interface OptimizedGeometrySuggestion {
-  type: 'wall_thickening' | 'orientation_change' | 'support_addition' | 'fillet_add' | 'hole_fill' | 'bridging_redesign';
-  priority: 'critical' | 'high' | 'medium' | 'low';
-  description: string;
-  implementation: string;
-  expectedImprovement: string;
-  difficulty: 'easy' | 'moderate' | 'hard';
-}
-
-interface MaterialRecommendation {
-  material: string;
-  process: string;
-  reason: string;
-  confidence: number;
-  layerHeight: string;
-  infill: string;
-  supports: string;
-}
-
-interface OptimizationAdvisorDetails {
-  suggestions: OptimizedGeometrySuggestion[];
-  recommendedMaterials: MaterialRecommendation[];
-  optimalOrientation: string;
-  estimatedImprovement: number;
-}
 
 export class OptimizationAdvisor extends BaseAgent {
   constructor() {

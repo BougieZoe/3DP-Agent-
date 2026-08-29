@@ -1,22 +1,7 @@
-import type { AgentOutput } from '@shared/domain/agent';
+import type { AgentOutput, ScoringBreakdown } from '@shared/domain/agent';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { BaseAgent, type AgentContext } from './baseAgent';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
-
-interface ScoringBreakdown {
-  wallThicknessScore: number;
-  overhangScore: number;
-  aspectRatioScore: number;
-  volumeScore: number;
-  featureDetailScore: number;
-  wallThicknessWeight: number;
-  overhangWeight: number;
-  aspectRatioWeight: number;
-  volumeWeight: number;
-  featureDetailWeight: number;
-  weightedTotal: number;
-  category: 'excellent' | 'good' | 'fair' | 'poor' | 'critical';
-}
 
 export class PrintabilityScorer extends BaseAgent {
   private readonly WEIGHTS = {
