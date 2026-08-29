@@ -55,6 +55,28 @@ React 19 + Three.js 0.184 + @react-three/fiber 9.6.1 + Vite 7.1.9 + TypeScript s
 4. Cognition effects (risk, failure, thermal, scan, pulses, causality)
 5. UI (toolbar, timeline, panels)
 
+### Rejected: LLM-driven dynamic causality reasoning (replacing rule-based causalityEngine)
+Evaluated 2026-08-29, inspired by CMU LLM-3D-Print (info_reasoning_adapter pattern).
+Reason: causalityEngine drives pre-print failure judgments that affect real material
+and structural decisions. Deterministic, auditable rules (same input → same causal
+chain every time) matter more here than reasoning sophistication. An LLM-generated
+causal chain could vary between runs on identical input, which is a liability, not
+an upgrade, for a tool users rely on to decide whether to trust a design.
+Do not reintroduce this without re-evaluating why determinism was deprioritized.
+
+### Deferred: Supervisor-Worker serial agent architecture (replacing parallel consensus)
+Evaluated 2026-08-29, inspired by CMU's Supervisor → Worker routing chain.
+Reason: our 4 agents solve "multi-perspective analysis of one static model" (parallel
+fits), not "diagnose → plan → execute" (serial fits, which is CMU's actual problem —
+real-time print monitoring). Revisit only if a future feature genuinely needs
+step-dependent agent handoff (e.g. an agent's output must gate the next agent's input).
+
+### Deferred: Tool-call interface layer for printer control
+Evaluated 2026-08-29, inspired by CMU's LangChain tool wrappers (query_printer,
+change_parameters, resume_print).
+Reason: product scope is pre-print analysis, not live printer control. No current
+feature needs this. Revisit only if the roadmap adds real-time print control.
+
 ## Bridge Routes & REPAIR & PROCESS
 - **Positioning (deliberate, not debt):** `REPAIR & PROCESS` (the browser button that calls `/api/mesh/process`) is an **internal / dev-only debugging feature**. It is NOT a production browser path: a browser SPA cannot safely hold `BRIDGE_TOKEN` (it would ship the secret to end users), so production keeps the bridges unmounted unless `BRIDGE_TOKEN` is explicitly set, and browser clients never send an Authorization header.
 - **Dev auth gate:** in dev, bridge routes (`/api/cad`, `/api/slice`, `/api/mesh`) skip `BRIDGE_TOKEN` ONLY for genuinely-loopback callers. The decision lives in `server/loopbackGuard.ts` and is made from the request-source chain (the real client IP in `x-forwarded-for`, trusted only when the direct socket peer is loopback) — **never from the Express bind host**, because the LAN-exposed Vite dev proxy (with `xfwd: true` on the bridge prefixes) forwards LAN peers with a loopback socket address. A dev server published on `0.0.0.0` keeps the bridges token-gated. Keep `vite.config.ts` `xfwd: true` and `server/loopbackGuard.ts` in sync if bridge proxies are added/removed.
