@@ -224,6 +224,26 @@ export interface AnalysisThresholds {
     minTrustedWallConfidence: number;
   };
 
+  /**
+   * Cross-check between server-side (trimesh) and client-side (tetrahedron)
+   * volume computations. Both use the same mathematical principle (signed
+   * tetrahedra from origin), so on the same watertight mesh they should agree
+   * closely. Deviations indicate either float32/float64 precision differences
+   * (tiny) or mesh repair changing the topology (expected).
+   *
+   * The check is skipped when: serverVolume is null, clientVolume ≤ 0, or the
+   * mesh was repaired (repair changes geometry, making divergence expected).
+   *
+   * Thresholds are provisional — no empirical cross-validation data exists yet.
+   * Recalibrate when real comparison data becomes available.
+   */
+  volumeCrossCheck: {
+    /** Relative difference > this triggers divergence flag (strict `>`). */
+    relativeThreshold: number;
+    /** Absolute difference must also exceed this in mm³ (avoids false positives on tiny meshes). */
+    absoluteThresholdMm3: number;
+  };
+
   /** Thermal field & warping analysis (thermal.ts). */
   thermal: {
     /** Shrinkage percent > this → high warping risk. */
@@ -388,6 +408,11 @@ export const DEFAULT_ANALYSIS_THRESHOLDS: AnalysisThresholds = {
 
   verdictGate: {
     minTrustedWallConfidence: 0.4,
+  },
+
+  volumeCrossCheck: {
+    relativeThreshold: 0.05,
+    absoluteThresholdMm3: 10,
   },
 
   thermal: {
@@ -632,6 +657,10 @@ export function validateThresholds(
   if (thresholds.verdictGate.minTrustedWallConfidence <= 0 || thresholds.verdictGate.minTrustedWallConfidence > 1) {
     errors.push('verdictGate.minTrustedWallConfidence must be in (0, 1]');
   }
+
+  // ── volumeCrossCheck ────────────────────────────────────────────────────────
+  ratio('volumeCrossCheck.relativeThreshold', thresholds.volumeCrossCheck.relativeThreshold);
+  finitePositive('volumeCrossCheck.absoluteThresholdMm3', thresholds.volumeCrossCheck.absoluteThresholdMm3);
 
   return errors;
 }

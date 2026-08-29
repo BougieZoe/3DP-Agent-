@@ -1,5 +1,6 @@
 import { type Confidence, type WallThicknessSample } from './types';
 import { getThresholds, DEFAULT_ANALYSIS_THRESHOLDS, type AnalysisThresholds } from './thresholds';
+import { type GeometryGraph } from './geometryGraph';
 
 /**
  * Ray budget = bounding-box diagonal × this factor.
@@ -17,7 +18,8 @@ import { getThresholds, DEFAULT_ANALYSIS_THRESHOLDS, type AnalysisThresholds } f
  */
 export const MAX_RAY_DIST_DIAGONAL_FACTOR = DEFAULT_ANALYSIS_THRESHOLDS.wallThickness.rayDistanceDiagonalFactor;
 
-function boundingBoxDiagonal(positions: Float32Array): number {
+function boundingBoxDiagonal(positions: Float32Array, graph?: GeometryGraph | null): number {
+  if (graph) return graph.boundingBoxDiagonal;
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
   for (let i = 0; i < positions.length; i += 3) {
@@ -172,6 +174,7 @@ export function sampleWallThickness(
   maxSamples?: number,
   maxRayDist?: number,
   thresholds: AnalysisThresholds = getThresholds(),
+  graph?: GeometryGraph | null,
 ): {
   samples: WallThicknessSample[];
   minThickness: number | null;
@@ -197,7 +200,7 @@ export function sampleWallThickness(
   // Scale-aware ray budget (see MAX_RAY_DIST_DIAGONAL_FACTOR). Callers that
   // already computed the bounding box pass the diagonal-derived value to avoid
   // a redundant scan; standalone callers derive it from the positions.
-  const rayLimit = maxRayDist ?? boundingBoxDiagonal(positions) * wt.rayDistanceDiagonalFactor;
+  const rayLimit = maxRayDist ?? boundingBoxDiagonal(positions, graph) * wt.rayDistanceDiagonalFactor;
 
   // Per-triangle AABBs for the slab pre-filter (6 floats per triangle).
   const triBounds = new Float32Array(triCount * 6);
