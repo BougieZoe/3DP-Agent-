@@ -340,6 +340,8 @@ export default function Home() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [recalcMap, setRecalcMap] = useState<Map<string, { beforeThin: number; afterThin: number; riskBefore: number; riskAfter: number }>>(new Map());
   const [overlayOpacity, setOverlayOpacity] = useState(0.7);
   const [overlayParams, setOverlayParams] = useState<{
     heatmap: { overhangThreshold: number; curvatureWeight: number; thicknessWeight: number; detectBridges: boolean };
@@ -1802,6 +1804,31 @@ deepAnalysisSeq.current += 1;
                         selectedSuggestionId={selectedSuggestionId}
                         onSelectSuggestion={setSelectedSuggestionId}
                         language={language}
+                        downloadingId={downloadingId}
+                        recalcMap={recalcMap}
+                        onRecalc={async (sug) => {
+                          if (!uploadedModel?.geometry) { toast.error('No model loaded'); return }
+                          try {
+                            const { recalcAfterRepair } = await import('@/lib/meshRepair')
+                            const res = await recalcAfterRepair(uploadedModel.geometry, sug as any)
+                            setRecalcMap(prev => new Map(prev).set(sug.id, res))
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : String(e))
+                          }
+                        }}
+                        onDownload={async (sug) => {
+                          if (!uploadedModel?.geometry) { toast.error('No model loaded'); return }
+                          setDownloadingId(sug.id)
+                          try {
+                            const { downloadRepairedStl } = await import('@/lib/meshRepair')
+                            const { fileName, triangleCount, blobSize } = downloadRepairedStl(uploadedModel.geometry, sug as any, uploadedModel.fileName)
+                            toast.success(`Repaired STL downloaded: ${fileName} · ${triangleCount} tris · ${(blobSize/1024).toFixed(1)}KB`)
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : String(e))
+                          } finally {
+                            setDownloadingId(null)
+                          }
+                        }}
                       />
                     </div>
                   </Suspense>
