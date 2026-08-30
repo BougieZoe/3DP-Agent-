@@ -7,6 +7,8 @@ interface GeometrySuggestionPanelProps {
   selectedSuggestionId: string | null;
   onSelectSuggestion: (id: string | null) => void;
   language?: ContentLang;
+  onDownload?: (suggestion: GeometrySuggestion) => void;
+  downloadingId?: string | null;
 }
 
 const TYPE_ICON_MAP: Record<string, string> = {
@@ -35,10 +37,12 @@ function Delta({ value, suffix = '' }: { value: number; suffix?: string }) {
   return <span className={`${PANEL.fontTiny} ${color}`}>{value > 0 ? '+' : ''}{value}{suffix}</span>;
 }
 
-function SuggestionCard({ suggestion, selected, onSelect, language }: {
+function SuggestionCard({ suggestion, selected, onSelect, onDownload, downloading, language }: {
   suggestion: GeometrySuggestion;
   selected: boolean;
   onSelect: () => void;
+  onDownload?: (s: GeometrySuggestion) => void;
+  downloading?: boolean;
   language: ContentLang;
 }) {
   return (
@@ -109,11 +113,24 @@ function SuggestionCard({ suggestion, selected, onSelect, language }: {
           </div>
         </div>
       )}
+
+      {/* 一键修复下载 — 代码层面：选中才可下载，带校验 */}
+      {selected && onDownload && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDownload(suggestion) }}
+          disabled={!!downloading}
+          className={`mt-2 w-full text-xs font-mono py-2 rounded-sm border transition-all ${
+            downloading ? 'border-border text-muted-foreground/40 bg-muted/10' : 'border-cyan-400/40 text-cyan-400 hover:bg-cyan-400 hover:text-black bg-cyan-400/5'
+          }`}
+        >
+          {downloading ? '▋ repairing...' : '⬇ Download Repaired STL'}
+        </button>
+      )}
     </button>
   );
 }
 
-export function GeometrySuggestionPanel({ suggestions, selectedSuggestionId, onSelectSuggestion, language = 'en' }: GeometrySuggestionPanelProps) {
+export function GeometrySuggestionPanel({ suggestions, selectedSuggestionId, onSelectSuggestion, language = 'en', onDownload, downloadingId }: GeometrySuggestionPanelProps) {
   if (suggestions.length === 0) {
     return (
       <div className="pt-4 space-y-4">
@@ -138,6 +155,8 @@ export function GeometrySuggestionPanel({ suggestions, selectedSuggestionId, onS
           suggestion={s}
           selected={selectedSuggestionId === s.id}
           onSelect={() => onSelectSuggestion(selectedSuggestionId === s.id ? null : s.id)}
+          onDownload={onDownload}
+          downloading={downloadingId === s.id}
           language={language}
         />
       ))}

@@ -340,6 +340,7 @@ export default function Home() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedPatternId, setSelectedPatternId] = useState<string | null>(null);
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [overlayOpacity, setOverlayOpacity] = useState(0.7);
   const [overlayParams, setOverlayParams] = useState<{
     heatmap: { overhangThreshold: number; curvatureWeight: number; thicknessWeight: number; detectBridges: boolean };
@@ -1802,6 +1803,20 @@ deepAnalysisSeq.current += 1;
                         selectedSuggestionId={selectedSuggestionId}
                         onSelectSuggestion={setSelectedSuggestionId}
                         language={language}
+                        downloadingId={downloadingId}
+                        onDownload={async (sug) => {
+                          if (!uploadedModel?.geometry) { toast.error('No model loaded'); return }
+                          setDownloadingId(sug.id)
+                          try {
+                            const { downloadRepairedStl } = await import('@/lib/meshRepair')
+                            const { fileName, triangleCount, blobSize } = downloadRepairedStl(uploadedModel.geometry, sug as any, uploadedModel.fileName)
+                            toast.success(`Repaired STL downloaded: ${fileName} · ${triangleCount} tris · ${(blobSize/1024).toFixed(1)}KB`)
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : String(e))
+                          } finally {
+                            setDownloadingId(null)
+                          }
+                        }}
                       />
                     </div>
                   </Suspense>
