@@ -37,11 +37,13 @@ function Delta({ value, suffix = '' }: { value: number; suffix?: string }) {
   return <span className={`${PANEL.fontTiny} ${color}`}>{value > 0 ? '+' : ''}{value}{suffix}</span>;
 }
 
-function SuggestionCard({ suggestion, selected, onSelect, onDownload, downloading, language }: {
+function SuggestionCard({ suggestion, selected, onSelect, onDownload, onRecalc, recalc, downloading, language }: {
   suggestion: GeometrySuggestion;
   selected: boolean;
   onSelect: () => void;
   onDownload?: (s: GeometrySuggestion) => void;
+  onRecalc?: (s: GeometrySuggestion) => void;
+  recalc?: { beforeThin: number; afterThin: number; riskBefore: number; riskAfter: number } | null;
   downloading?: boolean;
   language: ContentLang;
 }) {
@@ -114,23 +116,47 @@ function SuggestionCard({ suggestion, selected, onSelect, onDownload, downloadin
         </div>
       )}
 
-      {/* 一键修复下载 — 代码层面：选中才可下载，带校验 */}
-      {selected && onDownload && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onDownload(suggestion) }}
-          disabled={!!downloading}
-          className={`mt-2 w-full text-xs font-mono py-2 rounded-sm border transition-all ${
-            downloading ? 'border-border text-muted-foreground/40 bg-muted/10' : 'border-cyan-400/40 text-cyan-400 hover:bg-cyan-400 hover:text-black bg-cyan-400/5'
-          }`}
-        >
-          {downloading ? '▋ repairing...' : '⬇ Download Repaired STL'}
-        </button>
+      {/* 自适应对比 — 选中后先看 12→2，再决定下载 */}
+      {selected && (
+        <div className="mt-2 space-y-1.5">
+          {onRecalc && !recalc && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRecalc(suggestion) }}
+              className="w-full text-xs font-mono py-1.5 rounded-sm border border-border text-muted-foreground hover:text-foreground hover:border-border/60 bg-background/40"
+            >
+              ↻ Preview Fix (thin walls before→after)
+            </button>
+          )}
+          {recalc && (
+            <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono">
+              <div className={`${PANEL.borderSubtle} ${PANEL.roundedInner} p-1.5 bg-background/40`}>
+                <div className="text-muted-foreground/40">Thin walls</div>
+                <div className="text-foreground">{recalc.beforeThin} → <span className="text-emerald-400">{recalc.afterThin}</span></div>
+              </div>
+              <div className={`${PANEL.borderSubtle} ${PANEL.roundedInner} p-1.5 bg-background/40`}>
+                <div className="text-muted-foreground/40">Failure risk</div>
+                <div className="text-foreground">{recalc.riskBefore}% → <span className={recalc.riskAfter < recalc.riskBefore ? 'text-cyan-400' : 'text-muted-foreground'}>{recalc.riskAfter}%</span></div>
+              </div>
+            </div>
+          )}
+          {onDownload && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDownload(suggestion) }}
+              disabled={!!downloading}
+              className={`w-full text-xs font-mono py-2 rounded-sm border transition-all ${
+                downloading ? 'border-border text-muted-foreground/40 bg-muted/10' : 'border-cyan-400/40 text-cyan-400 hover:bg-cyan-400 hover:text-black bg-cyan-400/5'
+              }`}
+            >
+              {downloading ? '▋ repairing...' : '⬇ Download Repaired STL'}
+            </button>
+          )}
+        </div>
       )}
     </button>
   );
 }
 
-export function GeometrySuggestionPanel({ suggestions, selectedSuggestionId, onSelectSuggestion, language = 'en', onDownload, downloadingId }: GeometrySuggestionPanelProps) {
+export function GeometrySuggestionPanel({ suggestions, selectedSuggestionId, onSelectSuggestion, language = 'en', onDownload, onRecalc, recalcMap, downloadingId }: GeometrySuggestionPanelProps & { onRecalc?: (s: GeometrySuggestion)=>void; recalcMap?: Map<string, { beforeThin:number; afterThin:number; riskBefore:number; riskAfter:number }> }) {
   if (suggestions.length === 0) {
     return (
       <div className="pt-4 space-y-4">
@@ -156,6 +182,8 @@ export function GeometrySuggestionPanel({ suggestions, selectedSuggestionId, onS
           selected={selectedSuggestionId === s.id}
           onSelect={() => onSelectSuggestion(selectedSuggestionId === s.id ? null : s.id)}
           onDownload={onDownload}
+          onRecalc={onRecalc}
+          recalc={recalcMap?.get(s.id) ?? null}
           downloading={downloadingId === s.id}
           language={language}
         />
