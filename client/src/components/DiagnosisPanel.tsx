@@ -86,12 +86,8 @@ export function DiagnosisPanel({ language, canRun, onNeedAuth, materialContext, 
   };
 
   return (
-    <div className="border border-border/20 rounded-sm p-3 space-y-2 bg-background/40">
-      <div className="flex items-center justify-between">
-        <div className="text-[11px] font-mono text-muted-foreground/60">{t('diagTitle')}</div>
-        <span className="text-[10px] font-mono text-muted-foreground/20">或用 chat 右下角 📷 更快</span>
-      </div>
-      <div className="text-[10px] font-mono text-muted-foreground/40">{t('diagDesc')}</div>
+    <div className="border border-border/10 rounded-sm p-2 space-y-2 bg-background/20">
+      {/* 顶上大标题已去掉 — chat 右下角 📷 已是主入口，避免重复 */}
 
       <input ref={inputRef} type="file" accept="image/*" className="hidden"
         onChange={(e) => pick(e.target.files?.[0])} />

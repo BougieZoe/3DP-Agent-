@@ -333,9 +333,16 @@ export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATE
               onClick={() => photoRef.current?.click()}
               disabled={photoLoading}
               title="Upload failed print photo"
-              className="w-7 h-7 flex items-center justify-center rounded-sm border border-border/40 bg-background text-muted-foreground hover:text-primary hover:border-primary/40 hover:scale-110 hover:bg-primary/5 transition-all duration-150 disabled:opacity-40"
+              className="w-7 h-7 flex items-center justify-center rounded-sm border border-border/30 bg-background text-muted-foreground hover:text-primary hover:border-primary/40 hover:scale-110 hover:bg-primary/5 transition-all duration-150 disabled:opacity-40 group"
             >
-              {photoLoading ? '…' : '📷'}
+              {photoLoading ? (
+                <span className="text-[10px]">…</span>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="group-hover:scale-110 transition-transform">
+                  <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                  <circle cx="12" cy="13" r="3" />
+                </svg>
+              )}
             </button>
             <button
               onClick={() => sendMessage(input)}
