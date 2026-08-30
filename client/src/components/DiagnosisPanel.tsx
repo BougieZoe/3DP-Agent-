@@ -86,19 +86,20 @@ export function DiagnosisPanel({ language, canRun, onNeedAuth, materialContext, 
   };
 
   return (
-    <div className="border border-dashed border-border/50 rounded-sm p-4 space-y-3">
-      <div>
-        <div className="text-xs font-mono text-muted-foreground">{t('diagTitle')}</div>
-        <div className="mt-1 text-xs text-muted-foreground/60">{t('diagDesc')}</div>
+    <div className="border border-border/20 rounded-sm p-3 space-y-2 bg-background/40">
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] font-mono text-muted-foreground/60">{t('diagTitle')}</div>
+        <span className="text-[10px] font-mono text-muted-foreground/20">或用 chat 右下角 📷 更快</span>
       </div>
+      <div className="text-[10px] font-mono text-muted-foreground/40">{t('diagDesc')}</div>
 
       <input ref={inputRef} type="file" accept="image/*" className="hidden"
         onChange={(e) => pick(e.target.files?.[0])} />
 
       {!image && (
         <button onClick={() => inputRef.current?.click()}
-          className="w-full py-2.5 text-xs font-mono border border-primary/30 text-primary hover:bg-primary/10 rounded-sm transition-all">
-          {t('diagUpload')}
+          className="w-full py-2 text-[11px] font-mono border border-border/40 text-muted-foreground hover:text-primary hover:border-primary/30 hover:bg-primary/5 rounded-sm transition-all">
+          {t('diagUpload')} · 也可直接在 chat 输入框点 📷
         </button>
       )}
 

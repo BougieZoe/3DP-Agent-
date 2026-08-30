@@ -144,6 +144,8 @@ export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATE
   const [isLoading, setIsLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -211,6 +213,48 @@ export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATE
     }
   };
 
+  const handlePhoto = async (file: File | undefined) => {
+    if (!file || !/^image\//.test(file.type)) return
+    setPhotoLoading(true)
+    try {
+      // compress
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const img = new Image()
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve()
+        img.onerror = () => reject(new Error('image load failed'))
+        img.src = dataUrl
+      })
+      const maxDim = 640
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
+      const w = Math.max(1, Math.round(img.width * scale))
+      const h = Math.max(1, Math.round(img.height * scale))
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+      const compressed = canvas.toDataURL('image/jpeg', 0.8)
+
+      const userMsg: Message = { id: Date.now().toString(), role: 'user', content: `📷 Failed print photo attached` }
+      setMessages(prev => [...prev, userMsg])
+      // reuse DiagnosisPanel's diagnose logic via direct call
+      const { diagnosePrintFailure } = await import('@/lib/failureDiagnosis')
+      const result = await diagnosePrintFailure(compressed, { language } as any)
+      const diag = result.diagnosis
+      const reply = diag ? `${diag.overallAssessment}\n\n${diag.failureModes.map(m => `· ${m.mode}: ${Math.round(m.probability*100)}% — ${m.fixes.slice(0,2).join(' / ')}`).join('\n')}` : 'Diagnosis failed — try again'
+      setMessages(prev => [...prev, { id: Date.now().toString()+'_diag', role: 'assistant', content: reply, source: 'local' }])
+    } catch (e) {
+      setMessages(prev => [...prev, { id: Date.now().toString()+'_err', role: 'assistant', content: `Photo failed: ${e instanceof Error ? e.message : String(e)}`, source: 'local' }])
+    } finally {
+      setPhotoLoading(false)
+      if (photoRef.current) photoRef.current.value = ''
+    }
+  }
+
   const sourceColor = (src?: string) => {
     if (src === 'local') return 'text-muted-foreground/60';
     if (src && src in AI_PROVIDER_METADATA) return AI_PROVIDER_METADATA[src as AIProvider].colorClass;
@@ -272,23 +316,38 @@ export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATE
         </div>
       )}
 
-      <div className="px-3 pb-3 pt-1 flex gap-2 shrink-0 border-t border-border">
-        <input
-          ref={inputRef}
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
-          placeholder={translate(CONTENT, 'chat.placeholder', language)}
-          className="flex-1 bg-background border border-border rounded-sm px-3 py-2 text-xs font-mono text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/50"
-        />
-        <button
-          onClick={() => sendMessage(input)}
-          disabled={!input.trim() || isLoading}
-          className="px-3 py-2 text-xs font-mono bg-primary text-primary-foreground rounded-sm disabled:opacity-30 hover:bg-primary/90 transition-all"
-        >
-          →
-        </button>
+      <div className="px-3 pb-3 pt-2 flex gap-2 shrink-0 border-t border-border relative">
+        <div className="flex-1 relative">
+          <input
+            ref={inputRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
+            placeholder={translate(CONTENT, 'chat.placeholder', language) + '  ·  Ask or drop a failed photo'}
+            className="w-full bg-background border border-border rounded-sm pl-3 pr-20 py-2.5 text-xs font-mono text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/50"
+          />
+          {/* 2: 聊天 App 右下角常驻 📷 + 🎤 */}
+          <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={e => handlePhoto(e.target.files?.[0])} />
+            <button
+              onClick={() => photoRef.current?.click()}
+              disabled={photoLoading}
+              title="Upload failed print photo"
+              className="w-7 h-7 flex items-center justify-center rounded-sm border border-border/40 bg-background text-muted-foreground hover:text-primary hover:border-primary/40 hover:scale-110 hover:bg-primary/5 transition-all duration-150 disabled:opacity-40"
+            >
+              {photoLoading ? '…' : '📷'}
+            </button>
+            <button
+              onClick={() => sendMessage(input)}
+              disabled={!input.trim() || isLoading}
+              className="w-7 h-7 flex items-center justify-center rounded-sm bg-primary text-primary-foreground text-xs disabled:opacity-30 hover:bg-primary/90 transition-all"
+            >
+              →
+            </button>
+          </div>
+        </div>
       </div>
+      <div className="px-3 pb-1 text-[10px] font-mono text-muted-foreground/20 text-center">📷 直接点相机传失败照片，不用跳大卡</div>
     </div>
   );
 }
