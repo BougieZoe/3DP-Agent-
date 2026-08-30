@@ -218,7 +218,7 @@ export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATE
   };
 
   return (
-    <div className="flex flex-col h-full border border-border rounded-sm bg-card">
+    <div className="flex flex-col h-full border border-border/20 rounded-sm bg-card/40 backdrop-blur-md shadow-sm">
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
@@ -238,10 +238,10 @@ export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATE
                   {msg.source && msg.source !== 'local' ? `[${AI_PROVIDER_METADATA[msg.source].shortLabel}]` : translate(CONTENT, 'chat.localBadge', language)}
                 </div>
               )}
-              <div className={`text-xs font-mono leading-relaxed whitespace-pre-wrap px-3 py-2 rounded-sm ${
+              <div className={`text-xs font-mono leading-relaxed whitespace-pre-wrap px-3.5 py-2.5 shadow-sm backdrop-blur-md border ${
                 msg.role === 'user'
-                  ? 'bg-primary/10 text-foreground border border-primary/20'
-                  : 'bg-background text-foreground/80 border border-border/50'
+                  ? 'bg-primary/15 text-foreground border-primary/20 rounded-2xl rounded-br-sm'
+                  : 'bg-card/40 text-foreground/80 border-border/20 rounded-2xl rounded-bl-sm'
               }`}>
                 {msg.content}
               </div>
@@ -250,7 +250,7 @@ export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATE
         ))}
         {isLoading && (
           <div className="flex justify-start">
-            <div className="text-xs font-mono text-muted-foreground px-3 py-2 border border-border/50 rounded-sm bg-background">
+            <div className="text-xs font-mono text-muted-foreground px-3.5 py-2.5 border border-border/20 rounded-2xl rounded-bl-sm bg-card/40 backdrop-blur-md shadow-sm">
               <span className="animate-pulse">{translate(CONTENT, 'chat.analyzing', language)}</span>
             </div>
           </div>
