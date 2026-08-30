@@ -85,19 +85,15 @@ export function DiagnosisPanel({ language, canRun, onNeedAuth, materialContext, 
     setLoading(false);
   };
 
+  if (!image && !diagnosis && !loading && !error) {
+    // 没图时不占地方 — 主入口在 chat 右下角线稿相机
+    return null
+  }
+
   return (
     <div className="border border-border/10 rounded-sm p-2 space-y-2 bg-background/20">
-      {/* 顶上大标题已去掉 — chat 右下角 📷 已是主入口，避免重复 */}
-
       <input ref={inputRef} type="file" accept="image/*" className="hidden"
         onChange={(e) => pick(e.target.files?.[0])} />
-
-      {!image && (
-        <button onClick={() => inputRef.current?.click()}
-          className="w-full py-2 text-[11px] font-mono border border-border/40 text-muted-foreground hover:text-primary hover:border-primary/30 hover:bg-primary/5 rounded-sm transition-all">
-          {t('diagUpload')} · 也可直接在 chat 输入框点 📷
-        </button>
-      )}
 
       {image && (
         <div className="space-y-3">

@@ -318,13 +318,14 @@ export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATE
 
       <div className="px-3 pb-3 pt-2 flex gap-2 shrink-0 border-t border-border relative">
         <div className="flex-1 relative">
-          <input
-            ref={inputRef}
+          <textarea
+            ref={inputRef as any}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
             placeholder={translate(CONTENT, 'chat.placeholder', language) + '  ·  Ask or drop a failed photo'}
-            className="w-full bg-background border border-border rounded-sm pl-3 pr-20 py-2.5 text-xs font-mono text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/50"
+            rows={3}
+            className="w-full bg-background border border-border rounded-sm pl-3 pr-20 py-3 text-xs font-mono text-foreground placeholder:text-muted-foreground/30 focus:outline-none focus:border-primary/50 resize-none min-h-[72px]"
           />
           {/* 2: 聊天 App 右下角常驻 📷 + 🎤 */}
           <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
