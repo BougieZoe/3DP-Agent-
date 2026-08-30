@@ -66,6 +66,10 @@ const ThermalField = lazy(() => import('@/components/3D/ThermalField').then(m =>
 const WallThicknessHeatmapDesktop = lazy(() => import('@/components/3D/AdvancedWallThickness').then(m => ({ default: m.AdvancedWallThickness })));
 const CausalityHighlight = lazy(() => import('@/components/3D/CausalityHighlight').then(m => ({ default: m.CausalityHighlight })));
 const CognitiveScan = lazy(() => import('@/components/3D/CognitiveScan').then(m => ({ default: m.CognitiveScan })));
+const CausalityTimeline = lazy(() => import('@/components/causality/CausalityTimeline').then(m => ({ default: m.CausalityTimeline })));
+const CausalityMinimal = lazy(() => import('@/components/causality/CausalityMinimal').then(m => ({ default: m.CausalityMinimal })));
+const CausalityUnified = lazy(() => import('@/components/causality/CausalityUnified').then(m => ({ default: m.CausalityUnified })));
+const PhysicalVerificationBoard = lazy(() => import('@/components/verification/PhysicalVerificationBoard').then(m => ({ default: m.PhysicalVerificationBoard })));
 const AttentionPulse = lazy(() => import('@/components/3D/AttentionPulse').then(m => ({ default: m.AttentionPulse })));
 const WebGPUOverlay = lazy(() => import('@/components/3D/WebGPUOverlay').then(m => ({ default: m.WebGPUOverlay })));
 
@@ -306,7 +310,7 @@ export default function Home() {
   const [showModeMenu, setShowModeMenu] = useState(false);
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
-  const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality' | 'orders'>('geometry');
+  const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality' | 'orders' | 'verification'>('geometry');
   const [showAPIModal, setShowAPIModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -1188,7 +1192,7 @@ deepAnalysisSeq.current += 1;
                 feature cards (diagnosis opens as a modal) instead */}
             {modelData && (
               <div className="flex overflow-x-auto scrollbar-hide border-b border-border -mx-5 px-5">
-                {(['geometry', 'report', 'agents', 'chat', 'causality', 'orders'] as const).map(tabKey => (
+                {(['geometry', 'report', 'agents', 'chat', 'causality', 'orders', 'verification'] as const).map(tabKey => (
                   <button key={tabKey} onClick={() => setTab(tabKey)}
                     className={`text-xs font-mono px-3 sm:px-4 py-2.5 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
                       tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -1198,6 +1202,7 @@ deepAnalysisSeq.current += 1;
                       : tabKey === 'agents' ? t('agents').toUpperCase()
                       : tabKey === 'causality' ? t('causality').toUpperCase()
                       : tabKey === 'orders' ? 'ORDERS'
+                      : tabKey === 'verification' ? 'VERIFICATION'
                       : t('chatAI').toUpperCase()}
                     {tabKey === 'orders' && orders.orders.length > 0 && (
                       <span className="ml-1 px-1 py-0.5 text-[8px] rounded-full bg-cyan-400/20 text-cyan-400">
@@ -1798,6 +1803,15 @@ deepAnalysisSeq.current += 1;
                         onSelectSuggestion={setSelectedSuggestionId}
                         language={language}
                       />
+                    </div>
+                  </Suspense>
+                )}
+
+                {/* VERIFICATION TAB */}
+                {tab === 'verification' && (
+                  <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
+                    <div className="pt-4">
+                      <PhysicalVerificationBoard language={language as any} />
                     </div>
                   </Suspense>
                 )}
