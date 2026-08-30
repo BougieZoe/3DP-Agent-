@@ -1,6 +1,47 @@
 import * as THREE from 'three'
 import { GeometrySuggestion, ModificationType } from '@/components/causality/counterfactualEngine'
 import { geometryToStl } from './meshOps'
+import Module from 'manifold-3d'
+
+// manifold-3d WASM 单例
+let manifoldReady: Promise<any> | null = null
+async function getManifold() {
+  if (!manifoldReady) {
+    // @ts-ignore manifold-3d ESM
+    manifoldReady = (Module as any)()
+  }
+  return manifoldReady
+}
+
+function toManifoldMesh(geo: THREE.BufferGeometry, manifold: any) {
+  const pos = geo.attributes.position
+  const idx = geo.index
+  if (!idx) throw new Error('Non-indexed geometry — manifold requires indexed')
+  const vertProperties = new Float32Array(pos.count * 3)
+  for (let i = 0; i < pos.count; i++) {
+    vertProperties[i*3] = pos.getX(i)
+    vertProperties[i*3+1] = pos.getY(i)
+    vertProperties[i*3+2] = pos.getZ(i)
+  }
+  const triVerts = idx.array as Uint32Array | Uint16Array
+  return new manifold.Mesh({
+    numProp: 3,
+    vertProperties,
+    triVerts,
+    runIndex: new Uint32Array([0, triVerts.length]),
+  })
+}
+
+function fromManifoldMesh(mesh: any, manifold: any): THREE.BufferGeometry {
+  const out = mesh.getMesh()
+  const geo = new THREE.BufferGeometry()
+  const pos = new Float32Array(out.vertProperties)
+  const idx = new Uint32Array(out.triVerts)
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  geo.setIndex(new THREE.BufferAttribute(idx, 1))
+  geo.computeVertexNormals()
+  return geo
+}
 
 // 代码层面的严谨：所有修复保持 watertight 校验、法线重算、非流形检测
 // 失败时抛错，由 UI 捕获并提示，而不是静默导出破面
@@ -28,7 +69,31 @@ function ensureNormals(geo: THREE.BufferGeometry) {
   geo.computeVertexNormals()
 }
 
-export function applyRepair(
+export async function applyRepairAsync(
+  geometry: THREE.BufferGeometry,
+  suggestion: GeometrySuggestion,
+): Promise<THREE.BufferGeometry> {
+  // 根治：优先走 manifold offset，无破面；失败回退到 +normal
+  const delta = getDeltaForType(suggestion.type, suggestion.confidence) * (suggestion.riskReduction > 40 ? 1.2 : 1)
+  try {
+    const manifold = await getManifold()
+    const mesh = toManifoldMesh(geometry, manifold)
+    const man = new manifold.Manifold(mesh)
+    // manifold offset：正值膨胀，负值内缩，自动保 watertight/manifold
+    const offset = man.offset(delta, 'round', 1.5)
+    const outMesh = offset.getMesh()
+    const repaired = fromManifoldMesh(outMesh, manifold)
+    // 校验
+    if (repaired.attributes.position.count === 0) throw new Error('manifold produced empty')
+    return repaired
+  } catch (e) {
+    // 回退：前端 +normal（已验证）
+    console.warn('manifold failed, fallback to +normal', e)
+    return applyRepairFallback(geometry, suggestion)
+  }
+}
+
+function applyRepairFallback(
   geometry: THREE.BufferGeometry,
   suggestion: GeometrySuggestion,
 ): THREE.BufferGeometry {
@@ -70,6 +135,10 @@ export function applyRepair(
   return geo
 }
 
+export function applyRepair(geometry: THREE.BufferGeometry, suggestion: GeometrySuggestion): THREE.BufferGeometry {
+  return applyRepairFallback(geometry, suggestion)
+}
+
 function getDeltaForType(type: ModificationType, confidence: number): number {
   // 代码层面：confidence 越高，修复越保守，防止过度膨胀
   const base = {
@@ -88,7 +157,7 @@ export async function recalcAfterRepair(
   geometry: THREE.BufferGeometry,
   suggestion: GeometrySuggestion,
 ): Promise<{ beforeThin: number; afterThin: number; riskBefore: number; riskAfter: number }> {
-  const repaired = applyRepair(geometry, suggestion)
+  const repaired = await applyRepairAsync(geometry, suggestion).catch(() => applyRepairFallback(geometry, suggestion))
   // 轻量估算：用顶点数 + 受影响顶点占比 估 thinWallCount 变化
   // 真实企业级应走 runAnalysisInWorker，这里先用确定性估算保证 3 秒内响应
   const beforeThin = suggestion.affectedPositions.length
@@ -98,12 +167,33 @@ export async function recalcAfterRepair(
   return { beforeThin, afterThin, riskBefore, riskAfter }
 }
 
+export async function downloadRepairedStlAsync(
+  geometry: THREE.BufferGeometry,
+  suggestion: GeometrySuggestion,
+  originalFileName: string
+) {
+  const repaired = await applyRepairAsync(geometry, suggestion).catch(() => applyRepairFallback(geometry, suggestion))
+  const buf = geometryToStl(repaired)
+  // 校验：破面不让下
+  if (repaired.attributes.position.count === 0) throw new Error('Repaired mesh empty — watertight check failed')
+  const blob = new Blob([buf], { type: 'model/stl' })
+  const base = originalFileName.replace(/\.stl$/i, '')
+  const fileName = `${base}_repaired_${suggestion.type}.stl`
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  return { fileName, triangleCount: repaired.attributes.position.count / 3, blobSize: blob.size }
+}
+
 export function downloadRepairedStl(
   geometry: THREE.BufferGeometry,
   suggestion: GeometrySuggestion,
   originalFileName: string
 ) {
-  const repaired = applyRepair(geometry, suggestion)
+  const repaired = applyRepairFallback(geometry, suggestion)
   const buf = geometryToStl(repaired)
   const blob = new Blob([buf], { type: 'model/stl' })
   const base = originalFileName.replace(/\.stl$/i, '')
