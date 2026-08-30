@@ -1220,17 +1220,15 @@ deepAnalysisSeq.current += 1;
                 without a model it opens via the standalone DiagnosisModal */}
             {tab === 'chat' && modelData && (
               <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
-                <div className="pt-4">
-                  <DiagnosisPanel
-                    language={language}
-                    canRun={!!user || hasAnyKey()}
-                    onNeedAuth={() => setShowAccountModal(true)}
-                    materialContext={`${material.name} (${material.technology.toUpperCase()})`}
-                    geometryContext={unifiedAnalysis ? buildDiagnosisGeometryContext(unifiedAnalysis) : undefined}
-                  />
-                </div>
+                <DiagnosisPanel
+                  language={language}
+                  canRun={!!user || hasAnyKey()}
+                  onNeedAuth={() => setShowAccountModal(true)}
+                  materialContext={`${material.name} (${material.technology.toUpperCase()})`}
+                  geometryContext={unifiedAnalysis ? buildDiagnosisGeometryContext(unifiedAnalysis) : undefined}
+                />
                 {modelData ? (
-                  <div className="pt-4 h-[45vh] min-h-[320px] lg:h-[520px]">
+                  <div className="pt-2 flex-1 min-h-[60vh] h-[calc(100vh-220px)] flex flex-col">
                     <ChatPanel
                       model={modelData}
                       language={language}
