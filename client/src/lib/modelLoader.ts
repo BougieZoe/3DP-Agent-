@@ -7,7 +7,8 @@
 // but it was mm" class of wrong numbers.
 
 import * as THREE from 'three';
-import { OBJLoader, ThreeMFLoader } from 'three-stdlib';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
 import { unzipSync } from 'fflate';
 import { loadSTLFromBuffer, loadSTLFile } from './stlLoader';
 import type { LengthUnit } from '@shared/domain/geometry';

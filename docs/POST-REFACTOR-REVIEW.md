@@ -191,3 +191,23 @@
 | **P0** | 4 | Main-thread O(n²) analysis, type-unsafe cast in printReviewWorkflow, zero test coverage on agents/pipeline/UI, three-stdlib barrel bundle bloat |
 | **P1** | 7 | Memory leaks (geometry disposal), MaterialContext re-render cascade, agent `as unknown as Record` pattern, framer-motion dead dep, Language type divergence, dead MarkerInput interface, unused import |
 | **P2** | 12 | God component Home.tsx, duplicated transformation logic, useFrame callback count, RiskAnimation clock drift, undisposed 3D geometries, unbounded Map growth, unsafe `!` assertions, silent undefined in Record casts, flaky benchmarks, mock-only test, untested regex extraction, missing component test infra |
+
+---
+
+## Observations (not active bugs — awareness only)
+
+### O1. Wall-thickness confidence penalty conflates "thin by design" with "unreliable measurement"
+
+**Threshold:** `wallThickness.confidencePenalty.thinWallRatioBandCritical: 0.25`  
+**Mechanism:** When `thinWallRatio` exceeds 0.25, the per-sample confidence is multiplied by `criticalMultiplier: 0.5`, crushing overall wall confidence below the `verdictGate.minTrustedWallConfidence: 0.4` threshold and marking the model as low-confidence / untrusted.
+
+**Validated against:** 1 real-world case — Thingiverse thing:6889360 ("Fabric (With no supports!)"). This print-in-place fabric has intentional thin bars (1–2mm diameter) and thin plates (0.5–1mm thick) that printed successfully without supports. The pipeline flagged 2 of 4 file variants as low-confidence (confidence 0.200, thinWallRatio 35–58%) because the raycast sampler measures across these intentionally thin features and interprets the result as unreliable measurement rather than intentional geometry.
+
+| Variant | thinWallRatio | Confidence | Flagged? | Real outcome |
+|---------|--------------|------------|----------|--------------|
+| fabric-primary (id:6889360) | 35.0% | 0.200 | Yes | Printed OK |
+| fabric-large (id:6889361) | 58.0% | 0.200 | Yes | Printed OK |
+| fabric-openscad-1 (id:6889362) | 0.0% | 0.400 | No | Printed OK |
+| fabric-openscad-2 (id:6889364) | 0.0% | 0.500 | No | Printed OK |
+
+**Sample size:** 1 case, 4 file variants. Not enough evidence to justify a threshold change yet — flagging for awareness only. If more cases emerge where thin-by-design geometry is falsely flagged, revisit whether `thinWallRatio` should be contextualized by mesh density, feature regularity, or user-declared intent.

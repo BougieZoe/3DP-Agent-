@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { SimplifyModifier, mergeVertices, STLExporter } from 'three-stdlib';
+import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 
 export function countTriangles(geometry: THREE.BufferGeometry): number {
   return geometry.index ? geometry.index.count / 3 : geometry.attributes.position.count / 3;

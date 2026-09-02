@@ -14,7 +14,7 @@
 
 import { runAnalysisPipeline, type PipelineOptions } from '../pipeline';
 import { fromThreeBufferGeometry } from '../geometryConversion';
-import { isWallConfidenceTrusted } from '../../lib/lowConfidence';
+import { isWallConfidenceTrusted } from '../verdict';
 import type { GeometryModel } from '../geometryModel';
 import {
   createWatertightCube,
