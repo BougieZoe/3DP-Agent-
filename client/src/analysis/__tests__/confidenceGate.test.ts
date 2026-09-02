@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { runAnalysisPipeline } from '../pipeline';
 import { fromThreeBufferGeometry } from '../geometryConversion';
 import { createWatertightCube, createThinWall } from './testMeshes';
-import { isWallConfidenceTrusted } from '../../lib/lowConfidence';
+import { isWallConfidenceTrusted } from '../verdict';
 
 describe('wall-confidence gate end-to-end', () => {
   it('healthy cube resolves to the trusted baseline (banner off)', () => {

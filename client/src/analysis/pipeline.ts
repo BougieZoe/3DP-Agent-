@@ -20,9 +20,6 @@ import { getThresholds, type ThresholdsOverride } from './thresholds';
 import { type GeometryModel } from './geometryModel';
 import type { PrinterProfileId } from './types';
 import type { Material } from '@shared/domain/material';
-import { isWallThicknessModelLoaded } from '../lib/models/wallThickness';
-import { isOverhangModelLoaded } from '../lib/models/overhang';
-import { isPrintTimeModelLoaded } from '../lib/models/printTime';
 
 export interface PipelineOptions {
   printerId?: PrinterProfileId;
@@ -57,6 +54,13 @@ export interface PipelineOptions {
   fiberReinforced?: boolean;
   /** Fiber type for composite materials */
   fiberType?: 'carbon' | 'glass' | 'aramid' | 'basalt';
+  /**
+   * ML model availability flags. When absent the pipeline skips the ML
+   * analysis module entirely. Callers that load ONNX models (lib/models/)
+   * should pass the current state here so the pipeline doesn't reach into
+   * lib/ — preserving the analysis-layer boundary.
+   */
+  mlModelsLoaded?: { wallThickness: boolean; overhang: boolean; printTime: boolean };
 }
 
 export function runAnalysisPipeline(
@@ -330,11 +334,7 @@ export function runAnalysisPipeline(
   const EMPTY_ML: MLAnalysisResult = { wallThickness: null, overhang: null, printTime: null, modelsLoaded: { wallThickness: false, overhang: false, printTime: false } };
   const mlAnalysis = time('mlAnalysis', () => {
     try {
-      const modelsLoaded = {
-        wallThickness: isWallThicknessModelLoaded(),
-        overhang: isOverhangModelLoaded(),
-        printTime: isPrintTimeModelLoaded(),
-      };
+      const modelsLoaded = options.mlModelsLoaded ?? { wallThickness: false, overhang: false, printTime: false };
 
       // Only run if at least one model is loaded
       if (!modelsLoaded.wallThickness && !modelsLoaded.overhang && !modelsLoaded.printTime) {

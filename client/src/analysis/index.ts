@@ -24,4 +24,5 @@ export { scaleToMillimeters } from './units';
 export type { LengthUnit } from '@shared/domain/geometry';
 export { createGeometryModel, type GeometryModel } from './geometryModel';
 export { extractVertexData, type VertexData } from './geometryData';
+export { isWallConfidenceTrusted, MIN_TRUSTED_WALL_CONFIDENCE } from './verdict';
 export * from './types';

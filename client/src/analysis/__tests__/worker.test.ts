@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { runAnalysisPipeline } from '../pipeline';
-import { createTerrainGridModel } from '../../analysis/__tests__/testMeshes';
-import { buildMockUnifiedAnalysis, normalMetrics } from '../../agents/__tests__/testAgentFixtures';
+import { createTerrainGridModel } from './testMeshes';
 
 describe('runAnalysisPipeline (direct call, Worker unavailable path)', () => {
   it('returns UnifiedAnalysis with correct shape', () => {

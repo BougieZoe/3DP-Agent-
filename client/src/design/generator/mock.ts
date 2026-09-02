@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { STLExporter } from 'three-stdlib';
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import type {
   GeneratorAdapter,
   GeneratorJob,
