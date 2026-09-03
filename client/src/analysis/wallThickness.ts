@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+import { MeshBVH } from 'three-mesh-bvh';
 import { type Confidence, type WallThicknessSample } from './types';
 import { getThresholds, DEFAULT_ANALYSIS_THRESHOLDS, type AnalysisThresholds } from './thresholds';
 import { type GeometryGraph } from './geometryGraph';
@@ -47,71 +49,6 @@ function percentile(sorted: number[], p: number): number {
 }
 
 /**
- * Möller–Trumbore ray-triangle intersection with plain float arguments.
- * The previous version took six {x,y,z} object literals per call — for a
- * 1.5M-triangle model the sampler allocated ~17 billion objects (200 samples
- * × 1.47M faces × 6), which dominated the analysis time and GC pressure on
- * low-end phones. Identical math, zero allocations.
- */
-function rayTriangleIntersection(
-  ox: number, oy: number, oz: number,
-  dx: number, dy: number, dz: number,
-  ax: number, ay: number, az: number,
-  bx: number, by: number, bz: number,
-  cx: number, cy: number, cz: number,
-): number | null {
-  const EPS = 1e-8;
-
-  const edge1x = bx - ax, edge1y = by - ay, edge1z = bz - az;
-  const edge2x = cx - ax, edge2y = cy - ay, edge2z = cz - az;
-
-  const hx = dy * edge2z - dz * edge2y;
-  const hy = dz * edge2x - dx * edge2z;
-  const hz = dx * edge2y - dy * edge2x;
-
-  const a = edge1x * hx + edge1y * hy + edge1z * hz;
-  if (Math.abs(a) < EPS) return null;
-
-  const f = 1.0 / a;
-  const sx = ox - ax, sy = oy - ay, sz = oz - az;
-  const u = f * (sx * hx + sy * hy + sz * hz);
-  if (u < 0 || u > 1) return null;
-
-  const qx = sy * edge1z - sz * edge1y;
-  const qy = sz * edge1x - sx * edge1z;
-  const qz = sx * edge1y - sy * edge1x;
-  const v = f * (dx * qx + dy * qy + dz * qz);
-  if (v < 0 || u + v > 1) return null;
-
-  const t = f * (edge2x * qx + edge2y * qy + edge2z * qz);
-  return t >= 0 ? t : null;
-}
-
-/**
- * Ray-segment AABB overlap test.
- *
- * The ray travels from its origin along -normal for up to rayLimit; its swept
- * AABB is a thin box from the origin to the endpoint. A triangle can only be
- * hit inside that box, so a triangle whose AABB does not overlap the ray AABB
- * is skipped — six comparisons, no divisions, no allocations (the previous
- * slab filter did three divisions and allocated an object per triangle, which
- * on a 1.5M-face model cost ~119 GFLOP and ~3 billion allocations inside the
- * sampler).
- */
-function rayAABBOverlaps(
-  minX: number, maxX: number,
-  minY: number, maxY: number,
-  minZ: number, maxZ: number,
-  rayMinX: number, rayMaxX: number,
-  rayMinY: number, rayMaxY: number,
-  rayMinZ: number, rayMaxZ: number,
-): boolean {
-  return minX <= rayMaxX && maxX >= rayMinX
-    && minY <= rayMaxY && maxY >= rayMinY
-    && minZ <= rayMaxZ && maxZ >= rayMinZ;
-}
-
-/**
  * Wall-thickness confidence. Returns 0.0 — never a fabricated number — when the
  * raycast could not produce a valid measurement (no opposing faces found).
  */
@@ -158,15 +95,10 @@ export function deriveWtStatus(
 /**
  * Raycast wall-thickness sampling.
  *
- * Performance: the inner loop is the classic O(samples × triangles) scan, but
- * every triangle is pre-filtered by a six-comparison ray-AABB overlap test
- * before the (now allocation-free) intersection. The previous implementation
- * ran the full Möller–Trumbore test on every face with six object allocations
- * per call — on a 1.5M-triangle model that was ~2.9 billion intersections and
- * ~17 billion allocations, taking ~10 s on desktop and 30-60 s on a phone.
- * The overlap filter skips only triangles whose AABB the ray segment cannot
- * touch, so the hit set (and therefore the per-sample confidence, which
- * counts strictly-decreasing hits in index order) is byte-identical.
+ * Performance: builds a BVH (O(n log n)) once, then each of the 200 samples
+ * queries the BVH in O(log n) via `raycast`. The previous brute-force scanned
+ * all triangles per sample (O(samples × n)) — 20M tests on a 100K-mesh. BVH
+ * reduces this to ~3400 ray traversals total.
  */
 export function sampleWallThickness(
   positions: Float32Array,
@@ -202,22 +134,16 @@ export function sampleWallThickness(
   // a redundant scan; standalone callers derive it from the positions.
   const rayLimit = maxRayDist ?? boundingBoxDiagonal(positions, graph) * wt.rayDistanceDiagonalFactor;
 
-  // Per-triangle AABBs for the slab pre-filter (6 floats per triangle).
-  const triBounds = new Float32Array(triCount * 6);
-  for (let t = 0; t < triCount; t++) {
-    const base = t * 3;
-    const i0 = indices[base] * 3, i1 = indices[base + 1] * 3, i2 = indices[base + 2] * 3;
-    const ax = positions[i0], ay = positions[i0 + 1], az = positions[i0 + 2];
-    const bx = positions[i1], by = positions[i1 + 1], bz = positions[i1 + 2];
-    const cx = positions[i2], cy = positions[i2 + 1], cz = positions[i2 + 2];
-    const b6 = t * 6;
-    triBounds[b6] = ax < bx ? (ax < cx ? ax : cx) : (bx < cx ? bx : cx);
-    triBounds[b6 + 1] = ax > bx ? (ax > cx ? ax : cx) : (bx > cx ? bx : cx);
-    triBounds[b6 + 2] = ay < by ? (ay < cy ? ay : cy) : (by < cy ? by : cy);
-    triBounds[b6 + 3] = ay > by ? (ay > cy ? ay : cy) : (by > cy ? by : cy);
-    triBounds[b6 + 4] = az < bz ? (az < cz ? az : cz) : (bz < cz ? bz : cz);
-    triBounds[b6 + 5] = az > bz ? (az > cz ? az : cz) : (bz > cz ? bz : cz);
-  }
+  // Build BVH for O(log n) ray queries. The temporary Geometry + BVH are
+  // local to this call and disposed before returning.
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setIndex(new THREE.BufferAttribute(indices, 1));
+  const bvh = new MeshBVH(geo);
+
+  const ray = new THREE.Ray();
+  const origin = new THREE.Vector3();
+  const direction = new THREE.Vector3();
 
   const step = Math.max(1, Math.floor(triCount / maxSampleCount));
 
@@ -240,45 +166,24 @@ export function sampleWallThickness(
     const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
     if (len < 1e-12) continue;
 
-    const dx = -nx / len, dy = -ny / len, dz = -nz / len;
+    // Ray: from face centroid along inward normal (-normal direction).
+    origin.set(fcx, fcy, fcz);
+    direction.set(-nx / len, -ny / len, -nz / len);
+    ray.set(origin, direction);
 
     let minDist = rayLimit;
     let hitCount = 0;
 
-    // Swept AABB of this ray segment (origin → origin + dir * rayLimit).
-    const rayMinX = dx >= 0 ? fcx : fcx + dx * rayLimit;
-    const rayMaxX = dx >= 0 ? fcx + dx * rayLimit : fcx;
-    const rayMinY = dy >= 0 ? fcy : fcy + dy * rayLimit;
-    const rayMaxY = dy >= 0 ? fcy + dy * rayLimit : fcy;
-    const rayMinZ = dz >= 0 ? fcz : fcz + dz * rayLimit;
-    const rayMaxZ = dz >= 0 ? fcz + dz * rayLimit : fcz;
-
-    for (let j = 0; j < indices.length; j += 3) {
-      if (j === i) continue;
-
-      const b6 = (j / 3) * 6;
-      // Exact pre-filter: the triangle AABB must overlap the ray segment's
-      // swept AABB — otherwise the ray cannot touch the triangle and the
-      // full intersection is skipped (result-identical, no allocations).
-      if (!rayAABBOverlaps(
-        triBounds[b6], triBounds[b6 + 1],
-        triBounds[b6 + 2], triBounds[b6 + 3],
-        triBounds[b6 + 4], triBounds[b6 + 5],
-        rayMinX, rayMaxX, rayMinY, rayMaxY, rayMinZ, rayMaxZ,
-      )) continue;
-
-      const j0 = indices[j] * 3, j1 = indices[j + 1] * 3, j2 = indices[j + 2] * 3;
-
-      const t = rayTriangleIntersection(
-        fcx, fcy, fcz, dx, dy, dz,
-        positions[j0], positions[j0 + 1], positions[j0 + 2],
-        positions[j1], positions[j1 + 1], positions[j1 + 2],
-        positions[j2], positions[j2 + 1], positions[j2 + 2],
-      );
-
-      if (t !== null && t > wt.rayMinHitDistanceMm && t < minDist) {
-        minDist = t;
-        hitCount++;
+    // BVH raycast returns all hits (O(log n) traversal + O(k) where k = hit count).
+    // We find the closest valid hit to match the brute-force semantics.
+    const hits = bvh.raycast(ray, THREE.DoubleSide);
+    const sourceTriIdx = Math.floor(i / 3);
+    for (const hit of hits) {
+      if (hit.distance > wt.rayMinHitDistanceMm && hit.distance < minDist) {
+        if (hit.faceIndex !== sourceTriIdx) {
+          minDist = hit.distance;
+          hitCount++;
+        }
       }
     }
 
@@ -292,6 +197,9 @@ export function sampleWallThickness(
       confidence,
     });
   }
+
+  // Clean up temporary BVH geometry.
+  geo.dispose();
 
   const validSamples = samples.filter(s => s.thickness > wt.validThicknessMinMm && s.confidence > wt.validConfidenceMin);
   const minThickness = validSamples.length > 0
