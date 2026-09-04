@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls, PerspectiveCamera, Environment } from "@react-three/drei";
 import * as THREE from "three";
+import { COLORS } from "@/lib/visualLanguage";
 import {
   Download,
   RotateCcw,
@@ -19,6 +20,7 @@ import {
   Ruler,
   Settings2,
   Box,
+  Square,
 } from "lucide-react";
 import { createLocalBridgeAdapter, generateDesign } from "@/design/generator";
 import { parseSTL } from "@/lib/stlParser";
@@ -250,15 +252,15 @@ function StageRow({ stage }: { stage: Stage }) {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 80) return '#22c55e';
-  if (score >= 50) return '#f59e0b';
-  return '#ef4444';
+  if (score >= 80) return COLORS.verdict.passCSS;
+  if (score >= 50) return COLORS.verdict.warnCSS;
+  return COLORS.verdict.failCSS;
 }
 
 function verdictColor(verdict: string): string {
-  if (verdict === 'PASS') return '#22c55e';
-  if (verdict === 'WARN') return '#f59e0b';
-  return '#ef4444';
+  if (verdict === 'PASS') return COLORS.verdict.passCSS;
+  if (verdict === 'WARN') return COLORS.verdict.warnCSS;
+  return COLORS.verdict.failCSS;
 }
 
 function verdictBg(verdict: string): string {
@@ -333,11 +335,11 @@ function PreviewPlaceholder() {
     <group>
       <mesh>
         <boxGeometry args={[3, 1.5, 0.2]} />
-        <meshBasicMaterial color={0x2ea3ff} wireframe transparent opacity={0.25} />
+        <meshBasicMaterial color={COLORS.cadViewport.placeholderBody} wireframe transparent opacity={0.25} />
       </mesh>
       <mesh position={[0, 0.2, 0.8]}>
         <torusGeometry args={[0.8, 0.1, 12, 32]} />
-        <meshBasicMaterial color={0x66ccff} wireframe transparent opacity={0.15} />
+        <meshBasicMaterial color={COLORS.cadViewport.placeholderTorus} wireframe transparent opacity={0.15} />
       </mesh>
     </group>
   );
@@ -572,6 +574,8 @@ function buildGenerationError(
   const { code, detail } = outcome.error;
   const d = detail ?? '';
   switch (code) {
+    case 'cancelled':
+      return new Error('Cancelled');
     case 'transport-unavailable':
       return new Error(
         `CAD engine not reachable.\n\n` +
@@ -676,6 +680,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   const stageTs = useRef<Record<string, number>>({});
   const stlBytesRef = useRef<ArrayBuffer | null>(null);
   const templateSourceRef = useRef<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   // Generation sequence — bumped by every generate/regen entry point. Stale
   // async responses compare their captured seq and bail before writing state.
   const runSeqRef = useRef(0);
@@ -693,10 +698,16 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     setPrompt(STARTER_EXAMPLES[language][0]);
   }, [language]);
 
+  useEffect(() => () => abortRef.current?.abort(), []);
+
   const handleGenerate = useCallback(async (customPrompt?: string, baseModel?: { generatedModelId: string; editInstruction: string }) => {
     const seq = ++runSeqRef.current;
     const p = (customPrompt ?? prompt).trim();
     if (!p) return;
+
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
 
     setLoading(true);
     setError(null);
@@ -753,10 +764,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
       if (fallback.matched) {
         mark('llm', 'running', `cached template`);
+        quality = 'FALLBACK';
         templateSourceRef.current = fallback.source;
         setSourceVersion(v => v + 1);
         const adapter = createLocalBridgeAdapter({ generatorSource: fallback.source });
-        outcome = await generateDesign({ prompt: p, timeoutMs: CAD_GENERATE_TIMEOUT_MS, baseModel }, adapter);
+        outcome = await generateDesign({ prompt: p, timeoutMs: CAD_GENERATE_TIMEOUT_MS, baseModel, signal: ac.signal }, adapter);
         if (outcome.ok) setLlmInfo(`Template: ${fallback.matched}`);
       } else {
         const llmCandidates = buildLlmCandidates();
@@ -765,7 +777,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
           const adapter = createLocalBridgeAdapter({
             llmCandidates,
           });
-          outcome = await generateDesign({ prompt: p, timeoutMs: CAD_GENERATE_TIMEOUT_MS, baseModel }, adapter);
+          outcome = await generateDesign({ prompt: p, timeoutMs: CAD_GENERATE_TIMEOUT_MS, baseModel, signal: ac.signal }, adapter);
         } else {
           outcome = null;
         }
@@ -861,6 +873,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     } catch (err) {
       if (seq !== runSeqRef.current) return; // superseded — don't surface a stale error
       const msg = err instanceof Error ? err.message : String(err);
+      if (msg === 'Cancelled') return; // user-initiated abort — no error UI
       console.error('[CADStudio] Error:', msg);
       setError(msg);
     } finally {
@@ -868,15 +881,28 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     }
   }, [prompt, material, updateStage, language]);
 
+  const handleCancel = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLoading(false);
+    setError(null);
+    setStages(prev => prev.map(s => s.status === 'running' ? { ...s, status: 'pending' } : s));
+  }, []);
+
   /* ─── Parametric regeneration from source ─── */
   const handleRegenerateFromSource = useCallback(async (source: string) => {
     const seq = ++runSeqRef.current;
     if (!prompt.trim() && !geometry) return;
+
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+
     setLoading(true);
     setError(null);
     try {
       const adapter = createLocalBridgeAdapter({ generatorSource: source });
-      const outcome = await generateDesign({ prompt: prompt || 'parametric plate', timeoutMs: CAD_GENERATE_TIMEOUT_MS }, adapter);
+      const outcome = await generateDesign({ prompt: prompt || 'parametric plate', timeoutMs: CAD_GENERATE_TIMEOUT_MS, signal: ac.signal }, adapter);
       if (!outcome || !outcome.ok) throw new Error('Regeneration failed');
 
       templateSourceRef.current = source;
@@ -1103,7 +1129,8 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     const confidenceUp = afterConfidence > beforeConfidence;
     const issuesDown = afterIssues < beforeIssues;
     const riskDown = afterMetrics.manufacturingRisk < beforeMetrics.manufacturingRisk;
-    const accepted = confidenceUp && issuesDown && riskDown;
+    const improvements = [confidenceUp, issuesDown, riskDown].filter(Boolean).length;
+    const accepted = improvements >= 2;
 
     if (!accepted) {
       setGeometry(originalGeo);
@@ -1384,11 +1411,19 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
           {/* GENERATE + NEW DESIGN + DOWNLOAD */}
           <div className="flex items-stretch gap-3">
-            <button onClick={() => handleGenerate()} disabled={loading}
-              className="flex-1 h-11 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm px-5 text-sm font-mono font-bold hover:bg-foreground/90 disabled:opacity-30 transition-all">
-              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {t('cadGenerate')}
-            </button>
+            {loading ? (
+              <button onClick={handleCancel}
+                className="flex-1 h-11 inline-flex items-center justify-center gap-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-sm px-5 text-sm font-mono font-bold hover:bg-red-500/30 transition-all">
+                <Square className="w-4 h-4" />
+                {t('cadCancel')}
+              </button>
+            ) : (
+              <button onClick={() => handleGenerate()}
+                className="flex-1 h-11 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm px-5 text-sm font-mono font-bold hover:bg-foreground/90 disabled:opacity-30 transition-all">
+                <Sparkles className="w-4 h-4" />
+                {t('cadGenerate')}
+              </button>
+            )}
             <button onClick={handleNewDesign} disabled={loading} title={t('cadNewDesign')}
               className="h-11 w-11 inline-flex items-center justify-center border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all shrink-0">
               <RotateCcw className="w-4 h-4" />
@@ -1550,11 +1585,11 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         <Canvas dpr={[1, isMobile ? 1.5 : 2]} gl={{ antialias: !isMobile, alpha: true }} style={{ background: 'transparent' }}>
           <PerspectiveCamera makeDefault position={[0, 0, 8]} fov={55} />
           <Environment preset="studio" />
-          <ambientLight intensity={0.3} color={0xb9f8ff} />
-          <directionalLight position={[6, 7, 5]} intensity={0.8} color={0xffffff} />
-          <directionalLight position={[-7, 4, -4]} intensity={0.3} color={0x3cf0b6} />
-          <pointLight position={[0, 5, 6]} intensity={0.2} color={0x50a7ff} />
-          <Grid args={[200, 200]} cellSize={10} cellThickness={0.3} cellColor="#0b2b33" sectionSize={50} sectionThickness={0.7} sectionColor="#124650" fadeDistance={180} fadeStrength={1} position={[0, -0.02, 0]} />
+          <ambientLight intensity={0.3} color={COLORS.cadViewport.ambient} />
+          <directionalLight position={[6, 7, 5]} intensity={0.8} color={COLORS.cadViewport.keyLight} />
+          <directionalLight position={[-7, 4, -4]} intensity={0.3} color={COLORS.cadViewport.fillLight} />
+          <pointLight position={[0, 5, 6]} intensity={0.2} color={COLORS.cadViewport.rimLight} />
+          <Grid args={[200, 200]} cellSize={10} cellThickness={0.3} cellColor={COLORS.cadViewport.gridCell} sectionSize={50} sectionThickness={0.7} sectionColor={COLORS.cadViewport.gridSection} fadeDistance={180} fadeStrength={1} position={[0, -0.02, 0]} />
           {hasGeometry ? <PreviewMesh geometry={geometry} preset={cadPreset} fitKey={fitKey} /> : <PreviewPlaceholder />}
           <OrbitControls enableDamping dampingFactor={0.05} rotateSpeed={1.0} screenSpacePanning={true} />
         </Canvas>

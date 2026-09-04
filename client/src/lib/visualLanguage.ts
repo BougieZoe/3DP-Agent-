@@ -15,6 +15,12 @@ export interface ThemeColors {
   advisor: { base: number; css: string; glow: number };
   support: { overhang: number; bridge: number; contactOverhang: number; contactBridge: number };
   risk:    { sharpEdge: number; overhang: number; thinWall: number };
+  verdict: { pass: number; passCSS: string; warn: number; warnCSS: string; fail: number; failCSS: string };
+  cadViewport: {
+    ambient: number; keyLight: number; fillLight: number; rimLight: number;
+    gridCell: string; gridSection: string;
+    placeholderBody: number; placeholderTorus: number;
+  };
 }
 
 const dark: ThemeColors = {
@@ -28,6 +34,12 @@ const dark: ThemeColors = {
   advisor:  { base: 0xf4a9b4, css: '#f4a9b4', glow: 0xf4a9b4 },
   support:  { overhang: 0x4488ff, bridge: 0xff8844, contactOverhang: 0x2266ff, contactBridge: 0xff6622 },
   risk:     { sharpEdge: 0xff4444, overhang: 0xff8844, thinWall: 0xffff44 },
+  verdict:  { pass: 0x22c55e, passCSS: '#22c55e', warn: 0xf59e0b, warnCSS: '#f59e0b', fail: 0xef4444, failCSS: '#ef4444' },
+  cadViewport: {
+    ambient: 0xb9f8ff, keyLight: 0xffffff, fillLight: 0x3cf0b6, rimLight: 0x50a7ff,
+    gridCell: '#0b2b33', gridSection: '#124650',
+    placeholderBody: 0x2ea3ff, placeholderTorus: 0x66ccff,
+  },
 } as const;
 
 const light: ThemeColors = {
@@ -41,6 +53,12 @@ const light: ThemeColors = {
   advisor:  { base: 0xc89aa5, css: '#c89aa5', glow: 0xc89aa5 },
   support:  { overhang: 0x5a88aa, bridge: 0xb09068, contactOverhang: 0x3a66aa, contactBridge: 0xb07048 },
   risk:     { sharpEdge: 0xcc6666, overhang: 0xb09068, thinWall: 0xcccc66 },
+  verdict:  { pass: 0x16a34a, passCSS: '#16a34a', warn: 0xd97706, warnCSS: '#d97706', fail: 0xdc2626, failCSS: '#dc2626' },
+  cadViewport: {
+    ambient: 0xaacddd, keyLight: 0xffffff, fillLight: 0x6cc9aa, rimLight: 0x7ab8dd,
+    gridCell: '#c8d8dc', gridSection: '#9cb8c0',
+    placeholderBody: 0x5a9acc, placeholderTorus: 0x7aaacc,
+  },
 } as const;
 
 export const THEMES = { dark, light } as const;

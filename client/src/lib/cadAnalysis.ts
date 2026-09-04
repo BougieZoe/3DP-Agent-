@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { fromThreeBufferGeometry, runAnalysisInWorker, type UnifiedAnalysis } from '@/analysis';
+import type { PrinterProfileId } from '@/analysis/types';
 import {
   runConfidenceGate,
   type Issue as ConfidenceIssue,
@@ -22,6 +23,7 @@ export async function runCadAnalysis(
     material: Material;
     quality?: GenerationQuality;
     language: Language;
+    printerId?: PrinterProfileId;
   },
 ): Promise<{ geometry: THREE.BufferGeometry; unified: UnifiedAnalysis; gate: CADConfidenceReport; issues: ConfidenceIssue[] }> {
   geometry.computeVertexNormals();
@@ -31,7 +33,7 @@ export async function runCadAnalysis(
   const unified = await runAnalysisInWorker(model, {
     fileName: opts.fileName,
     material: opts.material,
-    printerId: 'bambu_x1c',
+    printerId: opts.printerId ?? 'bambu_x1c',
   });
   const gate = runConfidenceGate(unified, opts.prompt, opts.quality ?? 'SUCCESS', opts.language);
   return { geometry, unified, gate: gate.report, issues: gate.issues };
