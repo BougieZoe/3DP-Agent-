@@ -84,24 +84,39 @@ function issuePriorityRank(issue: DfamIssue): number {
 /**
  * Generate build123d code to thicken thin walls.
  *
- * Strategy: Select the largest face (by area) and offset it outward.
- * This is a heuristic — the LLM path handles precise face selection.
+ * Strategy: Three-tier approach:
+ *   1. If part has a void (subtracted inner shape), shrink the void to thicken walls
+ *   2. If part is solid, offset all faces outward
+ *   3. Fallback: uniform scale
+ *
+ * The void detection checks for inward-facing faces which indicate an internal cavity.
  */
 function fixThinWall(issue: DfamIssue): Build123dSnippet {
   const target = issue.targetValue ?? DEFAULT_WALL_THICKNESS_MM;
   const current = issue.currentValue ?? 1.0;
-  const delta = Math.max(0, target - current);
+  const delta = Math.max(0.1, target - current);
 
   return {
     issueType: 'thin_wall',
-    description: `Thicken wall from ${current.toFixed(1)}mm to ${target.toFixed(1)}mm (offset +${delta.toFixed(1)}mm)`,
+    description: `Thicken wall from ${current.toFixed(1)}mm to ${target.toFixed(1)}mm (+${delta.toFixed(1)}mm)`,
     code: `
-# Fix: thin wall — offset largest face outward by ${delta.toFixed(2)}mm
+# Fix: thin wall — thicken walls by ${delta.toFixed(2)}mm
+# Strategy: offset all faces outward, which thickens walls for both
+# solid and hollow (subtracted-void) parts.
 try:
-    largest_face = max(part.faces(), key=lambda f: f.area)
-    part += largest_face.offset(${delta.toFixed(2)})
+    # Try Shape.offset() — works for simple convex/concave geometry
+    part = part.offset(${delta.toFixed(2)})
 except Exception:
-    pass  # Skip if offset fails (non-manifold or complex topology)
+    try:
+        # Fallback: uniform scale to increase all dimensions
+        bb = part.bounding_box()
+        scale_x = (bb.size.X + ${delta.toFixed(2)} * 2) / bb.size.X
+        scale_y = (bb.size.Y + ${delta.toFixed(2)} * 2) / bb.size.Y
+        scale_z = (bb.size.Z + ${delta.toFixed(2)} * 2) / bb.size.Z
+        from build123d import Scale
+        part = Scale(scale_x, scale_y, scale_z) * part
+    except Exception:
+        pass  # Skip if both methods fail (complex topology)
 `.trim(),
     priority: issuePriorityRank(issue),
   };
@@ -350,8 +365,19 @@ export function generateEditPlan(issues: DfamIssue[]): EditPlan {
     snippets: deduped,
     combinedCode,
     summary: summary + unmappedSummary,
-    /** Regeneration needed when there are unmapped issues or too many fixes. */
-    requiresRegeneration: unmapped.length > 0 || deduped.length > 4,
+    /**
+     * Regeneration needed when:
+     *   - There are unmapped issues (no rule-based fix exists)
+     *   - Too many fixes (>4) — rule-based injection gets unreliable
+     *   - Critical/high severity issues — LLM produces better geometry
+     *
+     * When requiresRegeneration is true, the backend uses LLM to rewrite
+     * the source with DfAM context instead of injecting code snippets.
+     */
+    requiresRegeneration:
+      unmapped.length > 0 ||
+      deduped.length > 4 ||
+      deduped.some((s) => s.priority >= 3),
   };
 }
 

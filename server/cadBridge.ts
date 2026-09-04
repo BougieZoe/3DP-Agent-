@@ -377,6 +377,38 @@ async function generateFixViaLlm(
   return content;
 }
 
+/**
+ * Ask LLM to modify build123d source to fix DfAM issues.
+ * Unlike generateFixViaLlm (which fixes execution errors), this targets
+ * manufacturing problems: thin walls, overhangs, stress concentrations, etc.
+ */
+async function generateDfamFixViaLlm(
+  candidates: BridgeLlmCandidates,
+  originalSource: string,
+  fixPrompt: string,
+  userPrompt: string,
+): Promise<string> {
+  let content = '';
+  const candidate: LlmCandidate[] = candidates.map((llm) => ({
+    id: `${llm.baseUrl}|${llm.model}`,
+    label: `${new URL(llm.baseUrl).hostname}/${llm.model}`,
+    send: async () => {
+      content = await llmChatWithBackoff(llm, fixPrompt, () => {});
+      return { ok: true };
+    },
+  }));
+  const result = await runFailoverSequence(candidate, {
+    failureThreshold: 2,
+    cooldownMs: 30_000,
+    budgetMs: 150_000,
+    onLog: (msg) => console.log(`[cadBridge] dfam-fix-failover: ${msg}`),
+  });
+  if (!result.ok) {
+    throw new Error(result.error ?? 'DfAM fix generation failed');
+  }
+  return content;
+}
+
 function composeUserMessage(body: BridgeGenerateBody, priorSource: string | null): string {
   const lines: string[] = [];
   if (body.baseModel && priorSource) {
@@ -602,8 +634,16 @@ export function createCadBridgeRouter(): Router {
       }
 
       const fixPrompt = [
-        'Modify the following build123d generator to fix DfAM issues.',
-        'Preserve the original design intent — only change geometry to address the issues.',
+        'Modify the following build123d generator to fix DfAM (Design for Additive Manufacturing) issues.',
+        'Preserve the original design intent — only change geometry to address the issues below.',
+        '',
+        'CRITICAL RULES:',
+        '- Output ONLY the fixed Python code. No explanations or markdown.',
+        '- Keep the gen_step() function structure. Do NOT use BuildPart/BuildLine/BuildSketch context managers.',
+        '- For thin walls: adjust Box dimensions or use OffsetFaces to thicken walls. Do NOT use face.offset() on a single face.',
+        '- For overhangs: add support ribs (Box operations) under overhanging regions.',
+        '- For bridging: add reinforcement ribs across long spans.',
+        '- Return the modified part from gen_step().',
         '',
         'DfAM ISSUES TO FIX:',
         editPlan.summary,
@@ -618,7 +658,7 @@ export function createCadBridgeRouter(): Router {
       ].join('\n');
 
       try {
-        fixedSource = await generateFixViaLlm(candidates, body.source, fixPrompt, body.prompt ?? '');
+        fixedSource = await generateDfamFixViaLlm(candidates, body.source, fixPrompt, body.prompt ?? '');
       } catch (err) {
         console.log(`[cadBridge:${id.slice(0, 8)}] LLM fix failed: ${err}`);
         // Fall back to rule-based injection
