@@ -2,6 +2,7 @@ import type { AgentOutput, OptimizedGeometrySuggestion, MaterialRecommendation, 
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { BaseAgent, type AgentContext } from './baseAgent';
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from '@/analysis/metrics';
+import type { VendorCapacityAdapter } from '@/lib/vendorCapacity';
 
 export class OptimizationAdvisor extends BaseAgent {
   constructor() {
@@ -38,7 +39,7 @@ export class OptimizationAdvisor extends BaseAgent {
     const failureOutput = previousOutputs.get('failure_predictor');
 
     const suggestions = this.generateSuggestions(analysisInput, metricsInput, supportDecision, geometryOutput, scorerOutput, failureOutput, material.overhangThreshold, ctx.language);
-    const recommendedMaterials = this.recommendMaterials(analysisInput, metricsInput, ctx.language);
+    const recommendedMaterials = await this.recommendMaterials(analysisInput, metricsInput, ctx.language, ctx.vendorCapacityAdapter);
     const optimalOrientation = this.suggestOrientation(analysisInput, metricsInput, ctx.language);
 
     const score = Math.round(this.computeOptimizationScore(suggestions, recommendedMaterials.length));
@@ -191,11 +192,12 @@ export class OptimizationAdvisor extends BaseAgent {
     return suggestions;
   }
 
-  private recommendMaterials(
+  private async recommendMaterials(
     analysis: { wallThickness: { status: string; minThickness: number | null } },
     metrics: { size: { x: number; y: number; z: number } },
     language: ContentLang = 'en',
-  ): MaterialRecommendation[] {
+    adapter?: VendorCapacityAdapter,
+  ): Promise<MaterialRecommendation[]> {
     const volume = metrics.size.x * metrics.size.y * metrics.size.z;
     const maxDim = Math.max(metrics.size.x, metrics.size.y, metrics.size.z);
     const isLarge = volume > 500000;
@@ -205,25 +207,46 @@ export class OptimizationAdvisor extends BaseAgent {
     const supportLabel = (key: 'minimal' | 'standard' | 'required' | 'asNeeded') =>
       translate(CONTENT, `optimizationAdvisor.matSupport.${key}`, language);
 
+    let candidates: MaterialRecommendation[];
+
     if (isLarge) {
-      return [
+      candidates = [
         { material: 'PLA+', process: 'FDM', reason: translate(CONTENT, 'optimizationAdvisor.matReason.plaLarge', language), confidence: 0.9, layerHeight: '0.2mm', infill: '15-20%', supports: supportLabel('minimal') },
         { material: 'PETG', process: 'FDM', reason: translate(CONTENT, 'optimizationAdvisor.matReason.petgLarge', language), confidence: 0.7, layerHeight: '0.2mm', infill: '20-25%', supports: supportLabel('standard') },
       ];
-    }
-
-    if (isSmall && isThin) {
-      return [
+    } else if (isSmall && isThin) {
+      candidates = [
         { material: 'SLA Resin', process: 'SLA', reason: translate(CONTENT, 'optimizationAdvisor.matReason.slaSmall', language), confidence: 0.85, layerHeight: '0.05mm', infill: '100%', supports: supportLabel('required') },
         { material: 'PLA (0.4mm nozzle)', process: 'FDM', reason: translate(CONTENT, 'optimizationAdvisor.matReason.plaSmall', language), confidence: 0.6, layerHeight: '0.12mm', infill: '30%', supports: supportLabel('standard') },
       ];
+    } else {
+      candidates = [
+        { material: 'PLA', process: 'FDM', reason: translate(CONTENT, 'optimizationAdvisor.matReason.plaGeneral', language), confidence: 0.85, layerHeight: '0.2mm', infill: '20%', supports: supportLabel('asNeeded') },
+        { material: 'PETG', process: 'FDM', reason: translate(CONTENT, 'optimizationAdvisor.matReason.petgFunctional', language), confidence: 0.7, layerHeight: '0.2mm', infill: '25%', supports: supportLabel('standard') },
+        { material: 'ABS/ASA', process: 'FDM (enclosed)', reason: translate(CONTENT, 'optimizationAdvisor.matReason.absOutdoor', language), confidence: 0.5, layerHeight: '0.2mm', infill: '30%', supports: supportLabel('standard') },
+      ];
     }
 
-    return [
-      { material: 'PLA', process: 'FDM', reason: translate(CONTENT, 'optimizationAdvisor.matReason.plaGeneral', language), confidence: 0.85, layerHeight: '0.2mm', infill: '20%', supports: supportLabel('asNeeded') },
-      { material: 'PETG', process: 'FDM', reason: translate(CONTENT, 'optimizationAdvisor.matReason.petgFunctional', language), confidence: 0.7, layerHeight: '0.2mm', infill: '25%', supports: supportLabel('standard') },
-      { material: 'ABS/ASA', process: 'FDM (enclosed)', reason: translate(CONTENT, 'optimizationAdvisor.matReason.absOutdoor', language), confidence: 0.5, layerHeight: '0.2mm', infill: '30%', supports: supportLabel('standard') },
-    ];
+    // Annotate with vendor capacity if adapter is available
+    if (adapter) {
+      for (const candidate of candidates) {
+        try {
+          const matStock = await adapter.getMaterialStock(candidate.material);
+          if (matStock) {
+            candidate.availability = {
+              ...candidate.availability,
+              materialStockKg: matStock.remainingKg,
+              materialLastUpdated: matStock.lastUpdated,
+            };
+          }
+        } catch {
+          // Log and treat as "unknown availability" — don't crash the pipeline
+          console.warn(`[optimizationAdvisor] Failed to query material stock for "${candidate.material}"`);
+        }
+      }
+    }
+
+    return candidates;
   }
 
   private suggestOrientation(

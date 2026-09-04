@@ -10,6 +10,7 @@ import {
   mockMaterial,
 } from './testAgentFixtures';
 import type { AgentOutput } from '@shared/domain/agent';
+import type { VendorCapacityAdapter, MachineAvailability, MaterialStock } from '@/lib/vendorCapacity';
 
 describe('OptimizationAdvisor', () => {
   const advisor = new OptimizationAdvisor();
@@ -137,5 +138,107 @@ describe('OptimizationAdvisor', () => {
     const output = await advisor.execute(ctx);
     expect(output.score).toBeLessThan(70);
     expect(['fail', 'warning']).toContain(output.verdict);
+  });
+
+  it('annotates materials with availability when adapter is provided', async () => {
+    const mockAdapter: VendorCapacityAdapter = {
+      getMachineAvailability: async () => ({ machineId: 'kings3d-fgf1800pro-01', status: 'available' }),
+      getMaterialStock: async (type: string) => {
+        // Match by prefix — PLA+ matches PLA, PETG matches PETG, etc.
+        const normalized = type.replace(/[^a-zA-Z]/g, '').toUpperCase();
+        const stock: Record<string, MaterialStock> = {
+          PLA: { materialType: 'PLA', remainingKg: 12.5, lastUpdated: new Date().toISOString() },
+          PETG: { materialType: 'PETG', remainingKg: 0.3, lastUpdated: new Date().toISOString() },
+          ABSASA: { materialType: 'ABS/ASA', remainingKg: 8.0, lastUpdated: new Date().toISOString() },
+        };
+        // Find matching stock by checking if normalized starts with a key
+        for (const [key, val] of Object.entries(stock)) {
+          if (normalized.startsWith(key)) return val;
+        }
+        return null;
+      },
+    };
+
+    const ctx = buildAgentContext({
+      unifiedAnalysis: buildMockUnifiedAnalysis({ metrics: normalMetrics() }),
+      modelSize: { x: 200, y: 150, z: 30 },
+      vendorCapacityAdapter: mockAdapter,
+    });
+    const output = await advisor.execute(ctx);
+    const details = output.details as Record<string, unknown>;
+    const materials = details.recommendedMaterials as Array<Record<string, unknown>>;
+
+    expect(materials.length).toBeGreaterThanOrEqual(2);
+    const first = materials[0];
+    expect(first.availability).toBeDefined();
+    expect((first.availability as Record<string, unknown>).materialStockKg).toBe(12.5);
+  });
+
+  it('does not annotate when adapter is absent', async () => {
+    const ctx = buildAgentContext({
+      unifiedAnalysis: buildMockUnifiedAnalysis({ metrics: normalMetrics() }),
+      modelSize: { x: 200, y: 150, z: 30 },
+    });
+    const output = await advisor.execute(ctx);
+    const details = output.details as Record<string, unknown>;
+    const materials = details.recommendedMaterials as Array<Record<string, unknown>>;
+
+    expect(materials.length).toBeGreaterThanOrEqual(2);
+    for (const mat of materials) {
+      expect(mat.availability).toBeUndefined();
+    }
+  });
+
+  it('flags booked status via adapter', async () => {
+    const mockAdapter: VendorCapacityAdapter = {
+      getMachineAvailability: async () => ({ machineId: 'kings3d-fgf1800pro-02', status: 'booked', nextFreeSlot: '2026-09-06T08:00:00.000Z' }),
+      getMaterialStock: async (type: string) => {
+        const normalized = type.replace(/[^a-zA-Z]/g, '').toUpperCase();
+        const stock: Record<string, MaterialStock> = {
+          PLA: { materialType: 'PLA', remainingKg: 12.5, lastUpdated: new Date().toISOString() },
+          PETG: { materialType: 'PETG', remainingKg: 0.3, lastUpdated: new Date().toISOString() },
+          ABSASA: { materialType: 'ABS/ASA', remainingKg: 8.0, lastUpdated: new Date().toISOString() },
+        };
+        for (const [key, val] of Object.entries(stock)) {
+          if (normalized.startsWith(key)) return val;
+        }
+        return null;
+      },
+    };
+
+    const ctx = buildAgentContext({
+      unifiedAnalysis: buildMockUnifiedAnalysis({ metrics: normalMetrics() }),
+      modelSize: { x: 200, y: 150, z: 30 },
+      vendorCapacityAdapter: mockAdapter,
+    });
+    const output = await advisor.execute(ctx);
+    const details = output.details as Record<string, unknown>;
+    const materials = details.recommendedMaterials as Array<Record<string, unknown>>;
+    const first = materials[0];
+    const avail = first.availability as Record<string, unknown> | undefined;
+    expect(avail).toBeDefined();
+    expect(avail!.materialStockKg).toBeDefined();
+  });
+
+  it('handles adapter errors without crashing', async () => {
+    const brokenAdapter: VendorCapacityAdapter = {
+      getMachineAvailability: async () => { throw new Error('network error'); },
+      getMaterialStock: async () => { throw new Error('network error'); },
+    };
+
+    const ctx = buildAgentContext({
+      unifiedAnalysis: buildMockUnifiedAnalysis({ metrics: normalMetrics() }),
+      modelSize: { x: 200, y: 150, z: 30 },
+      vendorCapacityAdapter: brokenAdapter,
+    });
+    const output = await advisor.execute(ctx);
+    expect(output.score).toBeGreaterThanOrEqual(0);
+    const details = output.details as Record<string, unknown>;
+    const materials = details.recommendedMaterials as Array<Record<string, unknown>>;
+    expect(materials.length).toBeGreaterThanOrEqual(2);
+    // No availability annotation due to error
+    for (const mat of materials) {
+      expect(mat.availability).toBeUndefined();
+    }
   });
 });

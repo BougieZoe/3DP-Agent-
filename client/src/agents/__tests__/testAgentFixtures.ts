@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { UnifiedAnalysis } from '@/analysis';
 import type { AgentContext } from '../baseAgent';
+import type { VendorCapacityAdapter } from '@/lib/vendorCapacity';
 import type { Confidence, MetricsResult, TopologyResult, ValidationResult, OverhangMetrics, WallThicknessSample } from '@/analysis/types';
 import type { Material } from '@shared/domain/material';
 
@@ -271,6 +272,7 @@ export function buildAgentContext(overrides?: {
   material?: Material;
   fileName?: string;
   visionResult?: NonNullable<AgentContext['visionResult']> & { raw?: string };
+  vendorCapacityAdapter?: VendorCapacityAdapter;
 }): AgentContext {
   const geo = overrides?.geometry ?? mockGeometry();
   const norms = geo.getAttribute('normal')?.array as Float32Array ?? new Float32Array(9);
@@ -286,5 +288,6 @@ export function buildAgentContext(overrides?: {
     visionAnalysis: (overrides?.visionResult as { raw?: string } | undefined)?.raw ?? undefined,
     visionResult: overrides?.visionResult ?? undefined,
     language: 'en',
+    vendorCapacityAdapter: overrides?.vendorCapacityAdapter,
   };
 }
