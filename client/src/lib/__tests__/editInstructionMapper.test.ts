@@ -77,7 +77,8 @@ describe('editInstructionMapper', () => {
       expect(plan.combinedCode).toContain('offset');
       expect(plan.combinedCode).toContain('rib');
       expect(plan.combinedCode).toContain('fillet');
-      expect(plan.requiresRegeneration).toBe(false);
+      // High-priority issues trigger LLM path for better fix quality
+      expect(plan.requiresRegeneration).toBe(true);
     });
 
     it('marks regeneration needed for unmapped issues', () => {

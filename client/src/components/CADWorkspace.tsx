@@ -683,6 +683,9 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     iteration: number;
     maxIterations: number;
     reason: string;
+    previousScore: number;
+    currentScore: number;
+    improvement: number;
   } | null>(null);
   const lastBboxRef = useRef<string | null>(null);
   const startTs = useRef(0);
@@ -722,6 +725,9 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
       iteration: plan.iteration,
       maxIterations: 3,
       reason: `Auto-fix iteration ${plan.iteration}/3`,
+      previousScore: 0,
+      currentScore: 0,
+      improvement: 0,
     });
 
     // Re-trigger generation with the DfAM fix instruction as baseModel.editInstruction
@@ -1420,63 +1426,121 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   }, [handleAutoOptimize]);
 
   /**
-   * Auto Fix: send current source + DfAM issues to /api/cad/edit for
-   * rule-based geometry modification. No LLM regeneration needed for
-   * common fixes (thin walls, overhangs, stress concentration, etc.).
+   * Auto Fix: fix → re-analyze → compare → iterate.
+   * Loops up to 3 iterations, stops when score improves or no progress.
    */
   const handleAutoFix = useCallback(async () => {
     if (!templateSourceRef.current || gateIssues.length === 0) return;
 
+    const originalScore = confidenceReport?.overallScore ?? 0;
+    let currentSource = templateSourceRef.current;
+    let currentStlBytes = stlBytesRef.current;
+    let prevScore = originalScore;
+
     setLoading(true);
     setError(null);
-    setAutoFixState({ active: true, iteration: 1, maxIterations: 3, reason: 'Rule-based auto-fix' });
 
-    try {
-      const res = await fetch('/api/cad/edit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          source: templateSourceRef.current,
-          issues: gateIssues.map((i) => ({
-            type: i.severity === 'error' ? 'thin_wall' : 'overhang',
-            priority: i.severity === 'error' ? 'high' : 'medium',
-            description: i.message,
-            recommendation: i.suggestion,
-          })),
-          prompt,
-          meshTolerance: { linear: 0.02, angular: 0.05 },
-        }),
-        signal: AbortSignal.timeout(120_000),
+    for (let iter = 1; iter <= 3; iter++) {
+      setAutoFixState({
+        active: true,
+        iteration: iter,
+        maxIterations: 3,
+        reason: `Fix iteration ${iter}/3`,
+        previousScore: originalScore,
+        currentScore: prevScore,
+        improvement: 0,
       });
 
-      const data = await res.json();
-      if (!data.ok) {
-        throw new Error(data.error?.detail ?? 'Auto-fix failed');
+      try {
+        // 1. Call the edit endpoint
+        const res = await fetch('/api/cad/generate/edit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source: currentSource,
+            issues: gateIssues.map((i) => ({
+              type: i.severity === 'error' ? 'thin_wall' : 'overhang',
+              priority: i.severity === 'error' ? 'high' : 'medium',
+              description: i.message,
+              recommendation: i.suggestion,
+            })),
+            prompt,
+            meshTolerance: { linear: 0.02, angular: 0.05 },
+          }),
+          signal: AbortSignal.timeout(120_000),
+        });
+
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error?.detail ?? 'Auto-fix failed');
+
+        // 2. Parse the fixed STL
+        const stlBytes = Uint8Array.from(atob(data.stlBase64), (c) => c.charCodeAt(0));
+        const geo = parseSTL(stlBytes.buffer);
+
+        // 3. Re-analyze the fixed geometry
+        const { unified, gate, issues } = await runCadAnalysis(geo, {
+          fileName: `${prompt}.stl`,
+          prompt,
+          material,
+          quality: 'SUCCESS',
+          language,
+        });
+
+        const newScore = gate.overallScore;
+        const improvement = newScore - prevScore;
+
+        // 4. Update state with the fixed geometry
+        setGeometry(geo);
+        setAnalysis(unified);
+        setConfidenceReport(gate);
+        setGateIssues(issues);
+        stlBytesRef.current = stlBytes.buffer;
+        currentStlBytes = stlBytes.buffer;
+
+        if (data.source) {
+          currentSource = data.source;
+          templateSourceRef.current = data.source;
+          setSourceVersion((v) => v + 1);
+        }
+
+        // 5. Check convergence
+        const converged =
+          gate.verdict === 'PASS' ||
+          newScore >= 75 ||
+          iter >= 3 ||
+          improvement < 5;
+
+        setAutoFixState({
+          active: false,
+          iteration: iter,
+          maxIterations: 3,
+          reason: converged
+            ? (gate.verdict === 'PASS' ? `Passed at ${newScore}%` : `Converged at ${newScore}%`)
+            : `Score ${prevScore} → ${newScore} (+${improvement}), trying again…`,
+          previousScore: originalScore,
+          currentScore: newScore,
+          improvement,
+        });
+
+        if (converged) {
+          setRightTab('cad');
+          setLoading(false);
+          return;
+        }
+
+        prevScore = newScore;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(`Auto-fix failed at iteration ${iter}: ${msg}`);
+        setAutoFixState(null);
+        setLoading(false);
+        return;
       }
-
-      // Update geometry with the fixed STL
-      const stlBytes = Uint8Array.from(atob(data.stlBase64), (c) => c.charCodeAt(0));
-      const { parseSTL } = await import('@/lib/stlParser');
-      const geo = parseSTL(stlBytes.buffer);
-      setGeometry(geo);
-      stlBytesRef.current = stlBytes.buffer;
-
-      // Update source
-      if (data.source) {
-        templateSourceRef.current = data.source;
-        setSourceVersion((v) => v + 1);
-      }
-
-      setAutoFixState({ active: false, iteration: 1, maxIterations: 3, reason: `Applied ${data.fixesApplied} fixes` });
-      setRightTab('cad');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(`Auto-fix failed: ${msg}`);
-      setAutoFixState(null);
-    } finally {
-      setLoading(false);
     }
-  }, [gateIssues, prompt]);
+
+    setRightTab('cad');
+    setLoading(false);
+  }, [gateIssues, prompt, material, language, confidenceReport?.overallScore]);
 
   const handleNewDesign = useCallback(() => {
     setGeometry(null);
@@ -1804,12 +1868,24 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
               {/* Auto-Fix DfAM iteration status */}
               {autoFixState && (
-                <div className="text-center pt-0.5">
+                <div className="text-center pt-0.5 space-y-0.5">
                   <span className="text-[10px] font-mono tracking-[0.15em] px-2 py-0.5 rounded-sm border text-cyan-400/60 border-cyan-400/20 bg-cyan-400/5">
                     {autoFixState.active
                       ? `DfAM Auto-Fix · iteration ${autoFixState.iteration}/${autoFixState.maxIterations}`
                       : `DfAM Auto-Fix · done`}
                   </span>
+                  {!autoFixState.active && autoFixState.improvement !== 0 && (
+                    <div className="text-[10px] font-mono tracking-wider">
+                      <span className="text-muted-foreground/40">{autoFixState.previousScore}%</span>
+                      <span className="text-muted-foreground/20 mx-1">→</span>
+                      <span className={autoFixState.improvement > 0 ? 'text-green-400/70' : 'text-red-400/70'}>
+                        {autoFixState.currentScore}%
+                      </span>
+                      <span className={autoFixState.improvement > 0 ? 'text-green-400/50' : 'text-red-400/50'}>
+                        ({autoFixState.improvement > 0 ? '+' : ''}{autoFixState.improvement})
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
