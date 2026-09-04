@@ -7,6 +7,7 @@ import type { UnifiedAnalysis } from '@/analysis';
 import type { Material } from '@shared/domain/material';
 import { DEFAULT_MATERIAL } from '@shared/domain/material';
 import { getAgentLabel } from './types';
+import type { VendorCapacityAdapter } from '@/lib/vendorCapacity';
 
 export interface AgentContext {
   geometry: THREE.BufferGeometry;
@@ -26,6 +27,8 @@ export interface AgentContext {
   material: Material;
   /** UI language — agents localize their user-facing analysis text. */
   language: ContentLang;
+  /** Optional vendor capacity adapter — queried at decision points, NOT in iterate loops. */
+  vendorCapacityAdapter?: VendorCapacityAdapter;
 }
 
 export interface AgentCapabilities {

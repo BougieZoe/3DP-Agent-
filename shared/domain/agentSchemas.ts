@@ -116,6 +116,12 @@ export const MaterialRecommendationSchema = z.object({
   layerHeight: z.string(),
   infill: z.string(),
   supports: z.string(),
+  availability: z.object({
+    machineStatus: z.enum(['available', 'booked', 'maintenance']).optional(),
+    nextFreeSlot: z.string().optional(),
+    materialStockKg: z.number().optional(),
+    materialLastUpdated: z.string().optional(),
+  }).optional(),
 });
 
 export const OptimizationAdvisorDetailsSchema = z.object({

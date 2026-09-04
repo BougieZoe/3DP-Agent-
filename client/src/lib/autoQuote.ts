@@ -8,6 +8,8 @@
 import type { Order, PriceBreakdown, SupplierPriceList } from '@shared/domain/order';
 import type { UnifiedAnalysis } from '@/analysis/types';
 import type { Material } from '@shared/domain/material';
+import type { VendorCapacityAdapter } from '@/lib/vendorCapacity';
+import { CAPACITY_STALENESS_THRESHOLD_MS, isCapacityStale } from '@/lib/vendorCapacity';
 
 interface QuoteParams {
   analysis: UnifiedAnalysis;
@@ -16,6 +18,15 @@ interface QuoteParams {
   supplierPrices: SupplierPriceList[];
   destination?: string;
   shippingTerms?: 'EXW' | 'FOB' | 'CIF' | 'DDP';
+  vendorCapacityAdapter?: VendorCapacityAdapter;
+  machineId?: string;
+}
+
+interface CapacityInfo {
+  machineStatus?: 'available' | 'booked' | 'maintenance';
+  machineNextFreeSlot?: string;
+  materialStockKg?: number;
+  materialLastUpdated?: string;
 }
 
 interface QuoteResult {
@@ -24,6 +35,8 @@ interface QuoteResult {
   supplierId: string;
   confidence: number;
   notes: string[];
+  capacity?: CapacityInfo;
+  capacityDataStale?: boolean;
 }
 
 // Labor cost estimates by technology ($/hour)
@@ -46,8 +59,8 @@ function getMarginMultiplier(quantity: number): number {
   return 1.30;  // Small batch = higher margin
 }
 
-export function generateQuote(params: QuoteParams): QuoteResult | null {
-  const { analysis, material, quantity, supplierPrices, shippingTerms = 'DDP' } = params;
+export async function generateQuote(params: QuoteParams): Promise<QuoteResult | null> {
+  const { analysis, material, quantity, supplierPrices, shippingTerms = 'DDP', vendorCapacityAdapter, machineId } = params;
 
   const metrics = analysis.metrics?.result;
   const pt = analysis.printTime?.result;
@@ -60,6 +73,34 @@ export function generateQuote(params: QuoteParams): QuoteResult | null {
   );
 
   if (!supplierPrice) return null;
+
+  // Query vendor capacity
+  let capacity: CapacityInfo | undefined;
+  let capacityDataStale: boolean | undefined;
+
+  if (vendorCapacityAdapter) {
+    try {
+      const [machineAvail, matStock] = await Promise.all([
+        machineId ? vendorCapacityAdapter.getMachineAvailability(machineId) : Promise.resolve(null),
+        vendorCapacityAdapter.getMaterialStock(material.name),
+      ]);
+
+      if (machineAvail || matStock) {
+        capacity = {};
+        if (machineAvail) {
+          capacity.machineStatus = machineAvail.status;
+          capacity.machineNextFreeSlot = machineAvail.nextFreeSlot;
+        }
+        if (matStock) {
+          capacity.materialStockKg = matStock.remainingKg;
+          capacity.materialLastUpdated = matStock.lastUpdated;
+          capacityDataStale = isCapacityStale(matStock.lastUpdated);
+        }
+      }
+    } catch {
+      console.warn(`[autoQuote] Failed to query vendor capacity — treating as unknown`);
+    }
+  }
 
   // Calculate costs
   const weightKg = pt.materialWeightGrams / 1000;
@@ -104,6 +145,7 @@ export function generateQuote(params: QuoteParams): QuoteResult | null {
   if (quantity > 50) notes.push('Large batch discount may apply');
   if (printHours > 24) notes.push('Long print time - consider splitting');
   if (metrics.overhang.ratio > 0.3) notes.push('High support requirement');
+  if (capacityDataStale) notes.push('Capacity data may be outdated');
 
   return {
     price: {
@@ -119,6 +161,8 @@ export function generateQuote(params: QuoteParams): QuoteResult | null {
     supplierId: supplierPrice.supplierId,
     confidence,
     notes,
+    capacity,
+    capacityDataStale,
   };
 }
 

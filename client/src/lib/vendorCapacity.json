@@ -1,0 +1,39 @@
+{
+  "machines": [
+    {
+      "machineId": "kings3d-fgf1800pro-01",
+      "status": "available"
+    },
+    {
+      "machineId": "kings3d-fgf1800pro-02",
+      "status": "booked",
+      "nextFreeSlot": "2026-09-06T08:00:00.000Z"
+    },
+    {
+      "machineId": "formlabs-form3-01",
+      "status": "maintenance"
+    }
+  ],
+  "materials": [
+    {
+      "materialType": "PLA",
+      "remainingKg": 12.5,
+      "lastUpdated": "2026-09-04T10:00:00.000Z"
+    },
+    {
+      "materialType": "PETG",
+      "remainingKg": 0.3,
+      "lastUpdated": "2026-09-01T14:30:00.000Z"
+    },
+    {
+      "materialType": "ABS",
+      "remainingKg": 8.0,
+      "lastUpdated": "2026-09-04T08:00:00.000Z"
+    },
+    {
+      "materialType": "SLA Resin",
+      "remainingKg": 2.1,
+      "lastUpdated": "2026-09-03T16:00:00.000Z"
+    }
+  ]
+}
