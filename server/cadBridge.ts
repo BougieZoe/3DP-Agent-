@@ -31,6 +31,7 @@ const MAX_TIMEOUT_MS = 600_000;
 const LLM_TIMEOUT_MS = 150_000;
 const STDERR_TAIL = 4000;
 const MAX_REPAIR_ATTEMPTS = 2;
+const MAX_LLM_FIX_ATTEMPTS = 3;
 const METRICS_PATH = path.join(PROJECT_ROOT, '.cad-bridge', 'metrics.jsonl');
 
 interface BridgeLlmConfig {
@@ -253,6 +254,57 @@ async function generateSourceViaLlm(
   return content;
 }
 
+/** Send the failed source + traceback to the LLM and ask it to fix the code. */
+async function generateFixViaLlm(
+  candidates: BridgeLlmCandidates,
+  originalSource: string,
+  errorOutput: string,
+  userPrompt: string,
+): Promise<string> {
+  const fixMessage = [
+    `The following build123d code failed to execute. Fix the code so it runs correctly.`,
+    '',
+    `Original user request: ${userPrompt}`,
+    '',
+    'Failed source:',
+    '```python',
+    originalSource,
+    '```',
+    '',
+    'Error output:',
+    '```',
+    errorOutput.slice(-2000),
+    '```',
+    '',
+    'Rules:',
+    '- Output ONLY the fixed Python code. No explanations.',
+    '- Keep the same gen_step() function structure.',
+    '- Fix the error while preserving the original design intent.',
+    '- Do NOT use BuildPart, BuildLine, BuildSketch, or context managers.',
+    '- Do NOT use fillet/chamfer on shapes with holes.',
+  ].join('\n');
+
+  let content = '';
+  const candidate: LlmCandidate[] = candidates.map((llm) => ({
+    id: `${llm.baseUrl}|${llm.model}`,
+    label: `${new URL(llm.baseUrl).hostname}/${llm.model}`,
+    send: async () => {
+      content = await llmChatWithBackoff(llm, fixMessage, () => {});
+      return { ok: true };
+    },
+  }));
+  const result = await runFailoverSequence(candidate, {
+    failureThreshold: 2,
+    cooldownMs: 30_000,
+    budgetMs: 120_000,
+    onLog: (msg) => console.log(`[cadBridge] fix-failover: ${msg}`),
+  });
+  if (!result.ok) {
+    throw new Error(result.error ?? 'LLM fix generation failed');
+  }
+  return content;
+}
+
 function composeUserMessage(body: BridgeGenerateBody, priorSource: string | null): string {
   const lines: string[] = [];
   if (body.baseModel && priorSource) {
@@ -435,11 +487,12 @@ export function createCadBridgeRouter(): Router {
     }
 
     let source: string;
+    let candidates: BridgeLlmCandidates = [];
     if (body.generatorSource) {
       source = body.generatorSource;
       console.log(`[cadBridge:${id.slice(0, 8)}] Using generatorSource (${source.length} chars)`);
     } else {
-      const candidates: BridgeLlmCandidates =
+      candidates =
         body.llmCandidates && body.llmCandidates.length > 0
           ? body.llmCandidates
           : body.llm
@@ -495,6 +548,7 @@ export function createCadBridgeRouter(): Router {
     let run = await runStepCli(ready.python, args, runDir, timeoutMs);
     let repairAttempts = 0;
     let repairType: RepairType | null = null;
+    let llmFixAttempts = 0;
     const providerLabel =
       (body.llmCandidates?.[0]?.model ?? body.llm?.model) || 'template';
 
@@ -503,7 +557,7 @@ export function createCadBridgeRouter(): Router {
       console.log(`[cadBridge:${id.slice(0, 8)}] Attempt ${repairAttempts + 1} failed — inspecting traceback`);
       const repairResult = repairCadSource(source, combined);
       if (!repairResult) {
-        console.log(`[cadBridge:${id.slice(0, 8)}] No repairable pattern — giving up`);
+        console.log(`[cadBridge:${id.slice(0, 8)}] No repairable pattern — trying LLM fix`);
         break;
       }
 
@@ -516,6 +570,29 @@ export function createCadBridgeRouter(): Router {
 
       run = await runStepCli(ready.python, args, runDir, timeoutMs);
       console.log(`[cadBridge:${id.slice(0, 8)}] After repair — exit code ${run.code}`);
+    }
+
+    // ── LLM-based fix loop (after pattern repairs exhausted) ──
+    if (run.code !== 0 && !run.timedOut && candidates.length > 0) {
+      while (run.code !== 0 && !run.timedOut && llmFixAttempts < MAX_LLM_FIX_ATTEMPTS) {
+        const combined = run.stdout + run.stderr;
+        llmFixAttempts++;
+        console.log(`[cadBridge:${id.slice(0, 8)}] LLM fix attempt ${llmFixAttempts}/${MAX_LLM_FIX_ATTEMPTS}`);
+        try {
+          source = await generateFixViaLlm(candidates, source, combined, body.prompt ?? '');
+          const safety = scanSourceSafety(source);
+          if (!safety.safe) {
+            console.log(`[cadBridge:${id.slice(0, 8)}] LLM fix produced unsafe code: ${safety.reason}`);
+            break;
+          }
+          await writeFile(path.join(runDir, 'model.py'), source, 'utf-8');
+          run = await runStepCli(ready.python, args, runDir, timeoutMs);
+          console.log(`[cadBridge:${id.slice(0, 8)}] After LLM fix — exit code ${run.code}`);
+        } catch (err) {
+          console.log(`[cadBridge:${id.slice(0, 8)}] LLM fix failed: ${String(err)}`);
+          break;
+        }
+      }
     }
 
     // ── Metrics ──
