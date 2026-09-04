@@ -473,6 +473,28 @@ function sha256(buf: Buffer): string {
   return createHash('sha256').update(buf).digest('hex');
 }
 
+/**
+ * Inject rule-based fix code into an existing build123d generator.
+ * Finds the `return part` statement and inserts fix code before it.
+ */
+function injectRuleBasedFixes(source: string, fixCode: string): string {
+  // Strategy: find "return part" and insert fixes before it
+  const returnMatch = source.match(/^(\s*return\s+part\s*)$/m);
+  if (returnMatch) {
+    const indent = returnMatch[1].match(/^(\s*)/)?.[1] ?? '    ';
+    const insertPoint = source.indexOf(returnMatch[0]);
+    return (
+      source.slice(0, insertPoint) +
+      fixCode.split('\n').map((l) => `${indent}${l}`).join('\n') +
+      '\n\n' +
+      source.slice(insertPoint)
+    );
+  }
+
+  // Fallback: append fixes at the end of gen_step()
+  return source + '\n\n    # ── Auto-fix injected code ──\n' + fixCode + '\n';
+}
+
 function sendError(
   res: Response,
   status: number,
@@ -498,6 +520,165 @@ export function createCadBridgeRouter(): Router {
   router.get('/health', (_req: Request, res: Response) => {
     const status = bridgeReady();
     res.json({ ok: true, ...status, skillDir: SKILL_DIR });
+  });
+
+  // ── Auto-Fix endpoint: apply DfAM fixes to existing build123d source ──
+  //
+  // POST /api/cad/edit
+  // Body: { source: string, issues: DfamIssue[], prompt: string, constraints?, meshTolerance? }
+  //
+  // Takes existing build123d source + DfAM issues, generates fix code snippets
+  // via the edit instruction mapper, injects them into the source, and re-executes
+  // to produce a modified STL. Returns the new STL + updated source.
+  router.post('/edit', async (req: Request, res: Response) => {
+    const startedAt = Date.now();
+    const id = randomUUID();
+
+    const body = req.body as {
+      source?: string;
+      issues?: Array<{
+        type: string;
+        priority?: string;
+        description: string;
+        implementation?: string;
+        recommendation?: string;
+        currentValue?: number;
+        targetValue?: number;
+      }>;
+      prompt?: string;
+      constraints?: { targetPrinter?: string; materialName?: string; maxDimensionMm?: number };
+      meshTolerance?: { linear?: number; angular?: number };
+      llmCandidates?: BridgeLlmCandidates;
+      llm?: BridgeLlmConfig;
+    };
+
+    if (!body.source) {
+      sendError(res, 400, 'missing-source', 'source (build123d Python code) is required');
+      return;
+    }
+    if (!body.issues || body.issues.length === 0) {
+      sendError(res, 400, 'no-issues', 'issues array is required and must not be empty');
+      return;
+    }
+
+    const ready = bridgeReady();
+    if (!ready.ready) {
+      sendError(res, 503, 'bridge-unavailable', ready.reason ?? 'CAD bridge not ready');
+      return;
+    }
+
+    console.log(`[cadBridge:${id.slice(0, 8)}] Auto-fix: ${body.issues.length} issues on ${body.source.length} char source`);
+
+    // Build fix code snippets from issues using the rule-based mapper
+    // Import is dynamic to avoid bundling issues; the mapper is client-side code
+    // that also works in Node.js (pure logic, no DOM deps).
+    const { generateEditPlan, wrapEditPlanAsGenerator } = await import(
+      '../client/src/lib/editInstructionMapper'
+    );
+
+    const dfamIssues = (body.issues ?? []).map((i) => ({
+      type: i.type,
+      priority: (i.priority as 'critical' | 'high' | 'medium' | 'low') ?? 'medium',
+      description: i.description,
+      implementation: i.implementation,
+      recommendation: i.recommendation,
+      currentValue: i.currentValue,
+      targetValue: i.targetValue,
+    }));
+
+    const editPlan = generateEditPlan(dfamIssues);
+    console.log(`[cadBridge:${id.slice(0, 8)}] Edit plan: ${editPlan.snippets.length} fixes, regeneration=${editPlan.requiresRegeneration}`);
+
+    // Strategy: Use LLM to apply fixes to the existing source
+    // The rule-based snippets guide the LLM but the LLM does the actual code merge
+    let fixedSource: string;
+
+    if (editPlan.requiresRegeneration) {
+      // Complex fixes: ask LLM to regenerate with DfAM context
+      const candidates = buildMergedCandidates(body);
+      if (candidates.length === 0) {
+        sendError(res, 502, 'no-llm', 'Auto-fix requires LLM but no provider is configured');
+        return;
+      }
+
+      const fixPrompt = [
+        'Modify the following build123d generator to fix DfAM issues.',
+        'Preserve the original design intent — only change geometry to address the issues.',
+        '',
+        'DfAM ISSUES TO FIX:',
+        editPlan.summary,
+        '',
+        'RULE-BASED FIX SUGGESTIONS (use as guidance, adapt to the actual geometry):',
+        editPlan.combinedCode,
+        '',
+        'Existing generator source:',
+        body.source,
+        '',
+        `Original description: ${body.prompt ?? ''}`,
+      ].join('\n');
+
+      try {
+        fixedSource = await generateFixViaLlm(candidates, body.source, fixPrompt, body.prompt ?? '');
+      } catch (err) {
+        console.log(`[cadBridge:${id.slice(0, 8)}] LLM fix failed: ${err}`);
+        // Fall back to rule-based injection
+        fixedSource = injectRuleBasedFixes(body.source, editPlan.combinedCode);
+      }
+    } else {
+      // Simple fixes: inject rule-based code directly into the existing source
+      fixedSource = injectRuleBasedFixes(body.source, editPlan.combinedCode);
+    }
+
+    // Safety check
+    const safety = scanSourceSafety(fixedSource);
+    if (!safety.safe) {
+      console.warn(`[cadBridge:${id.slice(0, 8)}] REJECT — unsafe fixed source: ${safety.reason}`);
+      sendError(res, 502, 'unsafe-fixed', `Fixed code contained a forbidden operation (${safety.reason}).`);
+      return;
+    }
+
+    // Execute the fixed source
+    const runDir = path.join(RUNS_ROOT, id);
+    await mkdir(runDir, { recursive: true });
+    await writeFile(path.join(runDir, 'model.py'), fixedSource, 'utf-8');
+
+    const args = [STEP_CLI_DIR, 'model.py', '--stl', 'model.stl'];
+    if (body.meshTolerance?.linear) args.push('--mesh-tolerance', String(body.meshTolerance.linear));
+    if (body.meshTolerance?.angular) args.push('--mesh-angular-tolerance', String(body.meshTolerance.angular));
+
+    const timeoutMs = Math.min(body.constraints?.maxDimensionMm ? DEFAULT_TIMEOUT_MS * 1.5 : DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
+    console.log(`[cadBridge:${id.slice(0, 8)}] Running fixed source: python ${args.join(' ')}`);
+
+    const run = await runStepCli(ready.python, args, runDir, timeoutMs);
+
+    if (run.code !== 0) {
+      const combined = run.stdout + run.stderr;
+      console.error(`[cadBridge:${id.slice(0, 8)}] Fixed source execution failed:\n${combined.slice(-2000)}`);
+      sendError(res, 502, 'fix-execution-failed', `Auto-fix code failed to execute.\n\nError:\n${combined.slice(-1000)}`);
+      return;
+    }
+
+    // Read the generated STL
+    const stlPath = path.join(runDir, 'model.stl');
+    let stl: Buffer;
+    try {
+      stl = await readFile(stlPath);
+    } catch {
+      sendError(res, 502, 'stl-not-found', 'Fixed source ran but produced no STL output');
+      return;
+    }
+
+    const totalMs = Date.now() - startedAt;
+    console.log(`[cadBridge:${id.slice(0, 8)}] Auto-fix complete in ${totalMs}ms (${stl.length} bytes STL, ${editPlan.snippets.length} fixes applied)`);
+
+    res.json({
+      ok: true,
+      stlBase64: stl.toString('base64'),
+      source: fixedSource,
+      fixesApplied: editPlan.snippets.length,
+      fixSummary: editPlan.summary,
+      durationMs: totalMs,
+    });
   });
 
   // Download the exact STEP file produced for a run (the primary CAD artifact

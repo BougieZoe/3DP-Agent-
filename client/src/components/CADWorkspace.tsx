@@ -21,6 +21,7 @@ import {
   Settings2,
   Box,
   Square,
+  Wand2,
 } from "lucide-react";
 import { createLocalBridgeAdapter, generateDesign } from "@/design/generator";
 import { parseSTL } from "@/lib/stlParser";
@@ -41,6 +42,7 @@ import { DynamicParamsPanel } from "./cad/DynamicParamsPanel";
 import { parseParamsFromSource, sliderBounds } from "@/lib/cadParams";
 import { runCadAnalysis } from "@/lib/cadAnalysis";
 import { geometryToThreeMf } from "@/lib/threeMf";
+import { composeFixPlan, evaluateConvergence } from "@/lib/autoFixAgent";
 
 const LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
   openai:   { baseUrl: 'https://api.openai.com/v1',            model: 'gpt-4o' },
@@ -676,6 +678,12 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   } | null>(null);
   const [generationQuality, setGenerationQuality] = useState<GenerationQuality>('SUCCESS');
   const [repairInfo, setRepairInfo] = useState<{ repaired: boolean; repairType: string; attempts: number } | null>(null);
+  const [autoFixState, setAutoFixState] = useState<{
+    active: boolean;
+    iteration: number;
+    maxIterations: number;
+    reason: string;
+  } | null>(null);
   const lastBboxRef = useRef<string | null>(null);
   const startTs = useRef(0);
   const stageTs = useRef<Record<string, number>>({});
@@ -688,6 +696,8 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   // Bumped whenever the active build123d source changes, so the param
   // extraction memo (keyed on this) recomputes after each generation/regen.
   const [sourceVersion, setSourceVersion] = useState(0);
+  // Auto-fix: pending plan set after analysis, consumed by the effect below.
+  const pendingFixPlanRef = useRef<{ editInstruction: string; originalPrompt: string; iteration: number } | null>(null);
 
   const cadPreset = useMemo(() => getCADMaterialPreset(cadMaterialId), [cadMaterialId]);
 
@@ -700,6 +710,26 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   }, [language]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Auto-fix loop: when a fix plan is pending, re-trigger generation with the edit instruction.
+  useEffect(() => {
+    const plan = pendingFixPlanRef.current;
+    if (!plan) return;
+    pendingFixPlanRef.current = null;
+
+    setAutoFixState({
+      active: true,
+      iteration: plan.iteration,
+      maxIterations: 3,
+      reason: `Auto-fix iteration ${plan.iteration}/3`,
+    });
+
+    // Re-trigger generation with the DfAM fix instruction as baseModel.editInstruction
+    handleGenerate(plan.originalPrompt, {
+      generatedModelId: `autofix-${plan.iteration}`,
+      editInstruction: plan.editInstruction,
+    });
+  }, [autoFixState?.iteration]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGenerate = useCallback(async (customPrompt?: string, baseModel?: { generatedModelId: string; editInstruction: string }) => {
     const seq = ++runSeqRef.current;
@@ -850,6 +880,26 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
         issues: issues.map(i => ({ severity: i.severity, message: i.message })),
         risks: gate.risks,
       }].slice(-MAX_RUN_HISTORY));
+
+      // Auto-fix: check if DfAM analysis warrants a fix iteration
+      if (!baseModel && gate.verdict !== 'PASS') {
+        const currentIteration = autoFixState?.iteration ?? 0;
+        const fixPlan = composeFixPlan(gate, issues, p, currentIteration);
+        if (fixPlan.shouldFix) {
+          console.log(`[CADStudio] Auto-fix triggered: ${fixPlan.reason}`);
+          pendingFixPlanRef.current = {
+            editInstruction: fixPlan.editInstruction,
+            originalPrompt: p,
+            iteration: fixPlan.iteration,
+          };
+        } else {
+          console.log(`[CADStudio] Auto-fix skipped: ${fixPlan.reason}`);
+          setAutoFixState(null);
+        }
+      } else {
+        setAutoFixState(null);
+      }
+
       if (baseModel) {
         const newBbox = unified.metrics?.result?.boundingBoxDimensionsMm;
         const oldBboxStr = lastBboxRef.current;
@@ -1369,6 +1419,65 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
     handleAutoOptimize();
   }, [handleAutoOptimize]);
 
+  /**
+   * Auto Fix: send current source + DfAM issues to /api/cad/edit for
+   * rule-based geometry modification. No LLM regeneration needed for
+   * common fixes (thin walls, overhangs, stress concentration, etc.).
+   */
+  const handleAutoFix = useCallback(async () => {
+    if (!templateSourceRef.current || gateIssues.length === 0) return;
+
+    setLoading(true);
+    setError(null);
+    setAutoFixState({ active: true, iteration: 1, maxIterations: 3, reason: 'Rule-based auto-fix' });
+
+    try {
+      const res = await fetch('/api/cad/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: templateSourceRef.current,
+          issues: gateIssues.map((i) => ({
+            type: i.severity === 'error' ? 'thin_wall' : 'overhang',
+            priority: i.severity === 'error' ? 'high' : 'medium',
+            description: i.message,
+            recommendation: i.suggestion,
+          })),
+          prompt,
+          meshTolerance: { linear: 0.02, angular: 0.05 },
+        }),
+        signal: AbortSignal.timeout(120_000),
+      });
+
+      const data = await res.json();
+      if (!data.ok) {
+        throw new Error(data.error?.detail ?? 'Auto-fix failed');
+      }
+
+      // Update geometry with the fixed STL
+      const stlBytes = Uint8Array.from(atob(data.stlBase64), (c) => c.charCodeAt(0));
+      const { parseSTL } = await import('@/lib/stlParser');
+      const geo = parseSTL(stlBytes.buffer);
+      setGeometry(geo);
+      stlBytesRef.current = stlBytes.buffer;
+
+      // Update source
+      if (data.source) {
+        templateSourceRef.current = data.source;
+        setSourceVersion((v) => v + 1);
+      }
+
+      setAutoFixState({ active: false, iteration: 1, maxIterations: 3, reason: `Applied ${data.fixesApplied} fixes` });
+      setRightTab('cad');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Auto-fix failed: ${msg}`);
+      setAutoFixState(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [gateIssues, prompt]);
+
   const handleNewDesign = useCallback(() => {
     setGeometry(null);
     setAnalysis(null);
@@ -1459,7 +1568,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
 
         {/* Error inline */}
         {error && (
-          <div className="px-4 mt-3 text-sm text-red-400/80 font-mono">{error}</div>
+          <div className="px-4 mt-3 text-sm text-red-400/80 font-mono whitespace-pre-wrap">{error}</div>
         )}
 
         {/* Edit warning */}
@@ -1693,6 +1802,17 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                 </div>
               )}
 
+              {/* Auto-Fix DfAM iteration status */}
+              {autoFixState && (
+                <div className="text-center pt-0.5">
+                  <span className="text-[10px] font-mono tracking-[0.15em] px-2 py-0.5 rounded-sm border text-cyan-400/60 border-cyan-400/20 bg-cyan-400/5">
+                    {autoFixState.active
+                      ? `DfAM Auto-Fix · iteration ${autoFixState.iteration}/${autoFixState.maxIterations}`
+                      : `DfAM Auto-Fix · done`}
+                  </span>
+                </div>
+              )}
+
               {/* Print Check */}
               <div className="space-y-1.5">
                 <div className="text-[11px] text-muted-foreground/40 font-mono tracking-[0.2em]">{t('cadPrintCheck')}</div>
@@ -1727,6 +1847,14 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                 <button onClick={handleImproveDesign} disabled={loading}
                   className="w-full h-9 inline-flex items-center justify-center gap-2 bg-foreground text-background rounded-sm text-sm font-mono font-bold hover:bg-foreground/90 disabled:opacity-30 transition-all">
                   <RefreshCw className="w-4 h-4" /> {t('cadImproveDesign')}
+                </button>
+              )}
+
+              {/* AUTO FIX — rule-based DfAM geometry repair */}
+              {gateIssues.length > 0 && !loading && (
+                <button onClick={handleAutoFix}
+                  className="w-full h-9 inline-flex items-center justify-center gap-2 bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 rounded-sm text-sm font-mono font-bold hover:bg-cyan-500/25 transition-all">
+                  <Wand2 className="w-4 h-4" /> Auto Fix ({gateIssues.length} issues)
                 </button>
               )}
 
