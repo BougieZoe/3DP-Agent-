@@ -10,6 +10,7 @@
 
 import { useMemo } from 'react';
 import * as THREE from 'three';
+import { COLORS, MATERIALS } from '@/lib/visualLanguage';
 
 interface AdvancedSupportProps {
   geometry: THREE.BufferGeometry;
@@ -153,26 +154,22 @@ function SupportColumn({
   const radius = Math.min(1.5, 0.2 + Math.sqrt(area) * 0.15);
 
   // Color by type
-  const color = type === 'bridge' ? 0xff8844 : 0x4488ff;
+  const color = type === 'bridge' ? COLORS.support.bridge : COLORS.support.overhang;
 
   return (
     <group>
-      {/* Support column */}
       <mesh position={[position.x, groundY + columnHeight / 2, position.z]}>
         <cylinderGeometry args={[radius * 0.6, radius, columnHeight, 6]} />
         <meshPhongMaterial
           color={color}
-          transparent
+          {...MATERIALS.phongDouble}
           opacity={opacity}
-          side={THREE.DoubleSide}
-          depthWrite={false}
         />
       </mesh>
-      {/* Contact point indicator */}
       <mesh position={position.toArray()}>
         <sphereGeometry args={[radius * 0.4, 8, 8]} />
         <meshBasicMaterial
-          color={type === 'bridge' ? 0xff6622 : 0x2266ff}
+          color={type === 'bridge' ? COLORS.support.contactBridge : COLORS.support.contactOverhang}
           transparent
           opacity={opacity * 1.5}
         />

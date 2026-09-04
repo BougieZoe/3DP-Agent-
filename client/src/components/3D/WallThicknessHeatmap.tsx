@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import * as THREE from 'three';
 import type { WallThicknessSample } from '@/analysis/types';
 import { getThresholds } from '@/analysis/thresholds';
+import { MATERIALS } from '@/lib/visualLanguage';
 
 export interface WallThicknessHeatmapProps {
   geometry: THREE.BufferGeometry;
@@ -81,11 +82,8 @@ export function WallThicknessHeatmap({ geometry, samples, visible, opacity = 0.7
       <pointsMaterial
         size={points.size}
         vertexColors
-        transparent
+        {...MATERIALS.points}
         opacity={opacity}
-        sizeAttenuation
-        depthWrite={false}
-        blending={THREE.AdditiveBlending}
       />
     </points>
   );

@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import type { GeometryModel } from '@/analysis/geometryModel';
 import { initWebGPU, createStorageBuffer, createComputePipeline, readBuffer, type WebGPUContext } from '@/lib/webgpu';
 import stressComputeShader from '@/lib/shaders/stressCompute.wgsl?raw';
+import { OPACITIES, MATERIALS } from '@/lib/visualLanguage';
 
 export type OverlayMode = 'stress' | 'thermal' | 'height';
 
@@ -71,7 +72,7 @@ const FALLBACK_FRAGMENT_SHADER = `
 export function WebGPUOverlay({
   geometry,
   mode = 'stress',
-  opacity = 0.35,
+  opacity = OPACITIES.overlayMax,
   visible = true,
 }: WebGPUOverlayProps) {
   const meshRef = useRef<THREE.Mesh>(null);
@@ -93,10 +94,7 @@ export function WebGPUOverlay({
         uTime: { value: 0 },
         uOpacity: { value: opacity },
       },
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
+      ...MATERIALS.additiveDouble,
     });
   }, [opacity]);
 
@@ -124,10 +122,7 @@ export function WebGPUOverlay({
         uOpacity: { value: opacity },
       },
       vertexColors: true,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
+      ...MATERIALS.additiveDouble,
     });
   }, [useWebGPU, opacity]);
 

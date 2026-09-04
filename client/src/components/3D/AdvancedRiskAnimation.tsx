@@ -10,6 +10,7 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { COLORS, ANIMATION, MATERIALS } from '@/lib/visualLanguage';
 
 interface AdvancedRiskProps {
   geometry: THREE.BufferGeometry;
@@ -125,22 +126,20 @@ function RiskSphere({ point }: { point: RiskPoint }) {
     return (point.position[0] * 127.1 + point.position[1] * 311.7 + point.position[2] * 74.3) % 100;
   }, [point.position]);
 
-  const color = point.type === 'sharp_edge' ? 0xff4444
-    : point.type === 'overhang' ? 0xff8844
-    : 0xffff44;
+  const color = point.type === 'sharp_edge' ? COLORS.risk.sharpEdge
+    : point.type === 'overhang' ? COLORS.risk.overhang
+    : COLORS.risk.thinWall;
 
   useFrame(({ clock }) => {
     if (!ref.current) return;
     const t = clock.getElapsedTime() + seed;
 
-    // Breathing pulse
-    const pulse = 1 + Math.sin(t * 2) * 0.2 * point.severity;
-    ref.current.scale.setScalar(0.15 * pulse);
+    const pulse = 1 + Math.sin(t * ANIMATION.breath.pulseFreq) * ANIMATION.breath.pulseAmp * point.severity;
+    ref.current.scale.setScalar(ANIMATION.markerScale.base * pulse);
 
-    // Gentle drift
-    ref.current.position.x = point.position[0] + Math.sin(t * 0.5) * 0.05;
-    ref.current.position.y = point.position[1] + Math.sin(t * 0.3 + 1) * 0.03;
-    ref.current.position.z = point.position[2] + Math.cos(t * 0.4) * 0.05;
+    ref.current.position.x = point.position[0] + Math.sin(t * ANIMATION.drift.speed) * ANIMATION.drift.ampFact;
+    ref.current.position.y = point.position[1] + Math.sin(t * ANIMATION.drift.speed * 0.6 + 1) * ANIMATION.drift.ampFact * ANIMATION.drift.vertRat;
+    ref.current.position.z = point.position[2] + Math.cos(t * ANIMATION.drift.speed * 0.8) * ANIMATION.drift.ampFact;
   });
 
   return (
@@ -148,10 +147,8 @@ function RiskSphere({ point }: { point: RiskPoint }) {
       <sphereGeometry args={[1, 12, 12]} />
       <meshBasicMaterial
         color={color}
-        transparent
-        opacity={0.4 + point.severity * 0.4}
-        depthWrite={false}
-        blending={THREE.AdditiveBlending}
+        {...MATERIALS.additive}
+        opacity={ANIMATION.markerScale.base + point.severity * ANIMATION.breath.pulseAmp}
       />
     </mesh>
   );
