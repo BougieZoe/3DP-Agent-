@@ -1,14 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-
-/**
- * AI Advisor Character Component
- * Design: Floating anime-style character with gentle animations
- * - Floats around the printing chamber
- * - Emits soft glow
- * - Responds to scene interactions
- */
+import { COLORS, ANIMATION, OPACITIES, SIZES } from '@/lib/visualLanguage';
 
 interface AIAdvisorProps {
   position?: [number, number, number];
@@ -17,57 +10,50 @@ interface AIAdvisorProps {
 
 export function AIAdvisor({ position = [3, 1, 0], scale = 1 }: AIAdvisorProps) {
   const groupRef = useRef<THREE.Group>(null);
-  const floatOffsetRef = useRef(0);
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
+    const t = clock.getElapsedTime();
 
-    // Gentle floating animation
-    floatOffsetRef.current = Math.sin(clock.getElapsedTime() * 0.5) * 0.3;
-    groupRef.current.position.y = position[1] + floatOffsetRef.current;
-
-    // Gentle rotation
-    groupRef.current.rotation.z = Math.sin(clock.getElapsedTime() * 0.3) * 0.1;
+    groupRef.current.position.y = position[1] + Math.sin(t * ANIMATION.advisor.floatSpeed) * ANIMATION.advisor.floatAmp;
+    groupRef.current.rotation.z = Math.sin(t * ANIMATION.advisor.rotateSpeed) * ANIMATION.advisor.rotateAmp;
   });
+
+  const advisorColor = COLORS.advisor.base;
 
   return (
     <group ref={groupRef} position={position} scale={scale}>
-      {/* Character body - simplified sphere for now */}
       <mesh position={[0, 0, 0]}>
         <sphereGeometry args={[0.6, 32, 32]} />
         <meshStandardMaterial
-          color={0xf4a9b4}
-          emissive={0xf4a9b4}
+          color={advisorColor}
+          emissive={advisorColor}
           emissiveIntensity={0.3}
           metalness={0.2}
           roughness={0.6}
         />
       </mesh>
 
-      {/* Head */}
       <mesh position={[0, 0.7, 0]}>
         <sphereGeometry args={[0.4, 32, 32]} />
         <meshStandardMaterial
-          color={0xf4a9b4}
-          emissive={0xf4a9b4}
+          color={advisorColor}
+          emissive={advisorColor}
           emissiveIntensity={0.2}
         />
       </mesh>
 
-      {/* Glow aura */}
       <mesh position={[0, 0, 0]}>
-        <sphereGeometry args={[1.2, 32, 32]} />
+        <sphereGeometry args={[SIZES.advisorGlow, 32, 32]} />
         <meshStandardMaterial
-          color={0xf4a9b4}
-          emissive={0xf4a9b4}
+          color={advisorColor}
+          emissive={advisorColor}
           emissiveIntensity={0.15}
           transparent
-          opacity={0.3}
-          wireframe={false}
+          opacity={OPACITIES.overlay}
         />
       </mesh>
 
-      {/* Floating particles around character */}
       <FloatingParticles />
     </group>
   );
@@ -93,11 +79,11 @@ function FloatingParticles() {
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
     const material = new THREE.PointsMaterial({
-      color: 0xffffff,
-      size: 0.08,
+      color: COLORS.advisor.glow,
+      size: SIZES.point,
       sizeAttenuation: true,
       transparent: true,
-      opacity: 0.8,
+      opacity: OPACITIES.particle,
     });
 
     particlesRef.current.geometry = geometry;
@@ -113,8 +99,8 @@ function FloatingParticles() {
 
     for (let i = 0; i < positions.length; i += 3) {
       const index = i / 3;
-      const angle = (index / 50) * Math.PI * 2 + time * 0.5;
-      const radius = 1 + Math.sin(time + index) * 0.3;
+      const angle = (index / 50) * Math.PI * 2 + time * ANIMATION.advisor.particleOrbitSpeed;
+      const radius = 1 + Math.sin(time + index) * ANIMATION.advisor.particleRadiusAmp;
 
       positions[i] = Math.cos(angle) * radius;
       positions[i + 2] = Math.sin(angle) * radius;

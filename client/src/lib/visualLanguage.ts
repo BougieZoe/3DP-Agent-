@@ -12,6 +12,9 @@ export interface ThemeColors {
   highlight: { base: number; css: string };
   thermal: { cool: number; warmCore: number };
   neutral: { mute: number; muteCSS: string; pulse: number };
+  advisor: { base: number; css: string; glow: number };
+  support: { overhang: number; bridge: number; contactOverhang: number; contactBridge: number };
+  risk:    { sharpEdge: number; overhang: number; thinWall: number };
 }
 
 const dark: ThemeColors = {
@@ -22,6 +25,9 @@ const dark: ThemeColors = {
   highlight:{ base: 0x88ccff, css: '#88ccff' },
   thermal:  { cool: 0x4477aa, warmCore: 0xcc8844 },
   neutral:  { mute: 0x8899aa, muteCSS: '#8899aa', pulse: 0x66aacc },
+  advisor:  { base: 0xf4a9b4, css: '#f4a9b4', glow: 0xf4a9b4 },
+  support:  { overhang: 0x4488ff, bridge: 0xff8844, contactOverhang: 0x2266ff, contactBridge: 0xff6622 },
+  risk:     { sharpEdge: 0xff4444, overhang: 0xff8844, thinWall: 0xffff44 },
 } as const;
 
 const light: ThemeColors = {
@@ -32,6 +38,9 @@ const light: ThemeColors = {
   highlight:{ base: 0x7aa5b5, css: '#7aa5b5' },
   thermal:  { cool: 0x7088a5, warmCore: 0xb09068 },
   neutral:  { mute: 0x88837e, muteCSS: '#88837e', pulse: 0x7aa898 },
+  advisor:  { base: 0xc89aa5, css: '#c89aa5', glow: 0xc89aa5 },
+  support:  { overhang: 0x5a88aa, bridge: 0xb09068, contactOverhang: 0x3a66aa, contactBridge: 0xb07048 },
+  risk:     { sharpEdge: 0xcc6666, overhang: 0xb09068, thinWall: 0xcccc66 },
 } as const;
 
 export const THEMES = { dark, light } as const;
@@ -61,6 +70,7 @@ export const OPACITIES = {
   marker:         0.25,
   ghostMarker:    0.08,
   printHeadLine:  0.375,
+  particle:       0.80,
 } as const;
 
 // ============================================================
@@ -81,6 +91,7 @@ export const SIZES = {
   markerSphere:  0.3,
   sagLineInit:   0.01,
   initialScale:  0.01,
+  advisorGlow:   1.2,
 } as const;
 
 // ============================================================
@@ -95,6 +106,11 @@ export const MATERIALS = {
   additiveDouble: {
     transparent: true,
     blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  },
+  phongDouble: {
+    transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
   },
@@ -175,6 +191,11 @@ export const ANIMATION = {
   causalFloat: { speed: 1.2, amp: 0.006 },
   markerScale: { base: 0.15, sevF: 0.5 },
   markerDrift: { amp: 0.025, vertRat: 0.6 },
+  advisor: {
+    floatSpeed: 0.5,   floatAmp: 0.3,
+    rotateSpeed: 0.3,  rotateAmp: 0.1,
+    particleOrbitSpeed: 0.5, particleRadiusAmp: 0.3,
+  },
 } as const;
 
 // ============================================================

@@ -16,6 +16,7 @@
 
 import { useMemo } from 'react';
 import * as THREE from 'three';
+import { MATERIALS } from '@/lib/visualLanguage';
 
 interface AdvancedWallThicknessProps {
   geometry: THREE.BufferGeometry;
@@ -163,10 +164,8 @@ export function AdvancedWallThickness({
     <mesh geometry={coloredGeo} renderOrder={1}>
       <meshPhongMaterial
         vertexColors
-        transparent
+        {...MATERIALS.phongDouble}
         opacity={opacity}
-        side={THREE.DoubleSide}
-        depthWrite={false}
         polygonOffset
         polygonOffsetFactor={-1}
       />

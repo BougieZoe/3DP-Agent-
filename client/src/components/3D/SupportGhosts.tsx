@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
+import { COLORS, MATERIALS } from '@/lib/visualLanguage';
 
 interface SupportGhostsProps {
   markers: Array<{ position: { x: number; y: number; z: number }; severity: number }>;
@@ -36,11 +37,9 @@ export function SupportGhosts({ markers, visible, groundY = -7, opacity = 0.35 }
       {columns.map((col, i) => (
         <mesh key={i} geometry={col.geometry} position={col.position}>
           <meshPhongMaterial
-            color={0x4488ff}
-            transparent
+            color={COLORS.support.overhang}
+            {...MATERIALS.phongDouble}
             opacity={opacity}
-            side={THREE.DoubleSide}
-            depthWrite={false}
           />
         </mesh>
       ))}

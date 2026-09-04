@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
+import { MATERIALS } from '@/lib/visualLanguage';
 
 interface OverhangHeatmapProps {
   geometry: THREE.BufferGeometry;
@@ -84,10 +85,8 @@ export function OverhangHeatmap({ geometry, visible, opacity = 0.7 }: OverhangHe
     <mesh geometry={heatmapGeo} renderOrder={1}>
       <meshPhongMaterial
         vertexColors
-        transparent
+        {...MATERIALS.phongDouble}
         opacity={opacity}
-        side={THREE.DoubleSide}
-        depthWrite={false}
         polygonOffset
         polygonOffsetFactor={-1}
       />
