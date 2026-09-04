@@ -14,7 +14,8 @@ import {
   SANDBOX_FILE_KB,
   scanSourceSafety,
 } from './cadSandbox';
-import { runFailoverSequence, type LlmCandidate } from './llmFailover';
+import { runFailoverSequence, resetFailoverState, type LlmCandidate } from './llmFailover';
+import { buildAllCandidates, getKeys } from './config/llmKeys';
 
 const SKILL_DIR =
   process.env.CAD_SKILL_DIR ?? path.join(os.homedir(), '.agents', 'skills', 'cad');
@@ -77,6 +78,60 @@ export function resolvePython(): string {
   if (process.env.CAD_BRIDGE_PYTHON) return process.env.CAD_BRIDGE_PYTHON;
   if (existsSync(DEFAULT_VENV_PYTHON)) return DEFAULT_VENV_PYTHON;
   return 'python3';
+}
+
+/**
+ * Build merged LLM candidates: server-side keys (from YAML config) first,
+ * then client BYOK keys as fallback. This ensures:
+ *   - Admin can rotate keys via YAML without client changes
+ *   - Client BYOK still works for personal usage
+ *   - Server keys take priority (managed, auditable)
+ */
+function buildMergedCandidates(body: BridgeGenerateBody): BridgeLlmCandidates {
+  const serverKeys = getKeys();
+  const hasServerKeys = Object.keys(serverKeys.providers).length > 0;
+
+  // If no server-side keys configured, fall back to pure BYOK
+  if (!hasServerKeys) {
+    return (
+      body.llmCandidates && body.llmCandidates.length > 0
+        ? body.llmCandidates
+        : body.llm
+          ? [body.llm]
+          : []
+    );
+  }
+
+  // Build from server-side keys, ordered by provider priority
+  const serverCandidates: BridgeLlmCandidates = [];
+  for (const provider of Object.values(serverKeys.providers)) {
+    for (const entry of provider.keys) {
+      if (entry.key === '__no_key__') continue;
+      serverCandidates.push({
+        baseUrl: entry.baseUrl ?? provider.baseUrl,
+        apiKey: entry.key,
+        model: entry.model ?? provider.model,
+      });
+    }
+  }
+
+  // Append client BYOK keys as fallbacks (deduplicated by apiKey)
+  const clientCandidates = (
+    body.llmCandidates && body.llmCandidates.length > 0
+      ? body.llmCandidates
+      : body.llm
+        ? [body.llm]
+        : []
+  );
+  const seenKeys = new Set(serverCandidates.map((c) => c.apiKey));
+  for (const c of clientCandidates) {
+    if (!seenKeys.has(c.apiKey)) {
+      serverCandidates.push(c);
+      seenKeys.add(c.apiKey);
+    }
+  }
+
+  return serverCandidates;
 }
 
 function bridgeReady(): { ready: boolean; python: string; reason?: string } {
@@ -170,7 +225,9 @@ function extractPythonSource(text: string): string {
 
 /** Single OpenAI-compatible chat call to author build123d source. */
 async function llmChatOnce(llm: BridgeLlmConfig, userMessage: string): Promise<string> {
-  const res = await fetch(`${llm.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+  const url = `${llm.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+  console.log(`[cadBridge] LLM request → ${url} model=${llm.model}`);
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -179,8 +236,6 @@ async function llmChatOnce(llm: BridgeLlmConfig, userMessage: string): Promise<s
     body: JSON.stringify({
       model: llm.model,
       max_tokens: 4096,
-      // Low temperature → repeatable output. Same prompt should yield a
-      // similar shape across clicks instead of a random variation each time.
       temperature: 0.2,
       messages: [
         { role: 'system', content: CAD_SYSTEM_PROMPT },
@@ -190,10 +245,15 @@ async function llmChatOnce(llm: BridgeLlmConfig, userMessage: string): Promise<s
     signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   });
   if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.error(`[cadBridge] LLM ${res.status} from ${llm.model}: ${body.slice(0, 500)}`);
     if (res.status === 429) {
       throw new Error('LLM rate limited (HTTP 429) — provider quota exceeded');
     }
-    throw new Error(`LLM request failed: HTTP ${res.status}`);
+    if (res.status === 402) {
+      throw new Error(`LLM API key has no credits (HTTP 402) — model: ${llm.model}`);
+    }
+    throw new Error(`LLM request failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
   }
   const data = (await res.json()) as {
     choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
@@ -523,28 +583,36 @@ export function createCadBridgeRouter(): Router {
       source = body.generatorSource;
       console.log(`[cadBridge:${id.slice(0, 8)}] Using generatorSource (${source.length} chars)`);
     } else {
-      candidates =
-        body.llmCandidates && body.llmCandidates.length > 0
-          ? body.llmCandidates
-          : body.llm
-            ? [body.llm]
-            : [];
+      // Reset circuit breaker at each generation so stale blocks from previous
+      // attempts don't prevent the user's chosen provider from being tried.
+      resetFailoverState();
+
+      candidates = buildMergedCandidates(body);
       if (candidates.length === 0) {
         sendError(res, 502, 'generation-failed', 'LLM source generation failed: no LLM provider configured');
         return;
       }
       const llmStart = Date.now();
       try {
-        console.log(
-          `[cadBridge:${id.slice(0, 8)}] Calling LLM: ${candidates
-            .map((c) => `${new URL(c.baseUrl).hostname}/${c.model}`)
-            .join(' → ')}`,
-        );
+        const providerList = candidates
+          .map((c) => `${new URL(c.baseUrl).hostname}/${c.model}`)
+          .join(' → ');
+        console.log(`[cadBridge:${id.slice(0, 8)}] Calling LLM: ${providerList}`);
         source = await generateSourceViaLlm(candidates, composeUserMessage(body, priorSource));
         console.log(`[cadBridge:${id.slice(0, 8)}] LLM responded in ${Date.now() - llmStart}ms (${source.length} chars)`);
       } catch (err) {
-        console.log(`[cadBridge:${id.slice(0, 8)}] LLM failed after ${Date.now() - llmStart}ms: ${String(err)}`);
-        sendError(res, 502, 'generation-failed', `LLM source generation failed: ${String(err)}`);
+        const errMsg = String(err);
+        console.log(`[cadBridge:${id.slice(0, 8)}] LLM failed after ${Date.now() - llmStart}ms: ${errMsg}`);
+        // Build a clear error showing all providers that were tried
+        const providerSummary = candidates
+          .map((c) => `• ${new URL(c.baseUrl).hostname}/${c.model}`)
+          .join('\n');
+        sendError(
+          res,
+          502,
+          'generation-failed',
+          `LLM source generation failed.\n\nProviders attempted:\n${providerSummary}\n\nError: ${errMsg}\n\nTip: check your API key balance and model name in Settings.`,
+        );
         return;
       }
       warnings.push('LLM-authored build123d source executed in a sandboxed interpreter');

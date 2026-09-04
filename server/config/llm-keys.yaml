@@ -1,0 +1,41 @@
+# LLM API Keys — hot-reload, no restart needed.
+#
+# Edit this file → keys take effect on the next request.
+# Admin can also trigger manual reload: POST /api/admin/keys/reload
+#
+# Structure:
+#   providers.<providerId>:
+#     - key: <api-key>
+#       priority: <1=highest, lower=better>
+#       baseUrl: <optional override>
+#       model: <optional override>
+
+providers:
+  zhipu:
+    - key: "c0fc0f146d5642ed8accc6807204098c.hgQBJwM7T4AZbTyv"
+      priority: 1
+
+  deepseek:
+    # - key: "sk-xxx"
+    #   priority: 1
+
+  fireworks:
+    # - key: "fw_xxx"
+    #   priority: 1
+
+  moonshot:
+    # - key: "sk-xxx"
+    #   priority: 1
+
+  openai:
+    # - key: "sk-xxx"
+    #   priority: 1
+
+  google:
+    # - key: "xxx"
+    #   priority: 1
+
+  amd-cloud:
+    # No key needed — uses local vLLM endpoint
+    - key: "__no_key__"
+      priority: 1

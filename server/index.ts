@@ -18,6 +18,7 @@ import healthRouter from "./healthRouter";
 import { initShutdown } from "./shutdown";
 import { setupWebSocketServer } from "./websocket";
 import { setupCollaborationServer } from "./collaboration";
+import { loadKeysSync, startWatching, stopWatching, reloadKeys, getKeys, getLastLoadedAt, getLastError } from "./config/llmKeys";
 
 // Real address of the AMD machine, read from an environment variable instead
 // of hardcoded. Every time a new Droplet is spun up, only this env var in the
@@ -217,6 +218,27 @@ export function createApp() {
     logger.info(`Bridges mounted${BRIDGE_TOKEN ? ' (BRIDGE_TOKEN auth)' : ' (NODE_ENV != production)'}`, {
       context: 'server',
     });
+
+    // Admin endpoint: manually reload LLM keys from YAML config.
+    // POST /api/admin/keys/reload
+    app.post('/api/admin/keys/reload', ...amdProxy, async (_req: Request, res: Response) => {
+      const result = await reloadKeys();
+      res.json(result);
+    });
+
+    // Admin endpoint: get current key pool status (no keys exposed, just counts).
+    // GET /api/admin/keys/status
+    app.get('/api/admin/keys/status', ...amdProxy, (_req: Request, res: Response) => {
+      const keys = getKeys();
+      const totalKeys = Object.values(keys.providers)
+        .reduce((sum: number, p: any) => sum + p.keys.length, 0);
+      res.json({
+        providers: Object.keys(keys.providers).length,
+        totalKeys,
+        lastLoadedAt: getLastLoadedAt(),
+        lastError: getLastError(),
+      });
+    });
   } else {
     logger.warn('Production without BRIDGE_TOKEN — cad/mesh/slice/amd-proxy routes NOT mounted', {
       context: 'server',
@@ -306,6 +328,10 @@ function startServer() {
   
   // Initialize graceful shutdown
   initShutdown(server);
+
+  // Load LLM keys from YAML config and start hot-reload watcher
+  loadKeysSync();
+  startWatching();
   
   server.listen(Number(port), HOST as string | undefined, () => {
     logger.info(`Server running on http://${HOST ?? '0.0.0.0'}:${port}/`, {
