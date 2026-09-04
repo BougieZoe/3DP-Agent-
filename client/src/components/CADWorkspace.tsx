@@ -47,6 +47,7 @@ const LLM_CONFIGS: Record<string, { baseUrl: string; model: string }> = {
   deepseek: { baseUrl: 'https://api.deepseek.com/v1',          model: 'deepseek-chat' },
   kimi:     { baseUrl: 'https://api.moonshot.cn/v1',           model: 'kimi-k3' },
   fireworks:{ baseUrl: 'https://api.fireworks.ai/inference/v1', model: 'accounts/fireworks/models/deepseek-v4-pro' },
+  zhipu:    { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4.7' },
 };
 
 /**
