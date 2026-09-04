@@ -59,6 +59,18 @@ interface BridgeGenerateBody {
   generatorSource?: string;
   meshTolerance?: { linear?: number; angular?: number };
   timeoutMs?: number;
+  /** DfAM analysis context — issues to address in this generation. */
+  analysisContext?: {
+    issues: Array<{
+      type: string;
+      priority?: string;
+      description: string;
+      implementation?: string;
+      recommendation?: string;
+    }>;
+    originalPrompt?: string;
+    printabilityScore?: number;
+  };
 }
 
 export function resolvePython(): string {
@@ -326,6 +338,25 @@ function composeUserMessage(body: BridgeGenerateBody, priorSource: string | null
   if (body.baseModel && !priorSource) {
     lines.push(`Edit instruction (no prior source available, design fresh): ${body.baseModel.editInstruction}`);
   }
+
+  // Append DfAM analysis context when provided
+  if (body.analysisContext && body.analysisContext.issues.length > 0) {
+    const ac = body.analysisContext;
+    lines.push('');
+    lines.push('DfAM ANALYSIS CONTEXT (address these issues):');
+    if (ac.printabilityScore != null) {
+      lines.push(`Current printability score: ${ac.printabilityScore}/100`);
+    }
+    for (const issue of ac.issues.slice(0, 5)) {
+      const parts = [`- [${issue.priority ?? 'medium'}] ${issue.type}: ${issue.description}`];
+      if (issue.recommendation) parts.push(`  Fix: ${issue.recommendation}`);
+      else if (issue.implementation) parts.push(`  Fix: ${issue.implementation}`);
+      lines.push(parts.join('\n'));
+    }
+    lines.push('');
+    lines.push('IMPORTANT: Preserve the original design intent. Only modify geometry to address the issues above.');
+  }
+
   return lines.join('\n');
 }
 
