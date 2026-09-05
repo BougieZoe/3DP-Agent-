@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ['main', 'refactor/**', 'feat/**', 'fix/**']
+    branches: ['main', 'geometric-truth', 'refactor/**', 'feat/**', 'fix/**']
   pull_request:
 
 permissions:
