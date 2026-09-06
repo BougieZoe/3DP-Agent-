@@ -20,7 +20,7 @@ export function unifiedToModelData(
 ): ModelData {
   const metrics = unifiedAnalysis.metrics.result;
   const topology = unifiedAnalysis.topology.result;
-  const volume = metrics?.meshVolumeMm3 ?? metrics?.boundingBoxVolumeMm3 ?? 0;
+  const volume = metrics?.meshVolumeMm3 ?? 0;
   const surfaceArea = metrics?.surfaceAreaMm2 ?? 0;
   const oh = metrics?.overhang;
   const dims = metrics?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };

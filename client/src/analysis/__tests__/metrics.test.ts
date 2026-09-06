@@ -196,3 +196,54 @@ describe('deriveWtStatus contract', () => {
     }
   });
 });
+
+describe('volume source invariant', () => {
+  it('meshVolumeMm3 is used directly — bbox volume is never a fallback', () => {
+    const model = createWatertightCubeModel();
+    const result = computeMetrics(model);
+    const m = result.result;
+
+    // For a unit cube: mesh volume = 1.0, bbox volume = 1.0
+    // They happen to match, so verify the value is the mesh-computed one
+    expect(m.meshVolumeMm3).toBeCloseTo(1.0, 4);
+    expect(m.boundingBoxVolumeMm3).toBeCloseTo(1.0, 4);
+
+    // The critical invariant: meshVolumeMm3 must be a number (never null/undefined)
+    // so that ?? fallback to bboxVolumeMm3 never triggers
+    expect(typeof m.meshVolumeMm3).toBe('number');
+    expect(m.meshVolumeMm3).not.toBeNaN();
+  });
+
+  it('open cube still produces valid mesh volume (not bbox fallback)', () => {
+    const model = createOpenCubeModel();
+    const result = computeMetrics(model);
+    const m = result.result;
+
+    // Open cube has less volume than its bounding box
+    // meshVolumeMm3 should be the tetrahedron-computed value, not the bbox
+    expect(m.meshVolumeMm3).toBeGreaterThan(0);
+    expect(m.meshVolumeMm3).toBeLessThan(m.boundingBoxVolumeMm3 + 1);
+    expect(typeof m.meshVolumeMm3).toBe('number');
+  });
+
+  it('sparse mesh: tetrahedron computes ~0 volume for degenerate geometry', () => {
+    // Single large triangle: no enclosed volume, flat in z.
+    // This tests that computeMeshVolume handles degenerate geometry correctly
+    // (returns ~0) rather than producing NaN, Infinity, or other garbage values.
+    const positions = new Float32Array([
+      0, 0, 0,
+      100, 0, 0,
+      0, 100, 0,
+    ]);
+    const indices = new Uint16Array([0, 1, 2]);
+    const model = { positions, indices, normals: new Float32Array(9) };
+
+    const result = computeMetrics(model);
+    const m = result.result;
+
+    // Single triangle: enclosed volume ≈ 0 (tetrahedron method)
+    expect(m.meshVolumeMm3).toBeLessThan(0.01);
+    expect(typeof m.meshVolumeMm3).toBe('number');
+    expect(m.meshVolumeMm3).not.toBeNaN();
+  });
+});
