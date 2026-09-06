@@ -84,6 +84,22 @@ const AMBIENT_TEMP_C = 23;
 const CONVECTION_COEFFICIENT = 25; // W/m²·K — natural convection in air
 const FDM_PRINT_SPEED_MM_PER_S = 60; // typical FDM speed for duration estimation
 
+/**
+ * Compute mesh surface area from geometry graph positions and indices.
+ * Used to derive per-layer area estimates instead of bounding-box proxies.
+ */
+function computeGraphSurfaceArea(positions: Float32Array, indices: Uint16Array | Uint32Array): number {
+  let area = 0;
+  for (let i = 0; i < indices.length; i += 3) {
+    const i0 = indices[i] * 3, i1 = indices[i + 1] * 3, i2 = indices[i + 2] * 3;
+    const ux = positions[i1] - positions[i0], uy = positions[i1 + 1] - positions[i0 + 1], uz = positions[i1 + 2] - positions[i0 + 2];
+    const vx = positions[i2] - positions[i0], vy = positions[i2 + 1] - positions[i0 + 1], vz = positions[i2 + 2] - positions[i0 + 2];
+    const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+    area += 0.5 * Math.sqrt(cx * cx + cy * cy + cz * cz);
+  }
+  return area;
+}
+
 // ---------------------------------------------------------------------------
 // Per-material defaults (when thermal props are missing)
 // ---------------------------------------------------------------------------
@@ -386,15 +402,16 @@ function buildLayerList(
 
 /**
  * Estimate how long a layer takes to print based on cross-sectional area.
- * Simplified: assumes constant print speed and 0.4mm nozzle width.
+ * Uses mesh surface area / layer count as per-layer area estimate instead of
+ * bounding-box area (which overestimates for non-rectangular parts).
  */
 function estimateLayerPrintDuration(
   layer: LayerDef,
   graph: GeometryGraph,
 ): number {
-  // Use bounding box area as proxy for layer area
-  const bbox = graph.boundingBox;
-  const layerAreaMm2 = (bbox.maxX - bbox.minX) * (bbox.maxY - bbox.minY);
+  const totalLayers = Math.max(1, Math.ceil((graph.boundingBox.maxZ - graph.boundingBox.minZ) / layer.heightMm));
+  const surfaceArea = computeGraphSurfaceArea(graph.positions, graph.indices);
+  const layerAreaMm2 = surfaceArea / totalLayers / 2; // /2: top+bottom surfaces share area
   const extrusionWidthMm = 0.4;
   const pathLengthMm = layerAreaMm2 / extrusionWidthMm;
   return Math.max(0.5, pathLengthMm / FDM_PRINT_SPEED_MM_PER_S);
@@ -547,9 +564,9 @@ function estimateLayerFillFraction(
   layer: LayerDef,
   graph: GeometryGraph,
 ): number {
-  // Simplified: use bounding box as proxy
-  const bbox = graph.boundingBox;
-  const totalArea = (bbox.maxX - bbox.minX) * (bbox.maxY - bbox.minY);
+  const totalLayers = Math.max(1, Math.ceil((graph.boundingBox.maxZ - graph.boundingBox.minZ) / layer.heightMm));
+  const surfaceArea = computeGraphSurfaceArea(graph.positions, graph.indices);
+  const totalArea = surfaceArea / 2; // /2: top+bottom surfaces share area
   if (totalArea <= 0) return 0;
 
   // Count triangles that intersect this Z layer
@@ -576,9 +593,10 @@ function estimateLayerFillFraction(
     }
   }
 
-  // Approximate fill as fraction of triangles intersecting
-  const totalTriangles = graph.triangleCount;
-  return totalTriangles > 0 ? Math.min(1, intersectCount / (totalTriangles * 0.1)) : 0;
+  // Approximate fill as fraction of triangles intersecting this layer
+  // relative to average triangles per layer
+  const avgTrianglesPerLayer = graph.triangleCount / Math.max(1, totalLayers);
+  return avgTrianglesPerLayer > 0 ? Math.min(1, intersectCount / avgTrianglesPerLayer) : 0;
 }
 
 function isLayerNearCorner(

@@ -51,6 +51,7 @@ import { FeaturesSection } from '@/pages/home/FeaturesSection';
 import type { FeatureDestination } from '@/pages/home/featuresNavigation';
 import { toast } from 'sonner';
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
+import { WallThicknessHistogram } from '@/components/WallThicknessHistogram';
 
 // Lazy-loaded 3D visualization components (code splitting)
 const OverhangHeatmapDesktop = lazy(() => import('@/components/3D/AdvancedHeatmap').then(m => ({ default: m.AdvancedHeatmap })));
@@ -159,7 +160,7 @@ function unifiedToAnalysisSummary(unifiedAnalysis: import('@/analysis').UnifiedA
       areas: oh?.faceCount ?? 0,
       status: deriveOhStatus(oh?.ratio ?? 0),
     },
-    volume: metrics?.meshVolumeMm3 ?? metrics?.boundingBoxVolumeMm3 ?? 0,
+    volume: metrics?.meshVolumeMm3 ?? 0,
     surfaceArea: metrics?.surfaceAreaMm2 ?? 0,
   };
 }
@@ -1274,6 +1275,24 @@ deepAnalysisSeq.current += 1;
                         <StatusChip status={valid?.isWatertight ? 'good' : 'critical'} label={valid ? (valid.isWatertight ? '✓' : '✗') : '—'} />
                       </div>
                     </div>
+                    {/* Watertight / mesh integrity warning — prominent when mesh has issues */}
+                    {valid && !valid.isWatertight && (
+                      <div className="border border-red-400/30 rounded-sm bg-red-400/5 p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                          <span className="text-[11px] font-mono text-red-400 tracking-wider">{t('watertightWarning')}</span>
+                        </div>
+                        <div className="text-[11px] font-mono text-muted-foreground/60 leading-relaxed">{t('watertightWarningDesc')}</div>
+                        <div className="flex gap-4 mt-2">
+                          {topo && topo.boundaryEdgeCount > 0 && (
+                            <MetricRow label={t('cadBoundaryEdges')} value={topo.boundaryEdgeCount} />
+                          )}
+                          {topo && topo.nonManifoldEdgeCount > 0 && (
+                            <MetricRow label={t('cadNonManifoldEdges')} value={topo.nonManifoldEdgeCount} />
+                          )}
+                        </div>
+                      </div>
+                    )}
                     {/* Object context — what this part is FOR changes what matters.
                         Kept near the top (right under the verdict cards) so users
                         actually find it; buried at the bottom it went unnoticed. */}
@@ -1358,6 +1377,18 @@ deepAnalysisSeq.current += 1;
                         </div>
                       )}
                     </div>
+                    {/* Wall thickness distribution histogram — always rendered; component handles empty/sparse internally */}
+                    <WallThicknessHistogram
+                      samples={unifiedAnalysis?.metrics.result?.wallThicknessSamples ?? []}
+                      thinWallThresholdMm={0.8}
+                      labels={{
+                        title: t('wallHistTitle'),
+                        noData: t('wallHistNoData'),
+                        sparse: t('wallHistSparse'),
+                        samples: t('wallHistSamples'),
+                        range: t('wallHistRange'),
+                      }}
+                    />
                     {/* Expert mesh diagnostics — collapsed by default so the core metrics stay prominent */}
                     <details className="mt-2">
                       <summary className="cursor-pointer text-[11px] font-mono text-muted-foreground/60 hover:text-foreground select-none">

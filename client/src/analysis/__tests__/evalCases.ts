@@ -16,6 +16,7 @@ import { runAnalysisPipeline, type PipelineOptions } from '../pipeline';
 import { fromThreeBufferGeometry } from '../geometryConversion';
 import { isWallConfidenceTrusted } from '../verdict';
 import type { GeometryModel } from '../geometryModel';
+import * as THREE from 'three';
 import {
   createWatertightCube,
   createThinWall,
@@ -92,6 +93,76 @@ export const EVAL_CASES: EvalCase[] = [
     label: 'open terrain surface (wall measurement not meaningful)',
     build: () => fromThreeBufferGeometry(createTerrainGrid(10, 20, 20)),
     expectTrusted: false,
+  },
+  {
+    id: 'sparse-mesh',
+    label: 'single large triangle: mesh volume ≈ 0, bbox volume large — verifies mesh-volume source',
+    build: () => {
+      const geo = new THREE.BufferGeometry();
+      const vertices = new Float32Array([0, 0, 0, 100, 0, 0, 0, 100, 0]);
+      const normals = new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]);
+      geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+      geo.setIndex([0, 1, 2]);
+      return fromThreeBufferGeometry(geo);
+    },
+    expectTrusted: false,
+  },
+  {
+    id: 'tall-cylinder',
+    label: 'tall thin cylinder: bbox area ≫ mesh cross-section — verifies thermal proxy uses mesh area',
+    build: () => {
+      const segments = 16;
+      const radius = 5;
+      const height = 100;
+      const vertices: number[] = [];
+      const normals: number[] = [];
+      const indices: number[] = [];
+
+      // Generate cylinder vertices
+      for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+
+        // Bottom vertex
+        vertices.push(x, y, 0);
+        normals.push(Math.cos(angle), Math.sin(angle), 0);
+
+        // Top vertex
+        vertices.push(x, y, height);
+        normals.push(Math.cos(angle), Math.sin(angle), 0);
+      }
+
+      // Side faces
+      for (let i = 0; i < segments; i++) {
+        const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
+        indices.push(a, c, b, b, c, d);
+      }
+
+      // Bottom cap (fan from center)
+      const centerIdx = vertices.length / 3;
+      vertices.push(0, 0, 0);
+      normals.push(0, 0, -1);
+      for (let i = 0; i < segments; i++) {
+        indices.push(centerIdx, (i + 1) * 2, i * 2);
+      }
+
+      // Top cap (fan from center)
+      const topCenterIdx = vertices.length / 3;
+      vertices.push(0, 0, height);
+      normals.push(0, 0, 1);
+      for (let i = 0; i < segments; i++) {
+        indices.push(topCenterIdx, i * 2 + 1, (i + 1) * 2 + 1);
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normals), 3));
+      geo.setIndex(indices);
+      return fromThreeBufferGeometry(geo);
+    },
+    expectTrusted: true,
   },
 ];
 

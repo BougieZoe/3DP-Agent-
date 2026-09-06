@@ -15,7 +15,7 @@ export class GeometryAnalyst extends BaseAgent {
     const topology = unifiedAnalysis.topology.result;
     const triCount = topology?.triangleCount ?? 0;
     const surfaceArea = metrics?.surfaceAreaMm2 ?? 0;
-    const volume = metrics?.meshVolumeMm3 ?? metrics?.boundingBoxVolumeMm3 ?? 0;
+    const volume = metrics?.meshVolumeMm3 ?? 0;
 
     const aspectRatio = this.computeAspectRatio(modelSize);
     const overhangFaces = metrics?.overhang.faceCount ?? 0;

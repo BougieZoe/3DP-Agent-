@@ -260,4 +260,65 @@ describe('Thermal Analysis (S2)', () => {
       expect(result.layers.length).toBeGreaterThanOrEqual(0);
     });
   });
+
+  describe('Layer area source invariant', () => {
+    it('tall cylinder: printDurationS must reflect mesh surface area, not bbox area', () => {
+      // Tall thin cylinder: bbox area ≫ actual cross-section
+      // bbox area = (2*5) * (2*5) = 100 mm² (bounding square)
+      // mesh surface area ≈ 2πr² + 2πrh = 157 + 3142 = 3299 mm²
+      // layers = 100 / 0.2 = 500
+      // mesh layer area = 3299 / 500 / 2 ≈ 3.3 mm²
+      // bbox layer area = 100 mm² (old code)
+      //
+      // With old bbox proxy: printDuration ≈ 100/0.4/60 ≈ 4.17s
+      // With new mesh area:  printDuration ≈ 3.3/0.4/60 ≈ 0.14s (clamped to 0.5s)
+      const segments = 16;
+      const radius = 5;
+      const height = 100;
+      const vertices: number[] = [];
+      const normalsArr: number[] = [];
+      const indicesArr: number[] = [];
+
+      for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        vertices.push(x, y, 0, x, y, height);
+        normalsArr.push(Math.cos(angle), Math.sin(angle), 0, Math.cos(angle), Math.sin(angle), 0);
+      }
+      for (let i = 0; i < segments; i++) {
+        const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
+        indicesArr.push(a, c, b, b, c, d);
+      }
+      const centerIdx = vertices.length / 3;
+      vertices.push(0, 0, 0);
+      normalsArr.push(0, 0, -1);
+      for (let i = 0; i < segments; i++) indicesArr.push(centerIdx, (i + 1) * 2, i * 2);
+      const topCenterIdx = vertices.length / 3;
+      vertices.push(0, 0, height);
+      normalsArr.push(0, 0, 1);
+      for (let i = 0; i < segments; i++) indicesArr.push(topCenterIdx, i * 2 + 1, (i + 1) * 2 + 1);
+
+      const positions = new Float32Array(vertices);
+      const normals = new Float32Array(normalsArr);
+      const indices = new Uint32Array(indicesArr);
+      const model = createGeometryModel(positions, normals, indices);
+
+      const options: ThermalAnalysisOptions = {
+        material: { name: 'PLA', materialFamily: 'fdm' },
+        materialFamily: 'fdm',
+        layerHeightMm: 0.2,
+      };
+
+      const result = computeThermalMetrics(model, options);
+      expect(result.layers.length).toBeGreaterThan(0);
+
+      // Every layer's printDurationS must be < 1.0s for this geometry.
+      // Old bbox proxy would give ~4.17s (100mm² layer area).
+      // New mesh area gives ~0.5s (3.3mm² layer area, clamped).
+      for (const layer of result.layers) {
+        expect(layer.printDurationS).toBeLessThan(1.0);
+      }
+    });
+  });
 });
