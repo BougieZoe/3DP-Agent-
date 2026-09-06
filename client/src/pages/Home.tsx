@@ -52,6 +52,9 @@ import type { FeatureDestination } from '@/pages/home/featuresNavigation';
 import { toast } from 'sonner';
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
 import { WallThicknessHistogram } from '@/components/WallThicknessHistogram';
+import { ManufacturingRecommendationPanel } from '@/components/ManufacturingRecommendationPanel';
+import { ManufacturerExport } from '@/components/ManufacturerExport';
+import { recommendManufacturing, type ManufacturingGoal, type ProcessRecommendation } from '@/lib/manufacturingRecommendation';
 
 // Lazy-loaded 3D visualization components (code splitting)
 const OverhangHeatmapDesktop = lazy(() => import('@/components/3D/AdvancedHeatmap').then(m => ({ default: m.AdvancedHeatmap })));
@@ -307,6 +310,7 @@ export default function Home() {
   const { material, materialName, setMaterialName } = useMaterial();
   const [materialFamily, setMaterialFamily] = useState<Material['technology']>('fdm');
   const [objectContext, setObjectContext] = useState<ObjectContext>('general');
+  const [mfgGoal, setMfgGoal] = useState<ManufacturingGoal>('prototype');
   const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
   const [showModeMenu, setShowModeMenu] = useState(false);
   const [language, setLanguage] = useState<Language>('en');
@@ -815,6 +819,11 @@ deepAnalysisSeq.current += 1;
     const height = (geo.boundingBox?.max.y ?? 5) - (geo.boundingBox?.min.y ?? 0);
     return Math.max(10, Math.min(200, Math.round(height / 0.2)));
   }, [uploadedModel?.geometry]);
+
+  const mfgRecommendations: ProcessRecommendation[] = useMemo(() => {
+    if (!unifiedAnalysis) return [];
+    return recommendManufacturing(unifiedAnalysis, mfgGoal);
+  }, [unifiedAnalysis, mfgGoal]);
 
   return (
     <PrintPlaybackProvider totalLayers={totalLayers}>
@@ -1473,6 +1482,22 @@ deepAnalysisSeq.current += 1;
                         <MetricRow label={t('ecoDegradation')} value={`${Math.round(unifiedAnalysis.eco.result.degradationRisk * 100)}%`} highlight={unifiedAnalysis.eco.result.degradationRisk > 0.5} />
                         <MetricRow label={t('ecoBrittleness')} value={`${Math.round(unifiedAnalysis.eco.result.brittlenessRisk * 100)}%`} highlight={unifiedAnalysis.eco.result.brittlenessRisk > 0.6} />
                       </div>
+                    )}
+                    {unifiedAnalysis && (
+                      <ManufacturingRecommendationPanel
+                        recommendations={mfgRecommendations}
+                        selectedGoal={mfgGoal}
+                        onGoalChange={setMfgGoal}
+                        language={language}
+                      />
+                    )}
+                    {unifiedAnalysis && (
+                      <ManufacturerExport
+                        analysis={unifiedAnalysis}
+                        recommendations={mfgRecommendations}
+                        fileName={uploadedModel?.fileName ?? 'model'}
+                        language={language}
+                      />
                     )}
                     <button onClick={() => setTab('report')}
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
