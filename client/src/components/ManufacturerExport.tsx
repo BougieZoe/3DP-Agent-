@@ -1,4 +1,5 @@
 import { PANEL } from '@/lib/visualLanguage';
+import { getTranslation, type Language } from '@/lib/i18n';
 import type { UnifiedAnalysis } from '../analysis/types';
 import type { ProcessRecommendation } from '../lib/manufacturingRecommendation';
 
@@ -6,7 +7,7 @@ interface ManufacturerExportProps {
   analysis: UnifiedAnalysis | null;
   recommendations: ProcessRecommendation[];
   fileName: string;
-  language?: string;
+  language?: Language;
 }
 
 export interface ManufacturerSpec {
@@ -166,30 +167,32 @@ export function ManufacturerExport({
   analysis,
   recommendations,
   fileName,
+  language = 'en',
 }: ManufacturerExportProps) {
   if (!analysis) return null;
 
+  const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
   const spec = buildSpec(analysis, recommendations, fileName);
 
   return (
-    <div className={`${PANEL.bg} ${PANEL.glass} ${PANEL.border} ${PANEL.rounded} ${PANEL.padding} space-y-2`}>
+    <div className="backdrop-blur-xl bg-background/60 border border-border/30 rounded-md p-3 space-y-2 shadow-lg shadow-black/20">
       <div className="flex items-center justify-between">
-        <span className={PANEL.fontLabel}>MANUFACTURER HANDOFF</span>
+        <span className={PANEL.fontLabel}>{t('mfgHandoff')}</span>
         <button
           onClick={() => downloadJson(spec, fileName)}
           className={`${PANEL.chip} border border-cyan-400/30 text-cyan-400/80 hover:bg-cyan-400/10 transition-colors`}
         >
-          EXPORT JSON ↓
+          {t('mfgExportJson')}
         </button>
       </div>
       <div className={`${PANEL.fontTiny} text-muted-foreground/40`}>
-        Includes geometry, wall thickness, overhang, support, thermal, and DfAM notes — ready for factory review.
+        {t('mfgHandoffDesc')}
       </div>
       {spec.dfamNotes.length > 0 && (
         <div className="space-y-0.5">
           {spec.dfamNotes.map((note, i) => (
             <div key={i} className={`${PANEL.fontTiny} text-amber-400/70 flex items-start gap-1`}>
-              <span className="text-amber-400/40 shrink-0">DfAM:</span>
+              <span className="text-amber-400/40 shrink-0">{t('mfgDfam')}:</span>
               <span>{note}</span>
             </div>
           ))}
