@@ -25,7 +25,7 @@ export interface VerificationReport {
 }
 
 export interface VisionModelConfig {
-  provider: 'openai' | 'anthropic' | 'mock';
+  provider: 'openai' | 'glm' | 'mock';
   apiKey?: string;
   model?: string;
   maxTokens?: number;
@@ -111,6 +111,54 @@ async function callOpenAI(
   return JSON.parse(jsonMatch[0]);
 }
 
+async function callGLM(
+  images: Buffer[],
+  config: VisionModelConfig
+): Promise<{ findings: Finding[]; overallVerdict: Severity; summary: string }> {
+  const apiKey = config.apiKey || process.env.GLM_API_KEY;
+  if (!apiKey) throw new Error('GLM API key required (set GLM_API_KEY or pass in config)');
+
+  const model = config.model || 'glm-5.3';
+  const imageContent = images.map((buf) => ({
+    type: 'image_url' as const,
+    image_url: {
+      url: `data:image/png;base64,${buf.toString('base64')}`,
+    },
+  }));
+
+  const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: config.maxTokens || 2000,
+      messages: [
+        { role: 'system', content: VERIFICATION_PROMPT },
+        { role: 'user', content: [
+          { type: 'text' as const, text: `分析这 ${images.length} 张3D零件渲染图，检查打印问题：` },
+          ...imageContent,
+        ]},
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`GLM API error ${response.status}: ${err}`);
+  }
+
+  const data = await response.json() as { choices: { message: { content: string } }[] };
+  const content = data.choices[0]?.message?.content || '';
+
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error(`No JSON in GLM response: ${content.slice(0, 300)}`);
+
+  return JSON.parse(jsonMatch[0]);
+}
+
 async function callMock(): Promise<{ findings: Finding[]; overallVerdict: Severity; summary: string }> {
   return {
     findings: [
@@ -151,6 +199,9 @@ export async function verifyPart(
     case 'openai':
       result = await callOpenAI(images, config);
       break;
+    case 'glm':
+      result = await callGLM(images, config);
+      break;
     case 'mock':
     default:
       result = await callMock();
@@ -161,7 +212,7 @@ export async function verifyPart(
   return {
     fileName: basename(filePath),
     timestamp: new Date().toISOString(),
-    modelUsed: config.provider === 'openai' ? (config.model || 'gpt-4o') : 'mock',
+    modelUsed: config.provider === 'openai' ? (config.model || 'gpt-4o') : config.provider === 'glm' ? (config.model || 'glm-5.3') : 'mock',
     viewsRendered: multiView.views.length,
     findings: result.findings,
     overallVerdict: result.overallVerdict,
