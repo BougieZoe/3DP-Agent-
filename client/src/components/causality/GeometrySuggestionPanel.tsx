@@ -1,6 +1,7 @@
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { GeometrySuggestion } from './counterfactualEngine';
 import { PANEL, SEMANTIC } from '@/lib/visualLanguage';
+import { GlassCard } from '@/components/GlassCard';
 
 interface GeometrySuggestionPanelProps {
   suggestions: GeometrySuggestion[];
@@ -175,19 +176,21 @@ export function GeometrySuggestionPanel({ suggestions, selectedSuggestionId, onS
         <span className={`${PANEL.fontValue} text-muted-foreground/30`}>{translate(CONTENT, 'causality.suggestionsCount', language, { count: suggestions.length })}</span>
       </div>
 
-      {suggestions.map(s => (
-        <SuggestionCard
-          key={s.id}
-          suggestion={s}
-          selected={selectedSuggestionId === s.id}
-          onSelect={() => onSelectSuggestion(selectedSuggestionId === s.id ? null : s.id)}
-          onDownload={onDownload}
-          onRecalc={onRecalc}
-          recalc={recalcMap?.get(s.id) ?? null}
-          downloading={downloadingId === s.id}
-          language={language}
-        />
-      ))}
+      <GlassCard className="p-2">
+        {suggestions.map(s => (
+          <SuggestionCard
+            key={s.id}
+            suggestion={s}
+            selected={selectedSuggestionId === s.id}
+            onSelect={() => onSelectSuggestion(selectedSuggestionId === s.id ? null : s.id)}
+            onDownload={onDownload}
+            onRecalc={onRecalc}
+            recalc={recalcMap?.get(s.id) ?? null}
+            downloading={downloadingId === s.id}
+            language={language}
+          />
+        ))}
+      </GlassCard>
     </div>
   );
 }

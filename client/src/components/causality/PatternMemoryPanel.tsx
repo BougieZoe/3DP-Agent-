@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { PatternMatch } from './topologyPatternEngine';
 import { PANEL, PATTERN_COLORS_CSS } from '@/lib/visualLanguage';
+import { GlassCard } from '@/components/GlassCard';
 
 interface PatternMemoryPanelProps {
   matches: PatternMatch[];
@@ -223,17 +224,19 @@ export function PatternMemoryPanel({ matches, selectedPatternId, onSelectPattern
         <span className={`${PANEL.fontValue} text-muted-foreground/30`}>{translate(CONTENT, 'causality.patternsFound', language, { count: groups.length })}</span>
       </div>
 
-      {groups.map(group => (
-        <PatternGroupCard
-          key={group.pattern.id}
-          group={group}
-          selectedPatternId={selectedPatternId}
-          onSelectPattern={onSelectPattern}
-          open={openGroups.has(group.pattern.id)}
-          onToggle={() => toggle(group.pattern.id)}
-          language={language}
-        />
-      ))}
+      <GlassCard className="p-2">
+        {groups.map(group => (
+          <PatternGroupCard
+            key={group.pattern.id}
+            group={group}
+            selectedPatternId={selectedPatternId}
+            onSelectPattern={onSelectPattern}
+            open={openGroups.has(group.pattern.id)}
+            onToggle={() => toggle(group.pattern.id)}
+            language={language}
+          />
+        ))}
+      </GlassCard>
     </div>
   );
 }
