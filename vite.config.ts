@@ -42,6 +42,8 @@ const pwaPlugin = VitePWA({
     // New SW activates immediately and takes over → auto-update without workbox-window.
     skipWaiting: true,
     clientsClaim: true,
+    // 2.32 MB main bundle exceeds the 2 MB default; raise to 3 MB.
+    maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
   },
   devOptions: { enabled: false },
 });
