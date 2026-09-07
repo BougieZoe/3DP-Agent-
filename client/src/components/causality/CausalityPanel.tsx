@@ -2,6 +2,7 @@ import { Fragment } from 'react';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { CausalityGraph, CausalityEvent, CausalEdge } from './causalityEngine';
 import { PANEL, EVENT_COLORS_CSS } from '@/lib/visualLanguage';
+import { GlassCard } from '@/components/GlassCard';
 
 interface CausalityPanelProps {
   graph: CausalityGraph | null;
@@ -114,7 +115,7 @@ export function CausalityPanel({ graph, selectedId, onSelect, language = 'en' }:
       {/* Distinct presentation vs. the patterns list below: a faint panel with a
           left accent, and vertical connectors between events when a causal
           chain is being traced. */}
-      <div className={`${PANEL.borderSubtle} ${PANEL.roundedInner} ${PANEL.padding} border-l-2`}>
+      <GlassCard className={`${PANEL.padding} border-l-2`} accent="#cc66ff">
         <div className={PANEL.gapItems}>
           {events.map((event, i) => (
             <Fragment key={event.id}>
@@ -131,7 +132,7 @@ export function CausalityPanel({ graph, selectedId, onSelect, language = 'en' }:
             </Fragment>
           ))}
         </div>
-      </div>
+      </GlassCard>
     </div>
   );
 }

@@ -54,6 +54,7 @@ import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/Pr
 import { WallThicknessHistogram } from '@/components/WallThicknessHistogram';
 import { ManufacturingRecommendationPanel } from '@/components/ManufacturingRecommendationPanel';
 import { ManufacturerExport } from '@/components/ManufacturerExport';
+import { GlassCard } from '@/components/GlassCard';
 import { recommendManufacturing, type ManufacturingGoal, type ProcessRecommendation } from '@/lib/manufacturingRecommendation';
 
 // Lazy-loaded 3D visualization components (code splitting)
@@ -1267,26 +1268,26 @@ deepAnalysisSeq.current += 1;
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 border border-border rounded-sm bg-card">
+                      <GlassCard className="p-3">
                         <div className="text-xs text-muted-foreground mb-2 font-mono">{t('wallThicknessLabel')}</div>
                         <StatusChip status={analysis.wallThickness.status} label={t(analysis.wallThickness.status)} />
-                      </div>
-                      <div className="p-3 border border-border rounded-sm bg-card">
+                      </GlassCard>
+                      <GlassCard className="p-3">
                         <div className="text-xs text-muted-foreground mb-2 font-mono">{t('overhangLabel')}</div>
                         <StatusChip status={analysis.overhang.status} label={t(analysis.overhang.status)} />
-                      </div>
-                      <div className="p-3 border border-border rounded-sm bg-card">
+                      </GlassCard>
+                      <GlassCard className="p-3">
                         <div className="text-xs text-muted-foreground mb-2 font-mono">{t('cadManifold')}</div>
                         <StatusChip status={topo?.isManifold ? 'good' : 'critical'} label={topo ? (topo.isManifold ? '✓' : '✗') : '—'} />
-                      </div>
-                      <div className="p-3 border border-border rounded-sm bg-card">
+                      </GlassCard>
+                      <GlassCard className="p-3">
                         <div className="text-xs text-muted-foreground mb-2 font-mono">{t('cadWatertight')}</div>
                         <StatusChip status={valid?.isWatertight ? 'good' : 'critical'} label={valid ? (valid.isWatertight ? '✓' : '✗') : '—'} />
-                      </div>
+                      </GlassCard>
                     </div>
                     {/* Watertight / mesh integrity warning — prominent when mesh has issues */}
                     {valid && !valid.isWatertight && (
-                      <div className="border border-red-400/30 rounded-sm bg-red-400/5 p-3">
+                      <GlassCard className="p-3" accent="#cc6666">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
                           <span className="text-[11px] font-mono text-red-400 tracking-wider">{t('watertightWarning')}</span>
@@ -1300,13 +1301,13 @@ deepAnalysisSeq.current += 1;
                             <MetricRow label={t('cadNonManifoldEdges')} value={topo.nonManifoldEdgeCount} />
                           )}
                         </div>
-                      </div>
+                      </GlassCard>
                     )}
                     {/* Object context — what this part is FOR changes what matters.
                         Kept near the top (right under the verdict cards) so users
                         actually find it; buried at the bottom it went unnoticed. */}
                     {unifiedAnalysis && (
-                      <div className="border border-border rounded-sm bg-card p-4">
+                      <GlassCard className="p-4">
                         <div className="flex items-center justify-between mb-3">
                           <div className="text-xs text-muted-foreground mb-1 font-mono tracking-widest">{t('objectTitle')}</div>
                           <select
@@ -1340,14 +1341,14 @@ deepAnalysisSeq.current += 1;
                             </>
                           );
                         })()}
-                      </div>
+                      </GlassCard>
                     )}
                     {/* Liquid-cooling application panel — right under the OBJECT
                         dropdown so picking "Liquid Cooling" shows its risks immediately */}
                     {objectContext === 'liquid-cooling' && unifiedAnalysis && (() => {
                       const lc = liquidCoolingFromUnified(unifiedAnalysis);
                       return lc ? (
-                        <div className="border border-primary/25 rounded-sm bg-primary/5 p-4">
+                        <GlassCard className="p-4" accent="#66ccff">
                           <div className="text-xs text-primary mb-1 font-mono tracking-widest">{t('lcTitle')}</div>
                           <div className="text-[11px] font-mono text-muted-foreground/50 mb-3">geometric proxies — not CFD</div>
                           <MetricRow label={t('lcLeak')} value={`${Math.round(lc.leakRisk * 100)}%`} highlight={lc.leakRisk > 0.5} />
@@ -1355,10 +1356,10 @@ deepAnalysisSeq.current += 1;
                           <MetricRow label={t('lcHeatExchange')} value={`${Math.round(lc.heatExchangeProxy * 100)}%`} highlight={lc.heatExchangeProxy < 0.25} />
                           <MetricRow label={t('lcPressureWall')} value={lc.pressureWall.minThicknessMm != null ? `${lc.pressureWall.minThicknessMm.toFixed(2)} mm (min)` : '—'} highlight={lc.pressureWall.minThicknessMm != null && lc.pressureWall.minThicknessMm < lc.pressureWall.thresholdMm} />
                           <MetricRow label={t('lcOverallRisk')} value={`${Math.round(lc.overallRisk * 100)}%`} highlight={lc.overallRisk > 0.5} />
-                        </div>
+                        </GlassCard>
                       ) : null;
                     })()}
-                    <div className="border border-border rounded-sm bg-card p-4">
+                    <GlassCard className="p-4">
                       <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">
                         {t('geometryDataLabel')} <span className="text-primary/60">[ {unitSuffix} ]</span>
                       </div>
@@ -1385,7 +1386,7 @@ deepAnalysisSeq.current += 1;
                           ESTIMATED (volume-based)
                         </div>
                       )}
-                    </div>
+                    </GlassCard>
                     {/* Wall thickness distribution histogram — always rendered; component handles empty/sparse internally */}
                     <WallThicknessHistogram
                       samples={unifiedAnalysis?.metrics.result?.wallThicknessSamples ?? []}
@@ -1424,7 +1425,7 @@ deepAnalysisSeq.current += 1;
                     </details>
                     {/* Resin-specific metrics (shown when FDM/RESIN switch set to resin) */}
                     {unifiedAnalysis?.resin?.result && (
-                      <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
+                      <GlassCard className="p-4 mt-3" accent="#66ccff">
                         <div className="text-xs text-primary mb-3 font-mono tracking-widest">{t('resinPrintability')}</div>
                         <MetricRow label={t('resinShells')} value={unifiedAnalysis.resin.result.shellCount} highlight={unifiedAnalysis.resin.result.shellCount > 1} />
                         <MetricRow label={t('resinEnclosedCavity')} value={unifiedAnalysis.resin.result.enclosedCavity ? '⚠ yes' : 'no'} highlight={unifiedAnalysis.resin.result.enclosedCavity} />
@@ -1433,11 +1434,11 @@ deepAnalysisSeq.current += 1;
                         <MetricRow label={t('resinOverCure')} value={`${Math.round(unifiedAnalysis.resin.result.cureRisk * 100)}%`} highlight={unifiedAnalysis.resin.result.cureRisk > 0.6} />
                         <MetricRow label={t('orientation')} value={unifiedAnalysis.resin.result.orientation} />
                         <MetricRow label={t('footprint')} value={`${unifiedAnalysis.resin.result.footprintAreaMm2} mm²`} />
-                      </div>
+                      </GlassCard>
                     )}
                     {/* FGF large-format metrics (shown when FDM/RESIN/FGF switch set to FGF) */}
                     {unifiedAnalysis?.fgf?.result && (
-                      <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
+                      <GlassCard className="p-4 mt-3" accent="#66ccff">
                         <div className="text-xs text-primary mb-3 font-mono tracking-widest">{t('fgfLargeFormat')}</div>
                         <MetricRow label={t('fgfPartScale')} value={unifiedAnalysis.fgf.result.partScale} />
                         <MetricRow label={t('fgfMaxDim')} value={`${unifiedAnalysis.fgf.result.maxDimMm} mm`} />
@@ -1446,11 +1447,11 @@ deepAnalysisSeq.current += 1;
                         <MetricRow label={t('fgfSlenderness')} value={unifiedAnalysis.fgf.result.slenderness.toFixed(2)} />
                         <MetricRow label={t('orientation')} value={unifiedAnalysis.fgf.result.orientation} />
                         <MetricRow label={t('footprint')} value={`${unifiedAnalysis.fgf.result.footprintAreaMm2} mm²`} />
-                      </div>
+                      </GlassCard>
                     )}
                     {/* Powder Bed Fusion metrics (SLS / SLM / MJF) — geometric proxies, not thermal simulation */}
                     {unifiedAnalysis?.pbf?.result && (
-                      <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
+                      <GlassCard className="p-4 mt-3" accent="#66ccff">
                         <div className="text-xs text-primary mb-1 font-mono tracking-widest">{t('pbfLabel')} · {unifiedAnalysis.pbf.result.kind.toUpperCase()}</div>
                         <div className="text-[11px] font-mono text-muted-foreground/50 mb-3">{t('pbfGeometricProxy')}</div>
                         <MetricRow label={t('resinShells')} value={unifiedAnalysis.pbf.result.shellCount} highlight={unifiedAnalysis.pbf.result.powderTrap} />
@@ -1460,28 +1461,28 @@ deepAnalysisSeq.current += 1;
                         <MetricRow label={t('pbfSupport')} value={unifiedAnalysis.pbf.result.selfSupporting ? t('pbfSelfSupporting') : t('pbfSupportsRequired')} />
                         <MetricRow label={t('pbfDistortion')} value={`${Math.round(unifiedAnalysis.pbf.result.distortionRisk * 100)}%`} highlight={unifiedAnalysis.pbf.result.distortionRisk > 0.55} />
                         <MetricRow label={t('orientation')} value={unifiedAnalysis.pbf.result.orientation} />
-                      </div>
+                      </GlassCard>
                     )}
                     {/* Concrete construction-scale metrics — geometric proxies, not structural engineering */}
                     {unifiedAnalysis?.concrete?.result && (
-                      <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
+                      <GlassCard className="p-4 mt-3" accent="#66ccff">
                         <div className="text-xs text-primary mb-1 font-mono tracking-widest">{t('concreteTitle')}</div>
                         <div className="text-[11px] font-mono text-muted-foreground/50 mb-3">{t('concreteProxy')}</div>
                         <MetricRow label={t('concreteFeature')} value={`${Math.round(unifiedAnalysis.concrete.result.featureResolutionRisk * 100)}%`} highlight={unifiedAnalysis.concrete.result.featureResolutionRisk > 0.5} />
                         <MetricRow label={t('concreteOverhang')} value={`${Math.round(unifiedAnalysis.concrete.result.overhangSagRisk * 100)}%`} highlight={unifiedAnalysis.concrete.result.overhangSagRisk > 0.4} />
                         <MetricRow label={t('concreteCrack')} value={`${Math.round(unifiedAnalysis.concrete.result.crackRisk * 100)}%`} highlight={unifiedAnalysis.concrete.result.crackRisk > 0.5} />
                         <MetricRow label={t('concreteTime')} value={`${unifiedAnalysis.concrete.result.printTimeHours} h`} />
-                      </div>
+                      </GlassCard>
                     )}
                     {/* Eco-material advisory — material properties + thin-wall geometry */}
                     {unifiedAnalysis?.eco?.result && (
-                      <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 mt-3">
+                      <GlassCard className="p-4 mt-3" accent="#66ccff">
                         <div className="text-xs text-primary mb-1 font-mono tracking-widest">{t('ecoTitle')}</div>
                         <div className="text-[11px] font-mono text-muted-foreground/50 mb-3">{t('ecoProxy')}</div>
                         <MetricRow label={t('ecoMoisture')} value={`${Math.round(unifiedAnalysis.eco.result.moistureRisk * 100)}%`} highlight={unifiedAnalysis.eco.result.moistureRisk > 0.4} />
                         <MetricRow label={t('ecoDegradation')} value={`${Math.round(unifiedAnalysis.eco.result.degradationRisk * 100)}%`} highlight={unifiedAnalysis.eco.result.degradationRisk > 0.5} />
                         <MetricRow label={t('ecoBrittleness')} value={`${Math.round(unifiedAnalysis.eco.result.brittlenessRisk * 100)}%`} highlight={unifiedAnalysis.eco.result.brittlenessRisk > 0.6} />
-                      </div>
+                      </GlassCard>
                     )}
                     {unifiedAnalysis && (
                       <ManufacturingRecommendationPanel
