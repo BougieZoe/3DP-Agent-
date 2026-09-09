@@ -189,6 +189,26 @@ touch a shared file, or genuinely can't find one source of truth for a
 value), it should say so explicitly and explain why — not do it silently and
 report "all tests passing."
 
+## Regression note (2026-09-10): marker data contract
+
+**6. Markers must carry finite coords; overlays must never trust them.**
+Concrete example already hit in this project: `FailurePredictor.generateOverhangMarkers`
+stepped component indices (`i += 3` over a flat position array) but read
+`positions[i * 3]` — a 3x stride overshoot that emitted `{ position: { x: undefined } }`
+on any model under ~600 vertices. The malformed marker passed AttentionPulse's
+`!m.position` guard (object is truthy) and `undefined.toFixed()` threw inside the
+per-frame loop, freezing the entire viewport — while analysis panels still showed
+data, making it look like a rendering bug instead of a data bug. Rules:
+- When indexing flat `Float32Array` position/normal buffers, `i += 3` means `i`
+  is already a component index: coords are `positions[i..i+2]`, never `positions[i*3]`.
+  The bounds guard must check the index actually used.
+- Small models (<600 verts, e.g. calibration coupons, primitives) are the canary:
+  out-of-bounds reads that stay silent on large meshes return `undefined` here.
+  Any marker pipeline change must be tested with a tiny model, not just a large one.
+- Every per-frame overlay consumer (AttentionPulse and siblings) skips markers
+  with missing/non-finite coords (`Number.isFinite` check) instead of throwing —
+  one bad marker must never wedge the whole Canvas.
+
 ## Verification standard (already in use on this project)
 
 For any bug fix or logic change: reproduce the broken behavior first, apply
