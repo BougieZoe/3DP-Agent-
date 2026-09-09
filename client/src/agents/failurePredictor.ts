@@ -306,9 +306,13 @@ export class FailurePredictor extends BaseAgent {
       if (nz >= 0) continue;
       const angle = Math.acos(Math.max(-1, Math.min(1, nz))) * (180 / Math.PI);
       const tiltBelow = angle - 90;
+      // NOTE: i is a component index into the flat position/normal arrays
+      // (step 3 = one vertex), so the vertex coords are positions[i..i+2] —
+      // NOT positions[i*3] (that overshoots 3x and reads undefined on small
+      // models, producing markers with undefined coords that crash overlays).
       if (tiltBelow > threshold && i + 2 < positions.length) {
         markers.push({
-          position: { x: positions[i * 3], y: positions[i * 3 + 1], z: positions[i * 3 + 2] },
+          position: { x: positions[i], y: positions[i + 1], z: positions[i + 2] },
           type: 'support_needed',
           severity: severity === 'critical' ? 0.9 : severity === 'high' ? 0.7 : 0.5,
           description: translate(CONTENT, 'failurePredictor.markerOverhang', ctx.language, { angle: tiltBelow.toFixed(1) }),

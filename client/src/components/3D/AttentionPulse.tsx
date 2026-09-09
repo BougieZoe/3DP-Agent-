@@ -80,17 +80,22 @@ export function AttentionPulse({ markers, geometry, visible = true }: AttentionP
     }
 
     for (const m of markers) {
+      // Defensive: skip malformed markers (missing/non-finite coords) instead
+      // of throwing inside the frame loop — a single bad marker used to wedge
+      // the whole Canvas (e.g. tiny models producing undefined coords).
       if (!m.position) continue;
-      const dy = Math.abs(m.position.y - scanY);
+      const { x, y, z } = m.position;
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+      const dy = Math.abs(y - scanY);
       if (dy > scanThresh) continue;
 
-      const key = `${m.position.x.toFixed(2)},${m.position.y.toFixed(2)},${m.position.z.toFixed(2)}`;
+      const key = `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`;
       const lastT = lastTriggered.current.get(key) ?? -Infinity;
       if (now - lastT < cooldown) continue;
 
       active.push({
         id: nextId.current++,
-        position: [m.position.x, m.position.y, m.position.z] as [number, number, number],
+        position: [x, y, z] as [number, number, number],
         severity: m.severity,
         color: colorForType(m.type),
         birth: now,
