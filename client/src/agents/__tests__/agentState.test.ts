@@ -91,6 +91,7 @@ describe('agentState', () => {
       manager.setFailures({ risks: [] });
       manager.setOptimizations({ suggestions: [], materialRecommendation: 'PLA', orientationRecommendation: 'default' });
       manager.setScore(100);
+      manager.setAgentStatus('visual_verifier', 'done');
 
       expect(manager.isComplete()).toBe(true);
     });

@@ -75,7 +75,7 @@ export function computeConsensusVerdict(overallScore: number): AgentVerdict {
 
 export interface AgentContextSnapshot {
   triangleCount: number;
-  boundingBoxVolumeMm3: number;
+  meshVolumeMm3: number;
   surfaceAreaMm2: number;
   wallThicknessStatus: string;
   overhangStatus: string;

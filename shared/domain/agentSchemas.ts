@@ -13,6 +13,7 @@ export const AgentIdSchema = z.enum([
   'printability_scorer',
   'failure_predictor',
   'optimization_advisor',
+  'visual_verifier',
 ]);
 
 export const AgentVerdictSchema = z.enum(['pass', 'warning', 'fail', 'inconclusive']);
@@ -37,7 +38,7 @@ export const RiskMarkerSchema = z.object({
 export const GeometryAnalystDetailsSchema = z.object({
   triangleCount: z.number(),
   surfaceAreaMm2: z.number(),
-  boundingBoxVolumeMm3: z.number(),
+  meshVolumeMm3: z.number(),
   dimensions: z.object({ x: z.number(), y: z.number(), z: z.number() }),
   wallThickness: z.object({
     minEstimated: z.number().nullable(),

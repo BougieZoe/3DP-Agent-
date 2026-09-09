@@ -86,7 +86,7 @@ export class GeometryAnalyst extends BaseAgent {
     const details: GeometryAnalystDetails = {
       triangleCount: triCount,
       surfaceAreaMm2: surfaceArea,
-      boundingBoxVolumeMm3: volume,
+      meshVolumeMm3: volume,
       dimensions: { x: modelSize.x, y: modelSize.y, z: modelSize.z },
       wallThickness: {
         minEstimated: estimatedMinWall,

@@ -21,6 +21,7 @@ const AGENT_LABELS: Record<AgentId, string> = {
   failure_predictor: 'Failure',
   optimization_advisor: 'Optimize',
   printability_scorer: 'Score',
+  visual_verifier: 'Visual',
 };
 
 const AGENT_COLORS: Record<AgentId, string> = {
@@ -28,6 +29,7 @@ const AGENT_COLORS: Record<AgentId, string> = {
   failure_predictor: 'amber',
   optimization_advisor: 'green',
   printability_scorer: 'purple',
+  visual_verifier: 'blue',
 };
 
 const STATUS_STYLES: Record<string, string> = {
