@@ -10,6 +10,7 @@ import { createStepRouter } from "./stepRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
 import { relayLLM, relayLLMStream } from "./llmRelay";
+import { createBlenderRouter } from "./routes/blender";
 import { createShareRouter } from "./shareRouter";
 import { createStripeRouter } from "./stripeRouter";
 import { logger } from "./logger";
@@ -214,6 +215,9 @@ export function createApp() {
         }
       },
     );
+
+    // Blender headless adapter — spawn Blender subprocesses for mesh ops / rendering.
+    app.use('/api/blender', ...amdProxy, createBlenderRouter());
 
     logger.info(`Bridges mounted${BRIDGE_TOKEN ? ' (BRIDGE_TOKEN auth)' : ' (NODE_ENV != production)'}`, {
       context: 'server',

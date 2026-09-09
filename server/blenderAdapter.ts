@@ -9,8 +9,8 @@ import type {
 } from './engineAdapter';
 import { getToolAction, isCodeSafe, BLENDER_TOOL_POLICY } from './blenderToolPolicy';
 
-const BLENDER_PATH = '/Applications/Blender.app/Contents/MacOS/Blender';
-const TMP_DIR = '/tmp/blender-adapter';
+const BLENDER_PATH = process.env.BLENDER_PATH || '/Applications/Blender.app/Contents/MacOS/Blender';
+const TMP_DIR = process.env.BLENDER_TMP_DIR || '/tmp/blender-adapter';
 
 export class BlenderAdapter implements EngineAdapter {
   readonly name = 'blender';
@@ -56,7 +56,7 @@ info = {
 }
 print("__RESULT__" + json.dumps(info))
 `;
-    const result = await this.runScript(script);
+    const result = await this.runScript(script, 'createMesh');
     return this.parseResult<SceneObject>(result);
   }
 
@@ -96,7 +96,7 @@ info = {
 }
 print("__RESULT__" + json.dumps(info))
 `;
-    const result = await this.runScript(script);
+    const result = await this.runScript(script, 'importMesh');
     return this.parseResult<SceneObject>(result);
   }
 
@@ -123,7 +123,7 @@ info = {
 }
 print("__RESULT__" + json.dumps(info))
 `;
-    const result = await this.runScript(script);
+    const result = await this.runScript(script, 'queryScene');
     return this.parseResult<SceneInfo>(result);
   }
 
@@ -141,7 +141,7 @@ obj.data.materials.clear()
 obj.data.materials.append(mat)
 print("__RESULT__ok")
 `;
-    await this.runScript(script);
+    await this.runScript(script, 'setMaterial');
   }
 
   async render(options: RenderOptions): Promise<RenderResult> {
@@ -165,7 +165,7 @@ scene.render.filepath = '${outPath}'
 bpy.ops.render.render(write_still=True)
 print("__RESULT__" + '${outPath}')
 `;
-    await this.runScript(script);
+    await this.runScript(script, 'render');
     const stats = await stat(outPath);
     return {
       imagePath: outPath,
@@ -194,15 +194,34 @@ import bpy
 ${exportCmd}
 print("__RESULT__ok")
 `;
-    await this.runScript(script);
+    await this.runScript(script, `export_${format}`);
     const stats = await stat(filePath);
     return { filePath, fileSizeBytes: stats.size };
   }
 
   // ── Internal ──
 
-  private async runScript(pythonCode: string): Promise<string> {
+  /** Map adapter method names to policy tool names. */
+  private static METHOD_TO_TOOL: Record<string, string> = {
+    createMesh: 'create_mesh',
+    importMesh: 'import_file',
+    queryScene: 'query_scene',
+    setMaterial: 'set_material',
+    render: 'render',
+    export: 'export_stl',  // generic — caller can override
+  };
+
+  private async runScript(pythonCode: string, methodName?: string): Promise<string> {
     this.ensureInitialized();
+
+    // Check tool-level policy: deny is final, confirm is advisory (routes decide)
+    if (methodName) {
+      const toolName = BlenderAdapter.METHOD_TO_TOOL[methodName] ?? methodName;
+      const action = getToolAction(toolName, BLENDER_TOOL_POLICY);
+      if (action === 'deny') {
+        throw new Error(`Tool denied by policy: ${toolName}`);
+      }
+    }
 
     const safety = isCodeSafe(pythonCode, BLENDER_TOOL_POLICY);
     if (!safety.safe) {
