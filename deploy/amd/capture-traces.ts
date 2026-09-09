@@ -14,6 +14,8 @@
  *   CAPTURE_API_KEY=sk-... npx tsx deploy/amd/capture-traces.ts --rounds 5
  *   CAPTURE_API_KEY=sk-... CAPTURE_BASE_URL=http://localhost:3001 \
  *     npx tsx deploy/amd/capture-traces.ts --rounds 5 --provider deepseek
+ *   # walk the ~70-variant pool across runs with --offset:
+ *   CAPTURE_API_KEY=sk-... npx tsx deploy/amd/capture-traces.ts --rounds 10 --offset 10
  */
 
 import { appendFile, mkdir } from 'node:fs/promises';
@@ -36,7 +38,7 @@ const store = new Map<string, string>();
   setItem: (k: string, v: string) => { store.set(k, String(v)); },
   removeItem: (k: string) => { store.delete(k); },
   clear: () => { store.clear(); },
-  key: (i: number) => [...store.keys()][i] ?? null,
+  key: (i: number) => Array.from(store.keys())[i] ?? null,
   get length() { return store.size; },
 };
 
@@ -49,45 +51,66 @@ const realFetch = globalThis.fetch.bind(globalThis);
   return realFetch(resolved, init);
 }) as typeof fetch;
 
-function parseArgs(argv: string[]): { rounds: number; provider: string } {
+function parseArgs(argv: string[]): { rounds: number; provider: string; offset: number } {
   const roundsIdx = argv.indexOf('--rounds');
   const providerIdx = argv.indexOf('--provider');
+  const offsetIdx = argv.indexOf('--offset');
   return {
     rounds: roundsIdx >= 0 ? Number(argv[roundsIdx + 1]) || 3 : 3,
     provider: providerIdx >= 0 ? argv[providerIdx + 1] ?? 'deepseek' : 'deepseek',
+    offset: offsetIdx >= 0 ? Number(argv[offsetIdx + 1]) || 0 : 0,
   };
 }
 
-/** A few realistic model variants — same shape the browser pipeline sees. */
+/**
+ * Procedurally generated model variants — a deterministic grid over wall
+ * thickness × overhang area, with derived (physically consistent) statuses
+ * and varied names/dims/volume. ~70 distinct parts instead of a handful of
+ * hand-written ones, so captured traces don't overfit to a few shapes.
+ * Use --offset to walk the pool across multiple invocations.
+ * For real diversity, prefer live traffic via the server's /api/agent-trace.
+ */
 function buildVariants(): ModelData[] {
-  const base = (name: string, wall: number | null, ohAreas: number, wtStatus: 'good' | 'warning' | 'critical', ohStatus: 'good' | 'warning' | 'critical'): ModelData => ({
-    fileName: name,
-    wallThickness: {
-      minThickness: wall, p1Thickness: wall, p5Thickness: wall, p10Thickness: wall,
-      medianThickness: wall, avgThickness: wall,
-      thinWallCount: wtStatus === 'good' ? 0 : 12,
-      thinWallPercentage: wtStatus === 'good' ? 0 : 4.2,
-      thinWallRatio: wtStatus === 'good' ? 0 : 0.042,
-      averageConfidence: 0.82,
-      areas: Math.floor(ohAreas * 0.3),
-      status: wtStatus,
-    },
-    overhang: { angle: 45, areas: ohAreas, status: ohStatus },
-    volume: 18_400,
-    surfaceArea: 6_200,
-    dims: { x: 120, y: 60, z: 25 },
-  });
-  return [
-    base('bracket-120x60.stl', 1.2, 0, 'warning', 'good'),
-    base('lamp-shade-organic.stl', 0.8, 340, 'critical', 'warning'),
-    base('enclosure-box.stl', 2.0, 0, 'good', 'good'),
-    base('gearbox-cover.stl', 1.5, 96, 'warning', 'warning'),
-    base('phone-stand.stl', null, 210, 'warning', 'critical'),
+  const names = [
+    'bracket', 'lamp-shade', 'enclosure', 'gearbox-cover', 'phone-stand',
+    'impeller', 'cable-clip', 'drone-arm', 'pipe-elbow', 'hinge',
   ];
+  const walls: (number | null)[] = [null, 0.5, 0.7, 0.9, 1.1, 1.3, 1.6, 2.0, 2.5, 3.0];
+  const overhangs = [0, 40, 90, 160, 260, 420, 700];
+
+  const variants: ModelData[] = [];
+  for (const wall of walls) {
+    for (const ohAreas of overhangs) {
+      const i = variants.length;
+      const wtStatus: ModelData['wallThickness']['status'] =
+        wall === null ? 'warning' : wall < 0.8 ? 'critical' : wall < 1.3 ? 'warning' : 'good';
+      const ohStatus: ModelData['overhang']['status'] =
+        ohAreas >= 300 ? 'critical' : ohAreas > 0 ? 'warning' : 'good';
+      const thin = wtStatus !== 'good';
+      variants.push({
+        fileName: `${names[i % names.length]}-${i}.stl`,
+        wallThickness: {
+          minThickness: wall, p1Thickness: wall, p5Thickness: wall, p10Thickness: wall,
+          medianThickness: wall, avgThickness: wall,
+          thinWallCount: thin ? 4 + (i % 20) : 0,
+          thinWallPercentage: thin ? 1.5 + (i % 9) * 0.6 : 0,
+          thinWallRatio: thin ? 0.015 + (i % 9) * 0.006 : 0,
+          averageConfidence: 0.7 + (i % 4) * 0.08,
+          areas: Math.floor(ohAreas * 0.3),
+          status: wtStatus,
+        },
+        overhang: { angle: 40 + (i % 5) * 5, areas: ohAreas, status: ohStatus },
+        volume: 5_000 + ((i * 7) % 60) * 1_000,
+        surfaceArea: 2_000 + ((i * 11) % 40) * 200,
+        dims: { x: 40 + ((i * 13) % 160), y: 30 + ((i * 17) % 120), z: 10 + ((i * 7) % 60) },
+      });
+    }
+  }
+  return variants;
 }
 
 async function main(): Promise<void> {
-  const { rounds, provider } = parseArgs(process.argv.slice(2));
+  const { rounds, provider, offset } = parseArgs(process.argv.slice(2));
 
   const key = process.env.CAPTURE_API_KEY;
   if (!key) {
@@ -112,7 +135,7 @@ async function main(): Promise<void> {
 
   let total = 0;
   for (let round = 0; round < rounds; round++) {
-    const model = variants[round % variants.length];
+    const model = variants[(offset + round) % variants.length];
     const summary = buildModelDataSummary(model, material);
     console.log(`[round ${round + 1}/${rounds}] analyzing ${model.fileName} (${provider})`);
     const result = await runAgentPipeline(summary, 'en', undefined, material, undefined, traceFn);
