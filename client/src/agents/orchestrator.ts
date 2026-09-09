@@ -13,6 +13,7 @@ import { GeometryAnalyst } from './geometryAnalyst';
 import { PrintabilityScorer } from './printabilityScorer';
 import { FailurePredictor } from './failurePredictor';
 import { OptimizationAdvisor } from './optimizationAdvisor';
+import { VisualVerifierAgent } from './visualVerifierAgent';
 import { visionProvider, type VisionAnalysisResult } from './visionProvider';
 import {
   getAgentLabel,
@@ -24,6 +25,7 @@ import {
 } from './types';
 import { getLLMProvider } from '@/lib/llmAccess';
 import { getAgentStateManager } from './agentState';
+import { geometryToStl } from '@/lib/meshOps';
 
 /**
  * Time budget for the optional vision capture step, aligned with the
@@ -64,6 +66,7 @@ export class AgentOrchestrator {
       new PrintabilityScorer(),
       new FailurePredictor(),
       new OptimizationAdvisor(),
+      new VisualVerifierAgent(),
     ];
 
     for (const agent of agentInstances) {
@@ -93,6 +96,15 @@ export class AgentOrchestrator {
 
     const model = fromThreeBufferGeometry(geometry);
     const vertexData = extractVertexData(model);
+
+    // Generate STL bytes for server-side processing (Blender verification, etc.)
+    let stlBytes: ArrayBuffer | undefined;
+    try {
+      stlBytes = geometryToStl(geometry);
+    } catch {
+      // Non-critical: agents that don't need STL bytes will still work
+    }
+
     const ctx: AgentContext = {
       geometry,
       unifiedAnalysis,
@@ -103,6 +115,7 @@ export class AgentOrchestrator {
       fileName,
       material,
       language: language ?? 'en',
+      stlBytes,
     };
 
     if (visionCanvas) {

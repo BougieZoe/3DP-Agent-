@@ -10,10 +10,11 @@ export interface AgentStageConfig {
 }
 
 export const DEFAULT_AGENT_CONFIGS: AgentStageConfig[] = [
-  { agentId: 'geometry_analyst', enabled: true, weight: 0.30, useVision: true, timeoutMs: 15000 },
-  { agentId: 'printability_scorer', enabled: true, weight: 0.30, useVision: false, timeoutMs: 10000 },
-  { agentId: 'failure_predictor', enabled: true, weight: 0.25, useVision: true, timeoutMs: 15000 },
+  { agentId: 'geometry_analyst', enabled: true, weight: 0.25, useVision: true, timeoutMs: 15000 },
+  { agentId: 'printability_scorer', enabled: true, weight: 0.25, useVision: false, timeoutMs: 10000 },
+  { agentId: 'failure_predictor', enabled: true, weight: 0.20, useVision: true, timeoutMs: 15000 },
   { agentId: 'optimization_advisor', enabled: true, weight: 0.15, useVision: true, timeoutMs: 20000 },
+  { agentId: 'visual_verifier', enabled: true, weight: 0.15, useVision: true, timeoutMs: 30000 },
 ];
 
 export interface AgentResultWithExplanation {

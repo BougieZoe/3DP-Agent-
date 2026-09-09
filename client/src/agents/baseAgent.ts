@@ -29,6 +29,8 @@ export interface AgentContext {
   language: ContentLang;
   /** Optional vendor capacity adapter — queried at decision points, NOT in iterate loops. */
   vendorCapacityAdapter?: VendorCapacityAdapter;
+  /** Raw STL file bytes for server-side processing (e.g. Blender multi-angle verification). */
+  stlBytes?: ArrayBuffer;
 }
 
 export interface AgentCapabilities {

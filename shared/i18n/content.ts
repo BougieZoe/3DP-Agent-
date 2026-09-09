@@ -654,6 +654,11 @@ const shared = {
     ja: '最適化アドバイザー',
     zh: '优化顾问',
   },
+  'agentName.visual_verifier': {
+    en: 'Visual Verifier',
+    ja: 'ビジュアル検証',
+    zh: '视觉验证',
+  },
   'agentDesc.geometry_analyst': {
     en: 'Analyzes mesh geometry, wall thickness, overhangs, and features',
     ja: 'メッシュ形状、肉厚、オーバーハング、フィーチャーを解析',
@@ -672,7 +677,12 @@ const shared = {
   'agentDesc.optimization_advisor': {
     en: 'Suggests geometry improvements and orientation changes',
     ja: '形状の改善と向きの変更を提案',
-    zh: '建议几何改进与方向调整',
+    zh: '建议几何改进和方向调整',
+  },
+  'agentDesc.visual_verifier': {
+    en: 'Multi-angle visual inspection using rendered views and vision AI',
+    ja: 'レンダリング画像とビジョンAIによる多角度視覚検証',
+    zh: '使用渲染图和视觉AI进行多角度视觉检查',
   },
 };
 
@@ -1028,6 +1038,26 @@ const vision = {
     en: 'Vision analysis unavailable (no API key configured or API call failed)',
     ja: '視覚分析は利用できません（API Keyが未設定か、API呼び出しに失敗）',
     zh: '视觉分析不可用（未配置API Key或API调用失败）',
+  },
+  'visualVerifier.unavailable': {
+    en: 'Visual verification unavailable (Blender not installed and no client vision)',
+    ja: '視覚検証は利用できません（Blender未インストールかつクライアント視覚機能なし）',
+    zh: '视觉验证不可用（未安装Blender且无客户端视觉功能）',
+  },
+  'visualVerifier.criticalIssues': {
+    en: '{count} critical visual issue(s) detected',
+    ja: '{count}件の重大な視覚的問題を検出',
+    zh: '检测到 {count} 个严重视觉问题',
+  },
+  'visualVerifier.warnings': {
+    en: '{count} visual warning(s) detected',
+    ja: '{count}件の視覚的警告を検出',
+    zh: '检测到 {count} 个视觉警告',
+  },
+  'visualVerifier.noIssues': {
+    en: 'No visual issues detected from rendered views',
+    ja: 'レンダリング画像から視覚的問題は検出されませんでした',
+    zh: '从渲染图中未检测到视觉问题',
   },
 };
 

@@ -5,13 +5,13 @@ import { buildMockUnifiedAnalysis, normalMetrics, thinWallMetrics, overhangMetri
 import type { AgentStageConfig } from '../types';
 
 function makeConfigs(overrides?: Partial<Record<string, Partial<AgentStageConfig>>>): AgentStageConfig[] {
-  const ids: Array<'geometry_analyst' | 'printability_scorer' | 'failure_predictor' | 'optimization_advisor'> = [
-    'geometry_analyst', 'printability_scorer', 'failure_predictor', 'optimization_advisor',
+  const ids: Array<'geometry_analyst' | 'printability_scorer' | 'failure_predictor' | 'optimization_advisor' | 'visual_verifier'> = [
+    'geometry_analyst', 'printability_scorer', 'failure_predictor', 'optimization_advisor', 'visual_verifier',
   ];
   return ids.map(id => ({
     agentId: id,
     enabled: overrides?.[id]?.enabled !== false,
-    weight: overrides?.[id]?.weight ?? 0.25,
+    weight: overrides?.[id]?.weight ?? 0.20,
     useVision: false,
     timeoutMs: 5000,
   }));
@@ -23,10 +23,10 @@ describe('AgentOrchestrator', () => {
     const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
     const orch = new AgentOrchestrator();
     const result = await orch.runFullAnalysis(geo, ua, 'test.stl', undefined, 'en', mockMaterial());
-    expect(result.results.length).toBe(4);
+    expect(result.results.length).toBe(5);
     expect(result.consensus.overallScore).toBeGreaterThanOrEqual(50);
     expect(['pass', 'warning']).toContain(result.consensus.verdict);
-    expect(result.votingRecords.length).toBe(4);
+    expect(result.votingRecords.length).toBe(5);
     expect(result.totalDurationMs).toBeGreaterThan(0);
   });
 
@@ -67,12 +67,13 @@ describe('AgentOrchestrator', () => {
     const orch = new AgentOrchestrator(configs);
     const result = await orch.runFullAnalysis(geo, ua, 'weighted.stl');
     expect(result.consensus.overallScore).toBeGreaterThan(0);
-    expect(result.votingRecords.length).toBe(4);
+    expect(result.votingRecords.length).toBe(5);
   });
 
   it('handles disabled agents', async () => {
     const configs = makeConfigs({
       optimization_advisor: { enabled: false },
+      visual_verifier: { enabled: false },
     });
     const geo = mockGeometry();
     const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
@@ -81,6 +82,7 @@ describe('AgentOrchestrator', () => {
     expect(result.results.length).toBe(3);
     const ids = result.results.map(r => r.agentId);
     expect(ids).not.toContain('optimization_advisor');
+    expect(ids).not.toContain('visual_verifier');
   });
 
   it('handles empty findings gracefully', async () => {

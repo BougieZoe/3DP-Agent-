@@ -75,6 +75,7 @@ const INITIAL_STATE: AgentState = {
     failure_predictor: 'pending',
     optimization_advisor: 'pending',
     printability_scorer: 'pending',
+    visual_verifier: 'pending',
   },
   error: null,
 };
@@ -104,6 +105,7 @@ export class AgentStateManager {
         failure_predictor: 'pending',
         optimization_advisor: 'pending',
         printability_scorer: 'pending',
+        visual_verifier: 'pending',
       },
       error: null,
     };
