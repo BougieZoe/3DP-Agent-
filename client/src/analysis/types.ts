@@ -191,7 +191,7 @@ export const PRINTER_PROFILES = {
   prusa_mk4: { id: 'prusa_mk4', name: 'Prusa MK4', widthMm: 250, depthMm: 210, heightMm: 220 },
   creality_k1: { id: 'creality_k1', name: 'Creality K1', widthMm: 220, depthMm: 220, heightMm: 250 },
   ender_3: { id: 'ender_3', name: 'Ender 3', widthMm: 220, depthMm: 220, heightMm: 250 },
-  fgf_1800_pro: { id: 'fgf_1800_pro', name: 'Kings 3D FGF 1800 Pro', widthMm: 1800, depthMm: 1200, heightMm: 1300 },
+  fgf_1800_pro: { id: 'fgf_1800_pro', name: 'Large-format FGF printer', widthMm: 1800, depthMm: 1200, heightMm: 1300 },
   fgf_1200: { id: 'fgf_1200', name: 'FGF 1200 Large-Format', widthMm: 1200, depthMm: 800, heightMm: 1000 },
 } as const;
 
