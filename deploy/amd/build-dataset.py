@@ -60,10 +60,19 @@ def build_prompt_pool() -> int:
 
 
 def build_train_set() -> tuple[int, int]:
-    """agent-traces.jsonl (AgentTrace shape) -> (instruction, input, output)."""
+    """agent-traces.jsonl (AgentTrace shape) -> (instruction, input, output).
+
+    Quality gates:
+      - skip trivial outputs (critic verdicts like {"passed": true} teach
+        nothing and made up ~1/3 of early captures)
+      - exact dedupe on (instruction, input, output) — critic retries produce
+        near-identical pairs
+    """
     traces = load_jsonl(TRACES)
     if not traces:
         return 0, 0
+
+    MIN_OUTPUT_CHARS = 100
 
     agent_labels = {
         "geometry": "Act as the 3DP Geometry Analyst. Measure wall thickness, "
@@ -76,9 +85,16 @@ def build_train_set() -> tuple[int, int]:
                  "consistent with upstream findings.",
         "orchestrator": "Act as the 3DP Orchestrator. Summarize all agent "
                         "findings for a 3D printing engineer.",
+        "geometry_critic": "Act as a strict fact-checker reviewing a Geometry "
+                           "Analyst's report.",
+        "score_critic": "Act as a strict fact-checker reviewing a Printability "
+                        "Scorer's report.",
     }
 
     n = 0
+    skipped_short = 0
+    skipped_dup = 0
+    seen: set[tuple[str, str, str]] = set()
     with OUT.open("w") as fh:
         for t in traces:
             agent = (t.get("agent") or t.get("agentName") or "").lower()
@@ -91,12 +107,23 @@ def build_train_set() -> tuple[int, int]:
             raw = t.get("raw") or t.get("output") or ""
             if not raw:
                 continue
+            if len(raw.strip()) < MIN_OUTPUT_CHARS:
+                skipped_short += 1
+                continue
+            key = (instruction, context, raw)
+            if key in seen:
+                skipped_dup += 1
+                continue
+            seen.add(key)
             fh.write(json.dumps({
                 "instruction": instruction,
                 "input": context,
                 "output": raw,
             }, ensure_ascii=False) + "\n")
             n += 1
+    if skipped_short or skipped_dup:
+        print(f"      filtered: {skipped_short} trivial (<{MIN_OUTPUT_CHARS} chars), "
+              f"{skipped_dup} duplicates")
     return n, len(traces)
 
 
