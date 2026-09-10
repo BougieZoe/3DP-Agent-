@@ -11,6 +11,36 @@
 
 export type MaterialTechnology = 'fdm' | 'sla' | 'fgf' | 'sls' | 'slm' | 'mjf' | 'concrete' | 'eco';
 
+/**
+ * End-of-life profile for the LOOP analysis (reuse fate + natural end).
+ * All time values are months for a ~3mm-wall reference part under the named
+ * condition; geometry (thin walls, high surface/volume) shortens them via
+ * the loop module's geometry factor. Values marked "class estimate" come
+ * from public material-class data, not a specific vendor grade — verify per
+ * grade before quoting to customers.
+ */
+export interface MaterialEol {
+  /** Mechanical recycling viable (regrind / remelt). */
+  recyclable: boolean;
+  /** Industrial-compost biodegradable. */
+  compostable: boolean;
+  /** Marine-biodegradable (seawater, microbial action). */
+  marineDegradable: boolean;
+  /**
+   * Shredded scrap feeds straight back into FGF production (no repelletizing).
+   * Only meaningful for pellet-process materials; filament/resin entries leave it false.
+   */
+  fgfDirectReuse: boolean;
+  /**
+   * Baseline months [min, max] to full industrial-compost breakdown for a
+   * ~3mm-wall reference part. A RANGE, deliberately — point estimates for
+   * biodegradation are precision theater. Absent = unknown.
+   */
+  compostMonthsRange?: [number, number];
+  /** Provenance of the numbers above (certification class, literature, estimate). */
+  basis?: string;
+}
+
 export interface Material {
   name: string;
   /** Which printer technology this material feeds (FDM filament, SLA resin, FGF pellet). */
@@ -30,6 +60,15 @@ export interface Material {
   degradationRisk?: number;
   /** Eco-material advisory (0..1): brittle, cracks under load. */
   brittlenessRisk?: number;
+
+  // ── End-of-life (LOOP tab) ───────────────────────────────────────────────
+  /**
+   * End-of-life profile. OPTIONAL: absent means "unknown" — consumers must
+   * render "no EOL data", never assume landfill OR recyclable. Brand names
+   * must never appear here (or in any material entry): describe the material
+   * class with public class-level data only.
+   */
+  eol?: MaterialEol;
 
   // ── Thermal properties (S2 — heat field / warping analysis) ──────────────
   /** Glass transition temperature (°C) — critical for FDM warping. Above this, polymer softens. */
@@ -71,6 +110,11 @@ export const MATERIALS: Record<string, Material> = {
     shrinkagePercent: 0.3,
     thermalExpansionCoeff: 7e-5,
     environment: { enclosure: false, draftShield: false },
+    eol: {
+      recyclable: true, compostable: true, marineDegradable: false, fgfDirectReuse: false,
+      compostMonthsRange: [2, 6],
+      basis: 'Class data: PLA industrial-compost 60–180 days; not marine-degradable.',
+    },
   },
   PETG: {
     name: 'PETG', technology: 'fdm',
@@ -87,6 +131,10 @@ export const MATERIALS: Record<string, Material> = {
     shrinkagePercent: 0.4,
     thermalExpansionCoeff: 6e-5,
     environment: { enclosure: false, draftShield: false },
+    eol: {
+      recyclable: true, compostable: false, marineDegradable: false, fgfDirectReuse: false,
+      basis: 'Class data: PETG mechanically recyclable, not compostable.',
+    },
   },
   ABS: {
     name: 'ABS', technology: 'fdm',
@@ -103,6 +151,10 @@ export const MATERIALS: Record<string, Material> = {
     shrinkagePercent: 0.8,
     thermalExpansionCoeff: 7e-5,
     environment: { enclosure: true, draftShield: true, chamberTempC: 50 },
+    eol: {
+      recyclable: true, compostable: false, marineDegradable: false, fgfDirectReuse: false,
+      basis: 'Class data: ABS mechanically recyclable, not compostable.',
+    },
   },
   TPU: {
     name: 'TPU', technology: 'fdm',
@@ -211,6 +263,10 @@ export const MATERIALS: Record<string, Material> = {
     description: 'ABS delivered as raw pellets for large-format pellet-extrusion printers. Orders of magnitude cheaper per kilo than filament, still ABS-strong — with the same warping and shrinkage, now on a furniture scale.',
     useCase: 'Furniture, large structural parts, tooling and molds',
     overhangThreshold: 45, densityGPerCm3: 1.04, pricePerKgUsd: 8,
+    eol: {
+      recyclable: true, compostable: false, marineDegradable: false, fgfDirectReuse: true,
+      basis: 'Pellet process: shredded scrap feeds straight back, no repelletizing.',
+    },
   },
   PETG_PELLET: {
     name: 'PETG Pellet', technology: 'fgf',
@@ -218,6 +274,10 @@ export const MATERIALS: Record<string, Material> = {
     description: 'PETG pellets for large-format extrusion — tough, water- and chemical-resistant, with low odor during printing. A forgiving large-format choice compared to ABS pellet.',
     useCase: 'Large containers, signage, outdoor-lite structural parts',
     overhangThreshold: 40, densityGPerCm3: 1.27, pricePerKgUsd: 9,
+    eol: {
+      recyclable: true, compostable: false, marineDegradable: false, fgfDirectReuse: true,
+      basis: 'Pellet process: shredded scrap feeds straight back, no repelletizing.',
+    },
   },
   PP_PELLET: {
     name: 'PP Pellet', technology: 'fgf',
@@ -307,6 +367,11 @@ export const MATERIALS: Record<string, Material> = {
     useCase: 'Low-impact prototypes, decorative parts, short-life items',
     overhangThreshold: 50, densityGPerCm3: 1.24, pricePerKgUsd: 15,
     moistureRisk: 0.5, degradationRisk: 0.6, brittlenessRisk: 0.7,
+    eol: {
+      recyclable: true, compostable: true, marineDegradable: false, fgfDirectReuse: false,
+      compostMonthsRange: [2, 6],
+      basis: 'Class data: recycled PLA keeps PLA industrial-compostability.',
+    },
   },
   ECO_BIOPLA: {
     name: 'PLA+Bio Blend', technology: 'eco',
@@ -315,6 +380,11 @@ export const MATERIALS: Record<string, Material> = {
     useCase: 'Everyday prototypes, enclosures, low-cost parts',
     overhangThreshold: 50, densityGPerCm3: 1.23, pricePerKgUsd: 18,
     moistureRisk: 0.5, degradationRisk: 0.6, brittlenessRisk: 0.6,
+    eol: {
+      recyclable: true, compostable: true, marineDegradable: false, fgfDirectReuse: false,
+      compostMonthsRange: [2, 6],
+      basis: 'Class data: bio-blended PLA keeps PLA industrial-compostability.',
+    },
   },
   ECO_RPETG: {
     name: 'Recycled PETG', technology: 'eco',
@@ -323,6 +393,24 @@ export const MATERIALS: Record<string, Material> = {
     useCase: 'Functional parts, containers, outdoor-adjacent use',
     overhangThreshold: 40, densityGPerCm3: 1.27, pricePerKgUsd: 16,
     moistureRisk: 0.6, degradationRisk: 0.4, brittlenessRisk: 0.3,
+    eol: {
+      recyclable: true, compostable: false, marineDegradable: false, fgfDirectReuse: false,
+      basis: 'Class data: recycled PETG stays mechanically recyclable, not compostable.',
+    },
+  },
+  ECO_CELLULOSE_ACETATE: {
+    name: 'Cellulose Acetate (Bio)', technology: 'eco',
+    category: 'Bio-sourced thermoplastic',
+    description: 'Wood/cotton cellulose acetate with biodegradable plasticizers — transparent, pleasant to touch, printable as filament and pellet. The material class behind marine-biodegradable grades: recyclable in production and compost/marine-degradable at end of life. Hygroscopic, so dry before printing.',
+    useCase: 'Low-impact prototypes, transparent parts, short-life goods meant to return to nature',
+    overhangThreshold: 45, densityGPerCm3: 1.30, pricePerKgUsd: 40,
+    moistureRisk: 0.5, degradationRisk: 0.5, brittlenessRisk: 0.4,
+    printTempC: { min: 200, max: 230 },
+    eol: {
+      recyclable: true, compostable: true, marineDegradable: true, fgfDirectReuse: true,
+      compostMonthsRange: [2, 6],
+      basis: 'Class estimate: cellulose-acetate OK-biodegradable-MARINE class; density is class midpoint 1.28–1.32; verify per grade.',
+    },
   },
 };
 

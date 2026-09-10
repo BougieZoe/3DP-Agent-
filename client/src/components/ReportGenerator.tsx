@@ -573,6 +573,27 @@ function drawProductionSection(doc: JsPDF, prod: ProductionSuitability, lang: La
   return y + aLines.length * 4 + 4;
 }
 
+/**
+ * Circularity (LOOP) section — first-time-right, waste fate, natural end.
+ * Raw English labels (same precedent as "KEY METRICS"): the loop module's
+ * reasons are English literals, so no i18n keys are introduced here.
+ * Draws nothing when the analysis ran without a material (loop absent).
+ */
+function drawLoopSection(doc: JsPDF, analysis: UnifiedAnalysis, y: number): number {
+  const loop = analysis.loop?.result;
+  if (!loop) return y;
+  y = drawSectionHeader(doc, "CIRCULARITY (LOOP)", y);
+  y = drawDataRow(doc, "First-time-right", `${loop.firstTime.score}/100`, y, loop.firstTime.score < 50);
+  y = drawDataRow(doc, "Expected failure cost", `$${loop.firstTime.expectedFailureCostUsd.toFixed(2)}`, y);
+  if (loop.firstTime.drivers.length > 0) {
+    y = drawDataRow(doc, "Top risk", loop.firstTime.drivers[0], y);
+  }
+  y = drawDataRow(doc, "Waste total", `${loop.waste.totalWasteGrams} g (${(loop.waste.wasteRatio * 100).toFixed(1)}%)`, y);
+  y = drawDataRow(doc, "Waste fate", loop.waste.fate, y, loop.waste.fate === 'landfill');
+  y = drawDataRow(doc, "End of life", loop.eol.monthsCompost != null ? `~${loop.eol.monthsCompost[0]}-${loop.eol.monthsCompost[1]} mo compost` : "unknown", y);
+  return y;
+}
+
 /** One-line report-boundary note (measured vs AI opinion vs not simulated). */
 function drawLimitsNote(doc: JsPDF, lang: Language, y: number): number {
   const line = translate(CONTENT, 'pdf.limitsNote', lang);
@@ -717,6 +738,10 @@ async function generateClientPDF(
     y = drawProductionSection(doc, production, lang, y);
     y += 4;
   }
+
+  // ── Circularity (LOOP) ──
+  y = drawLoopSection(doc, analysis, y);
+  y += 4;
 
   // ── Next step ──
   y += 6;
@@ -972,6 +997,10 @@ async function generateDesignerPDF(
     y += 4;
   }
 
+  // ── Circularity (LOOP) ──
+  y = drawLoopSection(doc, analysis, y);
+  y += 4;
+
   doc.setFont(pdfFont, "italic");
   doc.setFontSize(8);
   doc.setTextColor(...C.muted);
@@ -1160,6 +1189,10 @@ async function generateFactoryPDF(
     y = drawProductionSection(doc, production, lang, y);
     y += 4;
   }
+
+  // ── Circularity (LOOP) ──
+  y = drawLoopSection(doc, analysis, y);
+  y += 4;
 
   // ── Disclaimer ──
   y += 6;
