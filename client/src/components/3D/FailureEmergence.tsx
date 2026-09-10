@@ -17,21 +17,23 @@ interface FailureEmergenceProps {
   visible: boolean;
 }
 
+// Data frame is Z-up (slicer convention, renders unrotated): the print
+// scan plane sweeps Z, so activation tracks marker Z — never Y.
 function useBounds(geometry: THREE.BufferGeometry) {
   return useMemo(() => {
     geometry.computeBoundingBox();
     const box = geometry.boundingBox!;
-    return { minY: box.min.y - 0.5, maxY: box.max.y + 0.5 };
+    return { minZ: box.min.z - 0.5, maxZ: box.max.z + 0.5 };
   }, [geometry]);
 }
 
-function useActivation(y: number, bounds: { minY: number; maxY: number }): React.RefObject<number> {
+function useActivation(z: number, bounds: { minZ: number; maxZ: number }): React.RefObject<number> {
   const level = useRef(0);
   const { progressRef } = usePrintPlayback();
 
   useFrame(() => {
-    const scanY = bounds.minY + progressRef.current * (bounds.maxY - bounds.minY);
-    if (Math.abs(y - scanY) < ANIMATION.scan.scanNear) {
+    const scanZ = bounds.minZ + progressRef.current * (bounds.maxZ - bounds.minZ);
+    if (Math.abs(z - scanZ) < ANIMATION.scan.scanNear) {
       level.current = Math.min(level.current + ANIMATION.reveal.activationRamp, 1);
     }
   });
@@ -40,18 +42,19 @@ function useActivation(y: number, bounds: { minY: number; maxY: number }): React
 }
 
 function SaggingBridge({ position, severity, bounds }: {
-  position: [number, number, number]; severity: number; bounds: { minY: number; maxY: number };
+  position: [number, number, number]; severity: number; bounds: { minZ: number; maxZ: number };
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const lineRef = useRef<THREE.Line>(null);
-  const activation = useActivation(position[1], bounds);
+  const activation = useActivation(position[2], bounds);
   const maxSag = severity * ANIMATION.sag.maxFactor;
 
   useEffect(() => {
     const group = groupRef.current;
     if (!group) return;
 
-    const pts = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -SIZES.sagLineInit, 0)];
+    // Sag droops toward the bed: -Z in the data frame.
+    const pts = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -SIZES.sagLineInit)];
     const geo = new THREE.BufferGeometry().setFromPoints(pts);
     const mat = new THREE.LineBasicMaterial({
       ...MATERIALS.line,
@@ -74,7 +77,7 @@ function SaggingBridge({ position, severity, bounds }: {
     const reveal = Math.min(activation.current * ANIMATION.reveal.rate, 1);
     const sag = reveal * maxSag;
     const pos = lineRef.current.geometry.attributes.position.array as Float32Array;
-    pos[1] = -sag; pos[4] = -sag;
+    pos[2] = -sag; pos[5] = -sag;
     lineRef.current.geometry.attributes.position.needsUpdate = true;
     const mat = lineRef.current.material as THREE.LineBasicMaterial;
     mat.opacity = reveal * SEMANTIC.failure.overlay.sag;
@@ -84,10 +87,10 @@ function SaggingBridge({ position, severity, bounds }: {
 }
 
 function OscillatingRegion({ position, severity, bounds }: {
-  position: [number, number, number]; severity: number; bounds: { minY: number; maxY: number };
+  position: [number, number, number]; severity: number; bounds: { minZ: number; maxZ: number };
 }) {
   const ref = useRef<THREE.Mesh>(null);
-  const activation = useActivation(position[1], bounds);
+  const activation = useActivation(position[2], bounds);
   const { progressRef } = usePrintPlayback();
 
   useFrame(() => {
@@ -111,10 +114,10 @@ function OscillatingRegion({ position, severity, bounds }: {
 }
 
 function StressPulse({ position, severity, bounds }: {
-  position: [number, number, number]; severity: number; bounds: { minY: number; maxY: number };
+  position: [number, number, number]; severity: number; bounds: { minZ: number; maxZ: number };
 }) {
   const ref = useRef<THREE.Mesh>(null);
-  const activation = useActivation(position[1], bounds);
+  const activation = useActivation(position[2], bounds);
   const { progressRef } = usePrintPlayback();
 
   useFrame(() => {
