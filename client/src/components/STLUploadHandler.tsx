@@ -8,8 +8,11 @@ import { autoOrientGeometry } from '@/lib/autoOrient';
 import { geometryToStl } from '@/lib/meshOps';
 import { sliceSTL, type SliceMetadata, type SliceProvenance, type SlicerId } from '@/lib/sliceClient';
 import { getCachedAnalysis, setCachedAnalysis, hashFileBytes, cacheKeyFromParts } from '@/lib/analysisCache';
+import { recordLoopPrint } from '@/lib/loopLedger';
+import { logLoopPrediction } from '@/lib/loopCalibration';
+import { scoreBand } from '@/analysis/loop';
 import { notifyAnalysisComplete } from '@/lib/notifications';
-import { DEFAULT_MATERIAL } from '@shared/domain/material';
+import { DEFAULT_MATERIAL, type Material } from '@shared/domain/material';
 import type { LengthUnit } from '@shared/domain/geometry';
 import * as THREE from 'three';
 
@@ -42,6 +45,12 @@ interface STLUploadHandlerProps {
   onUnitsChange: (units: LengthUnit) => void;
   /** Print-technology family for the initial analysis (FDM default). */
   materialFamily?: 'fdm' | 'sla' | 'fgf' | 'sls' | 'slm' | 'mjf' | 'concrete' | 'eco';
+  /**
+   * Currently selected material, forwarded into the analysis pipeline so
+   * material-gated modules (thermal, loop) run on fresh upload — not only
+   * after a later material change. Falls back to DEFAULT_MATERIAL.
+   */
+  material?: Material;
 }
 
 const labels = {
@@ -101,7 +110,7 @@ const labels = {
   },
 };
 
-export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', units, onUnitsChange, materialFamily = 'fdm' }: STLUploadHandlerProps) {
+export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', units, onUnitsChange, materialFamily = 'fdm', material }: STLUploadHandlerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -157,7 +166,7 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
         // (the old flow held two copies of every large STL in memory).
         log(`> READING ${file.name}...`);
         const arrayBuffer = await file.arrayBuffer();
-        const pipelineOptions = { fileName: file.name, materialFamily };
+        const pipelineOptions = { fileName: file.name, materialFamily, material: material ?? DEFAULT_MATERIAL };
 
         // Hash BEFORE transferring the buffer to the worker — after the
         // transfer the buffer is detached and the hash cannot be recomputed.
@@ -187,6 +196,45 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
           unifiedAnalysis = await runAnalysisInWorker(model, pipelineOptions);
           // Cache the result for future uploads
           await setCachedAnalysis(null, pipelineOptions, unifiedAnalysis, file.name, file.size, { cacheKey, fileHash });
+        }
+
+        // LOOP ledger — one entry per fresh upload (same fileHash replaces).
+        // Runs on cache hits too: re-uploading refreshes the record.
+        const loopResult = unifiedAnalysis.loop?.result;
+        if (loopResult) {
+          const effMaterial = pipelineOptions.material;
+          recordLoopPrint({
+            fileHash,
+            fileName: file.name,
+            timestamp: new Date().toISOString(),
+            material: effMaterial.name,
+            technology: effMaterial.technology,
+            partGrams: loopResult.waste.partGrams,
+            supportGrams: loopResult.waste.supportGrams,
+            totalWasteGrams: loopResult.waste.totalWasteGrams,
+            wasteRatio: loopResult.waste.wasteRatio,
+            fate: loopResult.waste.fate,
+            firstTimeScore: loopResult.firstTime.score,
+            expectedFailureCostUsd: loopResult.firstTime.expectedFailureCostUsd,
+            monthsCompostMin: loopResult.eol.monthsCompost?.[0] ?? null,
+            monthsCompostMax: loopResult.eol.monthsCompost?.[1] ?? null,
+          });
+          // Calibration trail: prediction + geometry features for future
+          // weight fitting against printFeedback outcomes (see loopCalibration).
+          const mRes = unifiedAnalysis.metrics?.result;
+          logLoopPrediction({
+            fileHash,
+            fileName: file.name,
+            timestamp: new Date().toISOString(),
+            material: effMaterial.name,
+            score: loopResult.firstTime.score,
+            band: scoreBand(loopResult.firstTime.score),
+            drivers: loopResult.firstTime.drivers,
+            wasteRatio: loopResult.waste.wasteRatio,
+            thinWallRatio: mRes?.thinWallRatio ?? 0,
+            overhangRatio: mRes?.overhang.ratio ?? 0,
+            supportDifficulty: unifiedAnalysis.support?.result.difficulty ?? 'none',
+          });
         }
 
         // Slice STL to get ground-truth print metrics (time, filament, layers).

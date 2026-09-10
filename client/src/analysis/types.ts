@@ -313,6 +313,8 @@ export interface UnifiedAnalysis {
   concrete?: AnalysisModuleResult<import('./concrete').ConcreteResult> | null;
   /** Present only when the analysis ran with materialFamily === 'eco'. */
   eco?: AnalysisModuleResult<import('./eco').EcoResult> | null;
+  /** Circularity (prevent / reuse / end) — present when a material is specified. */
+  loop?: AnalysisModuleResult<import('./loop').LoopResult> | null;
   /** Thermal field & warping analysis — present when material has thermal properties. */
   thermal?: AnalysisModuleResult<import('./thermal').ThermalFieldResult> | null;
   /** Metal printing analysis — present when materialFamily === 'slm'. */

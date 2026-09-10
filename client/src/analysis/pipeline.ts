@@ -8,6 +8,7 @@ import { computeFgfMetrics, type FgfResult } from './fgf';
 import { computePbfMetrics, type PbfResult, type PbfKind } from './pbf';
 import { computeConcreteMetrics, type ConcreteResult } from './concrete';
 import { computeEcoMetrics, type EcoResult } from './eco';
+import { computeLoopMetrics, type LoopResult } from './loop';
 import { computeThermalMetrics, type ThermalFieldResult } from './thermal';
 import { computeMetalAnalysis, type MetalAnalysisResult } from './metalAnalysis';
 import { computeMultiMaterialAnalysis, type MultiMaterialAnalysisResult } from './multiMaterial';
@@ -186,6 +187,37 @@ export function runAnalysisPipeline(
       }), 'Concrete construction-scale printability (geometric proxies — not structural engineering).');
     } catch (e) {
       return options.materialFamily === 'concrete' ? failResult('concrete', e, EMPTY_CONCRETE) : null;
+    }
+  });
+
+  // LOOP circularity — prevent (first-time-right), reuse (waste fate),
+  // end (geometry-adjusted EOL). Rule-based on metrics/support/printTime.
+  const EMPTY_LOOP: LoopResult = {
+    firstTime: { score: 0, expectedFailureCostUsd: 0, drivers: [] },
+    waste: { partGrams: 0, supportGrams: 0, processLossGrams: 0, totalWasteGrams: 0, wasteRatio: 0, fate: 'landfill', fateReason: '', contaminated: false },
+    eol: { monthsCompost: null, marineDegradable: false, geometryFactor: 1, basisNote: '' },
+  };
+  const loop = time('loop', () => {
+    try {
+      if (!mat || metrics.result.meshVolumeMm3 <= 0) return null;
+      const m = metrics.result;
+      const pt = printTime?.result;
+      return moduleResult('loop', 0.9 as Confidence, 0, computeLoopMetrics({
+        meshVolumeMm3: m.meshVolumeMm3,
+        surfaceAreaMm2: m.surfaceAreaMm2,
+        minWallThicknessMm: m.minWallThicknessMm,
+        thinWallRatio: m.thinWallRatio,
+        overhangRatio: m.overhang.ratio,
+        supportDifficulty: support?.result.difficulty ?? 'none',
+        supportGrams: support?.result.estimatedSupportGrams ?? 0,
+        materialCostUsd: pt?.materialCostUsd ?? 0,
+        machineCostUsd: pt ? pt.totalCostUsd - pt.materialCostUsd : 0,
+        material: mat,
+        technology: options.materialFamily ?? mat.technology,
+        contaminated: !!options.secondaryMaterial || !!options.fiberReinforced,
+      }), 'Circularity: first-time-right score, support-stream fate, geometry-adjusted end-of-life.');
+    } catch (e) {
+      return failResult('loop', e, EMPTY_LOOP);
     }
   });
 
@@ -409,7 +441,7 @@ export function runAnalysisPipeline(
     }
   });
 
-  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, thermal, metal, multiMaterial, aiSuggestions, mlAnalysis]
+  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, loop, thermal, metal, multiMaterial, aiSuggestions, mlAnalysis]
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .map(m => m.confidence);
   const overallConfidence = confidences.length > 0
@@ -428,6 +460,7 @@ export function runAnalysisPipeline(
     pbf,
     concrete,
     eco,
+    loop,
     thermal,
     metal,
     multiMaterial,

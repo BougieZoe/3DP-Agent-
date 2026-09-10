@@ -86,6 +86,7 @@ const ProductionCard = lazy(() => import('@/components/ProductionCard').then(m =
 const CostCard = lazy(() => import('@/components/CostCard').then(m => ({ default: m.CostCard })));
 const PostProcessingCard = lazy(() => import('@/components/PostProcessingCard').then(m => ({ default: m.PostProcessingCard })));
 const SustainabilityCard = lazy(() => import('@/components/SustainabilityCard').then(m => ({ default: m.SustainabilityCard })));
+const LoopTab = lazy(() => import('@/components/LoopTab').then(m => ({ default: m.LoopTab })));
 const OrderCard = lazy(() => import('@/components/OrderCard').then(m => ({ default: m.OrderCard })));
 const OrderForm = lazy(() => import('@/components/OrderForm').then(m => ({ default: m.OrderForm })));
 const OrderListView = lazy(() => import('@/components/OrderListView').then(m => ({ default: m.OrderListView })));
@@ -316,7 +317,7 @@ export default function Home() {
   const [showModeMenu, setShowModeMenu] = useState(false);
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
-  const [tab, setTab] = useState<'geometry' | 'report' | 'chat' | 'agents' | 'causality' | 'orders' | 'verification'>('geometry');
+  const [tab, setTab] = useState<'geometry' | 'report' | 'loop' | 'chat' | 'agents' | 'causality' | 'orders' | 'verification'>('geometry');
   const [showAPIModal, setShowAPIModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -1172,6 +1173,7 @@ deepAnalysisSeq.current += 1;
                   units={units}
                   onUnitsChange={handleUnitsChange}
                   materialFamily={materialFamily}
+                  material={material}
                 />
                 {/* Decorative presentation-only touches — remove any one freely */}
                 <ViewfinderCorners />
@@ -1205,13 +1207,14 @@ deepAnalysisSeq.current += 1;
                 feature cards (diagnosis opens as a modal) instead */}
             {modelData && (
               <div className="flex overflow-x-auto scrollbar-hide border-b border-border -mx-5 px-5">
-                {(['geometry', 'report', 'agents', 'chat', 'causality', 'orders', 'verification'] as const).map(tabKey => (
+                {(['geometry', 'report', 'loop', 'agents', 'chat', 'causality', 'orders', 'verification'] as const).map(tabKey => (
                   <button key={tabKey} onClick={() => setTab(tabKey)}
                     className={`text-xs font-mono px-3 sm:px-4 py-2.5 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
                       tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
                     }`}>
                     {tabKey === 'geometry' ? t('geometry').toUpperCase()
                       : tabKey === 'report' ? t('report').toUpperCase()
+                      : tabKey === 'loop' ? 'LOOP'
                       : tabKey === 'agents' ? t('agents').toUpperCase()
                       : tabKey === 'causality' ? t('causality').toUpperCase()
                       : tabKey === 'orders' ? 'ORDERS'
@@ -1628,6 +1631,18 @@ deepAnalysisSeq.current += 1;
                       </div>
                     )}
                   </div>
+                )}
+
+                {/* LOOP TAB */}
+                {tab === 'loop' && unifiedAnalysis && (
+                  <Suspense fallback={null}>
+                    <LoopTab
+                      unifiedAnalysis={unifiedAnalysis}
+                      material={material}
+                      language={language}
+                      onNavigate={(target) => setTab(target)}
+                    />
+                  </Suspense>
                 )}
 
                 {/* AGENTS TAB */}

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { runAnalysisPipeline } from '../pipeline';
 import { createTerrainGridModel } from './testMeshes';
+import { MATERIALS } from '@shared/domain/material';
 
 describe('runAnalysisPipeline (direct call, Worker unavailable path)', () => {
   it('returns UnifiedAnalysis with correct shape', () => {
@@ -48,6 +49,24 @@ describe('runAnalysisPipeline (direct call, Worker unavailable path)', () => {
       expect(result.printTime.result.estimatedPrintTimeMinutes).toBeGreaterThan(0);
       expect(result.printTime.result.layerCount).toBeGreaterThan(0);
     }
+  });
+
+  it('includes loop when a material is passed (fresh-upload contract)', () => {
+    const model = createTerrainGridModel(10, 10, 10);
+    const result = runAnalysisPipeline(model, {
+      fileName: 'test.stl',
+      material: MATERIALS.PLA,
+      materialFamily: 'fdm',
+    });
+    expect(result.loop).not.toBeNull();
+    expect(result.loop!.result.firstTime.score).toBeGreaterThanOrEqual(0);
+    expect(result.loop!.result.firstTime.score).toBeLessThanOrEqual(100);
+  });
+
+  it('omits loop when no material is passed', () => {
+    const model = createTerrainGridModel(10, 10, 10);
+    const result = runAnalysisPipeline(model, { fileName: 'test.stl' });
+    expect(result.loop).toBeNull();
   });
 
   it('returns null printTime for zero volume', () => {
