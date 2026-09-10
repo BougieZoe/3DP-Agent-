@@ -32,19 +32,19 @@ export function PostProcessingCard({ unifiedAnalysis, material, language }: Prop
     const s: Step[] = [];
 
     if (support && support.totalSupportVolumeMm3 > 50) {
-      s.push({ icon: '✂', label: language === 'zh' ? '去支撑' : language === 'ja' ? 'サポート除去' : 'Remove supports', time: support.totalSupportVolumeMm3 > 1000 ? '30-60m' : '10-30m', required: true });
+      s.push({ icon: '✂', label: language === 'zh' ? '去支撑' : language === 'ja' ? 'サポート除去' : 'Remove supports', time: support.totalSupportVolumeMm3 > 1000 ? '30-60 min' : '10-30 min', required: true });
     }
 
     if (material.technology === 'fdm' && m.surfaceAreaMm2 > 3000) {
-      s.push({ icon: ' ', label: language === 'zh' ? '打磨' : language === 'ja' ? '研磨' : 'Sanding', time: '15-30m', required: false });
+      s.push({ icon: ' ', label: language === 'zh' ? '打磨' : language === 'ja' ? '研磨' : 'Sanding', time: '15-30 min', required: false });
     }
 
     if ((material.name === 'ABS' || material.name === 'ASA')) {
-      s.push({ icon: '⚗', label: language === 'zh' ? '丙酮平滑' : language === 'ja' ? 'アセトン平滑' : 'Acetone smooth', time: '15-30m', required: false });
+      s.push({ icon: '⚗', label: language === 'zh' ? '丙酮平滑' : language === 'ja' ? 'アセトン平滑' : 'Acetone smooth', time: '15-30 min', required: false });
     }
 
     if (material.technology === 'sla') {
-      s.push({ icon: '☀', label: language === 'zh' ? 'UV固化' : language === 'ja' ? 'UV硬化' : 'UV cure', time: '10-30m', required: true });
+      s.push({ icon: '☀', label: language === 'zh' ? 'UV固化' : language === 'ja' ? 'UV硬化' : 'UV cure', time: '10-30 min', required: true });
     }
 
     if (m.minWallThicknessMm && m.minWallThicknessMm < 1.0) {

@@ -36,7 +36,10 @@ export function SustainabilityCard({ unifiedAnalysis, material, language }: Prop
     const volCm3 = m.meshVolumeMm3 / 1000;
     const wtKg = (volCm3 * material.densityGPerCm3) / 1000;
     const supVol = support?.totalSupportVolumeMm3 ?? 0;
-    const waste = wtKg > 0 ? ((supVol / 1000 * material.densityGPerCm3 + wtKg * 0.1) / wtKg) * 100 : 0;
+    // Support mass in kg (mm³ → cm³ → g → kg) so both terms share units with wtKg.
+    // The old code compared support grams against part kilograms (1000× off).
+    const supKg = ((supVol / 1000) * material.densityGPerCm3) / 1000;
+    const waste = wtKg > 0 ? ((supKg + wtKg * 0.1) / wtKg) * 100 : 0;
     const hours = pt?.estimatedPrintTimeHours ?? 0;
     const energy = hours * 0.35;
     const env = MAT_ENV[material.name] ?? { recyclable: false, co2PerKg: 3 };

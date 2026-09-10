@@ -1,5 +1,41 @@
 # Reflections
 
+## 2026-09-10 — estimate fixes + auto-orient coplanarity (wall_tower)
+
+**Commits:** `ea8729e4` fix(estimate), `beb521ec` fix(auto-orient). Human reviewed the full diff before commit; new tests were additionally verified bidirectional (fail on stashed old code, pass on new).
+
+### Checkpoint 1: "autoOrient doesn't fire" (wrong)
+
+**Claimed:** After reading `autoOrientGeometry` and hand-computing face areas, I ran a node repro (three.js STLLoader + autoOrient on wall_tower.stl) showing BEFORE (60,20,28) → AFTER (60,20,28), and concluded the rotation must happen elsewhere.
+
+**Reality:** The repro was unfaithful — the app parses via its own indexed `parseSTL` + `computeVertexNormals` smoothing, while STLLoader yields non-indexed geometry with face normals. The flatness sampling reads vertex normals, so the two paths diverge. The faithful repro (project `parseSTL` → `normalizeModelGeometry` → `autoOrientGeometry`) showed (60,20,28) → (28,20,60), confirming autoOrient as the culprit.
+
+**Root cause:** I optimized for a quick repro over a faithful one, even though the suspect code's input (smoothed indexed normals) was the entire point. A negative result from a shortcut repro was treated as exoneration.
+
+**Prevention:** When a repro contradicts production behavior, distrust the repro first — replicate the exact production call chain (imports included) before looking elsewhere.
+
+### Checkpoint 2: first coplanarity version over-rotated plain boxes
+
+**Claimed:** "Largest coplanar patch wins" fix complete with 5 new tests.
+
+**Diff/tests showed:** 2 of 5 new tests failed — a flat 60×20×28 box was tipped onto its 60×28 side (largest face down is "more stable" but gratuitous churn that breaks CAD-dim agreement, the exact complaint class being fixed).
+
+**Root cause:** Maximizing without a no-op guard; no control case (already-flat input) in the first test run.
+
+**Prevention:** Any rotation/orientation logic ships with no-op control cases (flat box, cube) from the first iteration, not added after failures — caught here by my own tests, but only because I wrote them before declaring done.
+
+### Checkpoint 3: numpy stride bug in raw-STL ground-truth script
+
+**Claimed (implicitly):** Throwaway verification script output.
+
+**Reality:** First version mis-sliced the binary STL (ignored the 2-byte attribute + normal prefix), printing absurd ±1e30 ranges. Caught immediately because the numbers were physically impossible; rewrote with `struct`.
+
+**Root cause:** None deep — but worth logging: sanity-check throwaway script output against known truth (CAD says 60×20×28) before reasoning from it.
+
+### Summary
+
+Three gaps, all self-caught before commit (one by contradiction, one by new tests, one by physical plausibility). The pattern across all three: acting on unchecked intermediate outputs. The bidirectional stash/pop test gate worked as designed — 9 estimate tests + 2 auto-orient tests fail on old code, pass on new.
+
 ## 2026-08-29 — bbox-merge consolidation
 
 **Files changed:** geometryGraph.ts, geometryData.ts, wallThickness.ts, metrics.ts, pipeline.ts

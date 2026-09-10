@@ -110,6 +110,22 @@ describe('estimateSupportVolume', () => {
     expect(result.result.supportRegions.length).toBe(0);
     expect(result.result.largestRegionRatio).toBe(0);
   });
+
+  it('converts support volume to grams without a second /1000', () => {
+    // density is g/mm³ (default 0.00124): grams must equal vol × density.
+    const result = estimateSupportVolume(ohPlate());
+    expect(result.result.totalSupportVolumeMm3).toBeGreaterThan(0);
+    expect(result.result.estimatedSupportGrams).toBeCloseTo(
+      result.result.totalSupportVolumeMm3 * 0.00124, 6
+    );
+  });
+
+  it('honours an explicit material density for grams', () => {
+    const result = estimateSupportVolume(ohPlate(), null, undefined, 0.002);
+    expect(result.result.estimatedSupportGrams).toBeCloseTo(
+      result.result.totalSupportVolumeMm3 * 0.002, 6
+    );
+  });
 });
 
 function makeSupportResult(overrides: Partial<import('../types').SupportResult>): import('../types').SupportResult {
