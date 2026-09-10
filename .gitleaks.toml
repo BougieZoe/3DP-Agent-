@@ -4,8 +4,15 @@ title = "gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "Legacy commits 5012ef74 (band-agents/agent_config.yaml with 5 API keys) and b1cbfea4 (client/src/lib/supabase.ts anon key). The secret-bearing files were deleted from the working tree. The 5 band-agents keys came from the Band of Agent hackathon (sandbox/expired) and the supabase anon key is public-by-design (sent to the client anyway) — neither is a live credential, so history is intentionally NOT rewritten. Allowed at commit scope so the full-history CI scan is stable; new commits hitting similar secrets are still blocked."
-commits = [
-  "5012ef74ef87d6bf6c49f8e9eae54e5720339828",
-  "b1cbfea4e1678f65e5d992a5215a8f43dee8ce81",
-]
+  description = "Legacy commits 5012ef74 (band-agents/agent_config.yaml with 5 API keys) and b1cbfea4 (client/src/lib/supabase.ts anon key). The secret-bearing files were deleted from the working tree. The 5 band-agents keys came from the Band of Agent hackathon (sandbox/expired) and the supabase anon key is public-by-design (sent to the client anyway) — neither is a live credential, so history is intentionally NOT rewritten. Allowed at commit scope so the full-history CI scan is stable; new commits hitting similar secrets are still blocked."
+  commits = [
+    "5012ef74ef87d6bf6c49f8e9eae54e5720339828",
+    "b1cbfea4e1678f65e5d992a5215a8f43dee8ce81",
+    # 2026-09-10: 462247ba added server/config/llm-keys.yaml with a live
+    # zhipu key on a PUBLIC repo. Key owner must ROTATE it on the provider
+    # console (exposure since 2026-09-04 cannot be undone). The real file is
+    # now gitignored + untracked (see llm-keys.yaml.example); this entry only
+    # silences the historical finding so the gate stays meaningful for NEW
+    # leaks. History intentionally NOT rewritten (same policy as above).
+    "462247ba61ff66851795287cf0b5113747234f73",
+  ]

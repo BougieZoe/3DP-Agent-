@@ -1,0 +1,25 @@
+# Copy to llm-keys.yaml and fill in real keys. NEVER commit llm-keys.yaml
+# (it is gitignored) — leaked keys trigger the Secret Scan CI gate and,
+# worse, expose billable credentials on a public repo.
+providers:
+  zhipu:
+    - key: "__PASTE_ZHIPU_KEY_HERE__"
+      priority: 1
+  deepseek:
+    - key: "__PASTE_DEEPSEEK_KEY_HERE__"
+      priority: 1
+  fireworks:
+    - key: "__PASTE_FIREWORKS_KEY_HERE__"
+      priority: 1
+  moonshot:
+    - key: "__PASTE_MOONSHOT_KEY_HERE__"
+      priority: 1
+  openai:
+    - key: "__PASTE_OPENAI_KEY_HERE__"
+      priority: 1
+  google:
+    - key: "__PASTE_GOOGLE_KEY_HERE__"
+      priority: 1
+  amd-cloud:
+    - key: "__no_key__"
+      priority: 1
