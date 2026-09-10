@@ -119,9 +119,9 @@ export function estimatePrintTime(
   const totalMinutes = Math.round(baseTimeMinutes * overhangPenalty + overheadMinutes);
   const totalHours = parseFloat((totalMinutes / 60).toFixed(1));
 
-  // Layer count
-  const maxDim = Math.max(metricsResult.boundingBoxDimensionsMm.x, metricsResult.boundingBoxDimensionsMm.y, metricsResult.boundingBoxDimensionsMm.z);
-  const layerCount = Math.ceil(maxDim / effectiveLayerHeight);
+  // Layer count — layers stack along Z (the build axis), so only the Z
+  // height matters. Using max(X, Y, Z) over-counts flat/wide models.
+  const layerCount = Math.ceil(metricsResult.boundingBoxDimensionsMm.z / Math.max(1e-6, effectiveLayerHeight));
 
   // Material weight
   const volumeCm3 = volume / 1000;

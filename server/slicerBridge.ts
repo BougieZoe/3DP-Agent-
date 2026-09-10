@@ -150,11 +150,23 @@ export function createSlicerAdapter(profile: SlicerProfile, deps: SlicerAdapterD
           gcode = (await read(gcodePath)).toString('utf-8');
         }
 
+        const layers = parseLayers(gcode);
+        const metadata = parseGCodeMetadata(gcode);
+        // Header comments vary by slicer/config: when the header has no usable
+        // layer count, fall back to the counted ;Z: markers rather than 0 or a
+        // stray config value. Same for a missing layer height (request profile
+        // first, then the median measured layer step).
+        if (metadata.layerCount <= 0 && layers.length > 0) {
+          metadata.layerCount = layers.length;
+        }
+        if (metadata.layerHeightMm == null) {
+          metadata.layerHeightMm = request.profile.layerHeightMm ?? medianLayerStepMm(layers);
+        }
         return {
           gcode,
           fileName: request.fileName ?? 'model.gcode',
-          metadata: parseGCodeMetadata(gcode),
-          layers: parseLayers(gcode),
+          metadata,
+          layers,
           warnings,
         };
       } finally {
@@ -294,16 +306,22 @@ export interface GCodeMetadata extends SlicerMetadata {}
 export function parseGCodeMetadata(gcode: string): GCodeMetadata {
   const timeMatch = gcode.match(/estimated printing time[^=]*=\s*([\dhms\s]+)/);
 
-  // Try multiple filament patterns (PrusaSlicer uses different formats)
+  // Try multiple filament patterns (PrusaSlicer uses different formats).
+  // Take the first NONZERO hit: real footers can contain
+  // `total filament used [g] = 0.00` next to a valid [cm3] figure.
   let filamentGrams = 0;
   const filamentGMatch = gcode.match(/filament used \[g\]\s*=\s*([\d.]+)/);
   const filamentTotalGMatch = gcode.match(/total filament used \[g\]\s*=\s*([\d.]+)/);
   const filamentCm3Match = gcode.match(/filament used \[cm3\]\s*=\s*([\d.]+)/);
 
-  if (filamentGMatch) {
-    filamentGrams = parseFloat(filamentGMatch[1]);
-  } else if (filamentTotalGMatch) {
-    filamentGrams = parseFloat(filamentTotalGMatch[1]);
+  for (const m of [filamentGMatch, filamentTotalGMatch]) {
+    if (m) {
+      const v = parseFloat(m[1]);
+      if (v > 0) {
+        filamentGrams = v;
+        break;
+      }
+    }
   }
 
   // If grams is 0, try to calculate from volume (PLA density ~1.24 g/cm³)
@@ -312,8 +330,11 @@ export function parseGCodeMetadata(gcode: string): GCodeMetadata {
     filamentGrams = Math.round(filamentCm3 * 1.24 * 100) / 100;
   }
 
-  const layerCountMatch = gcode.match(/(?:total layers count|layer_count)\s*=\s*(\d+)/);
-  const layerHeightMatch = gcode.match(/layer_height\s*=\s*([\d.]+)/);
+  // Anchored to `;` + exact key at line start: unanchored matching picks up
+  // lookalike config keys from real footers (`interlocking_beam_layer_count = 2`,
+  // `automatic_infill_combination_max_layer_height = 100%`).
+  const layerCountMatch = gcode.match(/^;\s*(?:total layers count|layer_count)\s*=\s*(\d+)/m);
+  const layerHeightMatch = gcode.match(/^;\s*layer_height\s*=\s*([\d.]+)/m);
 
   return {
     printTimeMinutes: timeMatch ? parsePrintTime(timeMatch[1]) : 0,
@@ -333,6 +354,17 @@ function parsePrintTime(s: string): number {
   const sec = s.match(/(\d+)s/);
   if (sec) total += parseInt(sec[1], 10) / 60;
   return Math.round(total * 100) / 100;
+}
+
+/**
+ * Median of the measured per-layer Z steps (skips the first layer, whose
+ * heightMm is 0 by construction). Null when fewer than 2 layers exist.
+ */
+export function medianLayerStepMm(layers: SlicerLayerInfo[]): number | null {
+  const steps = layers.map((l) => l.heightMm).filter((h) => h > 0).sort((a, b) => a - b);
+  if (steps.length === 0) return null;
+  const mid = Math.floor(steps.length / 2);
+  return steps.length % 2 === 1 ? steps[mid] : (steps[mid - 1] + steps[mid]) / 2;
 }
 
 /**

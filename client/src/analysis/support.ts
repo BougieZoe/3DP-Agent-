@@ -115,7 +115,9 @@ export function estimateSupportVolume(
   }
 
   const avgAngle = supportFaceCount > 0 ? totalOverhangAngle / supportFaceCount : 0;
-  const supportGrams = totalSupportVolume / 1000 * (densityGPerMm3 ?? supportConfig.densityGPerMm3);
+  // density is in g/mm³ (default 0.00124) and volume in mm³, so grams = vol × density.
+  // (A previous revision divided by 1000 a second time, understating grams 1000×.)
+  const supportGrams = totalSupportVolume * (densityGPerMm3 ?? supportConfig.densityGPerMm3);
 
   let difficulty: SupportDifficulty = 'none';
   if (supportFaceCount > 0) {
