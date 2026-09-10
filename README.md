@@ -10,6 +10,7 @@ A multi-agent AI system that predicts 3D printing failures before you waste time
 [Live Demo](https://3dp-agent.vercel.app) · [GitHub](https://github.com/BougieZoe/3DP-Agent-) · MIT License
 
 ---
+<img width="1280" height="720" alt="image4" src="https://github.com/user-attachments/assets/f6d6fffd-7cdf-44b3-92b8-5ba73b03ebf5" />
 
 ## Why It Exists
 
