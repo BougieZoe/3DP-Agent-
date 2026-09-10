@@ -1058,16 +1058,16 @@ deepAnalysisSeq.current += 1;
                 : <OverhangHeatmapDesktop geometry={uploadedModel.geometry} visible opacity={overlayOpacity} />
             )}
             {uploadedModel?.geometry && (
-              <SupportGhosts markers={agentMarkers} visible={showGhosts} opacity={overlayOpacity} />
+              <SupportGhosts markers={agentMarkers} geometry={uploadedModel.geometry} visible={showGhosts} opacity={overlayOpacity} />
             )}
             {uploadedModel?.geometry && (
               <RiskAnimation markers={agentMarkers} visible={showRisks} />
             )}
             {uploadedModel?.geometry && showPrintPath && (
-              <PrintPathPreview geometry={uploadedModel.geometry} visible opacity={overlayOpacity} />
+              <PrintPathPreview geometry={uploadedModel.geometry} toolpath={uploadedModel.toolpath} visible opacity={overlayOpacity} />
             )}
             {uploadedModel?.geometry && showLayerReveal && (
-              <LayerReveal geometry={uploadedModel.geometry} visible opacity={overlayOpacity} />
+              <LayerReveal geometry={uploadedModel.geometry} layers={uploadedModel.sliceLayers} visible opacity={overlayOpacity} />
             )}
             {uploadedModel?.geometry && showFailure && (
               <FailureEmergence markers={agentMarkers} geometry={uploadedModel.geometry} visible />

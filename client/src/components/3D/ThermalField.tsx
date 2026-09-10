@@ -26,10 +26,11 @@ export function ThermalField({ markers, geometry, visible, opacity: opacityProp 
   const activated = useRef<Map<number, number>>(new Map());
   const { progressRef } = usePrintPlayback();
 
+  // Data frame is Z-up: the thermal scan plane sweeps Z, never Y.
   const bounds = useMemo(() => {
     geometry.computeBoundingBox();
     const box = geometry.boundingBox!;
-    return { minY: box.min.y - 0.5, maxY: box.max.y + 0.5 };
+    return { minZ: box.min.z - 0.5, maxZ: box.max.z + 0.5 };
   }, [geometry]);
 
   const points = useMemo(() => {
@@ -76,13 +77,13 @@ export function ThermalField({ markers, geometry, visible, opacity: opacityProp 
 
   useFrame(() => {
     const { rampRate } = ANIMATION.thermal;
-    const scanY = bounds.minY + progressRef.current * (bounds.maxY - bounds.minY);
+    const scanZ = bounds.minZ + progressRef.current * (bounds.maxZ - bounds.minZ);
 
     for (let i = 0; i < points.count; i++) {
       const key = points.indices[i];
       if (!activated.current.has(key)) activated.current.set(key, 0);
-      const y = points.positions[i * 3 + 1];
-      if (Math.abs(y - scanY) < ANIMATION.scan.proxThresh) {
+      const z = points.positions[i * 3 + 2];
+      if (Math.abs(z - scanZ) < ANIMATION.scan.proxThresh) {
         const current = activated.current.get(key)!;
         activated.current.set(key, Math.min(current + rampRate, 1));
       }

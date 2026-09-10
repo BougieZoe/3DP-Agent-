@@ -6,7 +6,8 @@ import { runAnalysisInWorker, fromThreeBufferGeometry, type UnifiedAnalysis } fr
 import { normalizeModelGeometry } from '@/lib/modelNormalization';
 import { autoOrientGeometry } from '@/lib/autoOrient';
 import { geometryToStl } from '@/lib/meshOps';
-import { sliceSTL, type SliceMetadata, type SliceProvenance, type SlicerId } from '@/lib/sliceClient';
+import { sliceSTL, type SliceMetadata, type SliceProvenance, type SlicerId, type SliceLayerInfo } from '@/lib/sliceClient';
+import { parseToolpath, type Toolpath } from '@/lib/toolpath';
 import { getCachedAnalysis, setCachedAnalysis, hashFileBytes, cacheKeyFromParts } from '@/lib/analysisCache';
 import { recordLoopPrint } from '@/lib/loopLedger';
 import { logLoopPrediction } from '@/lib/loopCalibration';
@@ -31,6 +32,10 @@ export interface UploadedModel {
   sliceMetadata?: SliceMetadata;
   /** Provenance info tracking the data source (slicer vs estimate). */
   sliceProvenance?: SliceProvenance;
+  /** Real extrusion toolpath parsed from the slicer G-code (print overlay). */
+  toolpath?: Toolpath;
+  /** Real layer Z heights from the slicer (layer overlay). */
+  sliceLayers?: SliceLayerInfo[];
 }
 
 interface STLUploadHandlerProps {
@@ -241,6 +246,8 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
         // Only for STL files (binary format) — OBJ/3MF go through estimate path.
         let sliceMetadata: SliceMetadata | undefined;
         let sliceProvenance: SliceProvenance | undefined;
+        let toolpath: Toolpath | undefined;
+        let sliceLayers: SliceLayerInfo[] | undefined;
         if (file.name.toLowerCase().endsWith('.stl')) {
           try {
             log(`> SLICING ${file.name}...`);
@@ -258,6 +265,14 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
               profileUsed: 'default',
               autoDropToBed: true,
             };
+            sliceLayers = sliceResult.layers;
+            try {
+              toolpath = parseToolpath(sliceResult.gcode);
+              log(`> TOOLPATH: ${toolpath.totalPoints} extrusion pts / ${toolpath.layers.length} layers${toolpath.decimated ? ' (decimated)' : ''}`);
+            } catch (parseErr) {
+              // Toolpath parse failure degrades overlays only — metrics stand.
+              console.warn('[STLUploadHandler] toolpath parse failed:', parseErr);
+            }
             log(`> SLICE COMPLETE: ${sliceMetadata.printTimeMinutes.toFixed(1)}min, ${sliceMetadata.filamentGrams.toFixed(1)}g`);
           } catch (err) {
             // Slice failure does not block upload — fall back to volume estimates.
@@ -277,6 +292,8 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
           rawGeometry,
           sliceMetadata,
           sliceProvenance,
+          toolpath,
+          sliceLayers,
         });
 
         // Fire-and-forget notifications (webhook/email) — don't block the UI

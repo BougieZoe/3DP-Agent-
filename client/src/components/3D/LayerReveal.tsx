@@ -2,86 +2,86 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { usePrintPlayback } from '@/components/playback/PrintPlaybackContext';
-import { ANIMATION, MATERIALS } from '@/lib/visualLanguage';
+import { MATERIALS } from '@/lib/visualLanguage';
 import { useThemeTokens } from '@/lib/ThemeContext';
+import type { SliceLayerInfo } from '@/lib/sliceClient';
 
 interface LayerRevealProps {
   geometry: THREE.BufferGeometry;
+  /**
+   * Real layer Z heights from the slicer. Absent → uniform estimate from the
+   * geometry Z extent (count only, same convention as the layerCount estimate).
+   * Rendered as position rulers, never as cross-section shapes.
+   */
+  layers?: SliceLayerInfo[];
   visible: boolean;
   opacity?: number;
 }
 
-export function LayerReveal({ geometry, visible, opacity: opacityProp }: LayerRevealProps) {
+/** Fallback layer height (mm) when no slicer ran — matches the estimate path. */
+const FALLBACK_LAYER_HEIGHT_MM = 0.2;
+
+export function LayerReveal({ geometry, layers: sliceLayers, visible, opacity: opacityProp }: LayerRevealProps) {
   const SEMANTIC = useThemeTokens();
   const opacity = opacityProp ?? SEMANTIC.layerReveal.line.opacity;
   const groupRef = useRef<THREE.Group>(null);
-  const linesRef = useRef<THREE.Line[]>([]);
+  const linesRef = useRef<THREE.LineSegments | null>(null);
   const { progressRef } = usePrintPlayback();
 
-  const layers = useMemo(() => {
+  const ruler = useMemo(() => {
     geometry.computeBoundingBox();
     const box = geometry.boundingBox!;
-    const c = new THREE.Vector3();
-    box.getCenter(c);
-    const s = new THREE.Vector3();
-    box.getSize(s);
-    const minY = box.min.y;
-    const maxY = box.max.y;
-    const count = 20;
-    const result: { points: Float32Array; index: number }[] = [];
+    const minX = box.min.x;
+    const maxX = box.max.x;
+    const midY = (box.min.y + box.max.y) / 2;
 
-    for (let i = 0; i < count; i++) {
-      const t = i / (count - 1);
-      const y = minY + t * (maxY - minY);
-      const profile = 0.2 + Math.sin(t * Math.PI) * 0.55;
-      const hw = (s.x / 2) * profile;
-      const hd = (s.z / 2) * profile;
-      const pts = 32;
-      const coords: number[] = [];
-      for (let j = 0; j <= pts; j++) {
-        const u = j / pts;
-        const angle = u * Math.PI * 2;
-        coords.push(c.x + hw * Math.cos(angle), y, c.z + hd * Math.sin(angle));
-      }
-      result.push({ points: new Float32Array(coords), index: i });
+    let zList: number[];
+    if (sliceLayers && sliceLayers.length > 0) {
+      zList = [...sliceLayers].map((l) => l.zMm).sort((a, b) => a - b);
+    } else {
+      const sizeZ = Math.max(1e-6, box.max.z - box.min.z);
+      const count = Math.max(1, Math.round(sizeZ / FALLBACK_LAYER_HEIGHT_MM));
+      zList = Array.from({ length: count }, (_, i) => box.min.z + ((i + 1) / count) * sizeZ);
     }
-    return result;
-  }, [geometry]);
+
+    const positions = new Float32Array(zList.length * 6);
+    zList.forEach((z, i) => {
+      positions[i * 6] = minX;
+      positions[i * 6 + 1] = midY;
+      positions[i * 6 + 2] = z;
+      positions[i * 6 + 3] = maxX;
+      positions[i * 6 + 4] = midY;
+      positions[i * 6 + 5] = z;
+    });
+    return { positions, segCount: zList.length };
+  }, [geometry, sliceLayers]);
 
   useEffect(() => {
     if (!groupRef.current) return;
-    linesRef.current = [];
-    for (const layer of layers) {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(layer.points, 3));
-      const mat = new THREE.LineBasicMaterial({
-        ...MATERIALS.line,
-        color: SEMANTIC.layerReveal.line.three,
-        opacity: 0,
-      });
-      const line = new THREE.Line(geo, mat);
-      line.frustumCulled = false;
-      groupRef.current!.add(line);
-      linesRef.current.push(line);
-    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(ruler.positions, 3));
+    const mat = new THREE.LineBasicMaterial({
+      ...MATERIALS.line,
+      color: SEMANTIC.layerReveal.line.three,
+      opacity,
+      transparent: true,
+    });
+    const lines = new THREE.LineSegments(geo, mat);
+    lines.frustumCulled = false;
+    groupRef.current.add(lines);
+    linesRef.current = lines;
     return () => {
       groupRef.current?.clear();
-      for (const line of linesRef.current) { line.geometry.dispose(); (line.material as THREE.Material).dispose(); }
-      linesRef.current = [];
+      geo.dispose();
+      mat.dispose();
+      linesRef.current = null;
     };
-  }, [layers]);
+  }, [ruler, opacity]);
 
   useFrame(() => {
-    const { reveal } = ANIMATION;
-    const t = progressRef.current * reveal.progressScale;
-    for (let i = 0; i < linesRef.current.length; i++) {
-      const line = linesRef.current[i];
-      if (!line) continue;
-      const delay = i * reveal.layerStagger;
-      const revealVal = Math.min(Math.max((t - delay) * reveal.rate, 0), 1);
-      const mat = line.material as THREE.LineBasicMaterial;
-      mat.opacity = revealVal * opacity;
-    }
+    if (!linesRef.current) return;
+    const drawn = Math.floor(progressRef.current * ruler.segCount) * 2;
+    linesRef.current.geometry.setDrawRange(0, Math.max(2, drawn));
   });
 
   if (!visible) return null;
