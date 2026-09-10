@@ -2,7 +2,8 @@
   "name": "three-dp-agent",
   "version": "1.0.0",
   "type": "module",
-  "license": "MIT",
+  "private": true,
+  "license": "UNLICENSED",
   "main": "dist-electron/main.mjs",
   "scripts": {
     "dev": "vite --host",
