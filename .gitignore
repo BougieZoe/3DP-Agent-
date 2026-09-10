@@ -7,6 +7,8 @@ XPRIZE/
 
 # Env
 .env.*
+# Server-side LLM keys (billable credentials — NEVER commit the real file)
+server/config/llm-keys.yaml
 
 # CAD bridge workspace (venv + generation runs)
 .cad-bridge/
