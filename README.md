@@ -7,7 +7,16 @@ A multi-agent AI system that predicts 3D printing failures before you waste time
 <img width="1280" height="699" alt="3DPAgent" src="https://github.com/user-attachments/assets/40e79ef7-7fc0-4112-aa78-9e0de69eba40" />
 
 
-[Live Demo](https://3dp-agent.vercel.app) · [GitHub](https://github.com/BougieZoe/3DP-Agent-) · MIT License
+[Live Demo](https://3dp-agent.vercel.app) · [GitHub](https://github.com/BougieZoe/3DP-Agent-) · Proprietary
+
+## Copyright
+
+© 2026 Zoe. **3DP Agent™** and its original source code, UI design, documentation,
+assets, prompts, workflows, and 3D-processing logic are proprietary.
+
+All rights reserved. No copying, redistribution, modification, or derivative works
+are permitted without prior written permission. Third-party libraries and assets
+remain subject to their respective licenses. See [COPYRIGHT.md](COPYRIGHT.md).
 
 ---
 <img width="1280" height="720" alt="image4" src="https://github.com/user-attachments/assets/f6d6fffd-7cdf-44b3-92b8-5ba73b03ebf5" />
@@ -429,6 +438,6 @@ Anyone who has ever asked:
 
 ## License
 
-MIT
+This project is proprietary software. All rights reserved.
 
 If 3DP Agent saves you a failed print, consider giving the project a star.
