@@ -59,10 +59,11 @@ export function AttentionPulse({ markers, geometry, visible = true }: AttentionP
   const lastTriggered = useRef<Map<string, number>>(new Map());
   const { lifetime, scanThresh, maxDelay, cooldown } = ANIMATION.attention;
 
+  // Data frame is Z-up: the attention scan sweeps Z, never Y.
   const bounds = useMemo(() => {
     geometry.computeBoundingBox();
     const box = geometry.boundingBox!;
-    return { minY: box.min.y - 0.5, maxY: box.max.y + 0.5 };
+    return { minZ: box.min.z - 0.5, maxZ: box.max.z + 0.5 };
   }, [geometry]);
 
   const colorForType = (type: string) =>
@@ -72,7 +73,7 @@ export function AttentionPulse({ markers, geometry, visible = true }: AttentionP
 
   useFrame(() => {
     const now = progressRef.current * 10;
-    const scanY = bounds.minY + progressRef.current * (bounds.maxY - bounds.minY);
+    const scanZ = bounds.minZ + progressRef.current * (bounds.maxZ - bounds.minZ);
 
     const active: Pulse[] = [];
     for (const p of pulses) {
@@ -86,8 +87,8 @@ export function AttentionPulse({ markers, geometry, visible = true }: AttentionP
       if (!m.position) continue;
       const { x, y, z } = m.position;
       if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
-      const dy = Math.abs(y - scanY);
-      if (dy > scanThresh) continue;
+      const dz = Math.abs(z - scanZ);
+      if (dz > scanThresh) continue;
 
       const key = `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`;
       const lastT = lastTriggered.current.get(key) ?? -Infinity;
