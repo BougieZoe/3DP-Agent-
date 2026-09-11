@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import { useFrame } from '@react-three/fiber';
 
 export interface PlaybackState {
@@ -31,6 +31,15 @@ export function PrintPlaybackProvider({ totalLayers, children }: { totalLayers: 
 
   const progressRef = useRef(0);
   const layerRef = useRef(0);
+
+  // New model (or new layer count) → restart playback. Without this, state
+  // keeps the previous model's totalLayers while setProgress already uses
+  // the new one, producing impossible labels like L94/50.
+  useEffect(() => {
+    progressRef.current = 0;
+    layerRef.current = 0;
+    setState(s => (s.totalLayers === totalLayers ? s : { ...s, totalLayers, progress: 0, currentLayer: 0 }));
+  }, [totalLayers]);
 
   const play = useCallback(() => setState(s => ({ ...s, isPlaying: true })), []);
   const pause = useCallback(() => setState(s => ({ ...s, isPlaying: false })), []);
@@ -68,8 +77,15 @@ export function PlaybackUpdater() {
         ctx.pause();
       }
     } else {
-      ctx.progressRef.current = next;
-      ctx.layerRef.current = Math.floor(next * (ctx.state.totalLayers - 1));
+      // Sync React state only on layer change (~50/cycle): per-frame setState
+      // would re-render 60×/s. The old code never synced, so the Lx/50 + %
+      // label froze at 0 while the ref (and all overlays) kept advancing.
+      const layer = Math.floor(next * (ctx.state.totalLayers - 1));
+      if (layer !== ctx.layerRef.current) {
+        ctx.setProgress(next);
+      } else {
+        ctx.progressRef.current = next;
+      }
     }
   });
 

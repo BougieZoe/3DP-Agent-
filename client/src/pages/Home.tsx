@@ -818,7 +818,9 @@ deepAnalysisSeq.current += 1;
     if (!uploadedModel?.geometry) return 50;
     const geo = uploadedModel.geometry;
     geo.computeBoundingBox();
-    const height = (geo.boundingBox?.max.y ?? 5) - (geo.boundingBox?.min.y ?? 0);
+    // Build axis is Z (slicer convention) — the old Y extent undercounted
+    // flat models and overcounted tall ones.
+    const height = (geo.boundingBox?.max.z ?? 5) - (geo.boundingBox?.min.z ?? 0);
     return Math.max(10, Math.min(200, Math.round(height / 0.2)));
   }, [uploadedModel?.geometry]);
 
