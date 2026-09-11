@@ -11,11 +11,9 @@
 
 export const AMD_CLOUD_ENDPOINT = '/api/amd-proxy';
 
-// After centralized proxy introduction, clients should use the proxy endpoint.
-// We keep the old /api/llm for backwards compatibility during migration,
-// but the new default is /api/llm-proxy which enforces server-side
-// key usage for logged-in users and centralizes allowlist/rate limits.
-export const LLM_PROXY_ENDPOINT = '/api/llm-proxy';
+// NOTE: the server's relay endpoint is /api/llm. Keep client pointed at the
+// server's relay (/api/llm) so requests reach the existing relay implementation.
+export const LLM_PROXY_ENDPOINT = '/api/llm';
 
 /**
  * Semantic Diagnostic Layer provider.
