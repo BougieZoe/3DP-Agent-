@@ -1964,7 +1964,7 @@ deepAnalysisSeq.current += 1;
 
         {/* Fixed footer — stays at bottom, never scrolls */}
         <div className="fixed bottom-0 left-0 right-0 z-10 px-2 py-2 border-t border-border/30 text-xs text-muted-foreground/20 font-mono text-center flex flex-wrap items-center justify-center gap-x-4 gap-y-1 bg-background/80 backdrop-blur-sm">
-          <span>{'© 2026 Zoe · 3DP Agent™ · All rights reserved'}</span>
+          <span>{t('copyrightNotice')}</span>
           <button onClick={() => setShowPrivacy(true)} className="hover:text-muted-foreground transition-colors">
             {t('privacyTitle')}
           </button>

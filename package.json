@@ -124,7 +124,7 @@
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^2.1.4"
   },
-  "description": "3DP Agent — 3D Printing AI Consultant. Upload an STL and get a second opinion from four specialized AI agents.",
+  "description": "3DP Agent — a manufacturing intelligence workspace for geometry, printability, and failure prevention.",
   "author": "BougieZoe",
   "build": {
     "appId": "com.bougiezoe.3dp-agent",

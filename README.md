@@ -1,25 +1,35 @@
-# 3DP AGENT
+# 3DP Agent
 
-### Upload an STL. Watch it think. Ask it anything.
+### A manufacturing intelligence workspace for geometry, printability, and failure prevention.
 
-A multi-agent AI system that predicts 3D printing failures before you waste time, material, and money.
+Analyze a model before it reaches the printer. 3DP Agent combines geometry diagnostics,
+multi-agent reasoning, real slicer output, and manufacturing recommendations in one workspace.
 
-<img width="1280" height="699" alt="3DPAgent" src="https://github.com/user-attachments/assets/40e79ef7-7fc0-4112-aa78-9e0de69eba40" />
+<img width="1280" height="699" alt="3DP Agent analysis workspace" src="https://github.com/user-attachments/assets/40e79ef7-7fc0-4112-aa78-9e0de69eba40" />
 
 
-[Live Demo](https://3dp-agent.vercel.app) · [GitHub](https://github.com/BougieZoe/3DP-Agent-) · Proprietary
+[Live Demo](https://3dp-agent.vercel.app) · [GitHub](https://github.com/BougieZoe/3DP-Agent-) · Proprietary software
 
-## Copyright
+## Product at a glance
 
-© 2026 Zoe. **3DP Agent™** and its original source code, UI design, documentation,
-assets, prompts, workflows, and 3D-processing logic are proprietary.
+| Workspace | Input | Outcome |
+|-----------|-------|---------|
+| **ANALYZE** | STL, STEP, 3MF | Printability, geometry, thermal, failure, causality, and report workflows |
+| **CAD** | Natural-language design intent | Parametric build123d output with STEP/STL/3MF export |
+| **MESH** | Text and mesh files | Generate, repair, decimate, orient, and prepare models for production |
 
-All rights reserved. No copying, redistribution, modification, or derivative works
-are permitted without prior written permission. Third-party libraries and assets
-remain subject to their respective licenses. See [COPYRIGHT.md](COPYRIGHT.md).
+The core loop is simple: **inspect the geometry → understand the failure chain → choose the cheapest manufacturing action**.
+
+## What's new
+
+- **True toolpath preview** from parsed G-code, with layer reveal and print-path visualization.
+- **Circularity / LOOP analysis** for prevent, reuse, and end-of-life decisions with calibrated metrics.
+- **Manufacturing handoff** with process recommendations, material context, cost estimates, and exportable reports.
+- **Causality and counterfactual repair** that connect a geometric defect to its likely print outcome and a proposed fix.
+- **English, Japanese, and Chinese UI** across the core analysis and manufacturing workflows.
 
 ---
-<img width="1280" height="720" alt="image4" src="https://github.com/user-attachments/assets/f6d6fffd-7cdf-44b3-92b8-5ba73b03ebf5" />
+<img width="1280" height="720" alt="3DP Agent manufacturing intelligence workspace" src="https://github.com/user-attachments/assets/f6d6fffd-7cdf-44b3-92b8-5ba73b03ebf5" />
 
 ## Why It Exists
 
@@ -58,9 +68,8 @@ Drop in an STL file and receive:
 | **STEP Input** | **Direct CAD file analysis via OpenCASCADE WASM** |
 | **Thermal Analysis** | **Material-specific thermal behavior prediction** |
 
-No account required.
-
-Local analysis works immediately.
+Anonymous BYOK mode works without an account. Hosted inference adds authentication,
+server-side provider keys, and plan-based usage limits.
 
 ---
 
@@ -139,7 +148,7 @@ Instead of reading a report, users can watch the model explain itself.
 
 ---
 
-## Slicer Integration (S1c, S1b)
+## Slicer Integration
 
 3DP Agent integrates with real slicer CLIs to generate accurate print predictions:
 
@@ -173,7 +182,7 @@ curl -X POST http://localhost:3001/api/slice \
 
 ---
 
-## STEP Input Support (D1)
+## STEP Input Support
 
 3DP Agent can directly analyze STEP files using OpenCASCADE WASM:
 
@@ -198,7 +207,7 @@ curl -X POST http://localhost:3001/api/step \
 
 ---
 
-## Thermal Analysis (S2)
+## Thermal Analysis
 
 Advanced thermal behavior prediction for FDM printing:
 
@@ -278,7 +287,8 @@ CAD parsing:
 
 - OpenCASCADE WASM (via occt-wasm)
 
-Provider keys remain client-side.
+Hosted provider keys remain server-side. Anonymous BYOK keys are stored in the browser,
+relayed per request, and never persisted by the server.
 
 ---
 
@@ -363,7 +373,7 @@ Three studios share one manufacturing-analysis pipeline (`runAnalysisPipeline`
 - **CAD** — text → LLM → parametric build123d (STEP). Parametric sliders,
   STEP/STL/3MF export, live engine-health indicator.
 - **MESH** — text → mesh. Local mock (keyword → primitive) by default; real
-  text→3D when `VITE_TRIPO_API_KEY` is set. Server-side repair / decimate /
+  text→3D when the server-side `TRIPO_API_KEY` is set. Server-side repair / decimate /
   place-on-plate, STL/3MF export, and print-outcome feedback that seeds the
   confidence-gate calibration.
 
@@ -375,7 +385,7 @@ API endpoints (dev, all proxied to the server on :3001):
 - `POST /api/slice` — STL → G-code via PrusaSlicer/OrcaSlicer.
 - `POST /api/step` — STEP file → geometry + metadata.
 
-Optional env: `VITE_TRIPO_API_KEY` (hosted Tripo text→3D in Mesh Studio).
+Optional server env: `TRIPO_API_KEY` (hosted Tripo text→3D in Mesh Studio).
 
 ---
 
@@ -414,9 +424,9 @@ docker run \
 - [x] STEP File Support (OpenCASCADE WASM)
 - [x] Thermal Analysis (Material-specific)
 - [x] Large-format Printer Support
-- [ ] PDF Export
-- [ ] Batch Analysis
-- [ ] Cost Estimation
+- [x] PDF report export
+- [x] Batch analysis and report comparison
+- [x] Cost estimation and manufacturing handoff
 - [ ] Manufacturing Knowledge Graph
 - [ ] Historical Failure Memory
 
@@ -436,8 +446,14 @@ Anyone who has ever asked:
 
 ---
 
-## License
+## Legal
 
-This project is proprietary software. All rights reserved.
+This project is proprietary software. **3DP Agent™** and its original source code,
+UI design, documentation, assets, prompts, workflows, and 3D-processing logic are
+owned by Zoe. All rights reserved.
+
+No copying, redistribution, modification, or derivative works are permitted without
+prior written permission. Third-party libraries and assets remain subject to their
+respective licenses. See [COPYRIGHT.md](COPYRIGHT.md) for the complete notice.
 
 If 3DP Agent saves you a failed print, consider giving the project a star.
