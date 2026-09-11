@@ -9,6 +9,7 @@ multi-agent reasoning, real slicer output, and manufacturing recommendations in 
 
 
 [Live Demo](https://3dp-agent.vercel.app) · [GitHub](https://github.com/BougieZoe/3DP-Agent-) · Proprietary software
+![CI](https://github.com/BougieZoe/3DP-Agent-/actions/workflows/ci.yml/badge.svg)
 
 ## Product at a glance
 
@@ -23,7 +24,7 @@ The core loop is simple: **inspect the geometry → understand the failure chain
 ## What's new
 
 - **True toolpath preview** from parsed G-code, with layer reveal and print-path visualization.
-- **Circularity / LOOP analysis** for prevent, reuse, and end-of-life decisions with calibrated metrics.
+- **Circularity / LOOP analysis** for prevent, reuse, and end-of-life decisions with honest heuristic metrics.
 - **Manufacturing handoff** with process recommendations, material context, cost estimates, and exportable reports.
 - **Causality and counterfactual repair** that connect a geometric defect to its likely print outcome and a proposed fix.
 - **English, Japanese, and Chinese UI** across the core analysis and manufacturing workflows.
@@ -393,7 +394,7 @@ Optional server env: `TRIPO_API_KEY` (hosted Tripo text→3D in Mesh Studio).
 
 ```bash
 pnpm check   # tsc --noEmit
-pnpm test    # vitest (580+ tests)
+pnpm test    # vitest
 ```
 
 ### Test Coverage
