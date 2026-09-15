@@ -75,12 +75,13 @@ ENV PATH="/app/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin
 ENV NODE_PATH="/usr/local/lib/node_modules"
 ENV CAD_BRIDGE_DIR="/app/.cad-bridge"
 ENV PORT=3000
+ENV GO_PORT=8888
 
-EXPOSE 3000
+EXPOSE 3000 8888
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:3000/health || exit 1
 
 # Start both Go backend and Node.js server
-CMD ["/bin/bash", "-c", "/app/go-backend/3dp-agent-server --port 8888 & /usr/local/bin/node /app/dist/index.cjs"]
+CMD ["/bin/bash", "-c", "PORT=8888 /app/go-backend/3dp-agent-server & /usr/local/bin/node /app/dist/index.cjs"]

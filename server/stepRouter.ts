@@ -30,8 +30,12 @@ export function createStepRouter(): Router {
     try {
       // Test if occt-wasm is available
       const { OcctKernel } = await import('occt-wasm');
-      using kernel = await OcctKernel.init();
-      res.json({ ok: true, available: true });
+      const kernel = await OcctKernel.init();
+      try {
+        res.json({ ok: true, available: true });
+      } finally {
+        kernel.close();
+      }
     } catch (err) {
       res.json({ ok: true, available: false, error: String(err) });
     }

@@ -78,7 +78,9 @@ export async function parseStepFile(
 
   // Initialize OCCT kernel (lazy-loaded to avoid startup crash)
   const OcctKernel = await getOcctKernel();
-  using kernel = await OcctKernel.init();
+  const kernel = await OcctKernel.init();
+
+  try {
 
   // Import STEP file
   const stepString = new TextDecoder().decode(stepBytes);
@@ -146,6 +148,9 @@ export async function parseStepFile(
     surfaceAreaMm2: surfaceArea,
     warnings,
   };
+  } finally {
+    kernel.close();
+  }
 }
 
 /**
