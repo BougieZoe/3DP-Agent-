@@ -1,0 +1,12 @@
+# 3DP Agent Python Dependencies
+# Core CAD and mesh processing
+build123d>=0.11.1
+trimesh>=5.0.0
+pymeshfix>=0.18.1
+numpy>=2.0.0
+
+# Optional: For advanced mesh operations
+scipy>=1.10.0
+
+# Note: OpenCASCADE is included with build123d
+# Note: cadpy is installed locally, not available on PyPI
