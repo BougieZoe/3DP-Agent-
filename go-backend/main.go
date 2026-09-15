@@ -17,10 +17,12 @@ import (
 	"github.com/BougieZoe/3dp-agent-go/config"
 	"github.com/BougieZoe/3dp-agent-go/health"
 	"github.com/BougieZoe/3dp-agent-go/llm"
+	"github.com/BougieZoe/3dp-agent-go/memory"
 	"github.com/BougieZoe/3dp-agent-go/mesh"
 	"github.com/BougieZoe/3dp-agent-go/ratelimit"
 	"github.com/BougieZoe/3dp-agent-go/slicer"
 	"github.com/BougieZoe/3dp-agent-go/step"
+	"github.com/BougieZoe/3dp-agent-go/thermal"
 )
 
 func main() {
@@ -36,11 +38,19 @@ func main() {
 	rl := ratelimit.New(30, 60*1e9)
 	ba := auth.NewBridgeAuth(cfg.BridgeToken, cfg.IsProduction())
 
+	memoryStore, err := memory.NewMemoryStore(cfg.CadBridgeDir)
+	if err != nil {
+		log.Printf("Warning: failed to initialize memory store: %v", err)
+	} else {
+		defer memoryStore.Close()
+	}
+
 	slicerRouter := slicer.NewSlicerRouter(cfg.SlicerPaths)
 	meshRouter := mesh.NewMeshRouter(cfg.PythonPath, cfg.CadBridgeDir)
 	stepRouter := step.NewStepRouter(cfg.PythonPath, cfg.CadBridgeDir)
 	cadRouter := cad.NewCadRouter(cfg.PythonPath, cfg.CadBridgeDir)
 	healthRouter := health.NewHealthRouter(cfg.PythonPath, cfg.SlicerPaths)
+	thermalRouter := thermal.NewThermalRouter()
 
 	r := chi.NewRouter()
 
@@ -72,6 +82,17 @@ func main() {
 			r.Mount("/", cadRouter.Routes())
 		})
 
+		r.Route("/thermal", func(r chi.Router) {
+			r.Mount("/", thermalRouter.Routes())
+		})
+
+		if memoryStore != nil {
+			memoryRouter := memory.NewMemoryRouter(memoryStore)
+			r.Route("/memory", func(r chi.Router) {
+				r.Mount("/", memoryRouter.Routes())
+			})
+		}
+
 		r.Post("/llm", llmRelayHandler)
 		r.Post("/llm/stream", llmStreamHandler)
 	})
@@ -80,6 +101,9 @@ func main() {
 	log.Printf("3DP Agent Go backend starting on %s", addr)
 	log.Printf("  Environment: %s", cfg.NodeEnv)
 	log.Printf("  Bridge token: %v", cfg.BridgeToken != "")
+	if memoryStore != nil {
+		log.Printf("  Memory store: %s", memoryStore.GetDatabasePath())
+	}
 
 	go func() {
 		sigChan := make(chan os.Signal, 1)
