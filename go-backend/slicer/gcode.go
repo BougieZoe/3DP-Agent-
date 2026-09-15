@@ -63,7 +63,6 @@ func parseLayers(gcode string) []SlicerLayerInfo {
 	lines := strings.Split(gcode, "\n")
 	var layers []SlicerLayerInfo
 	var currentZ float64
-	var currentLayer int
 	inLayerChange := false
 
 	for _, line := range lines {
@@ -79,35 +78,21 @@ func parseLayers(gcode string) []SlicerLayerInfo {
 				if v, err := strconv.ParseFloat(m[1], 64); err == nil {
 					currentZ = v
 				}
+				inLayerChange = false
+				// Add layer entry
+				layerNum := len(layers)
+				var height float64
+				if layerNum > 0 {
+					height = currentZ - layers[layerNum-1].ZMm
+				}
+				layers = append(layers, SlicerLayerInfo{
+					LayerNumber: layerNum,
+					ZMm:         currentZ,
+					HeightMm:    height,
+				})
 				continue
 			}
-			// End of layer change block (next non-Z line or next LAYER_CHANGE)
-			if !strings.HasPrefix(line, ";Z:") && line != "" && !strings.HasPrefix(line, ";") {
-				inLayerChange = false
-			}
-		}
-
-		if m := reLayerN.FindStringSubmatch(line); len(m) == 2 {
-			if v, err := strconv.Atoi(m[1]); err == nil {
-				if len(layers) > 0 {
-					prev := &layers[len(layers)-1]
-					prev.HeightMm = currentZ - prev.ZMm
-				}
-				currentLayer = v
-				layers = append(layers, SlicerLayerInfo{
-					LayerNumber: currentLayer,
-					ZMm:         currentZ,
-					HeightMm:    0,
-				})
-			}
-		}
-	}
-
-	// Set last layer height
-	if len(layers) > 1 {
-		last := &layers[len(layers)-1]
-		if last.HeightMm == 0 && len(layers) > 1 {
-			last.HeightMm = currentZ - layers[len(layers)-2].ZMm
+			inLayerChange = false
 		}
 	}
 

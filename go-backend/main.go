@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -23,10 +24,8 @@ import (
 )
 
 func main() {
-	// Load config
 	cfg := config.Load()
 
-	// Load LLM keys
 	llm.SetKeysFilePath(cfg.CadBridgeDir + "/config/llm-keys.yaml")
 	if err := llm.LoadKeys(); err != nil {
 		log.Printf("Warning: failed to load LLM keys: %v", err)
@@ -34,69 +33,54 @@ func main() {
 	llm.StartWatching()
 	defer llm.StopWatching()
 
-	// Create rate limiter (30 requests per 60 seconds per IP)
-	rl := ratelimit.New(30, 60*1e9) // 60 seconds in nanoseconds
-
-	// Create bridge auth
+	rl := ratelimit.New(30, 60*1e9)
 	ba := auth.NewBridgeAuth(cfg.BridgeToken, cfg.IsProduction())
 
-	// Create routers
 	slicerRouter := slicer.NewSlicerRouter(cfg.SlicerPaths)
 	meshRouter := mesh.NewMeshRouter(cfg.PythonPath, cfg.CadBridgeDir)
 	stepRouter := step.NewStepRouter(cfg.PythonPath, cfg.CadBridgeDir)
 	cadRouter := cad.NewCadRouter(cfg.PythonPath, cfg.CadBridgeDir)
 	healthRouter := health.NewHealthRouter(cfg.PythonPath, cfg.SlicerPaths)
 
-	// Build main router
 	r := chi.NewRouter()
 
-	// Global middleware
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RealIP)
 	r.Use(rl.Middleware)
 
-	// Health routes (no auth required)
 	r.Route("/health", func(r chi.Router) {
 		r.Mount("/", healthRouter.Routes())
 	})
 
-	// Bridge routes (auth required in production)
 	r.Route("/api", func(r chi.Router) {
 		r.Use(ba.Middleware)
 
-		// Slicer
 		r.Route("/slice", func(r chi.Router) {
 			r.Mount("/", slicerRouter.Routes())
 		})
 
-		// Mesh processing
 		r.Route("/mesh", func(r chi.Router) {
-			r.Mount("/process", meshRouter.Routes())
+			r.Mount("/", meshRouter.Routes())
 		})
 
-		// STEP parser
 		r.Route("/step", func(r chi.Router) {
 			r.Mount("/", stepRouter.Routes())
 		})
 
-		// CAD bridge
 		r.Route("/cad", func(r chi.Router) {
-			r.Mount("/generate", cadRouter.Routes())
+			r.Mount("/", cadRouter.Routes())
 		})
 
-		// LLM relay
 		r.Post("/llm", llmRelayHandler)
 		r.Post("/llm/stream", llmStreamHandler)
 	})
 
-	// Start server
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	log.Printf("3DP Agent Go backend starting on %s", addr)
 	log.Printf("  Environment: %s", cfg.NodeEnv)
 	log.Printf("  Bridge token: %v", cfg.BridgeToken != "")
 
-	// Graceful shutdown
 	go func() {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -111,11 +95,24 @@ func main() {
 }
 
 func llmRelayHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement LLM relay
-	http.Error(w, "Not implemented", http.StatusNotImplemented)
+	var req llm.RelayRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+		return
+	}
+
+	result := llm.RelayLLM(req)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(result.Status)
+	w.Write([]byte(result.Body))
 }
 
 func llmStreamHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement LLM stream
-	http.Error(w, "Not implemented", http.StatusNotImplemented)
+	var req llm.RelayRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+		return
+	}
+
+	llm.RelayLLMStream(w, req)
 }

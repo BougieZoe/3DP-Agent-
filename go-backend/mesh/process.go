@@ -41,21 +41,35 @@ func runMeshProcess(pythonPath, cadDir string, stlBytes []byte, decimateTo int) 
 	outPath := filepath.Join(tmpDir, "output.stl")
 	diagPath := filepath.Join(tmpDir, "diagnostics.json")
 
-	// Find mesh_process.py
-	scriptPath := filepath.Join(cadDir, "..", "server", "mesh_process.py")
-	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-		// Try relative to current dir
-		scriptPath = "server/mesh_process.py"
-		if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
-			return nil, nil, fmt.Errorf("mesh_process.py not found")
+	// Find mesh_process.py - try multiple locations
+	locations := []string{
+		filepath.Join(cadDir, "..", "server", "mesh_process.py"),
+		"server/mesh_process.py",
+		"/Users/bougiezoe/3DP-Agent-/server/mesh_process.py",
+	}
+	var scriptPath string
+	for _, loc := range locations {
+		if _, err := os.Stat(loc); err == nil {
+			scriptPath = loc
+			break
 		}
 	}
+	if scriptPath == "" {
+		return nil, nil, fmt.Errorf("mesh_process.py not found")
+	}
 
-	// Build command with resource limits
-	cmd := exec.CommandContext(ctx, "/bin/sh", "-c",
-		fmt.Sprintf("ulimit -v 2000000; ulimit -t 120; ulimit -f 102400; exec \"%s\" \"%s\"",
-			pythonPath, scriptPath))
-	cmd.Args = []string{pythonPath, scriptPath, inPath, outPath, fmt.Sprintf("%d", decimateTo), diagPath}
+	// Find mesh-venv Python (has trimesh installed)
+	meshPython := filepath.Join(cadDir, "mesh-venv", "bin", "python3")
+	if _, err := os.Stat(meshPython); err != nil {
+		meshPython = pythonPath // fallback
+	}
+
+	// Build command - skip ulimit -v (not supported on macOS)
+	shellCmd := fmt.Sprintf(
+		"ulimit -t 120; ulimit -f 102400; exec \"%s\" \"%s\" \"%s\" \"%s\" \"%d\" \"%s\"",
+		meshPython, scriptPath, inPath, outPath, decimateTo, diagPath,
+	)
+	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", shellCmd)
 	cmd.Env = sandboxEnv()
 
 	// Run

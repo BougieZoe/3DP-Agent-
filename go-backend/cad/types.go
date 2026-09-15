@@ -1,14 +1,14 @@
 package cad
 
 type BridgeGenerateBody struct {
-	Prompt           string            `json:"prompt"`
-	Locale           string            `json:"locale,omitempty"`
-	Constraints      *Constraints      `json:"constraints,omitempty"`
-	LLM              *LLMConfig        `json:"llm,omitempty"`
-	GeneratorSource  string            `json:"generatorSource,omitempty"`
-	MeshTolerance    *MeshTolerance    `json:"meshTolerance,omitempty"`
-	TimeoutMs        int               `json:"timeoutMs,omitempty"`
-	AnalysisContext  *AnalysisContext  `json:"analysisContext,omitempty"`
+	Prompt          string           `json:"prompt"`
+	Locale          string           `json:"locale,omitempty"`
+	Constraints     *Constraints     `json:"constraints,omitempty"`
+	LLM             *LLMConfig       `json:"llm,omitempty"`
+	GeneratorSource string           `json:"generatorSource,omitempty"`
+	MeshTolerance   *MeshTolerance   `json:"meshTolerance,omitempty"`
+	TimeoutMs       int              `json:"timeoutMs,omitempty"`
+	AnalysisContext *AnalysisContext `json:"analysisContext,omitempty"`
 }
 
 type Constraints struct {
@@ -18,9 +18,9 @@ type Constraints struct {
 }
 
 type LLMConfig struct {
-	BaseURL  string `json:"baseUrl,omitempty"`
-	APIKey   string `json:"apiKey,omitempty"`
-	Model    string `json:"model,omitempty"`
+	BaseURL string `json:"baseUrl,omitempty"`
+	APIKey  string `json:"apiKey,omitempty"`
+	Model   string `json:"model,omitempty"`
 }
 
 type MeshTolerance struct {
@@ -29,9 +29,17 @@ type MeshTolerance struct {
 }
 
 type AnalysisContext struct {
-	Issues            []string `json:"issues,omitempty"`
-	OriginalPrompt    string   `json:"originalPrompt,omitempty"`
-	PrintabilityScore float64  `json:"printabilityScore,omitempty"`
+	Issues            []DfAIssue `json:"issues,omitempty"`
+	OriginalPrompt    string     `json:"originalPrompt,omitempty"`
+	PrintabilityScore float64    `json:"printabilityScore,omitempty"`
+}
+
+type DfAIssue struct {
+	Type           string `json:"type"`
+	Priority       string `json:"priority,omitempty"`
+	Description    string `json:"description"`
+	Implementation string `json:"implementation,omitempty"`
+	Recommendation string `json:"recommendation,omitempty"`
 }
 
 type GeneratedModel struct {

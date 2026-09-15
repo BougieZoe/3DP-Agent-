@@ -21,7 +21,7 @@ func Load() *Config {
 		BridgeToken:  os.Getenv("BRIDGE_TOKEN"),
 		SlicerPaths:  os.Getenv("SLICER_PATHS"),
 		PythonPath:   getEnvStr("PYTHON_PATH", "python3"),
-		CadBridgeDir: getEnvStr("CAD_BRIDGE_DIR", ".cad-bridge"),
+		CadBridgeDir: getEnvStr("CAD_BRIDGE_DIR", "/Users/bougiezoe/3DP-Agent-/.cad-bridge"),
 		NodeEnv:      getEnvStr("NODE_ENV", "development"),
 		IsElectron:   os.Getenv("IS_ELECTRON") == "true",
 	}
