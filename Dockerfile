@@ -1,40 +1,48 @@
-# ---- Stage 1: Build ----
-    FROM node:20-slim AS builder
+FROM debian:bookworm-slim
 
-    WORKDIR /app
-    
-    # 锁定跟你package.json里packageManager字段一致的pnpm版本
-    RUN corepack enable && corepack prepare pnpm@10.4.1 --activate
-    
-    # 先只拷贝依赖清单和patch文件,利用Docker层缓存加速重复build
-    COPY package.json pnpm-lock.yaml ./
-    COPY patches ./patches
-    
-    RUN pnpm install --frozen-lockfile
-    
-    # 再拷贝其余源码
-    COPY . .
-    
-    # 跑你原本的build脚本:vite build + esbuild打包server
-    RUN pnpm run build
-    
-    # ---- Stage 2: Production ----
-    FROM node:20-slim AS production
-    
-    WORKDIR /app
-    ENV NODE_ENV=production
-    
-    RUN corepack enable && corepack prepare pnpm@10.4.1 --activate
-    
-    COPY package.json pnpm-lock.yaml ./
-    COPY patches ./patches
-    
-    # 生产环境只装依赖,不装devDependencies
-    RUN pnpm install --frozen-lockfile --prod
-    
-    # 从builder阶段拿构建产物
-    COPY --from=builder /app/dist ./dist
-    
-    EXPOSE 3000
-    
-    CMD ["node", "dist/index.cjs"]
+WORKDIR /app
+
+# Install Python and dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create Python virtual environment and install dependencies
+RUN python3 -m venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+
+# Copy pre-built Go binary
+COPY go-backend/3dp-agent-server /app/go-backend/3dp-agent-server
+RUN chmod +x /app/go-backend/3dp-agent-server
+
+# Copy pre-built Node.js frontend
+COPY dist /app/dist
+COPY package.json /app/package.json
+
+# Copy Python scripts
+COPY server/mesh_process.py /app/server/mesh_process.py
+
+# Copy configuration
+COPY .cad-bridge/config /app/.cad-bridge/config
+
+# Create necessary directories
+RUN mkdir -p /app/.cad-bridge/runs /app/.cad-bridge/metrics
+
+# Set environment
+ENV NODE_ENV=production
+ENV PYTHONPATH=/app/.venv/lib/python3.11/site-packages
+
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
+# Start both Go backend and Node.js server
+CMD ["/bin/bash", "-c", "/app/go-backend/3dp-agent-server --port 8888 & node /app/dist/index.cjs"]
