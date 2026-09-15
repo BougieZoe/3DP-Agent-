@@ -1,14 +1,15 @@
 package cad
 
 type BridgeGenerateBody struct {
-	Prompt          string           `json:"prompt"`
-	Locale          string           `json:"locale,omitempty"`
-	Constraints     *Constraints     `json:"constraints,omitempty"`
-	LLM             *LLMConfig       `json:"llm,omitempty"`
-	GeneratorSource string           `json:"generatorSource,omitempty"`
-	MeshTolerance   *MeshTolerance   `json:"meshTolerance,omitempty"`
-	TimeoutMs       int              `json:"timeoutMs,omitempty"`
-	AnalysisContext *AnalysisContext `json:"analysisContext,omitempty"`
+	Prompt            string           `json:"prompt"`
+	Locale            string           `json:"locale,omitempty"`
+	Constraints       *Constraints     `json:"constraints,omitempty"`
+	LLM               *LLMConfig       `json:"llm,omitempty"`
+	GeneratorSource   string           `json:"generatorSource,omitempty"`
+	MeshTolerance     *MeshTolerance   `json:"meshTolerance,omitempty"`
+	TimeoutMs         int              `json:"timeoutMs,omitempty"`
+	AnalysisContext   *AnalysisContext `json:"analysisContext,omitempty"`
+	RequestDiagnostics bool            `json:"requestDiagnostics,omitempty"`
 }
 
 type Constraints struct {

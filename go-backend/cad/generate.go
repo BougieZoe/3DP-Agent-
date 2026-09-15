@@ -579,7 +579,7 @@ func (r *CadRouter) generateHandler(w http.ResponseWriter, req *http.Request) {
 	duration := time.Since(startedAt)
 	log.Printf("[cad:%s] Done in %v (%d bytes STL)", id[:8], duration, len(stl))
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	response := map[string]interface{}{
 		"ok": true,
 		"model": map[string]interface{}{
 			"id":         id,
@@ -591,11 +591,77 @@ func (r *CadRouter) generateHandler(w http.ResponseWriter, req *http.Request) {
 		"source":    source,
 		"repaired":  repairAttempts > 0,
 		"attempts":  repairAttempts + llmFixAttempts + 1,
-	})
+	}
+
+	if body.RequestDiagnostics && r.khanaPath != "" {
+		pyPath := filepath.Join(runDir, "model.py")
+		pyContent, readErr := os.ReadFile(pyPath)
+		if readErr == nil {
+			khanaSource := convertGenStepToAssembly(string(pyContent))
+			khanaPath := filepath.Join(runDir, "khana_assembly.py")
+			os.WriteFile(khanaPath, []byte(khanaSource), 0644)
+
+			checkCode, _, checkStderr, _ := runKhana(r.khanaPath, []string{"check", "khana_assembly.py:build_mechanism", "--out", runDir}, runDir, 120000)
+			mechanismPath := filepath.Join(runDir, "mechanism.json")
+			if mechanismData, err := os.ReadFile(mechanismPath); err == nil {
+				response["mechanism"] = json.RawMessage(mechanismData)
+			}
+			if checkCode == 2 {
+				response["diagnosticsWarning"] = "assertion_failed"
+			}
+			_ = checkStderr
+		}
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 func generateID() string {
 	return uuid.New().String()
+}
+
+func convertGenStepToAssembly(source string) string {
+	lines := strings.Split(source, "\n")
+	var imports []string
+	var bodyLines []string
+	inGenStep := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "from build123d import") || strings.HasPrefix(trimmed, "import") {
+			if !strings.Contains(line, "cad_khana") {
+				imports = append(imports, line)
+			}
+			continue
+		}
+		if strings.HasPrefix(trimmed, "def gen_step") {
+			inGenStep = true
+			continue
+		}
+		if inGenStep {
+			if trimmed == "" || strings.HasPrefix(trimmed, "def ") || strings.HasPrefix(trimmed, "class ") {
+				inGenStep = false
+			} else {
+				bodyLines = append(bodyLines, line)
+			}
+		}
+	}
+
+	result := "from build123d import *\nfrom cad_khana.mechanism.assembly import Assembly\n\n"
+	result += "def gen_body():\n"
+	for _, line := range bodyLines {
+		result += "    " + strings.TrimSpace(line) + "\n"
+	}
+	result += "\ndef build_mechanism():\n"
+	result += "    body = gen_body()\n"
+	result += "    return (\n"
+	result += "        Assembly()\n"
+	result += "        .with_part(\"body\", body)\n"
+	result += "        .assert_no_interference_within([\"body\"])\n"
+	result += "    )\n\n"
+	result += "assembly = build_mechanism()\n"
+
+	return result
 }
 
 func llmChatKhana(ctx context.Context, candidate llm.LLMCandidate, userMessage string) (string, error) {
