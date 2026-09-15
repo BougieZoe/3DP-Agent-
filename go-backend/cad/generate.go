@@ -88,6 +88,62 @@ def gen_step():
 
 Now generate for: `
 
+var khanaSystemPrompt = `You are a cad-khana Assembly code generator. Output ONLY valid Python.
+
+RULES:
+1. First lines: from build123d import * and from cad_khana.mechanism.assembly import Assembly
+2. Define individual parts as functions returning Part objects.
+3. Define a build_mechanism() function that returns an Assembly.
+4. Use .with_part("name", part(), location=Location(...)) to place parts.
+5. Add assertions: .assert_no_interference("a", "b") and .assert_clearance("a", "b", min_mm=0.5)
+6. Last line: assembly = build_mechanism()
+7. Output raw code ONLY. No markdown, no backticks, no explanations.
+8. NEVER: export_*, show_*, print, CadQuery, OCP, or external libs.
+9. Use Align.CENTER for centering. Put Pos() LEFT of the shape.
+10. Maximum ~30 lines. Keep it simple.
+
+PART PATTERNS:
+- Box:      Box(w, d, h, align=(Align.CENTER, Align.CENTER, Align.CENTER))
+- Cylinder: Cylinder(radius=r, height=h, align=(Align.CENTER, Align.CENTER, Align.CENTER))
+- Sphere:   Sphere(radius=r)
+- Hole:     body -= Pos(x,y,z) * Cylinder(radius=r, height=h)
+- Add:      body += Pos(x,y,z) * Box(w, d, h)
+
+LOCATION PATTERNS:
+- Translate: Location((x, y, z))
+- Rotate:    Rot(deg_x, deg_y, deg_z)
+- Combined:  Location((x, y, z)) * Rot(90, 0, 0)
+
+ASSERTION PATTERNS:
+- No interference: .assert_no_interference("part_a", "part_b")
+- Min clearance:   .assert_clearance("part_a", "part_b", min_mm=0.5)
+- Distance bounds: .assert_distance("part_a", "part_b", min_mm=1.0, max_mm=5.0)
+- Tangent contact: .assert_tangent_contact("part_a", "part_b")
+
+EXAMPLE:
+
+from build123d import Box, Cylinder, Location, Rot, Align
+from cad_khana.mechanism.assembly import Assembly
+
+def base():
+    return Box(60, 40, 10, align=(Align.CENTER, Align.CENTER, Align.CENTER))
+
+def post():
+    return Cylinder(radius=5, height=30)
+
+def build_mechanism():
+    return (
+        Assembly()
+        .with_part("base", base())
+        .with_part("post", post(), location=Location((0, 0, 20)))
+        .assert_no_interference("post", "base")
+        .assert_clearance("post", "base", min_mm=0.5)
+    )
+
+assembly = build_mechanism()
+
+Now generate for: `
+
 func extractPythonSource(text string) (string, error) {
 	re := regexp.MustCompile("(?s)```(?:python)?\\s*\\n(.*?)```")
 	match := re.FindStringSubmatch(text)
@@ -540,4 +596,214 @@ func (r *CadRouter) generateHandler(w http.ResponseWriter, req *http.Request) {
 
 func generateID() string {
 	return uuid.New().String()
+}
+
+func llmChatKhana(ctx context.Context, candidate llm.LLMCandidate, userMessage string) (string, error) {
+	url := strings.TrimRight(candidate.BaseURL, "/") + "/chat/completions"
+
+	messages := []llm.Message{
+		{Role: "system", Content: khanaSystemPrompt},
+		{Role: "user", Content: userMessage},
+	}
+
+	bodyBytes, _ := json.Marshal(llm.ChatRequest{
+		Model:    candidate.Model,
+		Messages: messages,
+		Stream:   false,
+	})
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if candidate.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+candidate.APIKey)
+	}
+
+	client := &http.Client{Timeout: llmTimeoutMs * time.Millisecond}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == 429 {
+		return "", fmt.Errorf("LLM rate limited (429)")
+	}
+	if resp.StatusCode == 402 {
+		return "", fmt.Errorf("LLM API key has no credits (402)")
+	}
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("LLM request failed: HTTP %d — %s", resp.StatusCode, string(body[:min(len(body), 200)]))
+	}
+
+	var llmResp llm.LLMResponse
+	if err := json.Unmarshal(body, &llmResp); err != nil {
+		return "", fmt.Errorf("failed to parse response: %v", err)
+	}
+	if llmResp.Error != nil {
+		return "", fmt.Errorf("LLM error: %s", llmResp.Error.Message)
+	}
+	if len(llmResp.Choices) == 0 {
+		return "", fmt.Errorf("no choices in response")
+	}
+
+	content := llmResp.Choices[0].Message.Content
+	if content == "" {
+		return "", fmt.Errorf("LLM returned empty content")
+	}
+
+	re := regexp.MustCompile("(?s)```(?:python)?\\s*\\n(.*?)```")
+	match := re.FindStringSubmatch(content)
+	source := content
+	if match != nil {
+		source = strings.TrimSpace(match[1])
+	}
+	if !strings.Contains(source, "build_mechanism") {
+		return "", fmt.Errorf("LLM output did not contain a build_mechanism() function")
+	}
+	return source, nil
+}
+
+func (r *CadRouter) khanaGenerateHandler(w http.ResponseWriter, req *http.Request) {
+	startedAt := time.Now()
+	id := generateID()
+
+	var body BridgeGenerateBody
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"ok":    false,
+			"error": "invalid JSON body",
+		})
+		return
+	}
+
+	log.Printf("[cad:%s] POST /khana/generate — prompt=%q", id[:8], truncate(body.Prompt, 80))
+
+	if body.Prompt == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"ok":    false,
+			"error": "prompt is required",
+		})
+		return
+	}
+
+	if r.khanaPath == "" {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"ok":    false,
+			"error": "khana not installed",
+		})
+		return
+	}
+
+	python, ready, reason := r.checkReady()
+	if !ready {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"ok":    false,
+			"error": reason,
+		})
+		return
+	}
+	_ = python
+
+	runDir := filepath.Join(r.cadBridgeDir, "runs", id)
+	os.MkdirAll(runDir, 0755)
+
+	candidates := llm.BuildAllCandidates("", nil)
+	if len(candidates) == 0 {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"ok":    false,
+			"error": "no LLM provider configured",
+		})
+		return
+	}
+
+	userMsg := composeUserMessage(body, "")
+
+	ctx, cancel := context.WithTimeout(req.Context(), 150*time.Second)
+	defer cancel()
+
+	var source string
+	var lastErr error
+	for _, c := range candidates {
+		source, lastErr = llmChatKhana(ctx, c, userMsg)
+		if lastErr == nil {
+			break
+		}
+		log.Printf("[cad:%s] khana candidate %s failed: %v", id[:8], c.Label, lastErr)
+	}
+	if lastErr != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]interface{}{
+			"ok":    false,
+			"error": fmt.Sprintf("LLM call failed: %v", lastErr),
+		})
+		return
+	}
+
+	sourcePath := filepath.Join(runDir, "assembly.py")
+	if err := os.WriteFile(sourcePath, []byte(source), 0644); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
+			"ok":    false,
+			"error": "failed to write source file",
+		})
+		return
+	}
+
+	factory := "build_mechanism"
+	checkCode, _, stderr, _ := runKhana(r.khanaPath, []string{"check", "assembly.py:" + factory, "--out", runDir}, runDir, 120000)
+
+	if checkCode != 0 && checkCode != 2 {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"ok":     false,
+			"status": "error",
+			"error":  fmt.Sprintf("khana check failed with code %d", checkCode),
+			"stderr": tailStr(stderr, 2000),
+		})
+		return
+	}
+
+	mechanismPath := filepath.Join(runDir, "mechanism.json")
+	mechanismData, _ := os.ReadFile(mechanismPath)
+
+	exportCode, _, exportStderr, _ := runKhana(r.khanaPath, []string{"export", "assembly.py:" + factory, "--out", runDir}, runDir, 120000)
+	if exportCode != 0 {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"ok":     false,
+			"status": "error",
+			"error":  fmt.Sprintf("khana export failed with code %d", exportCode),
+			"stderr": tailStr(exportStderr, 2000),
+		})
+		return
+	}
+
+	stlPath := filepath.Join(runDir, "assembly.stl")
+	stl, err := os.ReadFile(stlPath)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"ok":     false,
+			"status": "error",
+			"error":  "STL file not found after export",
+		})
+		return
+	}
+
+	duration := time.Since(startedAt)
+	status := "ok"
+	if checkCode == 2 {
+		status = "assertion_failed"
+	}
+
+	log.Printf("[cad:%s] khana generate done in %v (%d bytes STL)", id[:8], duration, len(stl))
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":       true,
+		"status":   status,
+		"stlBase64": encodeBase64(stl),
+		"source":   source,
+		"mechanism": json.RawMessage(mechanismData),
+		"durationMs": duration.Milliseconds(),
+	})
 }

@@ -15,14 +15,17 @@ type CadRouter struct {
 	pythonPath   string
 	cadBridgeDir string
 	stepCLIDir   string
+	khanaPath    string
 }
 
 func NewCadRouter(pythonPath, cadBridgeDir string) *CadRouter {
 	stepCLI := "/Users/bougiezoe/.agents/skills/cad/scripts/step"
+	khana := findKhana()
 	return &CadRouter{
 		pythonPath:   pythonPath,
 		cadBridgeDir: cadBridgeDir,
 		stepCLIDir:   stepCLI,
+		khanaPath:    khana,
 	}
 }
 
@@ -30,8 +33,11 @@ func (r *CadRouter) Routes() chi.Router {
 	router := chi.NewRouter()
 	router.Get("/health", r.healthHandler)
 	router.Post("/generate", r.generateHandler)
+	router.Post("/khana/generate", r.khanaGenerateHandler)
 	router.Post("/edit", r.editHandler)
 	router.Get("/{id}/step", r.stepHandler)
+	router.Post("/khana/check", r.khanaCheckHandler)
+	router.Post("/khana/export", r.khanaExportHandler)
 	return router
 }
 
@@ -47,6 +53,10 @@ func (r *CadRouter) healthHandler(w http.ResponseWriter, req *http.Request) {
 		"reason":   reason,
 		"python":   python,
 		"skillDir": r.stepCLIDir,
+		"khana": map[string]interface{}{
+			"available": r.khanaPath != "",
+			"path":      r.khanaPath,
+		},
 	})
 }
 
