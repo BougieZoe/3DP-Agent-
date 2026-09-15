@@ -112,6 +112,21 @@ export default defineConfig({
         changeOrigin: true,
         xfwd: true,
       },
+      "/api/thermal": {
+        target: "http://127.0.0.1:8888",
+        changeOrigin: true,
+        xfwd: true,
+      },
+      "/api/memory": {
+        target: "http://127.0.0.1:8888",
+        changeOrigin: true,
+        xfwd: true,
+      },
+      "/api/step": {
+        target: "http://127.0.0.1:8888",
+        changeOrigin: true,
+        xfwd: true,
+      },
       // Dev: LLM relay
       "/api/llm": {
         target: "http://127.0.0.1:8888",

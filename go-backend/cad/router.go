@@ -19,7 +19,7 @@ type CadRouter struct {
 }
 
 func NewCadRouter(pythonPath, cadBridgeDir string) *CadRouter {
-	stepCLI := "/Users/bougiezoe/.agents/skills/cad/scripts/step"
+	stepCLI := findStepCLI()
 	khana := findKhana()
 	return &CadRouter{
 		pythonPath:   pythonPath,
@@ -29,13 +29,30 @@ func NewCadRouter(pythonPath, cadBridgeDir string) *CadRouter {
 	}
 }
 
+func findStepCLI() string {
+	// Check common locations
+	paths := []string{
+		"/Users/bougiezoe/.agents/skills/cad/scripts/step",
+		filepath.Join(os.Getenv("HOME"), ".agents/skills/cad/scripts/step"),
+		"/usr/local/bin/step",
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
 func (r *CadRouter) Routes() chi.Router {
 	router := chi.NewRouter()
-	router.Get("/health", r.healthHandler)
-	router.Post("/generate", r.generateHandler)
+	router.Route("/generate", func(gr chi.Router) {
+		gr.Get("/health", r.healthHandler)
+		gr.Post("/", r.generateHandler)
+		gr.Post("/edit", r.editHandler)
+		gr.Get("/{id}/step", r.stepHandler)
+	})
 	router.Post("/khana/generate", r.khanaGenerateHandler)
-	router.Post("/edit", r.editHandler)
-	router.Get("/{id}/step", r.stepHandler)
 	router.Post("/khana/check", r.khanaCheckHandler)
 	router.Post("/khana/export", r.khanaExportHandler)
 	return router
