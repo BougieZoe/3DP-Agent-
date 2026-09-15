@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  3dp-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: 3dp-agent
+    ports:
+      - "3000:3000"
+      - "8888:8888"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - GO_PORT=8888
+      - BRIDGE_TOKEN=${BRIDGE_TOKEN:-}
+      - PYTHONPATH=/app/.venv/lib/python3.11/site-packages
+    volumes:
+      - .cad-bridge:/app/.cad-bridge
+      - ./server/mesh_process.py:/app/server/mesh_process.py
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3
+    networks:
+      - 3dp-network
+
+  # Optional: PrusaSlicer CLI for slicing
+  prusaslicer:
+    image: prusaslicer/prusaslicer:latest
+    container_name: prusaslicer
+    volumes:
+      - .cad-bridge/runs:/runs
+    networks:
+      - 3dp-network
+    profiles:
+      - slicer
+
+networks:
+  3dp-network:
+    driver: bridge
