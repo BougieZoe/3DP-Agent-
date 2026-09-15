@@ -34,7 +34,7 @@ export function createStepRouter(): Router {
       try {
         res.json({ ok: true, available: true });
       } finally {
-        kernel.close();
+        kernel[Symbol.dispose]();
       }
     } catch (err) {
       res.json({ ok: true, available: false, error: String(err) });

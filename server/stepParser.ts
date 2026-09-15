@@ -149,7 +149,7 @@ export async function parseStepFile(
     warnings,
   };
   } finally {
-    kernel.close();
+    kernel[Symbol.dispose]();
   }
 }
 
