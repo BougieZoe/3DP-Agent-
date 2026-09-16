@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -89,13 +90,31 @@ func (r *CadRouter) checkReady() (string, bool, string) {
 }
 
 func (r *CadRouter) editHandler(w http.ResponseWriter, req *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, map[string]interface{}{
-		"ok": false,
-		"error": map[string]string{
-			"code":   "not-implemented",
-			"detail": "CAD edit not yet implemented in Go backend",
-		},
-	})
+	r.editHandlerImpl(w, req)
+}
+
+func generateEditPrompt(originalSource string, editInstructions string, originalPrompt string) string {
+	var lines []string
+	lines = append(lines, "You are modifying an existing build123d CAD model.")
+	lines = append(lines, "")
+	if originalPrompt != "" {
+		lines = append(lines, "Original design intent: "+originalPrompt)
+		lines = append(lines, "")
+	}
+	lines = append(lines, "Current source code:")
+	lines = append(lines, "```python")
+	lines = append(lines, originalSource)
+	lines = append(lines, "```")
+	lines = append(lines, "")
+	lines = append(lines, "Edit instructions: "+editInstructions)
+	lines = append(lines, "")
+	lines = append(lines, "Rules:")
+	lines = append(lines, "- Output ONLY the modified Python code. No explanations.")
+	lines = append(lines, "- Keep the gen_step() function structure.")
+	lines = append(lines, "- Preserve the original design intent unless the edit explicitly changes it.")
+	lines = append(lines, "- Do NOT use BuildPart, BuildLine, BuildSketch, or context managers.")
+	lines = append(lines, "- Do NOT use fillet/chamfer on shapes with holes.")
+	return strings.Join(lines, "\n")
 }
 
 func (r *CadRouter) stepHandler(w http.ResponseWriter, req *http.Request) {
