@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getAPIKeys, saveAPIKeys, getSelectedProvider, setSelectedProvider } from '@/lib/apiKeys';
 import { Language } from '@/lib/i18n';
 import { AI_PROVIDERS } from '@shared/domain/providers';
@@ -6,6 +6,21 @@ import { AI_PROVIDERS } from '@shared/domain/providers';
 interface APIKeyModalProps {
   onClose: () => void;
   language: Language;
+}
+
+interface ModelInfo {
+  id: string;
+  provider: string;
+  label: string;
+  source: string;
+}
+
+interface ProviderMeta {
+  id: string;
+  label: string;
+  baseUrl: string;
+  hasApiKey: boolean;
+  modelCount: number;
 }
 
 const labels = {
@@ -18,9 +33,33 @@ const labels = {
     clear: 'CLR',
     save: 'SAVE KEYS',
     saved: '✓ SAVED',
+    models: 'models',
+    more: 'more',
   },
-  ja: { /* 日文标签 */ },
-  zh: { /* 中文标签 */ }
+  ja: {
+    header: 'API CONFIG',
+    desc1: 'キーローカル保存。リレーのみ、サーバー保存なし。',
+    desc2: 'AI解析にはキーを1つ以上追加してください。',
+    hide: 'HIDE',
+    show: 'SHOW',
+    clear: 'CLR',
+    save: 'SAVE KEYS',
+    saved: '✓ SAVED',
+    models: 'models',
+    more: 'more',
+  },
+  zh: {
+    header: 'API 配置',
+    desc1: '密钥本地保存，仅通过服务器中转，不存储在服务器端。',
+    desc2: '请添加至少一个密钥以解锁 AI 分析功能。',
+    hide: '隐藏',
+    show: '显示',
+    clear: '清除',
+    save: '保存密钥',
+    saved: '✓ 已保存',
+    models: '个模型',
+    more: '更多',
+  }
 };
 
 export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
@@ -29,6 +68,50 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
   const [activeProvider, setActiveProvider] = useState(
     getSelectedProvider() || AI_PROVIDERS.find(p => !!getAPIKeys()[p.id])?.id || AI_PROVIDERS[0].id
   );
+  const [providerModels, setProviderModels] = useState<Record<string, ModelInfo[]>>({});
+  const [providerMeta, setProviderMeta] = useState<Record<string, ProviderMeta>>({});
+
+  // Fetch model metadata on mount
+  useEffect(() => {
+    fetch('/api/models')
+      .then(res => res.json())
+      .then(data => {
+        if (data.ok && data.models) {
+          // Group models by provider
+          const grouped: Record<string, ModelInfo[]> = {};
+          data.models.forEach((m: ModelInfo) => {
+            if (!grouped[m.provider]) grouped[m.provider] = [];
+            grouped[m.provider].push(m);
+          });
+          // Sort each provider's models by released date (newest first)
+          Object.keys(grouped).forEach(provider => {
+            grouped[provider].sort((a, b) => {
+              // API models first, then hardcoded
+              if (a.source !== b.source) return a.source === 'api' ? -1 : 1;
+              return a.id.localeCompare(b.id);
+            });
+          });
+          setProviderModels(grouped);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Fetch provider metadata
+  useEffect(() => {
+    fetch('/api/models/providers')
+      .then(res => res.json())
+      .then(data => {
+        if (data.ok && data.providers) {
+          const meta: Record<string, ProviderMeta> = {};
+          data.providers.forEach((p: ProviderMeta) => {
+            meta[p.id] = p;
+          });
+          setProviderMeta(meta);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSave = () => {
     // AMD Cloud不需要key,但getActiveProvider()是靠"这个provider有没有值"
@@ -43,43 +126,80 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
     onClose();
   };
 
+  const getTopModels = (providerId: string): ModelInfo[] => {
+    const models = providerModels[providerId] || [];
+    return models.slice(0, 3);
+  };
+
+  const getRemainingCount = (providerId: string): number => {
+    const models = providerModels[providerId] || [];
+    return Math.max(0, models.length - 3);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 overflow-y-auto">
       <div className="bg-card border border-border rounded-lg w-full max-w-md p-6 my-6">
         <h2 className="text-lg font-semibold mb-4">API Configuration</h2>
         
-        {AI_PROVIDERS.map(provider => (
-          <div key={provider.id} className="mb-4">
-            <label className={`flex items-center gap-2 text-sm mb-1.5 ${provider.colorClass}`}>
-              <input
-                type="radio"
-                name="active-provider"
-                checked={activeProvider === provider.id}
-                onChange={() => setActiveProvider(provider.id)}
-                className="accent-current"
-              />
-              {provider.label}
-              {activeProvider === provider.id && (
-                <span className="text-[10px] opacity-70 font-normal">ACTIVE</span>
+        {AI_PROVIDERS.map(provider => {
+          const topModels = getTopModels(provider.id);
+          const remaining = getRemainingCount(provider.id);
+          const meta = providerMeta[provider.id];
+          
+          return (
+            <div key={provider.id} className="mb-4">
+              <label className={`flex items-center gap-2 text-sm mb-1.5 ${provider.colorClass}`}>
+                <input
+                  type="radio"
+                  name="active-provider"
+                  checked={activeProvider === provider.id}
+                  onChange={() => setActiveProvider(provider.id)}
+                  className="accent-current"
+                />
+                {provider.label}
+                {activeProvider === provider.id && (
+                  <span className="text-[10px] opacity-70 font-normal">ACTIVE</span>
+                )}
+                {meta && meta.modelCount > 0 && (
+                  <span className="text-[10px] opacity-50 font-normal">
+                    [{meta.modelCount} {labels[language].models}]
+                  </span>
+                )}
+              </label>
+              
+              {/* Top 3 models */}
+              {topModels.length > 0 && (
+                <div className="ml-6 mb-1.5 text-[11px] opacity-60">
+                  {topModels.map((m, i) => (
+                    <span key={m.id}>
+                      {i > 0 && ' · '}
+                      {m.label || m.id}
+                    </span>
+                  ))}
+                  {remaining > 0 && (
+                    <span className="opacity-50"> +{remaining} {labels[language].more}</span>
+                  )}
+                </div>
               )}
-            </label>
-            <div className="flex gap-2">
-              <input
-                type={showKeys[provider.id] ? 'text' : 'password'}
-                value={keys[provider.id] || ''}
-                onChange={(e) => setKeys(prev => ({ ...prev, [provider.id]: e.target.value }))}
-                placeholder={provider.keyPlaceholder}
-                className="flex-1 bg-background border border-border rounded px-3 py-2 text-sm font-mono"
-              />
-              <button
-                onClick={() => setShowKeys(prev => ({ ...prev, [provider.id]: !prev[provider.id] }))}
-                className="px-3 border border-border rounded text-xs"
-              >
-                {showKeys[provider.id] ? '🙈' : '👁'}
-              </button>
+              
+              <div className="flex gap-2">
+                <input
+                  type={showKeys[provider.id] ? 'text' : 'password'}
+                  value={keys[provider.id] || ''}
+                  onChange={(e) => setKeys(prev => ({ ...prev, [provider.id]: e.target.value }))}
+                  placeholder={provider.keyPlaceholder}
+                  className="flex-1 bg-background border border-border rounded px-3 py-2 text-sm font-mono"
+                />
+                <button
+                  onClick={() => setShowKeys(prev => ({ ...prev, [provider.id]: !prev[provider.id] }))}
+                  className="px-3 border border-border rounded text-xs"
+                >
+                  {showKeys[provider.id] ? '🙈' : '👁'}
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         <div className="flex gap-3 mt-6">
           <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded font-medium">

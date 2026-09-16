@@ -7,9 +7,9 @@
 //   - Serves via GET /api/models
 //
 // Adding a new provider:
-//  1. Add entry to providerEndpoints map
-//  2. Add to hardcodedModels as fallback
-//  3. That's it — system auto-discovers models from the API
+//  1. Add entry to llm-keys.yaml
+//  2. Add API key
+//  3. System auto-discovers models from the API
 
 package models
 
@@ -27,13 +27,13 @@ import (
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type ModelInfo struct {
-	ID         string            `json:"id"`
-	Provider   string            `json:"provider"`
-	Label      string            `json:"label"`
-	Released   string            `json:"released,omitempty"`
-	Capabilities []string        `json:"capabilities,omitempty"`
-	Pricing    *ModelPricing     `json:"pricing,omitempty"`
-	Source     string            `json:"source"` // "api", "yaml", "hardcoded"
+	ID           string            `json:"id"`
+	Provider     string            `json:"provider"`
+	Label        string            `json:"label"`
+	Released     string            `json:"released,omitempty"`
+	Capabilities []string          `json:"capabilities,omitempty"`
+	Pricing      *ModelPricing     `json:"pricing,omitempty"`
+	Source       string            `json:"source"` // "api", "yaml", "hardcoded"
 }
 
 type ModelPricing struct {
@@ -48,6 +48,7 @@ type ModelRegistry struct {
 	providerMeta map[string]*ProviderMeta
 	lastRefresh  time.Time
 	ttl          time.Duration
+	providerConfig map[string]ProviderConfig
 }
 
 type ProviderMeta struct {
@@ -55,6 +56,13 @@ type ProviderMeta struct {
 	Label     string `json:"label"`
 	BaseURL   string `json:"baseUrl"`
 	HasAPIKey bool   `json:"hasApiKey"`
+	ModelCount int   `json:"modelCount"`
+}
+
+type ProviderConfig struct {
+	ID      string `yaml:"id"`
+	BaseURL string `yaml:"baseUrl"`
+	Model   string `yaml:"model"`
 }
 
 // ── Provider Configuration ─────────────────────────────────────────────────
@@ -103,11 +111,21 @@ var providerLabels = map[string]string{
 
 func NewModelRegistry(ttl time.Duration) *ModelRegistry {
 	r := &ModelRegistry{
-		models:       make(map[string]*ModelInfo),
-		providerMeta: make(map[string]*ProviderMeta),
-		ttl:          ttl,
+		models:         make(map[string]*ModelInfo),
+		providerMeta:   make(map[string]*ProviderMeta),
+		ttl:            ttl,
+		providerConfig: make(map[string]ProviderConfig),
 	}
 	return r
+}
+
+// SetProviderConfig updates provider config from YAML (hot-reload)
+func (r *ModelRegistry) SetProviderConfig(config map[string]ProviderConfig) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.providerConfig = config
+	// Force refresh on next call
+	r.lastRefresh = time.Time{}
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -144,10 +162,23 @@ func (r *ModelRegistry) GetModelsByProvider(provider string) []ModelInfo {
 		}
 	}
 
+	// Sort by released date (newest first), then by ID
 	sort.Slice(models, func(i, j int) bool {
+		if models[i].Released != models[j].Released {
+			return models[i].Released > models[j].Released
+		}
 		return models[i].ID < models[j].ID
 	})
 
+	return models
+}
+
+// GetTopModelsByProvider returns top N models for a provider.
+func (r *ModelRegistry) GetTopModelsByProvider(provider string, n int) []ModelInfo {
+	models := r.GetModelsByProvider(provider)
+	if len(models) > n {
+		return models[:n]
+	}
 	return models
 }
 
@@ -198,12 +229,26 @@ func (r *ModelRegistry) Refresh(apiKeys map[string]string) error {
 		r.models[m.Provider+"/"+m.ID] = &m
 	}
 
+	// Determine providers to query: YAML config > hardcoded endpoints
+	providersToQuery := make(map[string]string)
+	for provider := range r.providerConfig {
+		if endpoint, ok := providerEndpoints[provider]; ok {
+			providersToQuery[provider] = endpoint
+		}
+	}
+	// Add hardcoded endpoints not in YAML
+	for provider, endpoint := range providerEndpoints {
+		if _, ok := providersToQuery[provider]; !ok {
+			providersToQuery[provider] = endpoint
+		}
+	}
+
 	// Fetch from each provider API
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	discovered := make(map[string]*ModelInfo)
 
-	for provider, endpoint := range providerEndpoints {
+	for provider, endpoint := range providersToQuery {
 		apiKey := apiKeys[provider]
 		if apiKey == "" {
 			// No API key — mark provider as unavailable
@@ -245,6 +290,17 @@ func (r *ModelRegistry) Refresh(apiKeys map[string]string) error {
 	for key, m := range discovered {
 		m.Source = "api"
 		r.models[key] = m
+	}
+
+	// Update model counts
+	for provider := range r.providerMeta {
+		count := 0
+		for _, m := range r.models {
+			if m.Provider == provider {
+				count++
+			}
+		}
+		r.providerMeta[provider].ModelCount = count
 	}
 
 	r.lastRefresh = time.Now()

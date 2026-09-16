@@ -51,14 +51,21 @@ func main() {
 	// Initialize model registry with 5-minute TTL
 	modelRegistry := models.NewModelRegistry(5 * time.Minute)
 
-	// Extract API keys from LLM config for model discovery
-	apiKeys := make(map[string]string)
+	// Extract provider config and API keys from LLM config
 	llmKeys := llm.GetKeys()
+	providerConfig := make(map[string]models.ProviderConfig)
+	apiKeys := make(map[string]string)
 	for provider, config := range llmKeys.Providers {
+		providerConfig[provider] = models.ProviderConfig{
+			ID:      config.ID,
+			BaseURL: config.BaseURL,
+			Model:   config.Model,
+		}
 		if len(config.Keys) > 0 {
 			apiKeys[provider] = config.Keys[0].Key
 		}
 	}
+	modelRegistry.SetProviderConfig(providerConfig)
 
 	// Initial refresh (non-blocking)
 	go func() {
