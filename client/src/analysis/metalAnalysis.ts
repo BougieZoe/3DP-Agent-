@@ -16,6 +16,7 @@
 import type { Confidence } from "./types";
 import { moduleResult, type AnalysisModuleResult } from "./types";
 import type { Material } from "@shared/domain/material";
+import { MATERIALS } from "@shared/domain/material";
 import type { GeometryModel } from "./geometryModel";
 
 // ---------------------------------------------------------------------------
@@ -125,74 +126,8 @@ export interface MetalAnalysisOptions {
 // Constants for metal printing
 // ---------------------------------------------------------------------------
 
-/** Material-specific properties for metal printing */
-const METAL_THERMAL_PROPS: Record<string, {
-  meltingPointC: number;
-  thermalConductivityWPerMK: number;
-  thermalExpansionCoeff: number;
-  yieldStrengthMPa: number;
-  elasticModulusGPa: number;
-  PoissonRatio: number;
-  densityGPerCm3: number;
-  recommendedLayerHeightMm: { min: number; max: number };
-  recommendedLaserPowerW: { min: number; max: number };
-}> = {
-  STEEL_316L: {
-    meltingPointC: 1400,
-    thermalConductivityWPerMK: 16.3,
-    thermalExpansionCoeff: 16e-6,
-    yieldStrengthMPa: 205,
-    elasticModulusGPa: 193,
-    PoissonRatio: 0.27,
-    densityGPerCm3: 7.98,
-    recommendedLayerHeightMm: { min: 0.02, max: 0.06 },
-    recommendedLaserPowerW: { min: 200, max: 400 },
-  },
-  TI64: {
-    meltingPointC: 1660,
-    thermalConductivityWPerMK: 6.7,
-    thermalExpansionCoeff: 8.6e-6,
-    yieldStrengthMPa: 880,
-    elasticModulusGPa: 114,
-    PoissonRatio: 0.34,
-    densityGPerCm3: 4.43,
-    recommendedLayerHeightMm: { min: 0.02, max: 0.05 },
-    recommendedLaserPowerW: { min: 150, max: 350 },
-  },
-  ALSI10MG: {
-    meltingPointC: 575,
-    thermalConductivityWPerMK: 112,
-    thermalExpansionCoeff: 21e-6,
-    yieldStrengthMPa: 230,
-    elasticModulusGPa: 70,
-    PoissonRatio: 0.33,
-    densityGPerCm3: 2.67,
-    recommendedLayerHeightMm: { min: 0.02, max: 0.08 },
-    recommendedLaserPowerW: { min: 200, max: 370 },
-  },
-  INCONEL718: {
-    meltingPointC: 1335,
-    thermalConductivityWPerMK: 11.4,
-    thermalExpansionCoeff: 13e-6,
-    yieldStrengthMPa: 1035,
-    elasticModulusGPa: 200,
-    PoissonRatio: 0.30,
-    densityGPerCm3: 8.19,
-    recommendedLayerHeightMm: { min: 0.02, max: 0.05 },
-    recommendedLaserPowerW: { min: 250, max: 500 },
-  },
-  COPPER: {
-    meltingPointC: 1085,
-    thermalConductivityWPerMK: 398,
-    thermalExpansionCoeff: 17e-6,
-    yieldStrengthMPa: 70,
-    elasticModulusGPa: 117,
-    PoissonRatio: 0.34,
-    densityGPerCm3: 8.96,
-    recommendedLayerHeightMm: { min: 0.02, max: 0.06 },
-    recommendedLaserPowerW: { min: 400, max: 1000 },
-  },
-};
+// Material-specific properties are now sourced from MATERIALS registry
+// See shared/domain/material.ts for the unified material database
 
 // ---------------------------------------------------------------------------
 // Analysis Functions
@@ -207,7 +142,14 @@ function analyzeThermalStress(
   options: MetalAnalysisOptions
 ): ThermalStressResult {
   const { positions, indices, triangleCount } = model;
-  const thermalProps = METAL_THERMAL_PROPS[material.name] ?? METAL_THERMAL_PROPS.STEEL_316L;
+  
+  // Get material properties from MATERIALS registry
+  const materialKey = material.name?.toUpperCase().replace(/\s+/g, '') ?? '';
+  const registryMaterial = MATERIALS[materialKey];
+  const mat = registryMaterial ?? material;
+  
+  // Use melting point from material properties, with fallback
+  const meltingPointC = mat.meltingPointC ?? 1400;
   
   // Calculate geometry properties
   let minX = Infinity, maxX = -Infinity;
@@ -239,7 +181,7 @@ function analyzeThermalStress(
   const flatnessFactor = (sizeX * sizeY) / (maxDim * maxDim);
   
   // Calculate thermal gradient estimate
-  const maxThermalGradientCPerMm = thermalProps.meltingPointC / Math.max(1, sizeZ) * sizeFactor * thinWallFactor;
+  const maxThermalGradientCPerMm = meltingPointC / Math.max(1, sizeZ) * sizeFactor * thinWallFactor;
   
   // Calculate thermal stress risk
   const thermalStressRisk = Math.min(1, 
@@ -293,18 +235,25 @@ function analyzeResidualStress(
   material: Material,
   thermalStress: ThermalStressResult
 ): ResidualStressResult {
-  const thermalProps = METAL_THERMAL_PROPS[material.name] ?? METAL_THERMAL_PROPS.STEEL_316L;
+  // Get material properties from MATERIALS registry
+  const materialKey = material.name?.toUpperCase().replace(/\s+/g, '') ?? '';
+  const registryMaterial = MATERIALS[materialKey];
+  const mat = registryMaterial ?? material;
+  
+  // Use material properties with fallbacks
+  const yieldStrengthMPa = mat.tensileStrengthMPa ?? 205;
+  const poissonRatio = mat.PoissonRatio ?? 0.27;
   
   // Residual stress correlates with thermal stress and material properties
   const residualStressLevel = Math.min(1, 
     thermalStress.thermalStressRisk * 0.6 +
-    (thermalProps.yieldStrengthMPa / 1000) * 0.4 // Higher yield strength → more residual stress
+    (yieldStrengthMPa / 1000) * 0.4 // Higher yield strength → more residual stress
   );
   
   // Cracking risk increases with residual stress and decreases with ductility
   const crackingRisk = Math.min(1,
     residualStressLevel * 0.7 +
-    (1 - thermalProps.PoissonRatio) * 0.3 // Lower Poisson ratio → more brittle
+    (1 - poissonRatio) * 0.3 // Lower Poisson ratio → more brittle
   );
   
   // Delamination risk correlates with layer adhesion
@@ -332,7 +281,13 @@ function analyzeDistortion(
   material: Material,
   thermalStress: ThermalStressResult
 ): DistortionResult {
-  const thermalProps = METAL_THERMAL_PROPS[material.name] ?? METAL_THERMAL_PROPS.STEEL_316L;
+  // Get material properties from MATERIALS registry
+  const materialKey = material.name?.toUpperCase().replace(/\s+/g, '') ?? '';
+  const registryMaterial = MATERIALS[materialKey];
+  const mat = registryMaterial ?? material;
+  
+  // Use thermal expansion coefficient with fallback
+  const thermalExpansionCoeff = mat.thermalExpansionCoeff ?? 16e-6;
   
   // Calculate size metrics
   let minX = Infinity, maxX = -Infinity;
@@ -357,7 +312,7 @@ function analyzeDistortion(
   // 2. Thermal expansion coefficient
   // 3. Thermal stress
   const sizeFactor = Math.min(1, (sizeX + sizeY + sizeZ) / 300);
-  const expansionFactor = thermalProps.thermalExpansionCoeff / 25e-6; // Normalize to aluminum
+  const expansionFactor = thermalExpansionCoeff / 25e-6; // Normalize to aluminum
   
   const distortionRisk = Math.min(1,
     sizeFactor * 0.4 +
@@ -374,7 +329,7 @@ function analyzeDistortion(
   }
   
   // Estimate magnitude (simplified)
-  const magnitudeMm = distortionRisk * sizeFactor * thermalProps.thermalExpansionCoeff * 1000;
+  const magnitudeMm = distortionRisk * sizeFactor * thermalExpansionCoeff * 1000;
   
   // Identify critical zones
   const criticalZones: DistortionZone[] = [];

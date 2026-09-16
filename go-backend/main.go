@@ -17,6 +17,7 @@ import (
 	"github.com/BougieZoe/3dp-agent-go/config"
 	"github.com/BougieZoe/3dp-agent-go/health"
 	"github.com/BougieZoe/3dp-agent-go/llm"
+	"github.com/BougieZoe/3dp-agent-go/material"
 	"github.com/BougieZoe/3dp-agent-go/memory"
 	"github.com/BougieZoe/3dp-agent-go/mesh"
 	"github.com/BougieZoe/3dp-agent-go/ratelimit"
@@ -84,6 +85,10 @@ func main() {
 
 		r.Route("/thermal", func(r chi.Router) {
 			r.Mount("/", thermalRouter.Routes())
+		})
+
+		r.Route("/materials", func(r chi.Router) {
+			r.Mount("/", material.Handler())
 		})
 
 		if memoryStore != nil {
