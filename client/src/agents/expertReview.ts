@@ -14,7 +14,7 @@
 // LLM call + response parsing.
 
 import { callAI } from '@/lib/apiKeys';
-import { getLLMProvider } from '@/lib/llmAccess';
+import { getLLMProviderForMaterial } from '@/lib/llmAccess';
 import type { Material } from '@shared/domain/material';
 import type { ModelData } from '@/lib/ruleEngine';
 import type { ObjectContext } from '@/analysis/context';
@@ -156,9 +156,12 @@ export interface ExpertReviewInput {
 /**
  * Run one expert LLM review. Returns null when no LLM path is available or the
  * call fails — callers keep the deterministic result untouched.
+ *
+ * Uses material-aware routing: metal (SLM) → Claude (strong reasoning),
+ * other materials → DeepSeek (cheaper). Falls back to whatever is available.
  */
 export async function runExpertReview(input: ExpertReviewInput): Promise<ExpertReview | null> {
-  const llm = getLLMProvider();
+  const llm = getLLMProviderForMaterial(input.material);
   if (!llm || llm.provider === 'amd-cloud') return null;
 
   const system = buildExpertSystemPrompt(input.material.technology, input.objectContext);
