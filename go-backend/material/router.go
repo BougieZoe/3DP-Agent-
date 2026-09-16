@@ -2,7 +2,9 @@ package material
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
+	"sort"
 	"strings"
 )
 
@@ -28,6 +30,7 @@ type Material struct {
 	MeltingPointC            *float64 `json:"meltingPointC,omitempty"`
 	ThermalDiffusivityMm2PerS *float64 `json:"thermalDiffusivityMm2PerS,omitempty"`
 	Emisivity                *float64 `json:"emisivity,omitempty"`
+	OverhangThreshold        *float64 `json:"overhangThreshold,omitempty"`
 	
 	// Mechanical properties
 	TensileStrengthMPa   *float64 `json:"tensileStrengthMPa,omitempty"`
@@ -45,6 +48,33 @@ type Material struct {
 	MoistureRisk         *float64 `json:"moistureRisk,omitempty"`
 	DegradationRisk      *float64 `json:"degradationRisk,omitempty"`
 	BrittlenessRisk      *float64 `json:"brittlenessRisk,omitempty"`
+}
+
+// RecommendationRequest represents a material recommendation request
+type RecommendationRequest struct {
+	Technology   string   `json:"technology"`
+	MaxBudgetPerKg *float64 `json:"maxBudgetPerKg,omitempty"`
+	Application  []string `json:"application,omitempty"`
+	TopN         int      `json:"topN,omitempty"`
+}
+
+// MaterialRecommendation represents a recommended material
+type MaterialRecommendation struct {
+	Material     *Material `json:"material"`
+	Score        float64   `json:"score"`
+	Reasons      []string  `json:"reasons"`
+	Warnings     []string  `json:"warnings"`
+	Alternatives []*Material `json:"alternatives"`
+}
+
+// RecommendationResponse represents the recommendation response
+type RecommendationResponse struct {
+	Recommendations []MaterialRecommendation `json:"recommendations"`
+	Filters         struct {
+		Technology      string   `json:"technology"`
+		ExcludedCount   int      `json:"excludedCount"`
+		ExcludedReasons []string `json:"excludedReasons"`
+	} `json:"filters"`
 }
 
 // MaterialRegistry is the main material database
@@ -249,7 +279,169 @@ func Handler() http.Handler {
 	// GET /api/materials/{name} - Get material by name
 	mux.HandleFunc("/api/materials/", handleGetMaterial)
 	
+	// POST /api/materials/recommend - Get material recommendations
+	mux.HandleFunc("/api/materials/recommend", handleRecommend)
+	
 	return mux
+}
+
+func handleRecommend(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	
+	var req RecommendationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	
+	// Default top N
+	topN := req.TopN
+	if topN <= 0 {
+		topN = 3
+	}
+	
+	// Get candidates
+	var candidates []*Material
+	for _, m := range MaterialRegistry {
+		// Filter by technology
+		if req.Technology != "" && !strings.EqualFold(m.Technology, req.Technology) {
+			continue
+		}
+		
+		// Filter by budget
+		if req.MaxBudgetPerKg != nil && m.PricePerKgUsd > *req.MaxBudgetPerKg {
+			continue
+		}
+		
+		candidates = append(candidates, m)
+	}
+	
+	// Score each candidate
+	type scored struct {
+		material *Material
+		score    float64
+		reasons  []string
+		warnings []string
+	}
+	
+	var scoredList []scored
+	for _, m := range candidates {
+		score := 50.0 // Base score
+		reasons := []string{}
+		warnings := []string{}
+		
+		// Cost efficiency (0-20 points)
+		costScore := math.Max(0, 20-(m.PricePerKgUsd/25))
+		score += costScore
+		if m.PricePerKgUsd < 30 {
+			reasons = append(reasons, "Cost-effective")
+		}
+		
+		// Shrinkage factor (-10 to +5)
+		if m.ShrinkagePercent != nil {
+			if *m.ShrinkagePercent > 1.0 {
+				score -= 10
+				warnings = append(warnings, "High shrinkage risk")
+			} else if *m.ShrinkagePercent < 0.3 {
+				score += 5
+				reasons = append(reasons, "Low shrinkage")
+			}
+		}
+		
+		// Enclosure requirement (-5)
+		if m.EnclosureRequired != nil && *m.EnclosureRequired {
+			score -= 5
+			warnings = append(warnings, "Requires enclosure")
+		}
+		
+		// Moisture risk (-5)
+		if m.MoistureRisk != nil && *m.MoistureRisk > 0.5 {
+			score -= 5
+			warnings = append(warnings, "Hygroscopic - dry before printing")
+		}
+		
+		// Tensile strength bonus (+10 for strong materials)
+		if m.TensileStrengthMPa != nil && *m.TensileStrengthMPa > 50 {
+			score += 10
+			reasons = append(reasons, "High strength")
+		}
+		
+		// Application matching
+		if len(req.Application) > 0 {
+			applicationText := strings.ToLower(m.UseCase + " " + m.Description + " " + m.Category)
+			matchCount := 0
+			for _, app := range req.Application {
+				if strings.Contains(applicationText, strings.ToLower(app)) {
+					matchCount++
+				}
+			}
+			if matchCount > 0 {
+				score += float64(matchCount) * 5
+				reasons = append(reasons, "Matches application requirements")
+			}
+		}
+		
+		// Clamp score
+		score = math.Max(0, math.Min(100, score))
+		
+		scoredList = append(scoredList, scored{
+			material: m,
+			score:    score,
+			reasons:  reasons,
+			warnings: warnings,
+		})
+	}
+	
+	// Sort by score
+	sort.Slice(scoredList, func(i, j int) bool {
+		return scoredList[i].score > scoredList[j].score
+	})
+	
+	// Take top N
+	var recommendations []MaterialRecommendation
+	for i := 0; i < topN && i < len(scoredList); i++ {
+		s := scoredList[i]
+		rec := MaterialRecommendation{
+			Material: s.material,
+			Score:    s.score,
+			Reasons:  s.reasons,
+			Warnings: s.warnings,
+			Alternatives: []*Material{},
+		}
+		
+		// Add alternatives
+		for j := i + 1; j < len(scoredList) && len(rec.Alternatives) < 2; j++ {
+			rec.Alternatives = append(rec.Alternatives, scoredList[j].material)
+		}
+		
+		recommendations = append(recommendations, rec)
+	}
+	
+	// Build response
+	resp := RecommendationResponse{
+		Recommendations: recommendations,
+	}
+	resp.Filters.Technology = req.Technology
+	resp.Filters.ExcludedCount = len(candidates) - len(recommendations)
+	if req.Technology != "" {
+		resp.Filters.ExcludedReasons = append(resp.Filters.ExcludedReasons, "Technology: "+req.Technology)
+	}
+	if req.MaxBudgetPerKg != nil {
+		resp.Filters.ExcludedReasons = append(resp.Filters.ExcludedReasons, "Budget: $"+formatFloat(*req.MaxBudgetPerKg)+"/kg")
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func formatFloat(f float64) string {
+	return strings.TrimRight(strings.TrimRight(
+		strings.Replace(string(rune(int(f))), ".", ".", 1), 
+		"0", 
+	), ".")
 }
 
 func handleListMaterials(w http.ResponseWriter, r *http.Request) {
