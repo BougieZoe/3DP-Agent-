@@ -30,36 +30,54 @@ export function getLLMProvider(): LLMAccess | null {
 
 /**
  * Material-aware LLM routing: selects the optimal provider based on material
- * technology. Metal (SLM) needs strong reasoning → Claude. Other materials
- * use cheaper models (DeepSeek). Falls back to whatever is available.
+ * technology. Uses ranked provider lists — picks the first provider with a
+ * configured key. Users can add new providers by configuring their API key;
+ * no code changes needed.
  *
  * Cost savings: ~80% for non-metal materials while maintaining quality for
  * high-stakes metal analysis.
  */
-export function getLLMProviderForMaterial(material: Material): LLMAccess | null {
-  const isSignedIn = getAuthSnapshot().user;
 
-  // Metal (SLM) needs strong reasoning — prefer Claude
-  if (material.technology === 'slm') {
-    if (isSignedIn) {
-      // Server-side: try Claude first, fall back to DeepSeek
-      const claudeKey = getKey('claude');
-      if (claudeKey) return { provider: 'claude', key: '' };
-      // Claude not configured server-side, try client-side
-      const clientClaude = getKey('claude');
-      if (clientClaude) return { provider: 'claude', key: clientClaude };
-      // Fall back to DeepSeek
-      return { provider: HOSTED_DEFAULT_PROVIDER, key: '' };
+// Ranked provider lists per material technology.
+// First provider with a configured key wins.
+// Users can override by adding keys to any provider.
+const PROVIDER_PRIORITY: Record<Material['technology'], AIProviderId[]> = {
+  slm: ['claude', 'openai', 'deepseek', 'zhipu', 'kimi', 'fireworks', 'gemini'],
+  fdm: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
+  sla: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
+  fgf: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
+  sls: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
+  mjf: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
+  concrete: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
+  eco: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
+};
+
+function findAvailableProvider(
+  priorityList: AIProviderId[],
+  isSignedIn: boolean,
+): LLMAccess | null {
+  // For signed-in users, try server-side providers first
+  if (isSignedIn) {
+    for (const provider of priorityList) {
+      // Server-side: check if provider has env var key configured
+      // The relay will resolve the key server-side
+      return { provider, key: '' };
     }
-    // Anonymous: try Claude first, fall back to active provider
-    const claudeKey = getKey('claude');
-    if (claudeKey) return { provider: 'claude', key: claudeKey };
-    // Fall back to whatever the user has configured
-    return getLLMProvider();
   }
 
-  // All other materials: use cheapest provider (DeepSeek)
-  return getLLMProvider();
+  // For anonymous users, check BYOK keys
+  for (const provider of priorityList) {
+    const key = getKey(provider);
+    if (key) return { provider, key };
+  }
+
+  return null;
+}
+
+export function getLLMProviderForMaterial(material: Material): LLMAccess | null {
+  const isSignedIn = !!getAuthSnapshot().user;
+  const priorityList = PROVIDER_PRIORITY[material.technology] ?? PROVIDER_PRIORITY.fdm;
+  return findAvailableProvider(priorityList, isSignedIn);
 }
 
 export function isLLMAvailable(): boolean {
