@@ -56,6 +56,8 @@ import { ManufacturingRecommendationPanel } from '@/components/ManufacturingReco
 import { ManufacturerExport } from '@/components/ManufacturerExport';
 import { GlassCard } from '@/components/GlassCard';
 import { recommendManufacturing, type ManufacturingGoal, type ProcessRecommendation } from '@/lib/manufacturingRecommendation';
+import { MaterialRecommendationPanel } from '@/components/MaterialRecommendationPanel';
+import { recommendMaterials, type RecommendationResult } from '@/analysis/materialRecommendation';
 
 // Lazy-loaded 3D visualization components (code splitting)
 const OverhangHeatmapDesktop = lazy(() => import('@/components/3D/AdvancedHeatmap').then(m => ({ default: m.AdvancedHeatmap })));
@@ -313,6 +315,8 @@ export default function Home() {
   const [materialFamily, setMaterialFamily] = useState<Material['technology']>('fdm');
   const [objectContext, setObjectContext] = useState<ObjectContext>('general');
   const [mfgGoal, setMfgGoal] = useState<ManufacturingGoal>('prototype');
+  const [materialRecResult, setMaterialRecResult] = useState<RecommendationResult | null>(null);
+  const [materialRecLoading, setMaterialRecLoading] = useState(false);
   const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
   const [showModeMenu, setShowModeMenu] = useState(false);
   const [language, setLanguage] = useState<Language>('en');
@@ -433,6 +437,21 @@ export default function Home() {
     const md = unifiedToModelData(model.unifiedAnalysis, model.fileName, material.overhangThreshold);
     setQuickReport(generateQuickReport(md, language, material));
     commitModel(model);
+
+    // Generate material recommendations
+    setMaterialRecLoading(true);
+    try {
+      const recResult = recommendMaterials({
+        technology: material.technology as Material['technology'],
+        model: fromThreeBufferGeometry(model.geometry),
+        topN: 3,
+      });
+      setMaterialRecResult(recResult);
+    } catch (err) {
+      console.error('Material recommendation failed:', err);
+    } finally {
+      setMaterialRecLoading(false);
+    }
   };
 
   /** Keep models[] and uploadedModel in sync (used after re-analysis too). */
@@ -1495,6 +1514,18 @@ deepAnalysisSeq.current += 1;
                         selectedGoal={mfgGoal}
                         onGoalChange={setMfgGoal}
                         language={language}
+                      />
+                    )}
+                    {unifiedAnalysis && (
+                      <MaterialRecommendationPanel
+                        result={materialRecResult}
+                        onSelectMaterial={(mat) => {
+                          const key = Object.keys(MATERIALS).find(k => MATERIALS[k].name === mat.name);
+                          if (key) {
+                            reanalyzeWithMaterial(key as MaterialName);
+                          }
+                        }}
+                        isLoading={materialRecLoading}
                       />
                     )}
                     {unifiedAnalysis && (
