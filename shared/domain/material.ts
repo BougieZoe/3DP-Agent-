@@ -91,6 +91,26 @@ export interface Material {
     draftShield: boolean;
     chamberTempC?: number;
   };
+
+  // ── Extended thermal properties ─────────────────────────────────────────────
+  /** Thermal diffusivity (mm²/s) — how fast temperature changes propagate. */
+  thermalDiffusivityMm2PerS?: number;
+  /** Emissivity (0-1) — surface radiation efficiency for thermal analysis. */
+  emisivity?: number;
+  /** Melting point (°C) — for metals and semi-crystalline polymers. */
+  meltingPointC?: number;
+
+  // ── Mechanical properties ───────────────────────────────────────────────────
+  /** Tensile strength at yield (MPa). */
+  tensileStrengthMPa?: number;
+  /** Flexural modulus (GPa). */
+  flexuralModulusGPa?: number;
+  /** Elastic modulus (GPa). */
+  elasticModulusGPa?: number;
+  /** Poisson's ratio. */
+  PoissonRatio?: number;
+  /** Hardness description (e.g., "Shore 85A", "Rockwell R120"). */
+  hardness?: string;
 }
 
 export const MATERIALS: Record<string, Material> = {
@@ -110,6 +130,16 @@ export const MATERIALS: Record<string, Material> = {
     shrinkagePercent: 0.3,
     thermalExpansionCoeff: 7e-5,
     environment: { enclosure: false, draftShield: false },
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.12,
+    emisivity: 0.92,
+    meltingPointC: 180,
+    // Mechanical properties
+    tensileStrengthMPa: 50,
+    flexuralModulusGPa: 3.5,
+    elasticModulusGPa: 3.5,
+    PoissonRatio: 0.36,
+    hardness: 'Rockwell R80',
     eol: {
       recyclable: true, compostable: true, marineDegradable: false, fgfDirectReuse: false,
       compostMonthsRange: [2, 6],
@@ -131,6 +161,16 @@ export const MATERIALS: Record<string, Material> = {
     shrinkagePercent: 0.4,
     thermalExpansionCoeff: 6e-5,
     environment: { enclosure: false, draftShield: false },
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.17,
+    emisivity: 0.90,
+    meltingPointC: 250,
+    // Mechanical properties
+    tensileStrengthMPa: 53,
+    flexuralModulusGPa: 2.1,
+    elasticModulusGPa: 2.1,
+    PoissonRatio: 0.38,
+    hardness: 'Rockwell R100',
     eol: {
       recyclable: true, compostable: false, marineDegradable: false, fgfDirectReuse: false,
       basis: 'Class data: PETG mechanically recyclable, not compostable.',
@@ -151,6 +191,16 @@ export const MATERIALS: Record<string, Material> = {
     shrinkagePercent: 0.8,
     thermalExpansionCoeff: 7e-5,
     environment: { enclosure: true, draftShield: true, chamberTempC: 50 },
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.12,
+    emisivity: 0.90,
+    meltingPointC: 230,
+    // Mechanical properties
+    tensileStrengthMPa: 44,
+    flexuralModulusGPa: 2.3,
+    elasticModulusGPa: 2.3,
+    PoissonRatio: 0.40,
+    hardness: 'Rockwell R105',
     eol: {
       recyclable: true, compostable: false, marineDegradable: false, fgfDirectReuse: false,
       basis: 'Class data: ABS mechanically recyclable, not compostable.',
@@ -163,7 +213,7 @@ export const MATERIALS: Record<string, Material> = {
     useCase: 'Gaskets, phone cases, shock absorbers, flexible hinges',
     overhangThreshold: 40, densityGPerCm3: 1.21, pricePerKgUsd: 45,
     // Thermal properties — low warping (flexible)
-    glassTransitionTempC: 50,
+    glassTransitionTempC: -40, // Corrected: TPU is an elastomer with Tg well below room temperature
     thermalConductivityWPerMK: 0.25,
     specificHeatJPerGK: 1.5,
     printTempC: { min: 210, max: 240 },
@@ -171,6 +221,15 @@ export const MATERIALS: Record<string, Material> = {
     shrinkagePercent: 0.2,
     thermalExpansionCoeff: 8e-5,
     environment: { enclosure: false, draftShield: false },
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.17,
+    emisivity: 0.90,
+    // Mechanical properties
+    tensileStrengthMPa: 35,
+    flexuralModulusGPa: 0.06,
+    elasticModulusGPa: 0.06,
+    PoissonRatio: 0.45,
+    hardness: 'Shore 85A',
   },
   ASA: {
     name: 'ASA', technology: 'fdm',
@@ -187,6 +246,15 @@ export const MATERIALS: Record<string, Material> = {
     shrinkagePercent: 0.7,
     thermalExpansionCoeff: 7e-5,
     environment: { enclosure: true, draftShield: true, chamberTempC: 50 },
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.12,
+    emisivity: 0.90,
+    // Mechanical properties
+    tensileStrengthMPa: 44,
+    flexuralModulusGPa: 2.3,
+    elasticModulusGPa: 2.3,
+    PoissonRatio: 0.40,
+    hardness: 'Rockwell R105',
   },
   PC: {
     name: 'PC', technology: 'fdm',
@@ -203,6 +271,16 @@ export const MATERIALS: Record<string, Material> = {
     shrinkagePercent: 1.0,
     thermalExpansionCoeff: 6.5e-5,
     environment: { enclosure: true, draftShield: true, chamberTempC: 70 },
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.14,
+    emisivity: 0.90,
+    meltingPointC: 267,
+    // Mechanical properties
+    tensileStrengthMPa: 63,
+    flexuralModulusGPa: 2.4,
+    elasticModulusGPa: 2.4,
+    PoissonRatio: 0.37,
+    hardness: 'Rockwell R118',
   },
   NYLON: {
     name: 'Nylon', technology: 'fdm',
@@ -219,6 +297,16 @@ export const MATERIALS: Record<string, Material> = {
     shrinkagePercent: 1.5,
     thermalExpansionCoeff: 8e-5,
     environment: { enclosure: true, draftShield: true, chamberTempC: 40 },
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.14,
+    emisivity: 0.90,
+    meltingPointC: 260,
+    // Mechanical properties
+    tensileStrengthMPa: 85,
+    flexuralModulusGPa: 2.8,
+    elasticModulusGPa: 2.8,
+    PoissonRatio: 0.40,
+    hardness: 'Rockwell R120',
   },
   // ── SLA/DLP — resins (a material family for the SLA/DLP printer technology) ──
   RESIN_STD: {
@@ -227,6 +315,12 @@ export const MATERIALS: Record<string, Material> = {
     description: 'The base SLA/DLP resin — a liquid photopolymer that UV light cures layer by layer into solid parts. Delivers the finest detail and smoothest surface of any 3D printing process, but is brittle with low impact and heat resistance.',
     useCase: 'Miniatures, jewelry, dental-adjacent display models',
     overhangThreshold: 40, densityGPerCm3: 1.15, pricePerKgUsd: 60,
+    // Mechanical properties
+    tensileStrengthMPa: 50,
+    flexuralModulusGPa: 2.5,
+    elasticModulusGPa: 2.5,
+    PoissonRatio: 0.35,
+    hardness: 'Shore D80',
   },
   RESIN_TOUGH: {
     name: 'Tough Resin', technology: 'sla',
@@ -234,6 +328,12 @@ export const MATERIALS: Record<string, Material> = {
     description: 'A photopolymer blended with impact modifiers so cured parts behave more like ABS than brittle standard resin — higher toughness and less cracking — while keeping resin-level detail.',
     useCase: 'Functional prototypes, snap-fit parts, consumer products',
     overhangThreshold: 40, densityGPerCm3: 1.17, pricePerKgUsd: 90,
+    // Mechanical properties
+    tensileStrengthMPa: 55,
+    flexuralModulusGPa: 2.3,
+    elasticModulusGPa: 2.3,
+    PoissonRatio: 0.35,
+    hardness: 'Shore D78',
   },
   RESIN_CLEAR: {
     name: 'Clear Resin', technology: 'sla',
@@ -241,6 +341,12 @@ export const MATERIALS: Record<string, Material> = {
     description: 'A transparent photopolymer with optical clarity that can be polished or clear-coated after curing. Keep out of sunlight — the same UV that cures it also yellows it over time.',
     useCase: 'Lenses, transparent housings, lighting, demonstration parts',
     overhangThreshold: 40, densityGPerCm3: 1.14, pricePerKgUsd: 75,
+    // Mechanical properties
+    tensileStrengthMPa: 50,
+    flexuralModulusGPa: 2.5,
+    elasticModulusGPa: 2.5,
+    PoissonRatio: 0.35,
+    hardness: 'Shore D80',
   },
   RESIN_ENG: {
     name: 'Engineering Resin', technology: 'sla',
@@ -248,6 +354,12 @@ export const MATERIALS: Record<string, Material> = {
     description: 'A high-performance photopolymer engineered for heat and chemical resistance beyond standard resins — cured parts hold up under functional loads and repeated handling, not just display.',
     useCase: 'Functional prototypes, jigs and fixtures, tooling',
     overhangThreshold: 40, densityGPerCm3: 1.18, pricePerKgUsd: 120,
+    // Mechanical properties
+    tensileStrengthMPa: 60,
+    flexuralModulusGPa: 3.5,
+    elasticModulusGPa: 3.5,
+    PoissonRatio: 0.35,
+    hardness: 'Shore D85',
   },
   RESIN_DENTAL: {
     name: 'Dental Resin', technology: 'sla',
@@ -255,6 +367,12 @@ export const MATERIALS: Record<string, Material> = {
     description: 'A biocompatibility-tested photopolymer for dental workflows — produces accurate models and guides with high precision and clean dimensional fidelity; verify the specific ISO class against your application.',
     useCase: 'Dental models, surgical guides, orthodontic appliances',
     overhangThreshold: 40, densityGPerCm3: 1.20, pricePerKgUsd: 200,
+    // Mechanical properties
+    tensileStrengthMPa: 45,
+    flexuralModulusGPa: 3.0,
+    elasticModulusGPa: 3.0,
+    PoissonRatio: 0.35,
+    hardness: 'Shore D82',
   },
   // ── FGF — pellet feedstocks ──────────────────────────────────────────────
   ABS_PELLET: {
@@ -263,6 +381,14 @@ export const MATERIALS: Record<string, Material> = {
     description: 'ABS delivered as raw pellets for large-format pellet-extrusion printers. Orders of magnitude cheaper per kilo than filament, still ABS-strong — with the same warping and shrinkage, now on a furniture scale.',
     useCase: 'Furniture, large structural parts, tooling and molds',
     overhangThreshold: 45, densityGPerCm3: 1.04, pricePerKgUsd: 8,
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.12,
+    emisivity: 0.90,
+    // Mechanical properties
+    tensileStrengthMPa: 44,
+    flexuralModulusGPa: 2.3,
+    elasticModulusGPa: 2.3,
+    PoissonRatio: 0.40,
     eol: {
       recyclable: true, compostable: false, marineDegradable: false, fgfDirectReuse: true,
       basis: 'Pellet process: shredded scrap feeds straight back, no repelletizing.',
@@ -274,6 +400,14 @@ export const MATERIALS: Record<string, Material> = {
     description: 'PETG pellets for large-format extrusion — tough, water- and chemical-resistant, with low odor during printing. A forgiving large-format choice compared to ABS pellet.',
     useCase: 'Large containers, signage, outdoor-lite structural parts',
     overhangThreshold: 40, densityGPerCm3: 1.27, pricePerKgUsd: 9,
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.17,
+    emisivity: 0.90,
+    // Mechanical properties
+    tensileStrengthMPa: 53,
+    flexuralModulusGPa: 2.1,
+    elasticModulusGPa: 2.1,
+    PoissonRatio: 0.38,
     eol: {
       recyclable: true, compostable: false, marineDegradable: false, fgfDirectReuse: true,
       basis: 'Pellet process: shredded scrap feeds straight back, no repelletizing.',
@@ -285,6 +419,14 @@ export const MATERIALS: Record<string, Material> = {
     description: 'Polypropylene pellets — the lightest material here (~0.91 g/cm³, floats on water), chemically inert, fatigue- and weld-resistant. Holds a living hinge like no other plastic; large-format PP parts are in demand for tanks and industrial hardware.',
     useCase: 'Chemical tanks, living-hinge parts, industrial large-scale hardware',
     overhangThreshold: 45, densityGPerCm3: 0.91, pricePerKgUsd: 10,
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.13,
+    emisivity: 0.90,
+    // Mechanical properties
+    tensileStrengthMPa: 35,
+    flexuralModulusGPa: 1.5,
+    elasticModulusGPa: 1.5,
+    PoissonRatio: 0.40,
   },
   // ── SLS / MJF — polymer powder bed fusion (self-supporting powder) ───────
   PA12: {
@@ -293,6 +435,16 @@ export const MATERIALS: Record<string, Material> = {
     description: 'Nylon 12 powder fused by laser (SLS) or fusing-agent + infrared (MJF). Tough, fatigue-resistant, chemically stable, low moisture uptake. The part grows inside a powder bed, so overhangs are self-supporting and never need printed supports — but enclosed cavities trap unsintered powder that needs escape holes.',
     useCase: 'Functional parts, snap-fit, batch production',
     overhangThreshold: 65, densityGPerCm3: 1.01, pricePerKgUsd: 45,
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.12,
+    emisivity: 0.90,
+    meltingPointC: 178,
+    // Mechanical properties
+    tensileStrengthMPa: 50,
+    flexuralModulusGPa: 1.8,
+    elasticModulusGPa: 1.8,
+    PoissonRatio: 0.40,
+    hardness: 'Rockwell R110',
   },
   PA11: {
     name: 'PA11 (Nylon 11)', technology: 'sls',
@@ -300,6 +452,16 @@ export const MATERIALS: Record<string, Material> = {
     description: 'Nylon 11 powder — bio-derived (castor oil), noticeably more ductile and impact-resistant than PA12, keeping living hinges and parts in harsh environments intact. Same self-supporting powder-bed behavior as PA12.',
     useCase: 'Ductile functional parts, automotive, hinges',
     overhangThreshold: 65, densityGPerCm3: 1.04, pricePerKgUsd: 60,
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.12,
+    emisivity: 0.90,
+    meltingPointC: 185,
+    // Mechanical properties
+    tensileStrengthMPa: 48,
+    flexuralModulusGPa: 1.7,
+    elasticModulusGPa: 1.7,
+    PoissonRatio: 0.40,
+    hardness: 'Rockwell R108',
   },
   TPU_POWDER: {
     name: 'TPU Powder', technology: 'sls',
@@ -307,6 +469,15 @@ export const MATERIALS: Record<string, Material> = {
     description: 'Thermoplastic polyurethane powder — laser-sintered flexible, rubber-like parts with complex compliant geometry that FDM cannot make. Overhangs are powder-supported; open lattices keep powder easy to clear.',
     useCase: 'Cushions, seals, compliant structures, lattices',
     overhangThreshold: 65, densityGPerCm3: 1.20, pricePerKgUsd: 85,
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.14,
+    emisivity: 0.90,
+    // Mechanical properties
+    tensileStrengthMPa: 25,
+    flexuralModulusGPa: 0.10,
+    elasticModulusGPa: 0.10,
+    PoissonRatio: 0.45,
+    hardness: 'Shore 80A',
   },
   MJF_PA12: {
     name: 'PA12 (MJF)', technology: 'mjf',
@@ -322,6 +493,19 @@ export const MATERIALS: Record<string, Material> = {
     description: '316L stainless steel powder melted by laser into fully dense metal parts — corrosion-resistant and weldable, the workhorse industrial metal. Unlike polymer PBF, overhangs beyond ~45° NEED support anchors, and trapped powder in cavities is expensive and hard to remove.',
     useCase: 'Industrial, tooling, corrosion-resistant parts',
     overhangThreshold: 45, densityGPerCm3: 7.98, pricePerKgUsd: 50,
+    // Extended thermal properties
+    meltingPointC: 1375,
+    thermalConductivityWPerMK: 16.3,
+    specificHeatJPerGK: 0.50,
+    thermalDiffusivityMm2PerS: 4.1,
+    emisivity: 0.35,
+    printTempC: { min: 1300, max: 1400 },
+    // Mechanical properties
+    tensileStrengthMPa: 570,
+    flexuralModulusGPa: 193,
+    elasticModulusGPa: 193,
+    PoissonRatio: 0.27,
+    hardness: 'Rockwell C20',
   },
   TI64: {
     name: 'Ti-6Al-4V', technology: 'slm',
@@ -329,6 +513,19 @@ export const MATERIALS: Record<string, Material> = {
     description: 'Ti-6Al-4V titanium alloy powder — aerospace-grade strength-to-weight and biocompatible, but the most demanding metal to print: high residual stress, steep unsupported faces distort, and it is expensive per kg.',
     useCase: 'Aerospace, medical implants, high-performance',
     overhangThreshold: 45, densityGPerCm3: 4.43, pricePerKgUsd: 320,
+    // Extended thermal properties
+    meltingPointC: 1660,
+    thermalConductivityWPerMK: 6.7,
+    specificHeatJPerGK: 0.526,
+    thermalDiffusivityMm2PerS: 2.9,
+    emisivity: 0.30,
+    printTempC: { min: 1600, max: 1700 },
+    // Mechanical properties
+    tensileStrengthMPa: 1100,
+    flexuralModulusGPa: 114,
+    elasticModulusGPa: 114,
+    PoissonRatio: 0.34,
+    hardness: 'Rockwell C36',
   },
   ALSI10MG: {
     name: 'AlSi10Mg', technology: 'slm',
@@ -336,6 +533,70 @@ export const MATERIALS: Record<string, Material> = {
     description: 'AlSi10Mg aluminum alloy powder — lightweight with good thermal conductivity, a cast-like alloy popular for automotive and heat-dissipation parts. Lower density than steel makes large parts lighter, but it still needs support anchors and powder-escape planning.',
     useCase: 'Automotive, heat sinks, lightweight structures',
     overhangThreshold: 45, densityGPerCm3: 2.67, pricePerKgUsd: 40,
+    // Extended thermal properties
+    meltingPointC: 575,
+    thermalConductivityWPerMK: 112,
+    specificHeatJPerGK: 0.89,
+    thermalDiffusivityMm2PerS: 47,
+    emisivity: 0.30,
+    printTempC: { min: 550, max: 600 },
+    // Mechanical properties
+    tensileStrengthMPa: 350,
+    flexuralModulusGPa: 70,
+    elasticModulusGPa: 70,
+    PoissonRatio: 0.33,
+    hardness: 'Rockwell C40',
+  },
+  // ── Additional metals ──────────────────────────────────────────────────────
+  INCONEL718: {
+    name: 'Inconel 718', technology: 'slm',
+    category: 'Superalloy powder (PBF)',
+    description: 'Inconel 718 nickel-chromium superalloy — excellent strength and corrosion resistance at high temperatures (up to 700°C). Difficult to print: requires high laser power, slow scan speeds, and stress-relief heat treatment. Used in aerospace and gas turbine applications.',
+    useCase: 'Aerospace, gas turbines, high-temperature engine components',
+    overhangThreshold: 45, densityGPerCm3: 8.19, pricePerKgUsd: 120,
+    meltingPointC: 1335,
+    glassTransitionTempC: 720,
+    thermalConductivityWPerMK: 11.4,
+    specificHeatJPerGK: 0.435,
+    printTempC: { min: 1250, max: 1350 },
+    tensileStrengthMPa: 1035,
+    elasticModulusGPa: 205,
+    PoissonRatio: 0.30,
+  },
+  COPPER: {
+    name: 'Copper (C18400)', technology: 'slm',
+    category: 'Metal powder (PBF)',
+    description: 'Copper alloy powder — excellent thermal and electrical conductivity. Challenging to print due to high reflectivity (requires green/blue laser or surface treatment). Used for heat exchangers, electrical contacts, and thermal management.',
+    useCase: 'Heat exchangers, electrical contacts, thermal management',
+    overhangThreshold: 45, densityGPerCm3: 8.96, pricePerKgUsd: 80,
+    meltingPointC: 1085,
+    thermalConductivityWPerMK: 398,
+    specificHeatJPerGK: 0.385,
+    printTempC: { min: 1050, max: 1150 },
+    tensileStrengthMPa: 310,
+    elasticModulusGPa: 130,
+    PoissonRatio: 0.34,
+  },
+  // ── High-performance polymers ───────────────────────────────────────────────
+  PEEK: {
+    name: 'PEEK', technology: 'fdm',
+    category: 'High-performance thermoplastic',
+    description: 'Polyether ether ketone — a semi-crystalline thermoplastic with exceptional mechanical and chemical resistance at high temperatures. Prints at 360-420°C with a heated bed (120-160°C) and requires an enclosed chamber. Expensive but produces parts comparable to metal in many applications.',
+    useCase: 'Aerospace, medical implants, oil & gas, semiconductor',
+    overhangThreshold: 45, densityGPerCm3: 1.30, pricePerKgUsd: 400,
+    glassTransitionTempC: 143,
+    meltingPointC: 343,
+    thermalConductivityWPerMK: 0.25,
+    specificHeatJPerGK: 1.3,
+    printTempC: { min: 360, max: 420 },
+    bedTempC: 160,
+    shrinkagePercent: 1.0,
+    thermalExpansionCoeff: 4.7e-5,
+    environment: { enclosure: true, draftShield: true, chamberTempC: 120 },
+    tensileStrengthMPa: 100,
+    flexuralModulusGPa: 4.1,
+    elasticModulusGPa: 4.1,
+    PoissonRatio: 0.40,
   },
   // ── Concrete — construction-scale extrusion (independent of FGF) ─────────
   CONCRETE_STD: {
@@ -367,6 +628,14 @@ export const MATERIALS: Record<string, Material> = {
     useCase: 'Low-impact prototypes, decorative parts, short-life items',
     overhangThreshold: 50, densityGPerCm3: 1.24, pricePerKgUsd: 15,
     moistureRisk: 0.5, degradationRisk: 0.6, brittlenessRisk: 0.7,
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.12,
+    emisivity: 0.92,
+    // Mechanical properties
+    tensileStrengthMPa: 45,
+    flexuralModulusGPa: 3.2,
+    elasticModulusGPa: 3.2,
+    PoissonRatio: 0.36,
     eol: {
       recyclable: true, compostable: true, marineDegradable: false, fgfDirectReuse: false,
       compostMonthsRange: [2, 6],
@@ -380,6 +649,14 @@ export const MATERIALS: Record<string, Material> = {
     useCase: 'Everyday prototypes, enclosures, low-cost parts',
     overhangThreshold: 50, densityGPerCm3: 1.23, pricePerKgUsd: 18,
     moistureRisk: 0.5, degradationRisk: 0.6, brittlenessRisk: 0.6,
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.12,
+    emisivity: 0.92,
+    // Mechanical properties
+    tensileStrengthMPa: 48,
+    flexuralModulusGPa: 3.0,
+    elasticModulusGPa: 3.0,
+    PoissonRatio: 0.36,
     eol: {
       recyclable: true, compostable: true, marineDegradable: false, fgfDirectReuse: false,
       compostMonthsRange: [2, 6],
@@ -393,6 +670,14 @@ export const MATERIALS: Record<string, Material> = {
     useCase: 'Functional parts, containers, outdoor-adjacent use',
     overhangThreshold: 40, densityGPerCm3: 1.27, pricePerKgUsd: 16,
     moistureRisk: 0.6, degradationRisk: 0.4, brittlenessRisk: 0.3,
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.17,
+    emisivity: 0.90,
+    // Mechanical properties
+    tensileStrengthMPa: 50,
+    flexuralModulusGPa: 2.0,
+    elasticModulusGPa: 2.0,
+    PoissonRatio: 0.38,
     eol: {
       recyclable: true, compostable: false, marineDegradable: false, fgfDirectReuse: false,
       basis: 'Class data: recycled PETG stays mechanically recyclable, not compostable.',
@@ -406,6 +691,14 @@ export const MATERIALS: Record<string, Material> = {
     overhangThreshold: 45, densityGPerCm3: 1.30, pricePerKgUsd: 40,
     moistureRisk: 0.5, degradationRisk: 0.5, brittlenessRisk: 0.4,
     printTempC: { min: 200, max: 230 },
+    // Extended thermal properties
+    thermalDiffusivityMm2PerS: 0.12,
+    emisivity: 0.90,
+    // Mechanical properties
+    tensileStrengthMPa: 40,
+    flexuralModulusGPa: 2.0,
+    elasticModulusGPa: 2.0,
+    PoissonRatio: 0.35,
     eol: {
       recyclable: true, compostable: true, marineDegradable: true, fgfDirectReuse: true,
       compostMonthsRange: [2, 6],
