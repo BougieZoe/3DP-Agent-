@@ -13,7 +13,7 @@ export interface AIProviderMetadata {
   label: string;
   shortLabel: string;
   keyPlaceholder: string;
-  colorClass: string;
+  color: string; // hex color for inline style
 }
 
 export const AI_PROVIDERS: readonly AIProviderMetadata[] = [
@@ -22,56 +22,56 @@ export const AI_PROVIDERS: readonly AIProviderMetadata[] = [
     label: 'Anthropic Claude',
     shortLabel: 'Claude',
     keyPlaceholder: 'sk-ant-api03-...',
-    colorClass: 'text-orange-300',
+    color: '#fb923c', // orange-400
   },
   {
     id: 'openai',
     label: 'OpenAI',
     shortLabel: 'OpenAI',
     keyPlaceholder: 'sk-proj-...',
-    colorClass: 'text-emerald-300',
+    color: '#34d399', // emerald-400
   },
   {
     id: 'gemini',
     label: 'Google Gemini',
     shortLabel: 'Gemini',
     keyPlaceholder: 'AIzaSy...',
-    colorClass: 'text-blue-300',
+    color: '#60a5fa', // blue-400
   },
   {
     id: 'deepseek',
     label: 'DeepSeek',
     shortLabel: 'DeepSeek',
     keyPlaceholder: 'sk-...',
-    colorClass: 'text-purple-300',
+    color: '#a78bfa', // purple-400
   },
   {
     id: 'kimi',
     label: 'Moonshot Kimi',
     shortLabel: 'Kimi',
     keyPlaceholder: 'sk-...',
-    colorClass: 'text-sky-300',
+    color: '#38bdf8', // sky-400
   },
   {
     id: 'amd-cloud',
     label: 'AMD Cloud',
     shortLabel: 'AMD',
     keyPlaceholder: 'No API key required',
-    colorClass: 'text-red-300',
+    color: '#f87171', // red-400
   },
   {
     id: 'fireworks',
     label: 'Fireworks AI',
     shortLabel: 'Fireworks',
     keyPlaceholder: 'fw_...',
-    colorClass: 'text-amber-300',
+    color: '#fbbf24', // amber-400
   },
   {
     id: 'zhipu',
     label: 'GLM (Zhipu)',
     shortLabel: 'GLM',
     keyPlaceholder: 'id.secret',
-    colorClass: 'text-violet-300',
+    color: '#a78bfa', // violet-400
   },
 ] as const;
 
