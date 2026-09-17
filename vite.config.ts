@@ -132,6 +132,11 @@ export default defineConfig({
         changeOrigin: true,
         xfwd: true,
       },
+      "/api/models": {
+        target: "http://127.0.0.1:8888",
+        changeOrigin: true,
+        xfwd: true,
+      },
       // Dev: LLM relay
       "/api/llm": {
         target: "http://127.0.0.1:8888",
