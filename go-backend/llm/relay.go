@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -75,8 +76,23 @@ type RelayRequest struct {
 }
 
 type RelayResult struct {
-	Status int
-	Body   string
+	Status   int
+	Body     string
+	Provider string // which provider actually handled the request
+}
+
+// shouldRetry returns true if the error is retryable (balance/rate limit/auth issues)
+func shouldRetry(status int) bool {
+	// 401: Unauthorized (invalid key)
+	// 402: Payment Required (balance exhausted)
+	// 429: Too Many Requests (rate limited)
+	// 500-599: Server errors (transient)
+	return status == 401 || status == 402 || status == 429 || (status >= 500 && status < 600)
+}
+
+// fallbackProviders defines the order to try providers when the primary fails
+var fallbackProviders = []string{
+	"deepseek", "zhipu", "kimi", "fireworks", "openai", "gemini", "claude",
 }
 
 func validateProviderModel(provider, model string) error {
@@ -155,7 +171,61 @@ func RelayLLM(req RelayRequest) RelayResult {
 		respBody = []byte("{}")
 	}
 
-	return RelayResult{Status: resp.StatusCode, Body: string(respBody)}
+	return RelayResult{Status: resp.StatusCode, Body: string(respBody), Provider: req.Provider}
+}
+
+// RelayLLMWithFallback tries the primary provider, then falls back to others on 402/429/5xx
+func RelayLLMWithFallback(req RelayRequest) RelayResult {
+	// Try the requested provider first
+	result := RelayLLM(req)
+	if !shouldRetry(result.Status) {
+		return result
+	}
+
+	log.Printf("[llm] Provider %s returned %d, trying fallback...", req.Provider, result.Status)
+
+	// Build list of fallback providers (excluding the one we already tried)
+	tried := map[string]bool{req.Provider: true}
+	for _, fallbackProvider := range fallbackProviders {
+		if tried[fallbackProvider] {
+			continue
+		}
+
+		// Get a key for this fallback provider
+		keys := GetProviderKeys(fallbackProvider)
+		if len(keys) == 0 {
+			continue
+		}
+
+		// Try the first available key
+		fallbackReq := RelayRequest{
+			Provider: fallbackProvider,
+			APIKey:   keys[0].Key,
+			Model:    req.Model,
+			Body:     req.Body,
+		}
+
+		// Update model in body for the new provider
+		if bodyMap, ok := fallbackReq.Body.(map[string]interface{}); ok {
+			// Get default model for this provider
+			providerConfig, exists := keysConfig.Providers[fallbackProvider]
+			if exists && providerConfig.Model != "" {
+				bodyMap["model"] = providerConfig.Model
+			}
+		}
+
+		result = RelayLLM(fallbackReq)
+		if !shouldRetry(result.Status) {
+			log.Printf("[llm] Fallback to %s succeeded (status %d)", fallbackProvider, result.Status)
+			return result
+		}
+
+		log.Printf("[llm] Fallback %s also returned %d, trying next...", fallbackProvider, result.Status)
+		tried[fallbackProvider] = true
+	}
+
+	// All providers failed, return the last error
+	return result
 }
 
 func RelayLLMStream(w http.ResponseWriter, req RelayRequest) {
