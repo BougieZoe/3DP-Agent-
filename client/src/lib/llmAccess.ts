@@ -42,14 +42,14 @@ export function getLLMProvider(): LLMAccess | null {
 // First provider with a configured key wins.
 // Users can override by adding keys to any provider.
 const PROVIDER_PRIORITY: Record<Material['technology'], AIProviderId[]> = {
-  slm: ['claude', 'openai', 'deepseek', 'zhipu', 'kimi', 'fireworks', 'gemini'],
-  fdm: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
-  sla: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
-  fgf: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
-  sls: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
-  mjf: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
-  concrete: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
-  eco: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'openai', 'gemini', 'claude'],
+  slm: ['claude', 'openai', 'deepseek', 'zhipu', 'kimi', 'fireworks', 'nemotron', 'gemini'],
+  fdm: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'nemotron', 'openai', 'gemini', 'claude'],
+  sla: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'nemotron', 'openai', 'gemini', 'claude'],
+  fgf: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'nemotron', 'openai', 'gemini', 'claude'],
+  sls: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'nemotron', 'openai', 'gemini', 'claude'],
+  mjf: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'nemotron', 'openai', 'gemini', 'claude'],
+  concrete: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'nemotron', 'openai', 'gemini', 'claude'],
+  eco: ['deepseek', 'zhipu', 'kimi', 'fireworks', 'nemotron', 'openai', 'gemini', 'claude'],
 };
 
 function findAvailableProvider(

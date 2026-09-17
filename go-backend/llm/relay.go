@@ -18,6 +18,7 @@ var defaultEndpoints = map[string]string{
 	"fireworks": "https://api.fireworks.ai/inference/v1/chat/completions",
 	"zhipu":     "https://open.bigmodel.cn/api/paas/v4/chat/completions",
 	"gemini":    "https://generativelanguage.googleapis.com/v1beta",
+	"nemotron":  "https://integrate.api.nvidia.com/v1/chat/completions",
 }
 
 func isModelAllowed(provider, model string) bool {
@@ -92,7 +93,7 @@ func shouldRetry(status int) bool {
 
 // fallbackProviders defines the order to try providers when the primary fails
 var fallbackProviders = []string{
-	"deepseek", "zhipu", "kimi", "fireworks", "openai", "gemini", "claude",
+	"deepseek", "zhipu", "kimi", "fireworks", "nemotron", "openai", "gemini", "claude",
 }
 
 func validateProviderModel(provider, model string) error {

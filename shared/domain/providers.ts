@@ -6,7 +6,8 @@ export type AIProviderId =
   | 'kimi'
   | 'amd-cloud'
   | 'fireworks'
-  | 'zhipu';
+  | 'zhipu'
+  | 'nemotron';
 
 export interface AIProviderMetadata {
   id: AIProviderId;
@@ -72,6 +73,13 @@ export const AI_PROVIDERS: readonly AIProviderMetadata[] = [
     shortLabel: 'GLM',
     keyPlaceholder: 'id.secret',
     color: '#a78bfa', // violet-400
+  },
+  {
+    id: 'nemotron',
+    label: 'NVIDIA Nemotron',
+    shortLabel: 'Nemotron',
+    keyPlaceholder: 'nvapi-...',
+    color: '#76b900', // NVIDIA green
   },
 ] as const;
 

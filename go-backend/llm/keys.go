@@ -48,6 +48,7 @@ var defaultProviderConfig = map[string]struct {
 	"gemini":     {BaseURL: "https://generativelanguage.googleapis.com/v1", Model: "gemini-2.5-flash"},
 	"claude":     {BaseURL: "https://api.anthropic.com/v1", Model: "claude-sonnet-4-20250514"},
 	"amd-cloud":  {BaseURL: "http://localhost:8000/v1", Model: "Qwen/Qwen3-8B"},
+	"nemotron":   {BaseURL: "https://integrate.api.nvidia.com/v1", Model: "nvidia/llama-3.1-nemotron-70b-instruct"},
 }
 
 func LoadKeys() error {
