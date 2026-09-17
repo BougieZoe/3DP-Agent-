@@ -26,8 +26,8 @@ export const AI_PROVIDERS: readonly AIProviderMetadata[] = [
   },
   {
     id: 'openai',
-    label: 'OpenAI GPT-5.5',
-    shortLabel: 'GPT-5.5',
+    label: 'OpenAI',
+    shortLabel: 'OpenAI',
     keyPlaceholder: 'sk-proj-...',
     colorClass: 'text-emerald-400',
   },
@@ -54,14 +54,14 @@ export const AI_PROVIDERS: readonly AIProviderMetadata[] = [
   },
   {
     id: 'amd-cloud',
-    label: 'AMD Cloud (Qwen3-8B)',
+    label: 'AMD Cloud',
     shortLabel: 'AMD',
     keyPlaceholder: 'No API key required',
     colorClass: 'text-red-400',
   },
   {
     id: 'fireworks',
-    label: 'Fireworks AI (backup)',
+    label: 'Fireworks AI',
     shortLabel: 'Fireworks',
     keyPlaceholder: 'fw_...',
     colorClass: 'text-amber-400',

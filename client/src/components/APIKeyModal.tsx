@@ -70,6 +70,7 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
   );
   const [providerModels, setProviderModels] = useState<Record<string, ModelInfo[]>>({});
   const [providerMeta, setProviderMeta] = useState<Record<string, ProviderMeta>>({});
+  const [expandedModels, setExpandedModels] = useState<Record<string, boolean>>({});
 
   // Fetch model metadata on mount
   useEffect(() => {
@@ -126,14 +127,12 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
     onClose();
   };
 
-  const getTopModels = (providerId: string): ModelInfo[] => {
-    const models = providerModels[providerId] || [];
-    return models.slice(0, 3);
+  const getModels = (providerId: string): ModelInfo[] => {
+    return providerModels[providerId] || [];
   };
 
-  const getRemainingCount = (providerId: string): number => {
-    const models = providerModels[providerId] || [];
-    return Math.max(0, models.length - 3);
+  const toggleModels = (providerId: string) => {
+    setExpandedModels(prev => ({ ...prev, [providerId]: !prev[providerId] }));
   };
 
   return (
@@ -142,9 +141,9 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
         <h2 className="text-lg font-semibold mb-4">API Configuration</h2>
         
         {AI_PROVIDERS.map(provider => {
-          const topModels = getTopModels(provider.id);
-          const remaining = getRemainingCount(provider.id);
+          const models = getModels(provider.id);
           const meta = providerMeta[provider.id];
+          const isExpanded = expandedModels[provider.id];
           
           return (
             <div key={provider.id} className="mb-4">
@@ -161,24 +160,23 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
                   <span className="text-[10px] opacity-70 font-normal">ACTIVE</span>
                 )}
                 {meta && meta.modelCount > 0 && (
-                  <span className="text-[10px] opacity-50 font-normal">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); toggleModels(provider.id); }}
+                    className="text-[10px] opacity-50 font-normal hover:opacity-80 cursor-pointer"
+                  >
                     [{meta.modelCount} {labels[language].models}]
-                  </span>
+                    <span className="ml-1">{isExpanded ? '▼' : '▶'}</span>
+                  </button>
                 )}
               </label>
               
-              {/* Top 3 models */}
-              {topModels.length > 0 && (
-                <div className="ml-6 mb-1.5 text-[11px] opacity-60">
-                  {topModels.map((m, i) => (
-                    <span key={m.id}>
-                      {i > 0 && ' · '}
-                      {m.label || m.id}
-                    </span>
+              {/* Collapsible model list */}
+              {isExpanded && models.length > 0 && (
+                <div className="ml-6 mb-1.5 text-[11px] opacity-60 max-h-24 overflow-y-auto">
+                  {models.map((m) => (
+                    <div key={m.id} className="py-0.5">{m.label || m.id}</div>
                   ))}
-                  {remaining > 0 && (
-                    <span className="opacity-50"> +{remaining} {labels[language].more}</span>
-                  )}
                 </div>
               )}
               
