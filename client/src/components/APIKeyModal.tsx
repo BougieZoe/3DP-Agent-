@@ -147,7 +147,7 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
           
           return (
             <div key={provider.id} className="mb-4">
-              <label className={`flex items-center gap-2 text-sm mb-1.5 ${provider.colorClass}`}>
+              <label className="flex items-center gap-2 text-sm mb-1.5" style={{ color: provider.color }}>
                 <input
                   type="radio"
                   name="active-provider"
