@@ -76,6 +76,7 @@ var providerEndpoints = map[string]string{
 	"fireworks": "https://api.fireworks.ai/v1/models",
 	"zhipu":     "https://open.bigmodel.cn/api/paas/v4/models",
 	"gemini":    "https://generativelanguage.googleapis.com/v1beta/models",
+	"nemotron":  "https://integrate.api.nvidia.com/v1/models",
 }
 
 // Hardcoded fallback models (used when API is unavailable)
@@ -105,6 +106,7 @@ var providerLabels = map[string]string{
 	"fireworks": "Fireworks AI",
 	"zhipu":     "Zhipu GLM",
 	"gemini":    "Google Gemini",
+	"nemotron":  "NVIDIA Nemotron",
 }
 
 // ── New Registry ───────────────────────────────────────────────────────────
