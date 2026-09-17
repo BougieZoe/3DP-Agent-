@@ -174,8 +174,9 @@ func llmRelayHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := llm.RelayLLM(req)
+	result := llm.RelayLLMWithFallback(req)
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-LLM-Provider", result.Provider)
 	w.WriteHeader(result.Status)
 	w.Write([]byte(result.Body))
 }
