@@ -1054,15 +1054,6 @@ deepAnalysisSeq.current += 1;
       }>
       {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-28 sm:pt-14 flex flex-col min-h-screen lg:h-screen lg:overflow-hidden">
 
-        {/* Live Floor — page-level banner, a sibling of the two-column split so
-            it spans the whole page (not just the right panel) and sits inside
-            the first screen. Empty state only, like the feature cards below. */}
-        {!uploadedModel && (
-          <div className="w-full flex-none px-4 sm:px-5 pt-3 sm:pt-4">
-            <AgentOfficeEntry t={t} variant="hero" />
-          </div>
-        )}
-
         {/* Two-column split — fills the rest of the viewport on desktop */}
         <div className="flex flex-col lg:flex-row lg:flex-1 lg:min-h-0">
 
@@ -1694,10 +1685,12 @@ deepAnalysisSeq.current += 1;
                 {/* AGENTS TAB */}
                 {tab === 'agents' && (
                   <div className="pt-4 space-y-4">
-                    {/* Live Floor — jump straight to the agents' office in
-                        fullscreen (the tab strip is too small to host the
-                        scene itself). */}
-                    <AgentOfficeEntry t={t} variant="inline" />
+                    {/* Live Floor — small-screen live view of the agents' 3D
+                        office. The full scene is too heavy for the tab strip,
+                        so the frame embeds the office page and hands off to the
+                        fullscreen overlay on click. Replaces the old 2x2
+                        FactoryScene grid and its consensus table. */}
+                    <AgentOfficeEntry t={t} variant="live" />
 
                     {agentLoading && (
                       <div className="border border-primary/30 rounded-sm p-6 text-center">
@@ -2003,9 +1996,11 @@ deepAnalysisSeq.current += 1;
 
             {/* Empty state — the drop zone above already prompts the upload.
                 Features sit lower with breathing room in between; the middle
-                stays open for future content. */}
+                stays open for future content. The Live Floor entry leads the
+                feature list (it is the only live, non-AI-key feature). */}
             {!uploadedModel && (
-              <div className="mt-28">
+              <div className="mt-28 space-y-3">
+                <AgentOfficeEntry t={t} variant="hero" />
                 <FeaturesSection t={t} onNavigate={handleFeatureNavigate} />
               </div>
             )}
