@@ -247,23 +247,130 @@ function OfficeBanner({
 }
 
 /**
- * Live Floor entry: banner + fullscreen office overlay.
- * `variant="hero"` renders as a page-level full-width banner (mount it above
- * the home two-column split); `variant="inline"` is the AGENTS-tab entry.
+ * Small-screen live view of the office, used inside the AGENTS panel where the
+ * full scene is too heavy to host. The frame embeds the same office page and
+ * hands the click off to the fullscreen overlay; the embedded iframe stays
+ * pointer-inert so it can neither swallow that click nor steal focus.
+ */
+function OfficeLivePreview({ t, onOpen }: { t: T; onOpen: () => void }) {
+  const [status, setStatus] = useState<Status>('checking');
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    setStatus('checking');
+    probeOffice().then((ok) => {
+      if (alive) setStatus(ok ? 'online' : 'offline');
+    });
+    return () => {
+      alive = false;
+    };
+  }, [attempt]);
+
+  return (
+    <div className="group overflow-hidden rounded-sm border border-primary/30 bg-card">
+      {/* Frame header — Live Floor (left) / FULLSCREEN (right) */}
+      <div className="flex items-center gap-2 border-b border-border/30 px-3 py-2">
+        <LiveDot />
+        <span className="font-mono text-[11px] tracking-[0.22em] text-foreground">
+          {t('featuresOfficeTitle')}
+        </span>
+        <span className="hidden min-w-0 truncate font-mono text-[10px] text-muted-foreground/60 sm:inline">
+          {t('featuresOfficeSubtitle')}
+        </span>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {status === 'online' && (
+            <span className="hidden font-mono text-[10px] tracking-widest text-emerald-400 md:inline">
+              {t('officeStatusLive')}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onOpen}
+            className="flex items-center gap-1.5 rounded-sm border border-primary/40 px-2.5 py-1 font-mono text-[10px] text-primary transition-colors hover:bg-primary hover:text-background"
+          >
+            <Maximize2 className="h-3 w-3" />
+            {t('officeFullscreen')}
+          </button>
+        </div>
+      </div>
+
+      <div className="relative aspect-video w-full bg-background">
+        {status === 'online' ? (
+          <>
+            <iframe
+              key={attempt}
+              src={OFFICE_URL}
+              title={t('featuresOfficeTitle')}
+              tabIndex={-1}
+              className="pointer-events-none absolute inset-0 h-full w-full border-0"
+              allow="fullscreen"
+            />
+            {/* Click shield — the embedded page never owns the pointer here. */}
+            <button
+              type="button"
+              onClick={onOpen}
+              aria-label={t('officeFullscreen')}
+              className="absolute inset-0 z-10 flex cursor-zoom-in items-end justify-end p-2"
+            >
+              <span className="flex items-center gap-1.5 rounded-sm border border-primary/40 bg-background/80 px-2 py-0.5 font-mono text-[9px] text-primary opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
+                <Maximize2 className="h-2.5 w-2.5" />
+                {t('officeFullscreen')}
+              </span>
+            </button>
+          </>
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center">
+            <div className="font-mono text-[10px] tracking-widest text-muted-foreground">
+              {status === 'checking' ? t('officeStatusChecking') : t('officeOfflineTitle')}
+            </div>
+            {status === 'offline' && (
+              <>
+                <code className="rounded-sm border border-border/60 bg-background/60 px-2.5 py-1 font-mono text-[10px] text-cyan-400">
+                  python3 web_console.py
+                </code>
+                <button
+                  type="button"
+                  onClick={() => setAttempt((n) => n + 1)}
+                  className="rounded-sm border border-primary/50 px-3 py-1 font-mono text-[10px] text-primary transition-colors hover:bg-primary hover:text-background"
+                >
+                  {t('officeRetry')}
+                </button>
+              </>
+            )}
+            {status === 'checking' && (
+              <div className="font-mono text-[10px] text-primary animate-pulse">▋</div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Live Floor entry: banner (or panel-sized live view) + fullscreen overlay.
+ * `variant="hero"` is the banner for the home feature list, `variant="inline"`
+ * is the compact strip used at the top of the AGENTS tab, and `variant="live"`
+ * is the small-screen live office view for the AGENTS panel.
  */
 export function AgentOfficeEntry({
   t,
   variant = 'hero',
 }: {
   t: T;
-  variant?: 'hero' | 'inline';
+  variant?: 'hero' | 'inline' | 'live';
 }) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
 
   return (
     <>
-      <OfficeBanner t={t} variant={variant} onOpen={() => setOpen(true)} />
+      {variant === 'live' ? (
+        <OfficeLivePreview t={t} onOpen={() => setOpen(true)} />
+      ) : (
+        <OfficeBanner t={t} variant={variant} onOpen={() => setOpen(true)} />
+      )}
       {open && <OfficeOverlay t={t} onClose={close} />}
     </>
   );
