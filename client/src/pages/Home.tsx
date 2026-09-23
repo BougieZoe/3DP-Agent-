@@ -48,6 +48,7 @@ import { ScanlineSweep } from '@/components/decorative/ScanlineSweep';
 import { BedStatusTicker } from '@/components/decorative/BedStatusTicker';
 import { LayerHeightLabel } from '@/components/decorative/LayerHeightLabel';
 import { FeaturesSection } from '@/pages/home/FeaturesSection';
+import { AgentOfficeEntry } from '@/components/factory/AgentOfficeEntry';
 import type { FeatureDestination } from '@/pages/home/featuresNavigation';
 import { toast } from 'sonner';
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
@@ -1681,6 +1682,11 @@ deepAnalysisSeq.current += 1;
                 {/* AGENTS TAB */}
                 {tab === 'agents' && (
                   <div className="pt-4 space-y-4">
+                    {/* Live Floor — jump straight to the agents' office in
+                        fullscreen (the tab strip is too small to host the
+                        scene itself). */}
+                    <AgentOfficeEntry t={t} variant="inline" />
+
                     {agentLoading && (
                       <div className="border border-primary/30 rounded-sm p-6 text-center">
                         <div className="text-xs font-mono text-primary animate-pulse mb-2">\u258b {t('multiAgentRunning')}</div>
