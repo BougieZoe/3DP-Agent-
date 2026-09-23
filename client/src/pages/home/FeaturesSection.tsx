@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Box, Bot, Camera, FileText, MessageCircle, Wand2, type LucideIcon } from 'lucide-react';
 import type { translations } from '@/lib/i18n';
 import { FEATURE_DESTINATIONS, type FeatureDestination, type FeatureId } from './featuresNavigation';
-import { AgentOfficeEntry } from '@/components/factory/AgentOfficeEntry';
 import './features.css';
 
 type TKey = keyof (typeof translations)['en'];
@@ -137,9 +136,6 @@ export function FeaturesSection({
         shakingId={shakingId}
         onItemClick={handleItemClick}
       />
-      {/* Live Floor — full-width entry into the agents' 3D office (live view).
-          Sits directly beneath the two feature cards. */}
-      <AgentOfficeEntry t={t} variant="hero" />
     </div>
   );
 }

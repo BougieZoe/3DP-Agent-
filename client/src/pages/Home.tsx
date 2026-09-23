@@ -1052,10 +1052,22 @@ deepAnalysisSeq.current += 1;
           <span>▋ {t('loading3d')}</span>
         </div>
       }>
-      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-28 sm:pt-14 flex flex-col lg:flex-row min-h-screen">
+      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-28 sm:pt-14 flex flex-col min-h-screen lg:h-screen lg:overflow-hidden">
+
+        {/* Live Floor — page-level banner, a sibling of the two-column split so
+            it spans the whole page (not just the right panel) and sits inside
+            the first screen. Empty state only, like the feature cards below. */}
+        {!uploadedModel && (
+          <div className="w-full flex-none px-4 sm:px-5 pt-3 sm:pt-4">
+            <AgentOfficeEntry t={t} variant="hero" />
+          </div>
+        )}
+
+        {/* Two-column split — fills the rest of the viewport on desktop */}
+        <div className="flex flex-col lg:flex-row lg:flex-1 lg:min-h-0">
 
         {/* Left: 3D Viewport */}
-        <div className="lg:w-1/2 h-[40vh] sm:h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
+        <div className="lg:w-1/2 h-[40vh] sm:h-[45vh] lg:h-full lg:min-h-0 lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
           <div className="absolute top-3 left-4 z-10 font-mono text-xs text-muted-foreground/40 space-y-0.5 hidden lg:block">
             <div>// {t('viewport')}</div>
             <div>// {t('viewportHint')}</div>
@@ -1181,7 +1193,7 @@ deepAnalysisSeq.current += 1;
         </div>
 
         {/* Right: Panel */}
-        <div className="lg:w-1/2 lg:h-[calc(100vh-3.5rem)] lg:overflow-y-auto">
+        <div className="lg:w-1/2 lg:h-full lg:min-h-0 lg:overflow-y-auto">
           <div className="pt-3 sm:pt-4 px-4 sm:px-5 pb-5 space-y-6 sm:space-y-8">
 
             {/* Upload */}
@@ -1999,6 +2011,7 @@ deepAnalysisSeq.current += 1;
             )}
 
           </div>
+        </div>
         </div>
 
         {/* Fixed footer — stays at bottom, never scrolls */}
