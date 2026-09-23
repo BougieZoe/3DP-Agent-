@@ -62,6 +62,16 @@ function OfficeOverlay({ t, onClose }: { t: T; onClose: () => void }) {
   const [status, setStatus] = useState<Status>('checking');
   const [attempt, setAttempt] = useState(0);
 
+  /**
+   * Close on pointerdown (not only click). The office iframe is a separate
+   * browsing context: the first press after it takes focus can be spent on
+   * restoring focus to the parent document, so a click-only handler needs a
+   * second press. pointerdown fires before that hand-off, so the very first
+   * press on the exit affordance always closes. `onClose` is idempotent, so
+   * keeping the click handler as well (keyboard / assistive tech) is safe.
+   */
+  const exitNow = useCallback(() => onClose(), [onClose]);
+
   useEffect(() => {
     let alive = true;
     setStatus('checking');
@@ -88,7 +98,7 @@ function OfficeOverlay({ t, onClose }: { t: T; onClose: () => void }) {
 
   return createPortal(
     <div className="fixed inset-0 z-[120] bg-background">
-      <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 border-b border-border/40 bg-background/85 px-4 py-2.5 backdrop-blur-sm">
+      <div className="absolute inset-x-0 top-0 z-20 flex items-center gap-3 border-b border-border/40 bg-background/85 px-4 py-2.5 backdrop-blur-sm">
         <LiveDot />
         <span className="font-mono text-[11px] tracking-[0.22em] text-foreground">
           {t('featuresOfficeTitle')}
@@ -103,8 +113,11 @@ function OfficeOverlay({ t, onClose }: { t: T; onClose: () => void }) {
             </span>
           )}
           <button
-            onClick={onClose}
-            className="rounded-sm border border-border px-2.5 py-1 text-[10px] font-mono text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
+            type="button"
+            onPointerDown={exitNow}
+            onClick={exitNow}
+            aria-label={t('officeExit')}
+            className="select-none rounded-sm border border-border px-3 py-1.5 text-[10px] font-mono text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
           >
             {t('officeExit')}
           </button>
@@ -116,7 +129,7 @@ function OfficeOverlay({ t, onClose }: { t: T; onClose: () => void }) {
           key={attempt}
           src={OFFICE_URL}
           title={t('featuresOfficeTitle')}
-          className="absolute inset-0 h-full w-full border-0"
+          className="absolute inset-0 z-0 h-full w-full border-0"
           allow="fullscreen"
         />
       ) : (
@@ -144,8 +157,10 @@ function OfficeOverlay({ t, onClose }: { t: T; onClose: () => void }) {
                     {t('officeRetry')}
                   </button>
                   <button
-                    onClick={onClose}
-                    className="rounded-sm border border-border px-4 py-1.5 text-[11px] font-mono text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                    type="button"
+                    onPointerDown={exitNow}
+                    onClick={exitNow}
+                    className="select-none rounded-sm border border-border px-4 py-1.5 text-[11px] font-mono text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
                   >
                     {t('officeExit')}
                   </button>
@@ -164,8 +179,10 @@ function OfficeOverlay({ t, onClose }: { t: T; onClose: () => void }) {
 }
 
 /**
- * The banner. `variant="hero"` is the full-width strip under the home feature
- * cards; `variant="inline"` is the compact version used inside the AGENTS tab.
+ * The banner. `variant="hero"` is the page-level full-width strip rendered
+ * outside the home two-column split (so it spans the whole page and stays in
+ * the first screen); `variant="inline"` is the compact version used inside the
+ * AGENTS tab.
  */
 function OfficeBanner({
   t,
@@ -231,7 +248,8 @@ function OfficeBanner({
 
 /**
  * Live Floor entry: banner + fullscreen office overlay.
- * Drop it under the home feature cards, or inside the AGENTS tab.
+ * `variant="hero"` renders as a page-level full-width banner (mount it above
+ * the home two-column split); `variant="inline"` is the AGENTS-tab entry.
  */
 export function AgentOfficeEntry({
   t,
