@@ -229,7 +229,7 @@ export const translations = {
     officeStatusLive: 'LIVE',
     officeStatusChecking: 'CONNECTING…',
     officeOfflineTitle: 'OFFICE SERVICE OFFLINE',
-    officeOfflineDesc: 'The live office is served by the local console (port 8091). Start it with the command below, then retry.',
+    officeOfflineDesc: 'The live office is served by the local console service. Start it with the command below, then retry.',
     officeRetry: 'RETRY',
     officeExit: 'EXIT · ESC',
     // ── CAD Studio ──
@@ -671,7 +671,7 @@ export const translations = {
     officeStatusLive: 'LIVE',
     officeStatusChecking: '接続中…',
     officeOfflineTitle: 'オフィスサービス未起動',
-    officeOfflineDesc: 'ライブオフィスはローカルコンソール（ポート8091）が配信します。下のコマンドで起動してから再試行してください。',
+    officeOfflineDesc: 'ライブオフィスはローカルコンソールサービスが配信します。下のコマンドで起動してから再試行してください。',
     officeRetry: '再試行',
     officeExit: '終了 · ESC',
     // ── CAD Studio ──
@@ -1113,7 +1113,7 @@ export const translations = {
     officeStatusLive: 'LIVE',
     officeStatusChecking: '连接中…',
     officeOfflineTitle: '办公室服务未连接',
-    officeOfflineDesc: '实时办公室由本地控制台服务（端口 8091）提供。按下方命令启动后重试即可。',
+    officeOfflineDesc: '实时办公室由本地控制台服务提供。按下方命令启动后重试即可。',
     officeRetry: '重试',
     officeExit: '退出 · ESC',
     // ── CAD Studio ──

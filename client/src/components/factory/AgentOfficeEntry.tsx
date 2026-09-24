@@ -10,9 +10,10 @@ type T = (key: TKey) => string;
  * Live Floor — the entry point into the agents' 3D office (real-time monitoring).
  *
  * The office itself is served by the local console service (~/3dp-agent,
- * web_console.py) on port 8091 as a bare full-viewport page at `/office`, so it
- * can be embedded directly as an iframe. This component only renders the entry
- * banner + the fullscreen overlay; it never touches the 3D scene itself.
+ * web_console.py, default http://127.0.0.1:8091) as a bare full-viewport page
+ * at `/office`, so it can be embedded directly as an iframe. This component
+ * only renders the entry banner + the fullscreen overlay; it never touches the
+ * 3D scene itself.
  *
  * Override the service origin with VITE_OFFICE_URL when the console runs
  * somewhere other than the default local port.
@@ -24,6 +25,13 @@ const OFFICE_ORIGIN = (
 ).replace(/\/+$/, '');
 const OFFICE_URL = `${OFFICE_ORIGIN}/office`;
 const OFFICE_HEALTH_URL = `${OFFICE_ORIGIN}/health`;
+/**
+ * Preview URL: `hud=0` hides the in-page view/lighting HUD. The preview iframe
+ * is pointer-inert by design (it must not swallow the click that opens the
+ * fullscreen overlay), so leaving the HUD visible would advertise buttons the
+ * user can never press. The fullscreen overlay keeps the HUD.
+ */
+const OFFICE_PREVIEW_URL = `${OFFICE_URL}?hud=0`;
 
 type Status = 'checking' | 'online' | 'offline';
 
@@ -179,45 +187,10 @@ function OfficeOverlay({ t, onClose }: { t: T; onClose: () => void }) {
 }
 
 /**
- * The banner. `variant="hero"` is the page-level full-width strip rendered
- * outside the home two-column split (so it spans the whole page and stays in
- * the first screen); `variant="inline"` is the compact version used inside the
- * AGENTS tab.
+ * The banner — the page-level full-width strip rendered outside the home
+ * two-column split, so it spans the whole page and stays in the first screen.
  */
-function OfficeBanner({
-  t,
-  variant,
-  onOpen,
-}: {
-  t: T;
-  variant: 'hero' | 'inline';
-  onOpen: () => void;
-}) {
-  if (variant === 'inline') {
-    return (
-      <button
-        onClick={onOpen}
-        className="group flex w-full items-center gap-3 rounded-sm border border-primary/30 bg-card grid-bg px-3.5 py-2.5 text-left transition-colors hover:border-primary/60 hover:bg-foreground/5"
-      >
-        <LiveDot />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="font-mono text-xs tracking-[0.22em] text-foreground">
-              {t('featuresOfficeTitle')}
-            </span>
-            <span className="text-[10px] font-mono text-muted-foreground/60">
-              {t('featuresOfficeSubtitle')}
-            </span>
-          </div>
-        </div>
-        <span className="flex shrink-0 items-center gap-1.5 rounded-sm border border-primary/40 px-2.5 py-1 text-[10px] font-mono text-primary">
-          <Maximize2 className="h-3 w-3" />
-          {t('officeFullscreen')}
-        </span>
-      </button>
-    );
-  }
-
+function OfficeBanner({ t, onOpen }: { t: T; onOpen: () => void }) {
   return (
     <button
       onClick={onOpen}
@@ -300,7 +273,7 @@ function OfficeLivePreview({ t, onOpen }: { t: T; onOpen: () => void }) {
           <>
             <iframe
               key={attempt}
-              src={OFFICE_URL}
+              src={OFFICE_PREVIEW_URL}
               title={t('featuresOfficeTitle')}
               tabIndex={-1}
               className="pointer-events-none absolute inset-0 h-full w-full border-0"
@@ -329,6 +302,9 @@ function OfficeLivePreview({ t, onOpen }: { t: T; onOpen: () => void }) {
                 <code className="rounded-sm border border-border/60 bg-background/60 px-2.5 py-1 font-mono text-[10px] text-cyan-400">
                   python3 web_console.py
                 </code>
+                <div className="text-[10px] font-mono text-muted-foreground/40">
+                  {OFFICE_ORIGIN}/office
+                </div>
                 <button
                   type="button"
                   onClick={() => setAttempt((n) => n + 1)}
@@ -350,8 +326,7 @@ function OfficeLivePreview({ t, onOpen }: { t: T; onOpen: () => void }) {
 
 /**
  * Live Floor entry: banner (or panel-sized live view) + fullscreen overlay.
- * `variant="hero"` is the banner for the home feature list, `variant="inline"`
- * is the compact strip used at the top of the AGENTS tab, and `variant="live"`
+ * `variant="hero"` is the banner for the home feature list; `variant="live"`
  * is the small-screen live office view for the AGENTS panel.
  */
 export function AgentOfficeEntry({
@@ -359,7 +334,7 @@ export function AgentOfficeEntry({
   variant = 'hero',
 }: {
   t: T;
-  variant?: 'hero' | 'inline' | 'live';
+  variant?: 'hero' | 'live';
 }) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
@@ -369,7 +344,7 @@ export function AgentOfficeEntry({
       {variant === 'live' ? (
         <OfficeLivePreview t={t} onOpen={() => setOpen(true)} />
       ) : (
-        <OfficeBanner t={t} variant={variant} onOpen={() => setOpen(true)} />
+        <OfficeBanner t={t} onOpen={() => setOpen(true)} />
       )}
       {open && <OfficeOverlay t={t} onClose={close} />}
     </>
