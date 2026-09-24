@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Maximize2 } from 'lucide-react';
+import { getTelemetryHub } from '@/agents/core';
 import type { translations } from '@/lib/i18n';
 
 type TKey = keyof (typeof translations)['en'];
@@ -32,6 +34,57 @@ const OFFICE_HEALTH_URL = `${OFFICE_ORIGIN}/health`;
  * user can never press. The fullscreen overlay keeps the HUD.
  */
 const OFFICE_PREVIEW_URL = `${OFFICE_URL}?hud=0`;
+
+/**
+ * Bridge the local TelemetryHub into the embedded office page.
+ *
+ * The office (`/office` on the console service) drives its own scene from the
+ * console's SSE stream, which only knows about runs started *there*. When the
+ * office is embedded in this site, the analysis runs in this page instead, so
+ * its telemetry must be pushed across the iframe boundary with postMessage:
+ * one `office-event` per agent status change, posted to OFFICE_ORIGIN. The
+ * office page answers with `office-ready` once its scene is up; only then do we
+ * push, and we re-push a full snapshot at that point so an office page that
+ * mounted late still catches up. Updates are deduplicated by status so the
+ * iframe is never woken up twice for the same value.
+ */
+function useOfficeBridge(iframeRef: RefObject<HTMLIFrameElement | null>) {
+  const readyRef = useRef(false);
+  const lastRef = useRef<Record<string, string>>({});
+
+  const push = useCallback(
+    (agentId: string, status: string) => {
+      const w = iframeRef.current?.contentWindow;
+      if (!w) return;
+      w.postMessage({ type: 'office-event', agent: agentId, status }, OFFICE_ORIGIN);
+    },
+    [iframeRef],
+  );
+
+  // Handshake: once the office page reports ready, flush a full snapshot.
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.origin !== OFFICE_ORIGIN) return;
+      if ((e.data as { type?: string })?.type !== 'office-ready') return;
+      readyRef.current = true;
+      for (const a of getTelemetryHub().getAll()) push(a.agentId, a.status);
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [push]);
+
+  // Subscribe to telemetry; only status *changes* cross the frame boundary.
+  useEffect(() => {
+    return getTelemetryHub().subscribe((all) => {
+      if (!readyRef.current) return;
+      for (const a of all) {
+        if (lastRef.current[a.agentId] === a.status) continue;
+        lastRef.current[a.agentId] = a.status;
+        push(a.agentId, a.status);
+      }
+    });
+  }, [push]);
+}
 
 type Status = 'checking' | 'online' | 'offline';
 
@@ -69,6 +122,8 @@ function LiveDot() {
 function OfficeOverlay({ t, onClose }: { t: T; onClose: () => void }) {
   const [status, setStatus] = useState<Status>('checking');
   const [attempt, setAttempt] = useState(0);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  useOfficeBridge(iframeRef);
 
   /**
    * Close on pointerdown (not only click). The office iframe is a separate
@@ -135,6 +190,7 @@ function OfficeOverlay({ t, onClose }: { t: T; onClose: () => void }) {
       {status === 'online' ? (
         <iframe
           key={attempt}
+          ref={iframeRef}
           src={OFFICE_URL}
           title={t('featuresOfficeTitle')}
           className="absolute inset-0 z-0 h-full w-full border-0"
@@ -228,6 +284,8 @@ function OfficeBanner({ t, onOpen }: { t: T; onOpen: () => void }) {
 function OfficeLivePreview({ t, onOpen }: { t: T; onOpen: () => void }) {
   const [status, setStatus] = useState<Status>('checking');
   const [attempt, setAttempt] = useState(0);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  useOfficeBridge(iframeRef);
 
   useEffect(() => {
     let alive = true;
@@ -273,6 +331,7 @@ function OfficeLivePreview({ t, onOpen }: { t: T; onOpen: () => void }) {
           <>
             <iframe
               key={attempt}
+              ref={iframeRef}
               src={OFFICE_PREVIEW_URL}
               title={t('featuresOfficeTitle')}
               tabIndex={-1}
