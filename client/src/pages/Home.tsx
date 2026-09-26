@@ -488,7 +488,14 @@ export default function Home() {
   };
 
   const runAgentAnalysis = async (model: UploadedModel, mat: Material = material) => {
-    if (!orchestratorRef.current) return;
+    if (!orchestratorRef.current) {
+      console.warn('[3DP] orchestrator not loaded yet, retrying in 1s...');
+      await new Promise(r => setTimeout(r, 1000));
+      if (!orchestratorRef.current) {
+        console.error('[3DP] orchestrator still null after retry');
+        return;
+      }
+    }
     setAgentLoading(true);
     try {
       // 1) Deterministic rule engine first — instant, free, always available.
@@ -500,10 +507,11 @@ export default function Home() {
         language,
         mat,
       );
+      console.log('[3DP] agent analysis complete:', ruleSummary);
       setAgentRun(ruleSummary);
 
     } catch (err) {
-      console.error('Rule analysis failed:', err);
+      console.error('[3DP] Rule analysis failed:', err);
     } finally {
       setAgentLoading(false);
     }
@@ -1710,34 +1718,78 @@ deepAnalysisSeq.current += 1;
 
                     {agentRun && !agentLoading && (
                       <>
-                        {/* Consensus Score */}
-                        <div className="border border-border rounded-sm bg-card p-5 text-center">
-                          <div className="text-xs font-mono text-muted-foreground mb-2">{t('consensusScore')}</div>
-                          <div className={`text-4xl font-mono font-bold ${
-                            agentRun.consensus.verdict === 'pass' ? 'text-emerald-400'
-                              : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
-                              : 'text-red-400'
-                          }`}>
-                            {agentRun.consensus.overallScore}
-                            <span className="text-lg text-muted-foreground/40">/100</span>
+                        {/* Consensus Score — Jev Decision Engine */}
+                        <div className="border border-border rounded-sm bg-card p-5">
+                          <div className="text-center mb-4">
+                            <div className="text-xs font-mono text-muted-foreground mb-2">{t('consensusScore')}</div>
+                            <div className={`text-4xl font-mono font-bold ${
+                              agentRun.consensus.verdict === 'pass' ? 'text-emerald-400'
+                                : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
+                                : 'text-red-400'
+                            }`}>
+                              {agentRun.consensus.overallScore}
+                              <span className="text-lg text-muted-foreground/40">/100</span>
+                            </div>
+                            <div className={`mt-1 text-xs font-mono uppercase ${
+                              agentRun.consensus.verdict === 'pass' ? 'text-emerald-400'
+                                : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
+                                : 'text-red-400'
+                            }`}>
+                              {agentRun.consensus.verdict === 'pass' ? t('verdictPass') : agentRun.consensus.verdict === 'warning' ? t('verdictWarning') : t('verdictFail')}
+                            </div>
                           </div>
-                          <div className={`mt-1 text-xs font-mono uppercase ${
-                            agentRun.consensus.verdict === 'pass' ? 'text-emerald-400'
-                              : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
-                              : 'text-red-400'
-                          }`}>
-                            {agentRun.consensus.verdict === 'pass' ? t('verdictPass') : agentRun.consensus.verdict === 'warning' ? t('verdictWarning') : t('verdictFail')}
-                          </div>
-                          <div className="mt-2 text-xs text-muted-foreground/50">
-                            {agentRun.analysisSource === 'llm' ? (
-                              <span className="text-cyan-400">{t('deepAgentLlm')}</span>
-                            ) : (
-                              <><span className="text-primary">{t('deterministicEngine')}</span>{' \u2022 '}</>
-                            )}
-                            {agentRun.usedVision && <><span className="text-primary">{t('visionUsed')}</span>{' \u2022 '}</>}
-                            {agentRun.consensus.agreementDelta < 10 ? t('strongAgreement') : t('moderateAgreement')}
-                            {' \u2022 '}{agentRun.totalDurationMs}ms
-                          </div>
+
+                          {/* Jev Decision Details */}
+                          {agentRun.consensus.jev?.jevUsed ? (
+                            <div className="space-y-3">
+                              {/* Risk & Action Chips */}
+                              <div className="flex flex-wrap justify-center gap-2">
+                                {agentRun.consensus.jev.topRisk !== 'none' && (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 border rounded-sm text-orange-400 border-orange-400/30 bg-orange-400/5">
+                                    {agentRun.consensus.jev.topRisk}
+                                  </span>
+                                )}
+                                {agentRun.consensus.jev.primaryAction !== 'proceed' && (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 border rounded-sm text-cyan-400 border-cyan-400/30 bg-cyan-400/5">
+                                    {agentRun.consensus.jev.primaryAction}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Confidence & Metadata */}
+                              <div className="grid grid-cols-3 gap-2 text-center">
+                                <div className="border border-border/30 rounded-sm p-2">
+                                  <div className="text-[10px] text-muted-foreground/50 mb-0.5">confidence</div>
+                                  <div className="text-xs font-mono text-primary">
+                                    {Math.round(agentRun.consensus.jev.jevConfidence * 100)}%
+                                  </div>
+                                </div>
+                                <div className="border border-border/30 rounded-sm p-2">
+                                  <div className="text-[10px] text-muted-foreground/50 mb-0.5">latency</div>
+                                  <div className="text-xs font-mono text-primary">
+                                    {agentRun.consensus.jev.jevLatencyMs}ms
+                                  </div>
+                                </div>
+                                <div className="border border-border/30 rounded-sm p-2">
+                                  <div className="text-[10px] text-muted-foreground/50 mb-0.5">cost</div>
+                                  <div className="text-xs font-mono text-primary">
+                                    ${agentRun.consensus.jev.jevCostUsd.toFixed(4)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center text-xs text-muted-foreground/50 mt-2">
+                              {agentRun.analysisSource === 'llm' ? (
+                                <span className="text-cyan-400">{t('deepAgentLlm')}</span>
+                              ) : (
+                                <><span className="text-primary">{t('deterministicEngine')}</span>{' \u2022 '}</>
+                              )}
+                              {agentRun.usedVision && <><span className="text-primary">{t('visionUsed')}</span>{' \u2022 '}</>}
+                              {agentRun.consensus.agreementDelta < 10 ? t('strongAgreement') : t('moderateAgreement')}
+                              {' \u2022 '}{agentRun.totalDurationMs}ms
+                            </div>
+                          )}
                         </div>
 
                         {/* Score methodology explanation — shown when both scores exist */}
@@ -1750,6 +1802,21 @@ deepAnalysisSeq.current += 1;
                               {t('scoreComparisonDesc')}
                             </p>
                           </details>
+                        )}
+
+                        {/* Jev Recalibration Indicator */}
+                        {agentRun.recalibrations && agentRun.recalibrations.length > 0 && (
+                          <div className="border border-cyan-400/30 rounded-sm bg-cyan-400/5 p-3">
+                            <div className="text-[10px] font-mono text-cyan-400 mb-1">
+                              JEV RECALIBRATION
+                            </div>
+                            {agentRun.recalibrations.map((recal: { agentId: string; originalScore: number; blendedScore: number; reason: string }) => (
+                              <div key={recal.agentId} className="text-[10px] text-muted-foreground/70">
+                                {getAgentLabelLazy(recal.agentId, language)}: {recal.originalScore} → {recal.blendedScore}
+                                <span className="text-muted-foreground/40 ml-1">({recal.reason})</span>
+                              </div>
+                            ))}
+                          </div>
                         )}
 
                         {/* Per-Agent Cards */}
@@ -1862,8 +1929,8 @@ deepAnalysisSeq.current += 1;
                         </div>
                       </>
                     )}
-                    {/* Expert LLM review — a material-domain AI expert translates the
-                        deterministic metrics into plain-language advice */}
+
+                    {/* Expert LLM review — always visible when AGENTS tab is active */}
                     <ExpertReviewPanel
                       model={modelData}
                       material={material}
@@ -1874,9 +1941,6 @@ deepAnalysisSeq.current += 1;
                         const fgf = unifiedAnalysis?.fgf?.result;
                         const pbf = unifiedAnalysis?.pbf?.result;
                         const concrete = unifiedAnalysis?.concrete?.result;
-                        // Liquid-cooling context takes priority — a liquid-cooled SLM
-                        // part is simultaneously a pbf part, and the application-level
-                        // numbers matter most to that expert.
                         if (objectContext === 'liquid-cooling' && unifiedAnalysis) {
                           const lc = liquidCoolingFromUnified(unifiedAnalysis);
                           if (lc) return `LiquidCooling: leakRisk: ${(lc.leakRisk * 100).toFixed(0)}%, channelRisk: ${(lc.channelRisk * 100).toFixed(0)}%, heatExchangeProxy: ${(lc.heatExchangeProxy * 100).toFixed(0)}%, pressureWallMin: ${lc.pressureWall.minThicknessMm ?? 'n/a'}mm, threshold: ${lc.pressureWall.thresholdMm}mm`;
