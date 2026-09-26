@@ -1692,7 +1692,7 @@ deepAnalysisSeq.current += 1;
 
                 {/* AGENTS TAB */}
                 {tab === 'agents' && (
-                  <div className="pt-4 space-y-4">
+                  <div className="!-mt-6 space-y-3">
                     {/* Live Floor — small-screen live view of the agents' 3D
                         office. The full scene is too heavy for the tab strip,
                         so the frame embeds the office page and hands off to the
@@ -2063,7 +2063,7 @@ deepAnalysisSeq.current += 1;
                 stays open for future content. The Live Floor entry leads the
                 feature list (it is the only live, non-AI-key feature). */}
             {!uploadedModel && (
-              <div className="mt-28 space-y-3">
+              <div className="mt-6 space-y-3">
                 <AgentOfficeEntry t={t} variant="hero" />
                 <FeaturesSection t={t} onNavigate={handleFeatureNavigate} />
               </div>

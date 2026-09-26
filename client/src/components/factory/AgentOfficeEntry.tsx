@@ -299,34 +299,12 @@ function OfficeLivePreview({ t, onOpen }: { t: T; onOpen: () => void }) {
   }, [attempt]);
 
   return (
-    <div className="group overflow-hidden rounded-sm border border-primary/30 bg-card">
-      {/* Frame header — Live Floor (left) / FULLSCREEN (right) */}
-      <div className="flex items-center gap-2 border-b border-border/30 px-3 py-2">
-        <LiveDot />
-        <span className="font-mono text-[11px] tracking-[0.22em] text-foreground">
-          {t('featuresOfficeTitle')}
-        </span>
-        <span className="hidden min-w-0 truncate font-mono text-[10px] text-muted-foreground/60 sm:inline">
-          {t('featuresOfficeSubtitle')}
-        </span>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          {status === 'online' && (
-            <span className="hidden font-mono text-[10px] tracking-widest text-emerald-400 md:inline">
-              {t('officeStatusLive')}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={onOpen}
-            className="flex items-center gap-1.5 rounded-sm border border-primary/40 px-2.5 py-1 font-mono text-[10px] text-primary transition-colors hover:bg-primary hover:text-background"
-          >
-            <Maximize2 className="h-3 w-3" />
-            {t('officeFullscreen')}
-          </button>
-        </div>
-      </div>
-
-      <div className="relative aspect-video w-full bg-background">
+    <div className="group relative overflow-hidden rounded-sm border border-primary/30 bg-card">
+      {/* No frame header here: the embedded office page already carries the
+          "Live Floor · Agent Office" identity in its own HUD, so a header in
+          this card would print the same label twice. The live frame fills the
+          card instead, and the fullscreen affordance lives on the frame. */}
+      <div className="relative aspect-video w-full bg-background lg:aspect-auto lg:h-[calc(100dvh_-_24.3rem)] min-h-[240px]">
         {status === 'online' ? (
           <>
             <iframe
@@ -345,7 +323,7 @@ function OfficeLivePreview({ t, onOpen }: { t: T; onOpen: () => void }) {
               aria-label={t('officeFullscreen')}
               className="absolute inset-0 z-10 flex cursor-zoom-in items-end justify-end p-2"
             >
-              <span className="flex items-center gap-1.5 rounded-sm border border-primary/40 bg-background/80 px-2 py-0.5 font-mono text-[9px] text-primary opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
+              <span className="flex items-center gap-1.5 rounded-sm border border-primary/40 bg-background/80 px-2 py-0.5 font-mono text-[9px] text-primary opacity-70 backdrop-blur-sm transition-opacity group-hover:opacity-100">
                 <Maximize2 className="h-2.5 w-2.5" />
                 {t('officeFullscreen')}
               </span>
