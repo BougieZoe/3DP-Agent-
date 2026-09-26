@@ -7,7 +7,8 @@ export type AIProviderId =
   | 'amd-cloud'
   | 'fireworks'
   | 'zhipu'
-  | 'nemotron';
+  | 'nemotron'
+  | 'openrouter';
 
 export interface AIProviderMetadata {
   id: AIProviderId;
@@ -80,6 +81,13 @@ export const AI_PROVIDERS: readonly AIProviderMetadata[] = [
     shortLabel: 'Nemotron',
     keyPlaceholder: 'nvapi-...',
     color: '#76b900', // NVIDIA green
+  },
+  {
+    id: 'openrouter',
+    label: 'OpenRouter (Jev)',
+    shortLabel: 'OpenRouter',
+    keyPlaceholder: 'sk-or-v1-...',
+    color: '#8b5cf6', // violet
   },
 ] as const;
 

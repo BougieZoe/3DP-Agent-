@@ -49,6 +49,29 @@ export interface DebateRound {
   agreementDelta: number;
 }
 
+export interface JevDecisionData {
+  /** Whether Jev was called and returned a result */
+  jevUsed: boolean;
+  /** Jev's overall score (0-100, mapped from 0-5) */
+  jevScore: number;
+  /** Jev's verdict */
+  jevVerdict: AgentVerdict;
+  /** Jev's confidence in its own answer (0-1) */
+  jevConfidence: number;
+  /** Single most critical risk identified by Jev */
+  topRisk: string;
+  /** Most valuable next action recommended by Jev */
+  primaryAction: string;
+  /** Latency of Jev call in ms */
+  jevLatencyMs: number;
+  /** Cost of Jev call in USD */
+  jevCostUsd: number;
+  /** Number of questions Jev answered */
+  jevQuestionCount: number;
+  /** Agent trust adjustments from Jev (agentId -> adjustment multiplier) */
+  agentTrustAdjustments: Record<string, number>;
+}
+
 export interface AgentConsensus {
   overallScore: number;
   agreementDelta: number;
@@ -58,6 +81,7 @@ export interface AgentConsensus {
   totalRounds: number;
   agentScores: Record<AgentId, number>;
   agentVerdicts: Record<AgentId, AgentVerdict>;
+  jev?: JevDecisionData;
 }
 
 export function calculateAgreementDelta(scores: number[]): number {

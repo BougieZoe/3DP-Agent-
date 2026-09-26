@@ -136,9 +136,13 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 overflow-y-auto">
-      <div className="bg-card border border-border rounded-lg w-full max-w-md p-6 my-6">
-        <h2 className="text-lg font-semibold mb-4">API Configuration</h2>
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+      <div className="bg-card border border-border rounded-lg w-full max-w-md flex flex-col" style={{ maxHeight: '85vh' }}>
+        <div className="px-6 pt-6 pb-4 border-b border-border/50">
+          <h2 className="text-lg font-semibold">API Configuration</h2>
+          <p className="text-xs text-muted-foreground/60 mt-1">{labels[language].desc1}</p>
+        </div>
+        <div className="px-6 py-4 flex-1 overflow-y-auto min-h-0">
         
         {AI_PROVIDERS.map(provider => {
           const models = getModels(provider.id);
@@ -198,8 +202,8 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
             </div>
           );
         })}
-
-        <div className="flex gap-3 mt-6">
+        </div>
+        <div className="px-6 py-4 border-t border-border/50 flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded font-medium">
             Cancel
           </button>

@@ -4,26 +4,29 @@ import { calculateAgreementDelta, computeConsensusVerdict } from '@shared/domain
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { UnifiedAnalysis } from '@/analysis';
 import type { MetricsResult } from '@/analysis/types';
-import type { Material } from '@shared/domain/material';
+import type { Material, MaterialTechnology } from '@shared/domain/material';
 import { DEFAULT_MATERIAL } from '@shared/domain/material';
 import { fromThreeBufferGeometry } from '@/analysis/geometryConversion';
 import { extractVertexData } from '@/analysis/geometryData';
 import { BaseAgent, type AgentContext } from './baseAgent';
-import { GeometryAnalyst } from './geometryAnalyst';
-import { PrintabilityScorer } from './printabilityScorer';
-import { FailurePredictor } from './failurePredictor';
-import { OptimizationAdvisor } from './optimizationAdvisor';
 import { visionProvider, type VisionAnalysisResult } from './visionProvider';
 import {
   getAgentLabel,
-  DEFAULT_AGENT_CONFIGS,
   type AgentResultWithExplanation,
   type AgentRunSummary,
   type VotingRecord,
-  type AgentStageConfig,
 } from './types';
 import { getLLMProvider } from '@/lib/llmAccess';
+import { runJevConsensus, type JevDecision } from '@/lib/jevClient';
 import { getAgentStateManager } from './agentState';
+import { getAuthSnapshot } from '@/lib/authStore';
+import { getKey as getApiKey } from '@/lib/apiKeys';
+import { detectAnomalies, type AnomalyReport } from './jevAnomalyDetector';
+import { recalibrateFlaggedAgents, type RecalibrationResult } from './jevRecalibrator';
+import { getAgentRegistry, type AgentSlot } from './core/agentRegistry';
+import { getAgentBus } from './core/agentBus';
+import { getTelemetryHub } from './core/agentTelemetry';
+import { PipelineFactory } from './core/pipelineFactory';
 
 /**
  * Time budget for the optional vision capture step, aligned with the
@@ -54,28 +57,21 @@ function buildVisionGeometrySummary(
 
 export class AgentOrchestrator {
   private agents: Map<AgentId, BaseAgent> = new Map();
-  private configs: Map<AgentId, AgentStageConfig> = new Map();
+  private registry = getAgentRegistry();
+  private bus = getAgentBus();
+  private telemetry = getTelemetryHub();
 
-  constructor(configs?: AgentStageConfig[]) {
-    const stageConfigs = configs ?? DEFAULT_AGENT_CONFIGS;
+  constructor() {
+    this.syncFromRegistry();
+    this.registry.subscribe(() => this.syncFromRegistry());
+  }
 
-    const agentInstances: BaseAgent[] = [
-      new GeometryAnalyst(),
-      new PrintabilityScorer(),
-      new FailurePredictor(),
-      new OptimizationAdvisor(),
-    ];
-
-    for (const agent of agentInstances) {
+  private syncFromRegistry(): void {
+    const newAgents = this.registry.instantiate();
+    this.agents.clear();
+    for (const agent of newAgents) {
       this.agents.set(agent.agentId, agent);
-      const config = stageConfigs.find(c => c.agentId === agent.agentId);
-      this.configs.set(agent.agentId, config ?? {
-        agentId: agent.agentId,
-        enabled: true,
-        weight: 0.25,
-        useVision: false,
-        timeoutMs: 15000,
-      });
+      this.telemetry.update(agent.agentId, { status: 'idle', currentPhase: 'ready', progress: 0 });
     }
   }
 
@@ -117,10 +113,22 @@ export class AgentOrchestrator {
       }
     }
 
-    const enabledAgents = Array.from(this.agents.values())
-      .filter(a => this.configs.get(a.agentId)?.enabled !== false);
+    const pipeline = PipelineFactory.build(material.technology as MaterialTechnology);
+    const enabledAgents = Array.from(this.agents.values());
+
+    this.bus.publish({ from: 'orchestrator', to: 'broadcast', type: 'telemetry', payload: { phase: 'analysis_start', agents: enabledAgents.map(a => a.agentId) } });
+
+    // Run agents and Jev Early Triage in parallel
+    const dims = unifiedAnalysis.metrics.result.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
+    const earlyTriagePromise = this.runJevEarlyTriage(unifiedAnalysis, material);
 
     const initialResults = await this.runAgentsParallel(ctx, enabledAgents);
+
+    // Get Early Triage results to adjust agent weights
+    const earlyTriage = await earlyTriagePromise;
+    if (earlyTriage) {
+      this.adjustWeightsByEarlyTriage(initialResults, earlyTriage);
+    }
 
     for (const result of initialResults) {
       const agentId = result.agentId;
@@ -142,7 +150,24 @@ export class AgentOrchestrator {
 
     const debateResults = await this.runDebatePhase(ctx, enabledAgents, initialResults);
 
-    const consensus = this.computeConsensus(initialResults, debateResults, language ?? 'en');
+    const jevDecision = await this.runJevDecision(initialResults, unifiedAnalysis, debateResults, material) ?? undefined;
+
+    // Phase 2: Anomaly Detection — flag agents whose scores Jev finds untrustworthy
+    let anomalies: AnomalyReport[] = [];
+    let recalibrationResults: RecalibrationResult[] = [];
+
+    if (jevDecision?.jevUsed) {
+      anomalies = detectAnomalies(initialResults, jevDecision, debateResults);
+
+      // Phase 3: Targeted Recalibration — re-run only the worst offender
+      if (anomalies.length > 0) {
+        recalibrationResults = await recalibrateFlaggedAgents(
+          anomalies, this.agents, ctx, initialResults, jevDecision,
+        );
+      }
+    }
+
+    const consensus = this.computeConsensus(initialResults, debateResults, language ?? 'en', jevDecision);
     const votingRecords = this.buildVotingRecords(initialResults, debateResults, initialScores);
     const totalDurationMs = Math.round(performance.now() - startTime);
 
@@ -153,6 +178,7 @@ export class AgentOrchestrator {
       totalDurationMs,
       usedVision: !!ctx.visionAnalysis,
       analysisSource: 'rules',
+      ...(recalibrationResults.length > 0 ? { recalibrations: recalibrationResults } : {}),
     };
   }
 
@@ -163,10 +189,12 @@ export class AgentOrchestrator {
     const stateManager = getAgentStateManager();
 
     const tasks = agents.map(async (agent) => {
-      const config = this.configs.get(agent.agentId);
-      const timeoutMs = config?.timeoutMs ?? 15000;
+      const slot = this.registry.get(agent.agentId);
+      const timeoutMs = slot?.timeoutMs ?? 15000;
 
       stateManager.setAgentStatus(agent.agentId, 'running');
+      this.telemetry.update(agent.agentId, { status: 'running', currentPhase: 'analyzing', progress: 0 });
+      this.bus.publish({ from: agent.agentId, to: 'broadcast', type: 'telemetry', payload: { status: 'running' } });
 
       try {
         const result = await Promise.race([
@@ -175,9 +203,20 @@ export class AgentOrchestrator {
         ]);
 
         stateManager.setAgentStatus(agent.agentId, 'done');
+        this.telemetry.update(agent.agentId, {
+          status: 'done',
+          currentPhase: 'complete',
+          progress: 1,
+          score: result.score,
+          confidence: result.confidence,
+          markers: result.markers,
+          durationMs: result.durationMs,
+        });
+        this.bus.publish({ from: agent.agentId, to: 'broadcast', type: 'score', payload: { score: result.score, verdict: result.verdict } });
         return result;
       } catch (err) {
         stateManager.setAgentStatus(agent.agentId, 'error');
+        this.telemetry.update(agent.agentId, { status: 'error', currentPhase: 'failed' });
         throw err;
       }
     });
@@ -204,10 +243,10 @@ export class AgentOrchestrator {
 
         const reviewResult = agent.review(ctx, otherOutputs);
         const adjustment = reviewResult.scoreAdjustment;
-        const config = this.configs.get(agent.agentId);
+        const slot = this.registry.get(agent.agentId);
 
         const adjustedScore = Math.max(0, Math.min(100, currentResult.score + adjustment));
-        votes[agent.agentId] = config?.weight ?? 0.25;
+        votes[agent.agentId] = slot?.weight ?? 0.25;
         adjustedScores[agent.agentId] = adjustedScore;
 
         currentResult.score = adjustedScore;
@@ -233,10 +272,123 @@ export class AgentOrchestrator {
     return rounds;
   }
 
+  private async runJevDecision(
+    results: AgentResultWithExplanation[],
+    unifiedAnalysis: UnifiedAnalysis,
+    debateRounds: DebateRound[],
+    material: Material,
+  ): Promise<JevDecision | undefined> {
+    const apiKey = this.getJevApiKey();
+    if (apiKey === undefined) return undefined; // No key available
+
+    const agentResults = results.map((r) => ({
+      agentId: r.agentId,
+      score: r.score,
+      confidence: r.confidence,
+      verdict: r.verdict,
+      markers: r.markers,
+    }));
+
+    const lastRound = debateRounds[debateRounds.length - 1];
+    const dims = unifiedAnalysis.metrics.result.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
+
+    const context = {
+      triangleCount: unifiedAnalysis.topology.result.triangleCount,
+      volumeMm3: unifiedAnalysis.metrics.result.meshVolumeMm3,
+      surfaceAreaMm2: unifiedAnalysis.metrics.result.surfaceAreaMm2,
+      dims: { x: dims.x, y: dims.y, z: dims.z },
+      material: material.technology.toUpperCase(),
+      agreementDelta: lastRound?.agreementDelta ?? 0,
+    };
+
+    const result = await runJevConsensus(apiKey, agentResults, context);
+    return result === null ? undefined : result;
+  }
+
+  private async runJevEarlyTriage(
+    unifiedAnalysis: UnifiedAnalysis,
+    material: Material,
+  ): Promise<{ riskCategory: string; agentPriority: string } | undefined> {
+    const apiKey = this.getJevApiKey();
+    if (!apiKey) return undefined;
+
+    const dims = unifiedAnalysis.metrics.result.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
+    const state = [
+      `Model: ${unifiedAnalysis.topology.result.triangleCount} triangles, ${unifiedAnalysis.metrics.result.meshVolumeMm3.toFixed(0)}mm³`,
+      `Dimensions: ${dims.x.toFixed(1)} × ${dims.y.toFixed(1)} × ${dims.z.toFixed(1)} mm`,
+      `Material: ${material.technology.toUpperCase()}`,
+    ].join('\n');
+
+    const questions = {
+      risk_category: {
+        type: 'choice' as const,
+        instructions: 'Primary risk category for this model',
+        criteria: {
+          watertight: 'Mesh has holes or non-manifold edges',
+          wall_thickness: 'Regions thinner than minimum printable thickness',
+          overhang: 'Large overhang areas requiring support',
+          dimensional: 'Dimensions too small or too large',
+          none: 'No significant risks detected',
+        },
+      },
+      agent_priority: {
+        type: 'choice' as const,
+        instructions: 'Which agent should be weighted most heavily',
+        criteria: {
+          geometry_analyst: 'Mesh integrity issues detected',
+          printability_scorer: 'Print settings are critical',
+          failure_predictor: 'Failure risk is high',
+          optimization_advisor: 'Orientation/material optimization needed',
+        },
+      },
+    };
+
+    try {
+      const { callJev } = await import('@/lib/jevClient');
+      const response = await callJev(apiKey, state, questions);
+      const riskCategory = response.answers.risk_category?.type === 'choice'
+        ? response.answers.risk_category.choice
+        : 'none';
+      const agentPriority = response.answers.agent_priority?.type === 'choice'
+        ? response.answers.agent_priority.choice
+        : 'geometry_analyst';
+      return { riskCategory, agentPriority };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private adjustWeightsByEarlyTriage(
+    results: AgentResultWithExplanation[],
+    triage: { riskCategory: string; agentPriority: string },
+  ): void {
+    const priorityMap: Record<string, AgentId> = {
+      geometry_analyst: 'geometry_analyst',
+      printability_scorer: 'printability_scorer',
+      failure_predictor: 'failure_predictor',
+      optimization_advisor: 'optimization_advisor',
+    };
+
+    const priorityAgent = priorityMap[triage.agentPriority];
+    if (priorityAgent) {
+      const slot = this.registry.get(priorityAgent);
+      if (slot) {
+        this.registry.updateWeight(priorityAgent, Math.min(0.5, slot.weight * 1.5));
+      }
+    }
+  }
+
+  private getJevApiKey(): string | undefined {
+    const token = getAuthSnapshot().token;
+    if (token) return '';
+    return getApiKey('openrouter');
+  }
+
   private computeConsensus(
     results: AgentResultWithExplanation[],
     debateRounds: DebateRound[],
     language: ContentLang = 'en',
+    jevDecision?: JevDecision,
   ): AgentConsensus {
     if (results.length === 0) {
       return {
@@ -259,20 +411,21 @@ export class AgentOrchestrator {
     let totalWeight = 0;
 
     for (const result of results) {
-      const config = this.configs.get(result.agentId);
-      const weight = config?.weight ?? 0.25;
+      const slot = this.registry.get(result.agentId);
+      const weight = slot?.weight ?? 0.25;
       agentScores[result.agentId] = result.score;
       agentVerdicts[result.agentId] = result.verdict;
       weightedSum += result.score * weight;
       totalWeight += weight;
     }
 
-    const overallScore = Math.round(weightedSum / Math.max(0.001, totalWeight));
+    const weightedAverage = Math.round(weightedSum / Math.max(0.001, totalWeight));
     const lastRound = debateRounds[debateRounds.length - 1];
     const agreementDelta = lastRound?.agreementDelta ?? 0;
     const totalRounds = debateRounds.length;
 
-    const consensusVerdict = computeConsensusVerdict(overallScore);
+    const overallScore = jevDecision?.jevUsed ? jevDecision.jevScore : weightedAverage;
+    const consensusVerdict = jevDecision?.jevUsed ? jevDecision.jevVerdict : computeConsensusVerdict(overallScore);
 
     const summaryParts: string[] = [];
     for (const result of results) {
@@ -318,6 +471,18 @@ export class AgentOrchestrator {
       totalRounds,
       agentScores,
       agentVerdicts,
+      jev: jevDecision?.jevUsed ? {
+        jevUsed: true,
+        jevScore: jevDecision.jevScore,
+        jevVerdict: jevDecision.jevVerdict,
+        jevConfidence: jevDecision.jevConfidence,
+        topRisk: jevDecision.topRisk,
+        primaryAction: jevDecision.primaryAction,
+        jevLatencyMs: jevDecision.raw.latencyMs,
+        jevCostUsd: jevDecision.raw.usage.cost,
+        jevQuestionCount: Object.keys(jevDecision.raw.answers).length,
+        agentTrustAdjustments: jevDecision.agentTrustAdjustments,
+      } : undefined,
     };
   }
 
@@ -327,7 +492,7 @@ export class AgentOrchestrator {
     initialScores: Map<AgentId, number>,
   ): VotingRecord[] {
     return results.map(result => {
-      const config = this.configs.get(result.agentId);
+      const slot = this.registry.get(result.agentId);
       const lastRound = debateRounds[debateRounds.length - 1];
       const initialScore = initialScores.get(result.agentId) ?? result.score;
       const adjustedScore = lastRound?.adjustedScores[result.agentId] ?? result.score;
@@ -336,7 +501,7 @@ export class AgentOrchestrator {
         agentId: result.agentId,
         initialScore,
         adjustedScore,
-        weight: config?.weight ?? 0.25,
+        weight: slot?.weight ?? 0.25,
         confidence: result.confidence,
       };
     });

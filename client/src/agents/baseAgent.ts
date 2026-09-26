@@ -29,6 +29,13 @@ export interface AgentContext {
   language: ContentLang;
   /** Optional vendor capacity adapter — queried at decision points, NOT in iterate loops. */
   vendorCapacityAdapter?: VendorCapacityAdapter;
+  /** Jev corrective context — present only during targeted recalibration. */
+  jevCorrection?: {
+    jevScore: number;
+    topRisk: string;
+    primaryAction: string;
+    flaggedFinding: string;
+  };
 }
 
 export interface AgentCapabilities {

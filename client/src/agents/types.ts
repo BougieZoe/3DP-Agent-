@@ -36,6 +36,15 @@ export interface VotingRecord {
   confidence: number;
 }
 
+export interface RecalibrationEvent {
+  agentId: string;
+  originalScore: number;
+  recalibratedScore: number;
+  blendedScore: number;
+  reason: string;
+  durationMs: number;
+}
+
 export interface AgentRunSummary {
   results: AgentResultWithExplanation[];
   consensus: {
@@ -47,8 +56,8 @@ export interface AgentRunSummary {
   votingRecords: VotingRecord[];
   totalDurationMs: number;
   usedVision: boolean;
-  /** Which analysis path produced this summary: deterministic rules or deep LLM. */
   analysisSource?: 'rules' | 'llm';
+  recalibrations?: RecalibrationEvent[];
 }
 
 export function getAgentLabel(agentId: AgentId, lang: ContentLang = 'en'): string {
