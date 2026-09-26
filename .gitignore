@@ -9,6 +9,7 @@ coverage/
 
 # === Go backend ===
 go-backend/3dp-agent-server
+bin/
 
 # === Python ===
 __pycache__/
