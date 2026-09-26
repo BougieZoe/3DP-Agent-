@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { AgentOrchestrator } from '../orchestrator';
+import { getAgentRegistry } from '../core/agentRegistry';
 import { visionProvider } from '../visionProvider';
 import { buildMockUnifiedAnalysis, normalMetrics, thinWallMetrics, overhangMetrics, criticalBothMetrics, mockGeometry, mockMaterial } from './testAgentFixtures';
 import type { AgentStageConfig } from '../types';
@@ -71,16 +72,20 @@ describe('AgentOrchestrator', () => {
   });
 
   it('handles disabled agents', async () => {
-    const configs = makeConfigs({
-      optimization_advisor: { enabled: false },
-    });
-    const geo = mockGeometry();
-    const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
-    const orch = new AgentOrchestrator(configs);
-    const result = await orch.runFullAnalysis(geo, ua, 'disabled.stl');
-    expect(result.results.length).toBe(3);
-    const ids = result.results.map(r => r.agentId);
-    expect(ids).not.toContain('optimization_advisor');
+    // The registry now owns enable/disable; the orchestrator syncs from it.
+    const registry = getAgentRegistry();
+    registry.disable('optimization_advisor');
+    try {
+      const geo = mockGeometry();
+      const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
+      const orch = new AgentOrchestrator();
+      const result = await orch.runFullAnalysis(geo, ua, 'disabled.stl');
+      expect(result.results.length).toBe(3);
+      const ids = result.results.map(r => r.agentId);
+      expect(ids).not.toContain('optimization_advisor');
+    } finally {
+      registry.enable('optimization_advisor');
+    }
   });
 
   it('handles empty findings gracefully', async () => {
