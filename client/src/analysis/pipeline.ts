@@ -88,7 +88,7 @@ export function runAnalysisPipeline(
 
   const emptyTopology: TopologyResult = { triangleCount: 0, vertexCount: 0, edgeCount: 0, manifoldEdgeCount: 0, boundaryEdgeCount: 0, nonManifoldEdgeCount: 0, shellCount: 0, isManifold: false, problemEdges: [] };
   const emptyValidation: ValidationResult = { isWatertight: false, holeCount: 0, boundaryEdgeCount: 0, flippedNormalFaceCount: 0, totalFaceCount: 0, flippedNormalRatio: 0, normalOrientation: 'unknown', degenerateFaceCount: 0 };
-  const emptyMetrics: MetricsResult = { meshVolumeMm3: 0, surfaceAreaMm2: 0, boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 }, minWallThicknessMm: null, avgWallThicknessMm: null, p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null, thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, wallThicknessSamples: [], overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 } };
+  const emptyMetrics: MetricsResult = { meshVolumeMm3: 0, volumeReliable: false, surfaceAreaMm2: 0, boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 }, minWallThicknessMm: null, avgWallThicknessMm: null, p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null, thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, wallThicknessSamples: [], overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 } };
 
   const failResult = <T>(moduleName: string, error: unknown, defaultValue: T): AnalysisModuleResult<T> => {
     const message = error instanceof Error
@@ -192,6 +192,8 @@ export function runAnalysisPipeline(
     try {
       if (options.materialFamily !== 'concrete') return null;
       const m = metrics.result;
+      // Crack/print-time proxies below are volume-derived: refuse on an open shell.
+      if (!m.volumeReliable) return null;
       return moduleResult('concrete', 1.0 as Confidence, 0, computeConcreteMetrics({
         minWallThicknessMm: m.minWallThicknessMm,
         overhangRatio: m.overhang?.ratio ?? 0,
@@ -212,7 +214,7 @@ export function runAnalysisPipeline(
   };
   const loop = time('loop', () => {
     try {
-      if (!mat || metrics.result.meshVolumeMm3 <= 0) return null;
+      if (!mat || metrics.result.meshVolumeMm3 <= 0 || !metrics.result.volumeReliable) return null;
       const m = metrics.result;
       const pt = printTime?.result;
       return moduleResult('loop', 0.9 as Confidence, 0, computeLoopMetrics({

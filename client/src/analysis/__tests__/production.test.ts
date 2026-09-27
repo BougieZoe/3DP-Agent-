@@ -20,7 +20,7 @@ function fakeUnified(dims: { x: number; y: number; z: number }, totalCostUsd: nu
   return {
     topology: { moduleName: 'topology', confidence: 1.0 as const, durationMs: 0, result: {} as never, explanation: '' },
     validation: { moduleName: 'validation', confidence: 1.0 as const, durationMs: 0, result: {} as never, explanation: '' },
-    metrics: { moduleName: 'metrics', confidence: 1.0 as const, durationMs: 0, result: { meshVolumeMm3: 1000, boundingBoxDimensionsMm: dims } as never, explanation: '' },
+    metrics: { moduleName: 'metrics', confidence: 1.0 as const, durationMs: 0, result: { meshVolumeMm3: 1000, volumeReliable: true, boundingBoxDimensionsMm: dims } as never, explanation: '' },
     printTime: { moduleName: 'printTime', confidence: 1.0 as const, durationMs: 0, result: { totalCostUsd, materialCostUsd } as never, explanation: '' },
     bedFit: null, support: null, timestamp: '', modelFileName: 'x.stl', overallConfidence: 1.0 as const,
   } as UnifiedAnalysis;

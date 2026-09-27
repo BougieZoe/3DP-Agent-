@@ -128,6 +128,21 @@ export interface MetricsResult {
   /** Exact: sum of signed tetrahedron volumes */
   meshVolumeMm3: number;
 
+  /**
+   * Whether `meshVolumeMm3` is a trustworthy deliverable.
+   *
+   * The signed-tetrahedron sum only equals the enclosed volume when the shell is
+   * closed. With a boundary hole the sum silently depends on where the hole
+   * sits: `t_openbox` (a 20mm cube missing one face) reports 6666.67mm³ — a
+   * plausible-looking number that is wrong, not merely approximate. Anything
+   * user-facing or cost-bearing must gate on this flag; the raw value is still
+   * computed so geometry-only consumers keep working unchanged.
+   *
+   * False when the mesh is not watertight, or when the graph has no usable
+   * topology at all.
+   */
+  volumeReliable: boolean;
+
   /** Exact: half sum of cross product magnitudes */
   surfaceAreaMm2: number;
 

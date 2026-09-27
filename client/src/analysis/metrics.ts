@@ -281,6 +281,21 @@ export function deriveSupportStatus(
   return { status: 'good', reasons, confidence: derive.goodConfidence };
 }
 
+/**
+ * A shell is closed when every edge is shared by exactly two faces — no
+ * boundary edge (1 face) and no non-manifold edge (>2 faces). Mirrors the test
+ * in `validation.ts`; kept local so the metrics module can label its own volume
+ * without threading validation state through the call signature. The two are
+ * pinned to agree by the golden set.
+ */
+function isGraphWatertight(g: GeometryGraph): boolean {
+  for (let e = 0; e < g.edgeCount; e++) {
+    const faces = g.edgeFaceCount[e];
+    if (faces === 1 || faces > 2) return false;
+  }
+  return true;
+}
+
 export function computeMetrics(
   model: GeometryModel,
   graph?: GeometryGraph | null,
@@ -294,7 +309,7 @@ export function computeMetrics(
 
   if (!g) {
     return moduleResult('metrics', 0.0, 0, {
-      meshVolumeMm3: 0, surfaceAreaMm2: 0,
+      meshVolumeMm3: 0, volumeReliable: false, surfaceAreaMm2: 0,
       boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 },
       minWallThicknessMm: null, avgWallThicknessMm: null,
       p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null,
@@ -306,7 +321,7 @@ export function computeMetrics(
 
   if (g.indices.length === 0) {
     return moduleResult('metrics', 0.5, Math.round(performance.now() - startTime), {
-      meshVolumeMm3: 0, surfaceAreaMm2: 0,
+      meshVolumeMm3: 0, volumeReliable: false, surfaceAreaMm2: 0,
       boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 },
       minWallThicknessMm: null, avgWallThicknessMm: null,
       p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null,
@@ -361,6 +376,7 @@ export function computeMetrics(
 
   const result: MetricsResult = {
     meshVolumeMm3: meshVolume,
+    volumeReliable: isGraphWatertight(g),
     surfaceAreaMm2: surfaceArea,
     boundingBoxVolumeMm3: dimX * dimY * dimZ,
     boundingBoxDimensionsMm: { x: dimX, y: dimY, z: dimZ },

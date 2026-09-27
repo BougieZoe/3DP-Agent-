@@ -27,7 +27,8 @@ export function PostProcessingCard({ unifiedAnalysis, material, language }: Prop
   const steps = useMemo<Step[]>(() => {
     const m = unifiedAnalysis.metrics?.result;
     const support = unifiedAnalysis.support?.result;
-    if (!m || m.meshVolumeMm3 <= 0) return [];
+    // Step durations are volume-derived and meaningless on an open shell.
+    if (!m || m.meshVolumeMm3 <= 0 || !m.volumeReliable) return [];
 
     const s: Step[] = [];
 

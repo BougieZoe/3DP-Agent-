@@ -31,7 +31,8 @@ export function SustainabilityCard({ unifiedAnalysis, material, language }: Prop
     const m = unifiedAnalysis.metrics?.result;
     const support = unifiedAnalysis.support?.result;
     const pt = unifiedAnalysis.printTime?.result;
-    if (!m || m.meshVolumeMm3 <= 0) return null;
+    // Waste/carbon figures are volume-derived and meaningless on an open shell.
+    if (!m || m.meshVolumeMm3 <= 0 || !m.volumeReliable) return null;
 
     const volCm3 = m.meshVolumeMm3 / 1000;
     const wtKg = (volCm3 * material.densityGPerCm3) / 1000;

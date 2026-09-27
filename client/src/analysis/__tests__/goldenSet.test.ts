@@ -50,6 +50,7 @@ describe('golden set — real STL bytes through the real pipeline', () => {
     expect(a.metrics.result?.meshVolumeMm3).toBeCloseTo(8000, 6);
     expect(a.metrics.result?.boundingBoxVolumeMm3).toBeCloseTo(8000, 6);
     expect(a.metrics.result?.minWallThicknessMm).toBeCloseTo(20, 6);
+    expect(a.metrics.result?.volumeReliable).toBe(true);
     // Bed-contact faces must NOT be flagged as overhang.
     expect(a.metrics.result?.overhang?.ratio).toBe(0);
     expect(a.scaleGuard?.result?.status).toBe('ok');
@@ -59,6 +60,7 @@ describe('golden set — real STL bytes through the real pipeline', () => {
     const a = analyzeGolden('t_big300');
     expect(a.validation.result?.isWatertight).toBe(true);
     expect(a.metrics.result?.meshVolumeMm3).toBeCloseTo(27_000_000, 3);
+    expect(a.metrics.result?.volumeReliable).toBe(true);
     expect(a.bedFit?.result?.fits).toBe(false);
     // A cube resting on the bed has no overhang — the whole bottom face is support.
     expect(a.metrics.result?.overhang?.ratio).toBe(0);
@@ -72,6 +74,7 @@ describe('golden set — real STL bytes through the real pipeline', () => {
     expect(a.validation.result?.isWatertight).toBe(false);
     expect(a.validation.result?.holeCount).toBeGreaterThan(0);
     expect(measured).not.toBeNull();
+    expect(a.metrics.result?.volumeReliable).toBe(false);
     // The two must disagree — this is the defect the Python engine shipped.
     expect(bboxMin).toBeGreaterThan(1.5);
     expect(measured!).toBeLessThan(1);
@@ -109,19 +112,28 @@ describe('golden set — real STL bytes through the real pipeline', () => {
     expect(a.validation.result?.isWatertight).toBe(false);
     expect(a.scaleGuard?.result?.status).toBe('suspect_inch');
     expect(a.scaleGuard?.result?.suggestedScale).toBe(25.4);
+    expect(a.metrics.result?.volumeReliable).toBe(false);
   });
 
   it('t_openbox — one missing face is detected as non-watertight', () => {
     const a = analyzeGolden('t_openbox');
     expect(a.validation.result?.isWatertight).toBe(false);
     expect(a.validation.result?.holeCount).toBeGreaterThan(0);
+    expect(a.metrics.result?.volumeReliable).toBe(false);
   });
 
+  it('volumeReliable agrees with isWatertight on every sample', () => {
+    for (const name of GOLDEN_SAMPLE_NAMES) {
+      const a = analyzeGolden(name);
+      // The flag is the metrics module's own watertightness test; it must
+      // never drift from the validation module's verdict.
+      expect(a.metrics.result?.volumeReliable).toBe(a.validation.result?.isWatertight);
+    }
+  });
   // ── Known gaps: decided, not yet implemented. ────────────────────────────
-  // Written as todo rather than assertions on purpose: the defective values
-  // (e.g. t_openbox volume 6666.67mm³, test_cube 0.167mm³) are what we intend
-  // to REMOVE — locking them into a snapshot would make the bug a contract.
+  // Recorded as todo rather than as an assertion — the shape of the verdict
+  // outlet is not settled yet, and pinning an undecided shape into a snapshot
+  // turns an open decision into a contract.
 
-  it.todo('non-watertight shells must not report a reliable volume / wall figure');
   it.todo('analysis layer must expose a single rules-based verdict + score outlet');
 });
