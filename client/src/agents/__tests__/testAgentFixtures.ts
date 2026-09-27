@@ -31,6 +31,7 @@ function sample(num: number): WallThicknessSample[] {
 export function normalMetrics(): MetricsResult {
   return {
     meshVolumeMm3: 5000,
+    volumeReliable: true,
     surfaceAreaMm2: 2000,
     boundingBoxVolumeMm3: 10000,
     boundingBoxDimensionsMm: { x: 50, y: 20, z: 10 },

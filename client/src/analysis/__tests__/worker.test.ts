@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { runAnalysisPipeline } from '../pipeline';
-import { createTerrainGridModel } from './testMeshes';
+import { createTerrainGridModel, createScaledWatertightCubeModel } from './testMeshes';
 import { MATERIALS } from '@shared/domain/material';
 
 describe('runAnalysisPipeline (direct call, Worker unavailable path)', () => {
@@ -39,7 +39,8 @@ describe('runAnalysisPipeline (direct call, Worker unavailable path)', () => {
   });
 
   it('includes printTime when volume is positive', () => {
-    const model = createTerrainGridModel(10, 10, 10);
+    // Closed solid on purpose: the volumetric path refuses open shells.
+    const model = createScaledWatertightCubeModel();
     const result = runAnalysisPipeline(model, {
       printerId: 'bambu_x1c',
       layerHeightMm: 0.2,
@@ -52,7 +53,7 @@ describe('runAnalysisPipeline (direct call, Worker unavailable path)', () => {
   });
 
   it('includes loop when a material is passed (fresh-upload contract)', () => {
-    const model = createTerrainGridModel(10, 10, 10);
+    const model = createScaledWatertightCubeModel();
     const result = runAnalysisPipeline(model, {
       fileName: 'test.stl',
       material: MATERIALS.PLA,

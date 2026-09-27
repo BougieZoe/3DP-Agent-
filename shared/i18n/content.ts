@@ -833,6 +833,11 @@ const analysis = {
     ja: '推定不可: 体積がゼロです',
     zh: '无法估算: 体积为零',
   },
+  'printTime.unreliableVolume': {
+    en: 'Cannot estimate: the shell is not watertight, so its volume is unreliable',
+    ja: '推定不可: メッシュが水密でないため、体積を信頼できません',
+    zh: '无法估算: 模型不水密，体积不可信',
+  },
   'printTime.estimate': {
     en: 'Est. {minutes}min ({hours}h) at {layerHeight}mm layer height. Material: {weight}g (${materialCost}). Total cost: ${totalCost}. {layers} layers.',
     ja: '推定 {minutes}分（{hours}時間）、層高{layerHeight}mm。材料: {weight}g（${materialCost}）。合計コスト: ${totalCost}。{layers}層。',

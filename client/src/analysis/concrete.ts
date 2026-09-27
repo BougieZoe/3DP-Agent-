@@ -73,7 +73,8 @@ export function computeConcreteMetrics(input: {
 /** Build the concrete metrics straight from a UnifiedAnalysis. */
 export function concreteFromUnified(unified: UnifiedAnalysis): ConcreteResult | null {
   const m = unified.metrics?.result;
-  if (!m || m.meshVolumeMm3 <= 0) return null;
+  // Volume feeds crack/print-time risk — refuse on an open shell.
+  if (!m || m.meshVolumeMm3 <= 0 || !m.volumeReliable) return null;
   return computeConcreteMetrics({
     minWallThicknessMm: m.minWallThicknessMm,
     overhangRatio: m.overhang?.ratio ?? 0,

@@ -18,6 +18,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { parseSTL } from '@/lib/stlParser';
 import { fromThreeBufferGeometry } from '../geometryConversion';
@@ -25,7 +26,9 @@ import { runAnalysisPipeline, type PipelineOptions } from '../pipeline';
 import type { GeometryModel } from '../geometryModel';
 import type { UnifiedAnalysis } from '../types';
 
-const STL_DIR = path.resolve(process.cwd(), 'client/src/analysis/__tests__/fixtures/stl');
+// Anchored to this file rather than to `process.cwd()`, so the suite resolves
+// the same bytes whether vitest is launched from the repo root or from client/.
+const STL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'fixtures/stl');
 
 export const GOLDEN_SAMPLE_NAMES = [
   'test_cube',

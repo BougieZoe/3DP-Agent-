@@ -64,7 +64,8 @@ export async function generateQuote(params: QuoteParams): Promise<QuoteResult | 
 
   const metrics = analysis.metrics?.result;
   const pt = analysis.printTime?.result;
-  if (!metrics || !pt || metrics.meshVolumeMm3 <= 0) return null;
+  // Never quote off an open shell: the volume — and therefore the price — is wrong.
+  if (!metrics || !pt || metrics.meshVolumeMm3 <= 0 || !metrics.volumeReliable) return null;
 
   // Find best matching supplier price
   const supplierPrice = supplierPrices.find(
