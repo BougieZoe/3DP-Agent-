@@ -1268,13 +1268,15 @@ deepAnalysisSeq.current += 1;
                 without a model it opens via the standalone DiagnosisModal */}
             {tab === 'chat' && modelData && (
               <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
-                <DiagnosisPanel
-                  language={language}
-                  canRun={!!user || hasAnyKey()}
-                  onNeedAuth={() => setShowAccountModal(true)}
-                  materialContext={`${material.name} (${material.technology.toUpperCase()})`}
-                  geometryContext={unifiedAnalysis ? buildDiagnosisGeometryContext(unifiedAnalysis) : undefined}
-                />
+                <div className="!-mt-5 sm:!-mt-6">
+                  <DiagnosisPanel
+                    language={language}
+                    canRun={!!user || hasAnyKey()}
+                    onNeedAuth={() => setShowAccountModal(true)}
+                    materialContext={`${material.name} (${material.technology.toUpperCase()})`}
+                    geometryContext={unifiedAnalysis ? buildDiagnosisGeometryContext(unifiedAnalysis) : undefined}
+                  />
+                </div>
                 {modelData ? (
                   <div className="pt-2 flex-1 min-h-[60vh] h-[calc(100vh-220px)] flex flex-col">
                     <ChatPanel
@@ -1294,11 +1296,11 @@ deepAnalysisSeq.current += 1;
 
             {/* Model-dependent tabs (need an uploaded + analyzed file) */}
             {analysis && modelData && (
-              <div className="space-y-0 fade-up">
+              <div className="space-y-0 fade-up !-mt-5 sm:!-mt-6">
 
                 {/* GEOMETRY TAB */}
                 {tab === 'geometry' && (
-                  <div className="space-y-4 pt-4 relative">
+                  <div className="space-y-4 pt-1 relative">
                     {materialLoading && (
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 rounded-sm">
                         <div className="text-xs font-mono text-primary animate-pulse">&#x258b; {t('recalculating')}</div>
@@ -1572,7 +1574,7 @@ deepAnalysisSeq.current += 1;
 
                 {/* REPORT TAB */}
                 {tab === 'report' && (
-                  <div className="pt-4 space-y-4 relative">
+                  <div className="pt-1 space-y-4 relative">
                     {materialLoading && (
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 rounded-sm">
                         <div className="text-xs font-mono text-primary animate-pulse">&#x258b; {t('recalculating')}</div>
@@ -1966,7 +1968,7 @@ deepAnalysisSeq.current += 1;
                 {/* CAUSALITY TAB */}
                 {tab === 'causality' && (
                   <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
-                    <div className="pt-4 space-y-4">
+                    <div className="pt-1 space-y-4">
                       <CausalityPanel graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} language={language} />
                       <div className="border-t border-border/20 my-2" />
                       {patternMatches.length > 0 && (
@@ -2016,7 +2018,7 @@ deepAnalysisSeq.current += 1;
                 {/* VERIFICATION TAB */}
                 {tab === 'verification' && (
                   <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
-                    <div className="pt-4">
+                    <div className="pt-1">
                       <PhysicalVerificationBoard language={language as any} />
                     </div>
                   </Suspense>
@@ -2024,7 +2026,7 @@ deepAnalysisSeq.current += 1;
 
                 {/* ORDERS TAB */}
                 {tab === 'orders' && (
-                  <div className="pt-4 space-y-4">
+                  <div className="pt-1 space-y-4">
                     {/* Create Order button */}
                     {uploadedModel ? (
                       <button
