@@ -3,6 +3,7 @@ import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { analyzeTopology } from './topology';
 import { validateMesh } from './validation';
 import { computeMetrics } from './metrics';
+import { analyzeScaleGuard, type ScaleGuardResult } from './scaleGuard';
 import { computeResinMetrics, type ResinResult } from './resin';
 import { computeFgfMetrics, type FgfResult } from './fgf';
 import { computePbfMetrics, type PbfResult, type PbfKind } from './pbf';
@@ -115,6 +116,18 @@ export function runAnalysisPipeline(
   const metrics = time('metrics', () => {
     try { return computeMetrics(model, graph, mat?.overhangThreshold, profiling, lang, thresholds); }
     catch (e) { return failResult('metrics', e, emptyMetrics); }
+  });
+
+  // Scale / unit sentinel — ported from the Python engine's `_scale_guard`.
+  // Read-only health check: flags an inch/cm export read as millimetres and
+  // oversized parts without ever rescaling. Computed right after metrics so a
+  // mis-scaled model is called out, never silently accepted.
+  const scaleGuard = time('scaleGuard', () => {
+    try {
+      const dims = metrics.result.boundingBoxDimensionsMm;
+      if (!(dims.x > 0 || dims.y > 0 || dims.z > 0)) return null;
+      return analyzeScaleGuard(model, [dims.x, dims.y, dims.z]) as AnalysisModuleResult<ScaleGuardResult>;
+    } catch (e) { return null; }
   });
 
   const bedFit = time('bedFit', () => {
@@ -441,7 +454,7 @@ export function runAnalysisPipeline(
     }
   });
 
-  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, loop, thermal, metal, multiMaterial, aiSuggestions, mlAnalysis]
+  const confidences = [topology, validation, metrics, scaleGuard, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, loop, thermal, metal, multiMaterial, aiSuggestions, mlAnalysis]
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .map(m => m.confidence);
   const overallConfidence = confidences.length > 0
@@ -452,6 +465,7 @@ export function runAnalysisPipeline(
     topology,
     validation,
     metrics,
+    scaleGuard,
     bedFit,
     support,
     printTime,
