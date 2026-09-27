@@ -28,8 +28,7 @@
 <canvas id="gl"></canvas>
 <div class="vignette"></div>
 <div class="hud"><span class="live"></span><b>Live Floor</b><span>· Agent Office</span></div>
-<script src="/lib/three.module.min.js"></script>
-<script src="/lib/office3d.js"></script>
+<script type="module" src="/lib/office3d.js"></script>
 <script type="module">
 /* postMessage bridge — receives agent status from parent (AgentOfficeEntry.tsx). */
 const AGENT_KEYS = ["geometry", "printability", "failure", "optimization"];
