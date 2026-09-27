@@ -23,7 +23,10 @@ type T = (key: TKey) => string;
 const OFFICE_ORIGIN = (
   ((import.meta as unknown as { env?: Record<string, string> }).env?.VITE_OFFICE_URL as
     | string
-    | undefined) || `http://${window.location.hostname}:8091`
+    | undefined)
+  || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? `http://${window.location.hostname}:8091`
+    : '')  // deployed without VITE_OFFICE_URL → office unavailable
 ).replace(/\/+$/, '');
 const OFFICE_URL = `${OFFICE_ORIGIN}/office`;
 const OFFICE_HEALTH_URL = `${OFFICE_ORIGIN}/health`;
@@ -90,6 +93,7 @@ type Status = 'checking' | 'online' | 'offline';
 
 /** Opaque probe: any HTTP response means the service is listening. */
 async function probeOffice(timeoutMs = 2500): Promise<boolean> {
+  if (!OFFICE_ORIGIN) return false;
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -205,21 +209,29 @@ function OfficeOverlay({ t, onClose }: { t: T; onClose: () => void }) {
             {status === 'offline' && (
               <>
                 <div className="mt-3 text-xs leading-relaxed text-muted-foreground/70">
-                  {t('officeOfflineDesc')}
+                  {OFFICE_ORIGIN
+                    ? t('officeOfflineDesc')
+                    : 'Office requires the local console service. Set VITE_OFFICE_URL or run locally.'}
                 </div>
-                <code className="mt-4 block rounded-sm border border-border/60 bg-background/60 px-3 py-2 text-left text-[11px] font-mono text-cyan-400">
-                  python3 web_console.py
-                </code>
-                <div className="mt-1 text-left text-[10px] font-mono text-muted-foreground/40">
-                  {OFFICE_ORIGIN}/office
-                </div>
+                {OFFICE_ORIGIN && (
+                  <>
+                    <code className="mt-4 block rounded-sm border border-border/60 bg-background/60 px-3 py-2 text-left text-[11px] font-mono text-cyan-400">
+                      python3 web_console.py
+                    </code>
+                    <div className="mt-1 text-left text-[10px] font-mono text-muted-foreground/40">
+                      {OFFICE_ORIGIN}/office
+                    </div>
+                  </>
+                )}
                 <div className="mt-5 flex justify-center gap-2">
-                  <button
-                    onClick={() => setAttempt((n) => n + 1)}
-                    className="rounded-sm border border-primary/50 px-4 py-1.5 text-[11px] font-mono text-primary transition-colors hover:bg-primary hover:text-background"
-                  >
-                    {t('officeRetry')}
-                  </button>
+                  {OFFICE_ORIGIN && (
+                    <button
+                      onClick={() => setAttempt((n) => n + 1)}
+                      className="rounded-sm border border-primary/50 px-4 py-1.5 text-[11px] font-mono text-primary transition-colors hover:bg-primary hover:text-background"
+                    >
+                      {t('officeRetry')}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onPointerDown={exitNow}
@@ -336,19 +348,27 @@ function OfficeLivePreview({ t, onOpen }: { t: T; onOpen: () => void }) {
             </div>
             {status === 'offline' && (
               <>
-                <code className="rounded-sm border border-border/60 bg-background/60 px-2.5 py-1 font-mono text-[10px] text-cyan-400">
-                  python3 web_console.py
-                </code>
-                <div className="text-[10px] font-mono text-muted-foreground/40">
-                  {OFFICE_ORIGIN}/office
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAttempt((n) => n + 1)}
-                  className="rounded-sm border border-primary/50 px-3 py-1 font-mono text-[10px] text-primary transition-colors hover:bg-primary hover:text-background"
-                >
-                  {t('officeRetry')}
-                </button>
+                {!OFFICE_ORIGIN ? (
+                  <div className="text-[10px] text-muted-foreground/70">
+                    Office requires the local console service.
+                  </div>
+                ) : (
+                  <>
+                    <code className="rounded-sm border border-border/60 bg-background/60 px-2.5 py-1 font-mono text-[10px] text-cyan-400">
+                      python3 web_console.py
+                    </code>
+                    <div className="text-[10px] font-mono text-muted-foreground/40">
+                      {OFFICE_ORIGIN}/office
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAttempt((n) => n + 1)}
+                      className="rounded-sm border border-primary/50 px-3 py-1 font-mono text-[10px] text-primary transition-colors hover:bg-primary hover:text-background"
+                    >
+                      {t('officeRetry')}
+                    </button>
+                  </>
+                )}
               </>
             )}
             {status === 'checking' && (
