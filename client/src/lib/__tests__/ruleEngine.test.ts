@@ -19,6 +19,7 @@ describe('ruleEngine', () => {
     wallThickness: { ...baseWall, minThickness: 2.5, areas: 3, status: 'good' },
     overhang: { angle: 45, areas: 0, status: 'good' },
     volume: 50000,
+    volumeReliable: true,
     surfaceArea: 1200,
     dims: { x: 100, y: 50, z: 25 },
   };
@@ -28,6 +29,7 @@ describe('ruleEngine', () => {
     wallThickness: { ...baseWall, minThickness: 0.5, thinWallCount: 10, thinWallPercentage: 20, thinWallRatio: 0.2, areas: 10, status: 'critical' },
     overhang: { angle: 45, areas: 0, status: 'good' },
     volume: 10000,
+    volumeReliable: true,
     surfaceArea: 500,
     dims: { x: 20, y: 20, z: 25 },
   };
@@ -37,6 +39,7 @@ describe('ruleEngine', () => {
     wallThickness: { ...baseWall, minThickness: 2.0, thinWallCount: 4, thinWallPercentage: 8, thinWallRatio: 0.08, areas: 2, status: 'warning' },
     overhang: { angle: 45, areas: 15, status: 'warning' },
     volume: 80000,
+    volumeReliable: true,
     surfaceArea: 2000,
     dims: { x: 80, y: 40, z: 25 },
   };
@@ -46,6 +49,7 @@ describe('ruleEngine', () => {
     wallThickness: { ...baseWall, minThickness: 3.0, areas: 0, status: 'good' },
     overhang: { angle: 45, areas: 0, status: 'good' },
     volume: 600000,
+    volumeReliable: true,
     surfaceArea: 8000,
     dims: { x: 200, y: 100, z: 30 },
   };
@@ -55,6 +59,7 @@ describe('ruleEngine', () => {
     wallThickness: { ...baseWall, minThickness: 1.5, areas: 1, status: 'warning' },
     overhang: { angle: 45, areas: 0, status: 'good' },
     volume: 10000,
+    volumeReliable: true,
     surfaceArea: 400,
     dims: { x: 20, y: 20, z: 25 },
   };
@@ -252,6 +257,31 @@ describe('ruleEngine', () => {
     it('should return empty string for unknown category', () => {
       const answer = answerLocally('unknown', validModel, 'en');
       expect(answer).toBe('');
+    });
+  });
+
+  describe('non-watertight shells', () => {
+    // A 20mm cube missing one face. The pipeline still sums the triangles and
+    // lands on 6666.67mm³ — a plausible-looking number that is wrong, not
+    // approximate. Nothing volume-derived may be stated about it.
+    const openShellModel: ModelData = {
+      ...validModel,
+      fileName: 't_openbox.stl',
+      volume: 6666.67,
+      volumeReliable: false,
+    };
+
+    it('does not rank process size off an open shell', () => {
+      const report = generateQuickReport(openShellModel, 'en');
+      expect(report).toContain('Process TBD (open shell)');
+    });
+
+    it('refuses volume-based estimates and says why', () => {
+      for (const category of ['material', 'time', 'cost']) {
+        const answer = answerLocally(category, openShellModel, 'en');
+        expect(answer).toContain('not closed');
+        expect(answer).not.toContain('6666');
+      }
     });
   });
 });

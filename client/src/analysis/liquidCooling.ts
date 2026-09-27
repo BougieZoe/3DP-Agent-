@@ -105,7 +105,8 @@ export function computeLiquidCoolingMetrics(input: LiquidCoolingInput): LiquidCo
 /** Build the liquid-cooling input straight from a UnifiedAnalysis. */
 export function liquidCoolingFromUnified(unified: UnifiedAnalysis): LiquidCoolingResult | null {
   const metrics = unified.metrics?.result;
-  if (!metrics || metrics.meshVolumeMm3 <= 0) return null;
+  // Volume feeds channel sizing — refuse on an open shell.
+  if (!metrics || metrics.meshVolumeMm3 <= 0 || !metrics.volumeReliable) return null;
   const topology = unified.topology?.result;
   const pbf = unified.pbf?.result;
   return computeLiquidCoolingMetrics({

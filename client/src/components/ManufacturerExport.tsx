@@ -2,6 +2,7 @@ import { PANEL } from '@/lib/visualLanguage';
 import { getTranslation, type Language } from '@/lib/i18n';
 import type { UnifiedAnalysis } from '../analysis/types';
 import type { ProcessRecommendation } from '../lib/manufacturingRecommendation';
+import { isVolumeReportable } from '@/lib/volumeDisplay';
 
 interface ManufacturerExportProps {
   analysis: UnifiedAnalysis | null;
@@ -17,7 +18,9 @@ export interface ManufacturerSpec {
   _source: string;
   geometry: {
     fileName: string;
-    volumeMm3: number;
+    /** Null when the shell is open: no enclosed volume is defined. */
+    volumeMm3: number | null;
+    volumeReliable: boolean;
     surfaceAreaMm2: number;
     boundingBoxMm: { x: number; y: number; z: number };
     triangleCount: number;
@@ -103,7 +106,8 @@ function buildSpec(
     _source: fileName,
     geometry: {
       fileName,
-      volumeMm3: m?.meshVolumeMm3 ?? 0,
+      volumeMm3: isVolumeReportable(m) ? m!.meshVolumeMm3 : null,
+      volumeReliable: m?.volumeReliable === true,
       surfaceAreaMm2: m?.surfaceAreaMm2 ?? 0,
       boundingBoxMm: m?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 },
       triangleCount: t?.triangleCount ?? 0,

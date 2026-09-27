@@ -14,6 +14,7 @@
 import type { Confidence } from "./types";
 import { moduleResult, type AnalysisModuleResult } from "./types";
 import type { Material } from "@shared/domain/material";
+import { MATERIALS } from "@shared/domain/material";
 import type { GeometryModel } from "./geometryModel";
 import { buildGeometryGraph, type GeometryGraph } from "./geometryGraph";
 
@@ -101,162 +102,6 @@ function computeGraphSurfaceArea(positions: Float32Array, indices: Uint16Array |
 }
 
 // ---------------------------------------------------------------------------
-// Per-material defaults (when thermal props are missing)
-// ---------------------------------------------------------------------------
-
-/**
- * Material-specific thermal properties for common 3D printing materials.
- * Based on published data and empirical measurements.
- */
-const MATERIAL_THERMAL_PROPS: Record<string, {
-  glassTransitionTempC: number;
-  thermalConductivityWPerMK: number;
-  specificHeatJPerGK: number;
-  shrinkagePercent: number;
-  printTempC: { min: number; max: number };
-  bedTempC: number;
-  densityGPerCm3: number;
-  thermalDiffusivityMm2PerS: number;
-  emisivity: number;
-}> = {
-  // PLA - Low shrinkage, easy to print
-  pla: {
-    glassTransitionTempC: 60,
-    thermalConductivityWPerMK: 0.13,
-    specificHeatJPerGK: 1.8,
-    shrinkagePercent: 0.2,
-    printTempC: { min: 190, max: 220 },
-    bedTempC: 50,
-    densityGPerCm3: 1.24,
-    thermalDiffusivityMm2PerS: 0.059,
-    emisivity: 0.92,
-  },
-  // ABS - High shrinkage, requires enclosure
-  abs: {
-    glassTransitionTempC: 105,
-    thermalConductivityWPerMK: 0.17,
-    specificHeatJPerGK: 1.4,
-    shrinkagePercent: 0.8,
-    printTempC: { min: 220, max: 250 },
-    bedTempC: 100,
-    densityGPerCm3: 1.04,
-    thermalDiffusivityMm2PerS: 0.116,
-    emisivity: 0.90,
-  },
-  // PETG - Medium shrinkage, good balance
-  petg: {
-    glassTransitionTempC: 80,
-    thermalConductivityWPerMK: 0.24,
-    specificHeatJPerGK: 1.2,
-    shrinkagePercent: 0.4,
-    printTempC: { min: 220, max: 250 },
-    bedTempC: 80,
-    densityGPerCm3: 1.27,
-    thermalDiffusivityMm2PerS: 0.157,
-    emisivity: 0.94,
-  },
-  // TPU - Flexible, low shrinkage
-  tpu: {
-    glassTransitionTempC: -40,
-    thermalConductivityWPerMK: 0.15,
-    specificHeatJPerGK: 2.0,
-    shrinkagePercent: 0.3,
-    printTempC: { min: 210, max: 230 },
-    bedTempC: 60,
-    densityGPerCm3: 1.20,
-    thermalDiffusivityMm2PerS: 0.063,
-    emisivity: 0.93,
-  },
-  // Nylon (PA6) - High shrinkage, hygroscopic
-  nylon: {
-    glassTransitionTempC: 50,
-    thermalConductivityWPerMK: 0.25,
-    specificHeatJPerGK: 1.6,
-    shrinkagePercent: 1.0,
-    printTempC: { min: 240, max: 270 },
-    bedTempC: 80,
-    densityGPerCm3: 1.14,
-    thermalDiffusivityMm2PerS: 0.137,
-    emisivity: 0.91,
-  },
-  // PC - High temperature, high shrinkage
-  pc: {
-    glassTransitionTempC: 147,
-    thermalConductivityWPerMK: 0.20,
-    specificHeatJPerGK: 1.3,
-    shrinkagePercent: 0.7,
-    printTempC: { min: 260, max: 310 },
-    bedTempC: 110,
-    densityGPerCm3: 1.20,
-    thermalDiffusivityMm2PerS: 0.128,
-    emisivity: 0.89,
-  },
-  // FDM default
-  fdm: {
-    glassTransitionTempC: 80,
-    thermalConductivityWPerMK: 0.2,
-    specificHeatJPerGK: 1.5,
-    shrinkagePercent: 0.5,
-    printTempC: { min: 200, max: 240 },
-    bedTempC: 60,
-    densityGPerCm3: 1.2,
-    thermalDiffusivityMm2PerS: 0.111,
-    emisivity: 0.92,
-  },
-  // SLA default
-  sla: {
-    glassTransitionTempC: 60,
-    thermalConductivityWPerMK: 0.15,
-    specificHeatJPerGK: 1.6,
-    shrinkagePercent: 0.1,
-    printTempC: { min: 20, max: 30 },
-    bedTempC: 25,
-    densityGPerCm3: 1.15,
-    thermalDiffusivityMm2PerS: 0.081,
-    emisivity: 0.95,
-  },
-  // SLS default
-  sls: {
-    glassTransitionTempC: 175,
-    thermalConductivityWPerMK: 0.25,
-    specificHeatJPerGK: 1.4,
-    shrinkagePercent: 0.3,
-    printTempC: { min: 170, max: 190 },
-    bedTempC: 170,
-    densityGPerCm3: 1.01,
-    thermalDiffusivityMm2PerS: 0.173,
-    emisivity: 0.90,
-  },
-  // SLM default
-  slm: {
-    glassTransitionTempC: 1400,
-    thermalConductivityWPerMK: 30,
-    specificHeatJPerGK: 0.5,
-    shrinkagePercent: 0.2,
-    printTempC: { min: 1000, max: 1400 },
-    bedTempC: 200,
-    densityGPerCm3: 7.8,
-    thermalDiffusivityMm2PerS: 7.7,
-    emisivity: 0.85,
-  },
-  // Concrete default
-  concrete: {
-    glassTransitionTempC: 100,
-    thermalConductivityWPerMK: 1.5,
-    specificHeatJPerGK: 0.8,
-    shrinkagePercent: 0.5,
-    printTempC: { min: 15, max: 25 },
-    bedTempC: 20,
-    densityGPerCm3: 2.4,
-    thermalDiffusivityMm2PerS: 0.78,
-    emisivity: 0.93,
-  },
-};
-
-// Legacy alias for backward compatibility
-const THERMAL_DEFAULTS: Record<string, Partial<Material>> = MATERIAL_THERMAL_PROPS;
-
-// ---------------------------------------------------------------------------
 // Core analysis
 // ---------------------------------------------------------------------------
 
@@ -271,10 +116,12 @@ export function computeThermalMetrics(
   options: ThermalAnalysisOptions,
   providedGraph?: GeometryGraph | null,
 ): ThermalFieldResult {
-  // Get material-specific thermal properties
-  const materialKey = options.material.name?.toLowerCase().replace(/\s+/g, '') ?? options.materialFamily;
-  const matProps = MATERIAL_THERMAL_PROPS[materialKey] ?? MATERIAL_THERMAL_PROPS[options.materialFamily];
-  const mat = { ...matProps, ...options.material };
+  // Get material-specific thermal properties from MATERIALS registry
+  const materialKey = options.material.name?.toUpperCase().replace(/\s+/g, '') ?? '';
+  const registryMaterial = MATERIALS[materialKey];
+  
+  // Use registry material properties if available, otherwise use provided material
+  const mat = registryMaterial ?? options.material;
 
   // Build geometry graph for spatial queries
   const graph = providedGraph ?? buildGeometryGraph(model);

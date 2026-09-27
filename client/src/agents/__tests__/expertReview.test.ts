@@ -44,15 +44,15 @@ describe('objectContextLabel', () => {
 describe('buildExpertContext', () => {
   it('includes material family label, object context and material metrics', () => {
     const ctx = buildExpertContext(sampleModel(), RESIN, 'detailed', 'islands: 2, suctionRisk: 60%');
-    expect(ctx).toContain('SLA/DLP resin');
+    expect(ctx).toContain('SLA/DLP Resin Expert');
     expect(ctx).toContain('fine-feature');
     expect(ctx).toContain('islands: 2');
     expect(ctx).toContain('status=warning');
   });
 
   it('labels the material family per technology', () => {
-    expect(buildExpertContext(sampleModel(), PLA, 'general')).toContain('FDM/FFF filament');
-    expect(buildExpertContext(sampleModel(), RESIN, 'general')).toContain('SLA/DLP resin');
+    expect(buildExpertContext(sampleModel(), PLA, 'general')).toContain('FDM/FFF Filament Expert');
+    expect(buildExpertContext(sampleModel(), RESIN, 'general')).toContain('SLA/DLP Resin Expert');
   });
 });
 

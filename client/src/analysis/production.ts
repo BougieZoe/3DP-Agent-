@@ -52,7 +52,8 @@ export interface ProductionSuitability {
 export function productionFromUnified(unified: UnifiedAnalysis, material: Material): ProductionSuitability | null {
   const m = unified.metrics?.result;
   const pt = unified.printTime?.result;
-  if (!m || !pt || m.meshVolumeMm3 <= 0) return null;
+  // Batch maths consume the volume directly — refuse on an open shell.
+  if (!m || !pt || m.meshVolumeMm3 <= 0 || !m.volumeReliable) return null;
 
   const dims = m.boundingBoxDimensionsMm;
   const build = BUILD_VOLUME_MM[material.technology] ?? null;

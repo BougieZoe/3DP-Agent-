@@ -17,6 +17,7 @@ export const LLM_ENDPOINTS: Record<string, string> = {
   kimi: "https://api.moonshot.cn/v1/chat/completions",
   fireworks: "https://api.fireworks.ai/inference/v1/chat/completions",
   zhipu: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+  openrouter: "https://openrouter.ai/api/v1/systemone",
 };
 
 // ── Allowed Models (whitelist) ─────────────────────────────────────────────
@@ -29,6 +30,7 @@ export const LLM_ALLOWED_MODELS: Record<string, ReadonlySet<string>> = {
   kimi: new Set(["kimi-k3"]),
   fireworks: new Set(["accounts/fireworks/models/deepseek-v4-pro"]),
   zhipu: new Set(["glm-4.7"]),
+  openrouter: new Set(["~typesafe/jev-latest", "typesafe/jev-1.13", "typesafe/jev-latest"]),
 };
 
 // ── Server-side API Key Environment Variables ──────────────────────────────
@@ -41,6 +43,7 @@ export const SERVER_KEY_ENV: Record<string, string | undefined> = {
   fireworks: process.env.FIREWORKS_API_KEY,
   gemini: process.env.GEMINI_API_KEY,
   zhipu: process.env.GLM_API_KEY,
+  openrouter: process.env.OPENROUTER_API_KEY,
 };
 
 // ── Plan-based Monthly Limits ──────────────────────────────────────────────

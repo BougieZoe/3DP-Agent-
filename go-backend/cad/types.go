@@ -12,6 +12,19 @@ type BridgeGenerateBody struct {
 	RequestDiagnostics bool            `json:"requestDiagnostics,omitempty"`
 }
 
+type BridgeEditBody struct {
+	/** The existing source code to edit. */
+	Source string `json:"source"`
+	/** Natural language edit instructions. */
+	EditInstructions string `json:"editInstructions"`
+	/** Optional: original prompt for context. */
+	OriginalPrompt string `json:"originalPrompt,omitempty"`
+	/** Optional: mesh tolerance for the regenerated STL. */
+	MeshTolerance *MeshTolerance `json:"meshTolerance,omitempty"`
+	/** Optional: timeout override. */
+	TimeoutMs int `json:"timeoutMs,omitempty"`
+}
+
 type Constraints struct {
 	TargetPrinter  string  `json:"targetPrinter,omitempty"`
 	MaterialName   string  `json:"materialName,omitempty"`

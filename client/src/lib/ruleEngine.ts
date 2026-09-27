@@ -27,6 +27,8 @@ export interface ModelData {
   };
   overhang: { angle: number; areas: number; status: 'good' | 'warning' | 'critical' };
   volume: number;
+  /** False when the shell is open — `volume` is then a by-product, not a measurement. */
+  volumeReliable: boolean;
   surfaceArea: number;
   dims: { x: number; y: number; z: number };
 }
@@ -87,11 +89,13 @@ export function generateQuickReport(
   }
 
   const volume = model.volume;
-  const process = volume > reportConfig.processLargeVolumeMm3
-    ? translate(CONTENT, 'rule.processLarge', lang)
-    : volume > reportConfig.processMidVolumeMm3
-      ? translate(CONTENT, 'rule.processMid', lang)
-      : translate(CONTENT, 'rule.processSmall', lang);
+  const process = model.volumeReliable === false
+    ? translate(CONTENT, 'rule.processUnknown', lang)
+    : volume > reportConfig.processLargeVolumeMm3
+      ? translate(CONTENT, 'rule.processLarge', lang)
+      : volume > reportConfig.processMidVolumeMm3
+        ? translate(CONTENT, 'rule.processMid', lang)
+        : translate(CONTENT, 'rule.processSmall', lang);
 
   const verdict = issues.length === 0
     ? translate(CONTENT, 'rule.verdictOk', lang)
@@ -163,6 +167,7 @@ export function answerLocally(
         : (isZh ? '⚠ 存在打印风险，建议修复壁厚或悬垂问题后再打印。' : isJa ? '⚠ 印刷リスクあり。修正を推奨します。' : '⚠ Print risk detected. Fix wall thickness or overhang issues first.');
     }
     case 'material': {
+      if (model.volumeReliable === false) return translate(CONTENT, 'rule.volumeUnmeasurable', lang);
       const v = model.volume;
       if (v > reportConfig.processLargeVolumeMm3) return isZh ? '推荐 FDM — 适合大型零件，成本低，速度快。材料建议：PLA / PETG / ABS。' : isJa ? 'FDM推奨 — 大型部品に最適。材料: PLA / PETG / ABS' : 'Recommend FDM — best for large parts. Materials: PLA / PETG / ABS.';
       if (v > reportConfig.processMidVolumeMm3) return isZh ? '推荐 FDM 或 SLA，取决于精度需求。精度要求高选SLA，成本优先选FDM。' : isJa ? 'FDMまたはSLAを推奨。精度重視ならSLA。' : 'FDM or SLA depending on precision needs. High detail → SLA. Cost-first → FDM.';
@@ -179,6 +184,7 @@ export function answerLocally(
         isJa ? '推奨設定: 積層0.2mm、充填20%（構造部品は40%+）、速度50mm/s、壁3層。' :
         'Recommended: Layer 0.2mm, Infill 20% (40%+ for structural), Speed 50mm/s, Walls 3 perimeters.';
     case 'time': {
+      if (model.volumeReliable === false) return translate(CONTENT, 'rule.volumeUnmeasurable', lang);
       const vol = model.volume / 1000;
       const mins = Math.round(vol * 0.8 + 20);
       return isZh ? `预计打印时间：${mins}–${mins + 30} 分钟（基于体积估算，FDM 0.2mm层高）。实际时间取决于切片设置。` :
@@ -186,6 +192,7 @@ export function answerLocally(
         `Estimated print time: ${mins}–${mins + 30} min (volume-based, FDM 0.2mm). Actual time depends on slicer settings.`;
     }
     case 'cost': {
+      if (model.volumeReliable === false) return translate(CONTENT, 'rule.volumeUnmeasurable', lang);
       const grams = model.volume * (material.densityGPerCm3 / 1000);
       const cost = (grams * material.pricePerKgUsd / 1000).toFixed(2);
       return isZh ? `材料成本估算：约 ¥${(parseFloat(cost) * 7).toFixed(1)}（${material.name}，基于体积）。不含机器、人工、后处理费用。` :

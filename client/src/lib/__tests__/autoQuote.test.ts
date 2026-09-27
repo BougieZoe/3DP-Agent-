@@ -9,6 +9,7 @@ function buildMockAnalysis(): UnifiedAnalysis {
     metrics: {
       result: {
         meshVolumeMm3: 12000,
+        volumeReliable: true,
         dimensions: { x: 100, y: 50, z: 25 },
         overhang: { ratio: 0.1, faceCount: 2 },
       },

@@ -21,7 +21,8 @@ export function CostCard({ unifiedAnalysis, material, language }: Props) {
   const data = useMemo(() => {
     const pt = unifiedAnalysis.printTime?.result;
     const m = unifiedAnalysis.metrics?.result;
-    if (!pt || !m || m.meshVolumeMm3 <= 0) return null;
+    // Material cost/weight here are volume-derived and meaningless on an open shell.
+    if (!pt || !m || m.meshVolumeMm3 <= 0 || !m.volumeReliable) return null;
 
     const total = pt.totalCostUsd ?? 0;
     const matCost = pt.materialCostUsd ?? 0;

@@ -4,6 +4,18 @@ export type { PipelineOptions } from './pipeline';
 export { analyzeTopology, buildEdgeMap, countShells } from './topology';
 export { validateMesh } from './validation';
 export { computeMetrics, computeMeshVolume, computeSurfaceArea, analyzeOverhang, sampleWallThickness, checkVolumeCrossConsistency, type VolumeCrossCheckResult } from './metrics';
+export {
+  assessScale,
+  analyzeScaleGuard,
+  tickHit,
+  coordGridRatio,
+  type ScaleGuardResult,
+  type ScaleGuardStatus,
+  type ScaleGuardTickCheck,
+  type ScaleGuardCoordSupport,
+  type ScaleGuardDisambiguation,
+  type ScaleGuardCoordBias,
+} from './scaleGuard';
 export { computeResinMetrics, type ResinResult } from './resin';
 export { computeFgfMetrics, type FgfResult } from './fgf';
 export { computePbfMetrics, type PbfResult, type PbfKind } from './pbf';

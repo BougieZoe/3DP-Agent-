@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+  CONSENSUS_PASS_MIN_SCORE,
+  CONSENSUS_WARNING_MIN_SCORE,
+} from '@shared/domain/agent';
+import {
   DEFAULT_ANALYSIS_THRESHOLDS,
   getThresholds,
   validateThresholds,
@@ -129,6 +133,20 @@ describe('DEFAULT_ANALYSIS_THRESHOLDS — byte-equivalence with legacy literals'
   it('verdictGate value matches lowConfidence.ts', () => {
     expect(DEFAULT_ANALYSIS_THRESHOLDS.verdictGate.minTrustedWallConfidence).toBe(0.4);
   });
+
+  it('ruling boundaries match the pre-migration verdict literals', () => {
+    expect(DEFAULT_ANALYSIS_THRESHOLDS.ruling).toEqual({
+      cadPassMinScore: 80,
+      cadWarnMinScore: 30,
+      consensusPassMinScore: 70,
+      consensusWarningMinScore: 40,
+    });
+  });
+
+  it('mirrors the consensus boundaries owned by shared/domain/agent.ts', () => {
+    expect(DEFAULT_ANALYSIS_THRESHOLDS.ruling.consensusPassMinScore).toBe(CONSENSUS_PASS_MIN_SCORE);
+    expect(DEFAULT_ANALYSIS_THRESHOLDS.ruling.consensusWarningMinScore).toBe(CONSENSUS_WARNING_MIN_SCORE);
+  });
 });
 
 describe('getThresholds deep-merge', () => {
@@ -193,5 +211,15 @@ describe('validateThresholds', () => {
 
   it('returns no errors for the pristine default', () => {
     expect(validateThresholds()).toEqual([]);
+  });
+
+  it('rejects a cad warning band that is not below the pass band', () => {
+    const bad = getThresholds({ ruling: { cadWarnMinScore: 80 } });
+    expect(validateThresholds(bad)).toContain('ruling.cadWarnMinScore must be < cadPassMinScore');
+  });
+
+  it('rejects a consensus boundary that drifts from shared/domain/agent.ts', () => {
+    const bad = getThresholds({ ruling: { consensusPassMinScore: 65 } });
+    expect(validateThresholds(bad).some(e => e.includes('ruling.consensus* must mirror shared/domain/agent.ts'))).toBe(true);
   });
 });

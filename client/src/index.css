@@ -170,3 +170,63 @@ body::before {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Factory Agent Animations */
+.agent-character { position: relative; display: flex; flex-direction: column; align-items: center; }
+
+@keyframes agentBreathe {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+@keyframes agentWork {
+  0%,100% { transform: rotate(-2deg) translateY(0); }
+  25% { transform: rotate(2deg) translateY(-3px); }
+  50% { transform: rotate(-1deg) translateY(-1px); }
+  75% { transform: rotate(1deg) translateY(-4px); }
+}
+@keyframes agentDebate {
+  0%,100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+@keyframes agentPresent {
+  0%,100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.02); }
+}
+@keyframes agentRecalibrate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes zFloat {
+  0% { opacity: 0.6; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-15px); }
+}
+@keyframes sparkle {
+  0%,100% { opacity: 0; transform: scale(0); }
+  50% { opacity: 1; transform: scale(1); }
+}
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-idle .agent-body { animation: agentBreathe 3s ease-in-out infinite; }
+.animate-working .agent-body { animation: agentWork 0.8s ease-in-out infinite; }
+.animate-debating .agent-body { animation: agentDebate 1.2s ease-in-out infinite; }
+.animate-presenting .agent-body { animation: agentPresent 2s ease-in-out infinite; }
+.animate-recalibrating .agent-body { animation: agentBreathe 1s ease-in-out infinite; }
+.animate-sleeping .agent-body { opacity: 0.4; animation: agentBreathe 4s ease-in-out infinite; }
+
+.animate-z { animation: zFloat 2s ease-out infinite; }
+.animate-z-delay { animation: zFloat 2s ease-out 0.5s infinite; }
+.animate-z-delay-2 { animation: zFloat 2s ease-out 1s infinite; }
+.animate-sparkle { animation: sparkle 1.5s ease-in-out infinite; }
+.animate-sparkle-delay { animation: sparkle 1.5s ease-in-out 0.3s infinite; }
+.animate-sparkle-delay-2 { animation: sparkle 1.5s ease-in-out 0.6s infinite; }
+.animate-spin-slow { animation: agentRecalibrate 3s linear infinite; transform-origin: center; }
+.animate-fade-in { animation: fadeSlideIn 0.3s ease forwards; }
+
+.factory-station { transition: transform 0.3s ease; }
+.factory-station:hover { transform: translateY(-2px); }
+
+.workstation-panel { backdrop-filter: blur(4px); }
+.debate-arena { backdrop-filter: blur(4px); }

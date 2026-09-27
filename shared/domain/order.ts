@@ -12,6 +12,8 @@ export type UserRole = 'designer' | 'supplier' | 'customer';
 export interface OrderSpecs {
   dimensions: { x: number; y: number; z: number };
   volumeMm3: number;
+  /** False when the source mesh was open: `volumeMm3` is then 0 by convention. */
+  volumeReliable?: boolean;
   surfaceAreaMm2: number;
   weightGrams: number;
 }

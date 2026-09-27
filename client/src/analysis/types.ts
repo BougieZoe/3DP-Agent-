@@ -128,6 +128,21 @@ export interface MetricsResult {
   /** Exact: sum of signed tetrahedron volumes */
   meshVolumeMm3: number;
 
+  /**
+   * Whether `meshVolumeMm3` is a trustworthy deliverable.
+   *
+   * The signed-tetrahedron sum only equals the enclosed volume when the shell is
+   * closed. With a boundary hole the sum silently depends on where the hole
+   * sits: `t_openbox` (a 20mm cube missing one face) reports 6666.67mm³ — a
+   * plausible-looking number that is wrong, not merely approximate. Anything
+   * user-facing or cost-bearing must gate on this flag; the raw value is still
+   * computed so geometry-only consumers keep working unchanged.
+   *
+   * False when the mesh is not watertight, or when the graph has no usable
+   * topology at all.
+   */
+  volumeReliable: boolean;
+
   /** Exact: half sum of cross product magnitudes */
   surfaceAreaMm2: number;
 
@@ -300,6 +315,12 @@ export interface UnifiedAnalysis {
   topology: AnalysisModuleResult<TopologyResult>;
   validation: AnalysisModuleResult<ValidationResult>;
   metrics: AnalysisModuleResult<MetricsResult>;
+  /**
+   * Scale / unit sentinel — ported from the Python engine's `scale_guard`.
+   * Read-only: flags implausible extents (oversize, inch/cm misread) and never
+   * auto-rescales. Null when the model has no usable extents.
+   */
+  scaleGuard?: AnalysisModuleResult<import('./scaleGuard').ScaleGuardResult> | null;
   bedFit: AnalysisModuleResult<BedFitResult> | null;
   support: AnalysisModuleResult<SupportResult> | null;
   printTime: AnalysisModuleResult<PrintTimeResult> | null;
@@ -340,4 +361,103 @@ export interface UnifiedAnalysis {
    * only when the pipeline is run with `enableProfiling: true`.
    */
   profiling?: Record<string, number>;
+}
+
+// ─── Structured Report ────────────────────────────────────────────────────────
+// Normalized report format for structured analysis output.
+// Sits between raw UnifiedAnalysis and rendered text/PDF.
+
+export type FindingSeverity = 'critical' | 'warning' | 'info';
+export type FindingCategory = 'geometry' | 'printability' | 'failure' | 'thermal' | 'cost' | 'environmental';
+export type RecommendationPriority = 'high' | 'medium' | 'low';
+export type RecommendationCategory = 'design' | 'material' | 'process' | 'orientation' | 'support';
+export type EffortLevel = 'easy' | 'moderate' | 'difficult';
+
+export interface ReportMetadata {
+  fileName: string;
+  material: string;
+  printerProfile: string;
+  technologyFamily: string;
+  analysisDate: string;
+  analysisMode: 'rules' | 'llm' | 'hybrid';
+  mlModelsAvailable: boolean;
+}
+
+export interface Evidence {
+  type: 'metric' | 'threshold' | 'comparison' | 'image';
+  label: string;
+  value: number | string;
+  unit: string;
+  threshold?: number;
+  status: 'pass' | 'warning' | 'fail';
+}
+
+export interface Finding {
+  id: string;
+  category: FindingCategory;
+  severity: FindingSeverity;
+  title: string;
+  description: string;
+  evidence: Evidence[];
+  impact: string;
+  moduleSource: string;
+  confidence: number;
+}
+
+export interface Recommendation {
+  id: string;
+  priority: RecommendationPriority;
+  category: RecommendationCategory;
+  title: string;
+  description: string;
+  expectedImpact: string;
+  effort: EffortLevel;
+  relatedFindings: string[];
+}
+
+export interface CostBreakdown {
+  materialCostUsd: number;
+  printTimeCostUsd: number;
+  supportCostUsd: number;
+  postProcessingCostUsd: number;
+  totalCostUsd: number;
+  failureRiskCostUsd: number;
+  expectedTotalCostUsd: number;
+}
+
+export interface ConfidenceBreakdown {
+  geometryAnalysis: number;
+  printabilityAssessment: number;
+  failurePrediction: number;
+  thermalAnalysis: number;
+  mlInference: number;
+  overall: number;
+}
+
+export interface ActionItem {
+  id: string;
+  order: number;
+  action: string;
+  reason: string;
+  estimatedTime: string;
+  dependencies: string[];
+}
+
+export interface ExecutiveSummary {
+  overallScore: number;
+  verdict: 'pass' | 'warning' | 'fail';
+  keyIssues: Finding[];
+  quickWins: Recommendation[];
+  estimatedCost: number;
+  estimatedPrintTime: number;
+}
+
+export interface StructuredReport {
+  metadata: ReportMetadata;
+  executiveSummary: ExecutiveSummary;
+  findings: Finding[];
+  recommendations: Recommendation[];
+  costBreakdown: CostBreakdown;
+  confidenceBreakdown: ConfidenceBreakdown;
+  actionItems: ActionItem[];
 }
