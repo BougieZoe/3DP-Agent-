@@ -8,6 +8,27 @@
 const GO_BACKEND = 'http://127.0.0.1:8888';
 const VITE_FRONTEND = 'http://localhost:3001';
 
+import { readFileSync } from 'node:fs';
+
+/**
+ * Zhipu API key — NEVER hardcode a key in this file.
+ * Resolution order:
+ *   1. process.env.GLM_API_KEY  (run: node --env-file=.env scripts/test-llm-integration.mjs)
+ *   2. server/config/llm-keys.yaml  (gitignored local key pool used by the Go relay)
+ */
+function loadGlmKey() {
+  if (process.env.GLM_API_KEY) return process.env.GLM_API_KEY;
+  try {
+    const yamlPath = new URL('../server/config/llm-keys.yaml', import.meta.url);
+    const m = readFileSync(yamlPath, 'utf8').match(/zhipu:\s*\n\s*- key:\s*["']?([^"'\s]+)["']?/);
+    if (m) return m[1];
+  } catch {}
+  return '';
+}
+
+const GLM_KEY = loadGlmKey();
+
+
 // Test results tracking
 const results = {
   passed: 0,
@@ -104,12 +125,13 @@ await test('Cache refresh works via /api/models/refresh', async () => {
 // Test 3: LLM Relay - Zhipu (only provider with key)
 // ============================================
 await test('POST /api/llm with Zhipu succeeds', async () => {
+  assert(GLM_KEY, 'No Zhipu key found: set GLM_API_KEY or server/config/llm-keys.yaml');
   const res = await fetch(`${GO_BACKEND}/api/llm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       provider: 'zhipu',
-      apiKey: 'fcbdaf5dbb3243138e9b950f2038fa13.hCNWNMIrc87Xw9Sf',
+      apiKey: GLM_KEY,
       body: {
         model: 'glm-4.7',
         messages: [
