@@ -257,7 +257,7 @@ export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATE
 
   const sourceColor = (src?: string) => {
     if (src === 'local') return 'text-muted-foreground/60';
-    if (src && src in AI_PROVIDER_METADATA) return AI_PROVIDER_METADATA[src as AIProvider].colorClass;
+    if (src && src in AI_PROVIDER_METADATA) return AI_PROVIDER_METADATA[src as AIProvider].color;
     return 'text-primary';
   };
 

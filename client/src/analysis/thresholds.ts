@@ -27,6 +27,11 @@
  * counts nothing.
  */
 
+import {
+  CONSENSUS_PASS_MIN_SCORE,
+  CONSENSUS_WARNING_MIN_SCORE,
+} from '@shared/domain/agent';
+
 export interface AnalysisThresholds {
   /**
    * Overhang angle shared by `analyzeOverhang` (metrics.ts) and
@@ -259,6 +264,36 @@ export interface AnalysisThresholds {
     /** Thermal risk score > this → temperature-related concerns. */
     highThermalRisk: number;
   };
+
+  /**
+   * Overall ruling boundaries — the two user-visible verdict chains.
+   *
+   * Kept in one group because a stored ruling is only interpretable together
+   * with the rule set that produced it.
+   * Nothing else in this file should hardcode a verdict boundary.
+   */
+  ruling: {
+    /**
+     * cad-confidence gate (confidenceEngine.computeVerdict): overallScore >=
+     * this AND no failed checks → 'PASS' (else 'WARN'; failed checks → 'FAIL').
+     */
+    cadPassMinScore: number;
+    /**
+     * cad-confidence gate floor: with no failed checks, scores >= cadPassMinScore
+     * → 'PASS', scores >= this → 'WARN', below this → 'FAIL'. (The legacy
+     * `>= 50` branch was unreachable — same `!hasFailedChecks` guard, same
+     * 'WARN' result as the `>= 30` branch right below it — and is deliberately
+     * not re-encoded as a separate threshold.)
+     */
+    cadWarnMinScore: number;
+    /**
+     * Agent consensus (shared/domain/agent.ts computeConsensusVerdict mirrors
+     * these): score >= this → 'pass'.
+     */
+    consensusPassMinScore: number;
+    /** Agent consensus: score >= this → 'warning' (else 'fail'). */
+    consensusWarningMinScore: number;
+  };
 }
 
 /** Deeply-partial override shape accepted by getThresholds(). */
@@ -422,6 +457,16 @@ export const DEFAULT_ANALYSIS_THRESHOLDS: AnalysisThresholds = {
     criticalWarpingRisk: 0.7,
     warningWarpingRisk: 0.4,
     highThermalRisk: 0.6,
+  },
+
+  ruling: {
+    // Pre-migration literals: 80 in cad-confidence computeVerdict; 70/40 in
+    // shared/domain/agent.ts computeConsensusVerdict (imported, so the two
+    // layers cannot drift).
+    cadPassMinScore: 80,
+    cadWarnMinScore: 30,
+    consensusPassMinScore: CONSENSUS_PASS_MIN_SCORE,
+    consensusWarningMinScore: CONSENSUS_WARNING_MIN_SCORE,
   },
 };
 
@@ -661,6 +706,30 @@ export function validateThresholds(
   // ── volumeCrossCheck ────────────────────────────────────────────────────────
   ratio('volumeCrossCheck.relativeThreshold', thresholds.volumeCrossCheck.relativeThreshold);
   finitePositive('volumeCrossCheck.absoluteThresholdMm3', thresholds.volumeCrossCheck.absoluteThresholdMm3);
+
+  // ── ruling ──────────────────────────────────────────────────────────────────
+  const scoreBound = (path: string, value: number): void => {
+    if (!Number.isFinite(value) || value <= 0 || value > 100) {
+      errors.push(`${path} must be a score in (0, 100], got ${value}`);
+    }
+  };
+  const rl = thresholds.ruling;
+  scoreBound('ruling.cadPassMinScore', rl.cadPassMinScore);
+  scoreBound('ruling.cadWarnMinScore', rl.cadWarnMinScore);
+  if (rl.cadWarnMinScore >= rl.cadPassMinScore) {
+    errors.push('ruling.cadWarnMinScore must be < cadPassMinScore');
+  }
+  scoreBound('ruling.consensusPassMinScore', rl.consensusPassMinScore);
+  scoreBound('ruling.consensusWarningMinScore', rl.consensusWarningMinScore);
+  if (rl.consensusWarningMinScore >= rl.consensusPassMinScore) {
+    errors.push('ruling.consensusWarningMinScore must be < consensusPassMinScore');
+  }
+  if (rl.consensusPassMinScore !== CONSENSUS_PASS_MIN_SCORE || rl.consensusWarningMinScore !== CONSENSUS_WARNING_MIN_SCORE) {
+    errors.push(
+      `ruling.consensus* must mirror shared/domain/agent.ts (${CONSENSUS_PASS_MIN_SCORE}/${CONSENSUS_WARNING_MIN_SCORE}), `
+      + `got ${rl.consensusPassMinScore}/${rl.consensusWarningMinScore}`,
+    );
+  }
 
   return errors;
 }

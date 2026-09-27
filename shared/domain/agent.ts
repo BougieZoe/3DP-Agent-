@@ -49,6 +49,29 @@ export interface DebateRound {
   agreementDelta: number;
 }
 
+export interface JevDecisionData {
+  /** Whether Jev was called and returned a result */
+  jevUsed: boolean;
+  /** Jev's overall score (0-100, mapped from 0-5) */
+  jevScore: number;
+  /** Jev's verdict */
+  jevVerdict: AgentVerdict;
+  /** Jev's confidence in its own answer (0-1) */
+  jevConfidence: number;
+  /** Single most critical risk identified by Jev */
+  topRisk: string;
+  /** Most valuable next action recommended by Jev */
+  primaryAction: string;
+  /** Latency of Jev call in ms */
+  jevLatencyMs: number;
+  /** Cost of Jev call in USD */
+  jevCostUsd: number;
+  /** Number of questions Jev answered */
+  jevQuestionCount: number;
+  /** Agent trust adjustments from Jev (agentId -> adjustment multiplier) */
+  agentTrustAdjustments: Record<string, number>;
+}
+
 export interface AgentConsensus {
   overallScore: number;
   agreementDelta: number;
@@ -58,6 +81,7 @@ export interface AgentConsensus {
   totalRounds: number;
   agentScores: Record<AgentId, number>;
   agentVerdicts: Record<AgentId, AgentVerdict>;
+  jev?: JevDecisionData;
 }
 
 export function calculateAgreementDelta(scores: number[]): number {
@@ -67,9 +91,21 @@ export function calculateAgreementDelta(scores: number[]): number {
   return Math.sqrt(variance);
 }
 
+/**
+ * Agent-consensus verdict boundaries.
+ *
+ * Owned here rather than in client/src/analysis/thresholds.ts because the
+ * shared layer must not import client code. The client mirrors both values in
+ * `thresholds.ruling` (consensusPassMinScore / consensusWarningMinScore) so the
+ * whole ruling rule set stays auditable in one place.
+ * Changing either value changes rulings: treat it as a rule-set change.
+ */
+export const CONSENSUS_PASS_MIN_SCORE = 70;
+export const CONSENSUS_WARNING_MIN_SCORE = 40;
+
 export function computeConsensusVerdict(overallScore: number): AgentVerdict {
-  if (overallScore >= 70) return 'pass';
-  if (overallScore >= 40) return 'warning';
+  if (overallScore >= CONSENSUS_PASS_MIN_SCORE) return 'pass';
+  if (overallScore >= CONSENSUS_WARNING_MIN_SCORE) return 'warning';
   return 'fail';
 }
 

@@ -99,6 +99,18 @@ export function estimatePrintTime(
       'Print time and filament from a real slicer run (G-code); cost derived from real filament weight.');
   }
 
+  // The volumetric path below derives time, filament and cost from the volume.
+  // On an open shell that volume is not trustworthy, and no slicer ground truth
+  // was supplied above — so we refuse to invent time/cost numbers for it.
+  if (!metricsResult.volumeReliable) {
+    return moduleResult('printTime', 0.0, 0, {
+      estimatedPrintTimeMinutes: 0, estimatedPrintTimeHours: 0,
+      materialWeightGrams: 0, materialCostUsd: 0, totalCostUsd: 0,
+      layerCount: 0, source: 'estimate',
+      printerProfile: { id: printerId, name: profile.name, widthMm: profile.widthMm, depthMm: profile.depthMm, heightMm: profile.heightMm },
+    }, translate(CONTENT, 'printTime.unreliableVolume', language));
+  }
+
   // Pick closest layer height rate
   const layerHeights = Object.keys(pt.volumetricRates).map(Number);
   const closestLh = layerHeights.reduce((prev, curr) =>

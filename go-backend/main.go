@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -17,8 +18,10 @@ import (
 	"github.com/BougieZoe/3dp-agent-go/config"
 	"github.com/BougieZoe/3dp-agent-go/health"
 	"github.com/BougieZoe/3dp-agent-go/llm"
+	"github.com/BougieZoe/3dp-agent-go/material"
 	"github.com/BougieZoe/3dp-agent-go/memory"
 	"github.com/BougieZoe/3dp-agent-go/mesh"
+	"github.com/BougieZoe/3dp-agent-go/models"
 	"github.com/BougieZoe/3dp-agent-go/ratelimit"
 	"github.com/BougieZoe/3dp-agent-go/slicer"
 	"github.com/BougieZoe/3dp-agent-go/step"
@@ -45,12 +48,50 @@ func main() {
 		defer memoryStore.Close()
 	}
 
+	// Initialize model registry with 5-minute TTL
+	modelRegistry := models.NewModelRegistry(5 * time.Minute)
+
+	// Extract provider config and API keys from LLM config
+	llmKeys := llm.GetKeys()
+	providerConfig := make(map[string]models.ProviderConfig)
+	apiKeys := make(map[string]string)
+	for provider, config := range llmKeys.Providers {
+		providerConfig[provider] = models.ProviderConfig{
+			ID:      config.ID,
+			BaseURL: config.BaseURL,
+			Model:   config.Model,
+		}
+		if len(config.Keys) > 0 {
+			apiKeys[provider] = config.Keys[0].Key
+		}
+	}
+	modelRegistry.SetProviderConfig(providerConfig)
+
+	// Initial refresh (non-blocking)
+	go func() {
+		if err := modelRegistry.Refresh(apiKeys); err != nil {
+			log.Printf("Warning: initial model refresh failed: %v", err)
+		}
+	}()
+
+	// Periodic refresh every 5 minutes
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := modelRegistry.Refresh(apiKeys); err != nil {
+				log.Printf("Warning: model refresh failed: %v", err)
+			}
+		}
+	}()
+
 	slicerRouter := slicer.NewSlicerRouter(cfg.SlicerPaths)
 	meshRouter := mesh.NewMeshRouter(cfg.PythonPath, cfg.CadBridgeDir)
 	stepRouter := step.NewStepRouter(cfg.PythonPath, cfg.CadBridgeDir)
 	cadRouter := cad.NewCadRouter(cfg.PythonPath, cfg.CadBridgeDir)
 	healthRouter := health.NewHealthRouter(cfg.PythonPath, cfg.SlicerPaths)
 	thermalRouter := thermal.NewThermalRouter()
+	modelRouter := models.NewModelRouter(modelRegistry)
 
 	r := chi.NewRouter()
 
@@ -84,6 +125,14 @@ func main() {
 
 		r.Route("/thermal", func(r chi.Router) {
 			r.Mount("/", thermalRouter.Routes())
+		})
+
+		r.Route("/materials", func(r chi.Router) {
+			r.Mount("/", material.Handler())
+		})
+
+		r.Route("/models", func(r chi.Router) {
+			r.Mount("/", modelRouter.Routes())
 		})
 
 		if memoryStore != nil {
@@ -125,8 +174,9 @@ func llmRelayHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := llm.RelayLLM(req)
+	result := llm.RelayLLMWithFallback(req)
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-LLM-Provider", result.Provider)
 	w.WriteHeader(result.Status)
 	w.Write([]byte(result.Body))
 }

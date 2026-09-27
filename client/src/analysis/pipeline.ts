@@ -3,6 +3,7 @@ import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { analyzeTopology } from './topology';
 import { validateMesh } from './validation';
 import { computeMetrics } from './metrics';
+import { analyzeScaleGuard, type ScaleGuardResult } from './scaleGuard';
 import { computeResinMetrics, type ResinResult } from './resin';
 import { computeFgfMetrics, type FgfResult } from './fgf';
 import { computePbfMetrics, type PbfResult, type PbfKind } from './pbf';
@@ -87,7 +88,7 @@ export function runAnalysisPipeline(
 
   const emptyTopology: TopologyResult = { triangleCount: 0, vertexCount: 0, edgeCount: 0, manifoldEdgeCount: 0, boundaryEdgeCount: 0, nonManifoldEdgeCount: 0, shellCount: 0, isManifold: false, problemEdges: [] };
   const emptyValidation: ValidationResult = { isWatertight: false, holeCount: 0, boundaryEdgeCount: 0, flippedNormalFaceCount: 0, totalFaceCount: 0, flippedNormalRatio: 0, normalOrientation: 'unknown', degenerateFaceCount: 0 };
-  const emptyMetrics: MetricsResult = { meshVolumeMm3: 0, surfaceAreaMm2: 0, boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 }, minWallThicknessMm: null, avgWallThicknessMm: null, p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null, thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, wallThicknessSamples: [], overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 } };
+  const emptyMetrics: MetricsResult = { meshVolumeMm3: 0, volumeReliable: false, surfaceAreaMm2: 0, boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 }, minWallThicknessMm: null, avgWallThicknessMm: null, p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null, thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, wallThicknessSamples: [], overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 } };
 
   const failResult = <T>(moduleName: string, error: unknown, defaultValue: T): AnalysisModuleResult<T> => {
     const message = error instanceof Error
@@ -115,6 +116,18 @@ export function runAnalysisPipeline(
   const metrics = time('metrics', () => {
     try { return computeMetrics(model, graph, mat?.overhangThreshold, profiling, lang, thresholds); }
     catch (e) { return failResult('metrics', e, emptyMetrics); }
+  });
+
+  // Scale / unit sentinel — ported from the Python engine's `_scale_guard`.
+  // Read-only health check: flags an inch/cm export read as millimetres and
+  // oversized parts without ever rescaling. Computed right after metrics so a
+  // mis-scaled model is called out, never silently accepted.
+  const scaleGuard = time('scaleGuard', () => {
+    try {
+      const dims = metrics.result.boundingBoxDimensionsMm;
+      if (!(dims.x > 0 || dims.y > 0 || dims.z > 0)) return null;
+      return analyzeScaleGuard(model, [dims.x, dims.y, dims.z]) as AnalysisModuleResult<ScaleGuardResult>;
+    } catch (e) { return null; }
   });
 
   const bedFit = time('bedFit', () => {
@@ -179,6 +192,8 @@ export function runAnalysisPipeline(
     try {
       if (options.materialFamily !== 'concrete') return null;
       const m = metrics.result;
+      // Crack/print-time proxies below are volume-derived: refuse on an open shell.
+      if (!m.volumeReliable) return null;
       return moduleResult('concrete', 1.0 as Confidence, 0, computeConcreteMetrics({
         minWallThicknessMm: m.minWallThicknessMm,
         overhangRatio: m.overhang?.ratio ?? 0,
@@ -199,7 +214,7 @@ export function runAnalysisPipeline(
   };
   const loop = time('loop', () => {
     try {
-      if (!mat || metrics.result.meshVolumeMm3 <= 0) return null;
+      if (!mat || metrics.result.meshVolumeMm3 <= 0 || !metrics.result.volumeReliable) return null;
       const m = metrics.result;
       const pt = printTime?.result;
       return moduleResult('loop', 0.9 as Confidence, 0, computeLoopMetrics({
@@ -441,7 +456,7 @@ export function runAnalysisPipeline(
     }
   });
 
-  const confidences = [topology, validation, metrics, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, loop, thermal, metal, multiMaterial, aiSuggestions, mlAnalysis]
+  const confidences = [topology, validation, metrics, scaleGuard, bedFit, support, printTime, resin, fgf, pbf, concrete, eco, loop, thermal, metal, multiMaterial, aiSuggestions, mlAnalysis]
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .map(m => m.confidence);
   const overallConfidence = confidences.length > 0
@@ -452,6 +467,7 @@ export function runAnalysisPipeline(
     topology,
     validation,
     metrics,
+    scaleGuard,
     bedFit,
     support,
     printTime,

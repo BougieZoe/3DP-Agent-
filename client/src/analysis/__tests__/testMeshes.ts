@@ -194,6 +194,18 @@ export function createOverhangPlate(width: number, depth: number, overhangAngleD
 export function createWatertightCubeModel(): GeometryModel {
   return geoToModel(createWatertightCube());
 }
+
+/**
+ * A closed cube big enough for the volume-derived modules to return non-trivial
+ * numbers. Tests that exercise printTime / loop must use a watertight solid:
+ * a 1mm cube (or an open terrain sheet) is either too small to estimate or not
+ * watertight at all, and volume-derived output is suppressed in both cases.
+ */
+export function createScaledWatertightCubeModel(scale: number = 20): GeometryModel {
+  const geo = createWatertightCube();
+  geo.scale(scale, scale, scale);
+  return geoToModel(geo);
+}
 export function createOpenCubeModel(): GeometryModel {
   return geoToModel(createOpenCube());
 }

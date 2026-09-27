@@ -14,6 +14,8 @@ describe('AI provider metadata', () => {
       'amd-cloud',
       'fireworks',
       'zhipu',
+      'nemotron',
+      'openrouter',
     ];
 
     expect(ids).toEqual(expectedIds);

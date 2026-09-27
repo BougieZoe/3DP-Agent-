@@ -5,6 +5,7 @@ import type { MetricsResult } from '../types';
 function metricsWithDims(x: number, y: number, z: number): MetricsResult {
   return {
     meshVolumeMm3: 6000,
+    volumeReliable: true,
     surfaceAreaMm2: 8000,
     boundingBoxVolumeMm3: x * y * z,
     boundingBoxDimensionsMm: { x, y, z },

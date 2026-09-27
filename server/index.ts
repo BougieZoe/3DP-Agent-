@@ -10,6 +10,7 @@ import { createStepRouter } from "./stepRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
 import { relayLLM, relayLLMStream } from "./llmRelay";
+import { relayJev } from "./jevRelay";
 import { createShareRouter } from "./shareRouter";
 import { createStripeRouter } from "./stripeRouter";
 import { logger } from "./logger";
@@ -282,6 +283,22 @@ export function createApp() {
     // Inject bearer into req.body for the relay
     (req.body as Record<string, unknown>).bearer = bearer;
     await relayLLMStream(req, res);
+  });
+
+  // Jev relay (/api/jev) — TypeSafe System One API.
+  //
+  // Jev makes fast, structured decisions using the System One API format.
+  // The request body contains { apiKey, body: { model, state, questions } }.
+  // For signed-in users, the server uses OPENROUTER_API_KEY from env.
+  // For anonymous users, they provide their own key (BYOK).
+  //
+  // System One API format differs from Chat Completion:
+  // - Input: { model, state, questions }
+  // - Output: { model, answers, usage }
+  app.post("/api/jev", express.json({ limit: "1mb" }), rateLimit, async (req: Request, res: Response) => {
+    const { apiKey, body } = (req.body ?? {}) as Record<string, unknown>;
+    const result = await relayJev({ apiKey: apiKey as string, body });
+    res.status(result.status).set("Content-Type", "application/json").send(result.text);
   });
 
   // Share report links — public, no auth required

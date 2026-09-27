@@ -48,6 +48,7 @@ import { ScanlineSweep } from '@/components/decorative/ScanlineSweep';
 import { BedStatusTicker } from '@/components/decorative/BedStatusTicker';
 import { LayerHeightLabel } from '@/components/decorative/LayerHeightLabel';
 import { FeaturesSection } from '@/pages/home/FeaturesSection';
+import { AgentOfficeEntry } from '@/components/factory/AgentOfficeEntry';
 import type { FeatureDestination } from '@/pages/home/featuresNavigation';
 import { toast } from 'sonner';
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
@@ -56,6 +57,8 @@ import { ManufacturingRecommendationPanel } from '@/components/ManufacturingReco
 import { ManufacturerExport } from '@/components/ManufacturerExport';
 import { GlassCard } from '@/components/GlassCard';
 import { recommendManufacturing, type ManufacturingGoal, type ProcessRecommendation } from '@/lib/manufacturingRecommendation';
+import { MaterialRecommendationPanel } from '@/components/MaterialRecommendationPanel';
+import { recommendMaterials, type RecommendationResult } from '@/analysis/materialRecommendation';
 
 // Lazy-loaded 3D visualization components (code splitting)
 const OverhangHeatmapDesktop = lazy(() => import('@/components/3D/AdvancedHeatmap').then(m => ({ default: m.AdvancedHeatmap })));
@@ -166,6 +169,7 @@ function unifiedToAnalysisSummary(unifiedAnalysis: import('@/analysis').UnifiedA
       status: deriveOhStatus(oh?.ratio ?? 0),
     },
     volume: metrics?.meshVolumeMm3 ?? 0,
+    volumeReliable: metrics?.volumeReliable === true,
     surfaceArea: metrics?.surfaceAreaMm2 ?? 0,
   };
 }
@@ -313,6 +317,8 @@ export default function Home() {
   const [materialFamily, setMaterialFamily] = useState<Material['technology']>('fdm');
   const [objectContext, setObjectContext] = useState<ObjectContext>('general');
   const [mfgGoal, setMfgGoal] = useState<ManufacturingGoal>('prototype');
+  const [materialRecResult, setMaterialRecResult] = useState<RecommendationResult | null>(null);
+  const [materialRecLoading, setMaterialRecLoading] = useState(false);
   const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
   const [showModeMenu, setShowModeMenu] = useState(false);
   const [language, setLanguage] = useState<Language>('en');
@@ -433,6 +439,21 @@ export default function Home() {
     const md = unifiedToModelData(model.unifiedAnalysis, model.fileName, material.overhangThreshold);
     setQuickReport(generateQuickReport(md, language, material));
     commitModel(model);
+
+    // Generate material recommendations
+    setMaterialRecLoading(true);
+    try {
+      const recResult = recommendMaterials({
+        technology: material.technology as Material['technology'],
+        model: fromThreeBufferGeometry(model.geometry),
+        topN: 3,
+      });
+      setMaterialRecResult(recResult);
+    } catch (err) {
+      console.error('Material recommendation failed:', err);
+    } finally {
+      setMaterialRecLoading(false);
+    }
   };
 
   /** Keep models[] and uploadedModel in sync (used after re-analysis too). */
@@ -468,7 +489,14 @@ export default function Home() {
   };
 
   const runAgentAnalysis = async (model: UploadedModel, mat: Material = material) => {
-    if (!orchestratorRef.current) return;
+    if (!orchestratorRef.current) {
+      console.warn('[3DP] orchestrator not loaded yet, retrying in 1s...');
+      await new Promise(r => setTimeout(r, 1000));
+      if (!orchestratorRef.current) {
+        console.error('[3DP] orchestrator still null after retry');
+        return;
+      }
+    }
     setAgentLoading(true);
     try {
       // 1) Deterministic rule engine first — instant, free, always available.
@@ -480,10 +508,11 @@ export default function Home() {
         language,
         mat,
       );
+      console.log('[3DP] agent analysis complete:', ruleSummary);
       setAgentRun(ruleSummary);
 
     } catch (err) {
-      console.error('Rule analysis failed:', err);
+      console.error('[3DP] Rule analysis failed:', err);
     } finally {
       setAgentLoading(false);
     }
@@ -1032,10 +1061,13 @@ deepAnalysisSeq.current += 1;
           <span>▋ {t('loading3d')}</span>
         </div>
       }>
-      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-28 sm:pt-14 flex flex-col lg:flex-row min-h-screen">
+      {mode === 'cad' ? <CADWorkspace language={language} /> : mode === 'mesh' ? <MeshStudio language={language} /> : <div className="pt-28 sm:pt-14 flex flex-col min-h-screen lg:h-screen lg:overflow-hidden">
+
+        {/* Two-column split — fills the rest of the viewport on desktop */}
+        <div className="flex flex-col lg:flex-row lg:flex-1 lg:min-h-0">
 
         {/* Left: 3D Viewport */}
-        <div className="lg:w-1/2 h-[40vh] sm:h-[45vh] lg:h-[calc(100vh-3.5rem)] lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
+        <div className="lg:w-1/2 h-[40vh] sm:h-[45vh] lg:h-full lg:min-h-0 lg:sticky lg:top-14 border-b lg:border-b-0 lg:border-r border-border relative">
           <div className="absolute top-3 left-4 z-10 font-mono text-xs text-muted-foreground/40 space-y-0.5 hidden lg:block">
             <div>// {t('viewport')}</div>
             <div>// {t('viewportHint')}</div>
@@ -1161,7 +1193,7 @@ deepAnalysisSeq.current += 1;
         </div>
 
         {/* Right: Panel */}
-        <div className="lg:w-1/2 lg:h-[calc(100vh-3.5rem)] lg:overflow-y-auto">
+        <div className="lg:w-1/2 lg:h-full lg:min-h-0 lg:overflow-y-auto">
           <div className="pt-3 sm:pt-4 px-4 sm:px-5 pb-5 space-y-6 sm:space-y-8">
 
             {/* Upload */}
@@ -1236,13 +1268,15 @@ deepAnalysisSeq.current += 1;
                 without a model it opens via the standalone DiagnosisModal */}
             {tab === 'chat' && modelData && (
               <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
-                <DiagnosisPanel
-                  language={language}
-                  canRun={!!user || hasAnyKey()}
-                  onNeedAuth={() => setShowAccountModal(true)}
-                  materialContext={`${material.name} (${material.technology.toUpperCase()})`}
-                  geometryContext={unifiedAnalysis ? buildDiagnosisGeometryContext(unifiedAnalysis) : undefined}
-                />
+                <div className="!-mt-5 sm:!-mt-6">
+                  <DiagnosisPanel
+                    language={language}
+                    canRun={!!user || hasAnyKey()}
+                    onNeedAuth={() => setShowAccountModal(true)}
+                    materialContext={`${material.name} (${material.technology.toUpperCase()})`}
+                    geometryContext={unifiedAnalysis ? buildDiagnosisGeometryContext(unifiedAnalysis) : undefined}
+                  />
+                </div>
                 {modelData ? (
                   <div className="pt-2 flex-1 min-h-[60vh] h-[calc(100vh-220px)] flex flex-col">
                     <ChatPanel
@@ -1262,11 +1296,11 @@ deepAnalysisSeq.current += 1;
 
             {/* Model-dependent tabs (need an uploaded + analyzed file) */}
             {analysis && modelData && (
-              <div className="space-y-0 fade-up">
+              <div className="space-y-0 fade-up !-mt-5 sm:!-mt-6">
 
                 {/* GEOMETRY TAB */}
                 {tab === 'geometry' && (
-                  <div className="space-y-4 pt-4 relative">
+                  <div className="space-y-4 pt-1 relative">
                     {materialLoading && (
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 rounded-sm">
                         <div className="text-xs font-mono text-primary animate-pulse">&#x258b; {t('recalculating')}</div>
@@ -1372,7 +1406,7 @@ deepAnalysisSeq.current += 1;
                       {unifiedAnalysis?.metrics.result?.minWallThicknessMm != null && (
                         <MetricRow label={t('minAbs')} value={toUnit(unifiedAnalysis.metrics.result.minWallThicknessMm).toFixed(3)} unit={unitSuffix} />
                       )}
-                      <MetricRow label={t('volume')} value={toUnit3(analysis.volume).toFixed(1)} unit={volumeUnit} />
+                      <MetricRow label={t('volume')} value={analysis.volumeReliable ? toUnit3(analysis.volume).toFixed(1) : '—'} unit={volumeUnit} />
                       <MetricRow label={t('surfaceArea')} value={toUnit2(analysis.surfaceArea).toFixed(1)} unit={areaUnit} />
                       <MetricRow label={t('dimX')} value={toUnit(modelData.dims.x).toFixed(2)} unit={unitSuffix} />
                       <MetricRow label={t('dimY')} value={toUnit(modelData.dims.y).toFixed(2)} unit={unitSuffix} />
@@ -1498,6 +1532,18 @@ deepAnalysisSeq.current += 1;
                       />
                     )}
                     {unifiedAnalysis && (
+                      <MaterialRecommendationPanel
+                        result={materialRecResult}
+                        onSelectMaterial={(mat) => {
+                          const key = Object.keys(MATERIALS).find(k => MATERIALS[k].name === mat.name);
+                          if (key) {
+                            reanalyzeWithMaterial(key as MaterialName);
+                          }
+                        }}
+                        isLoading={materialRecLoading}
+                      />
+                    )}
+                    {unifiedAnalysis && (
                       <ManufacturerExport
                         analysis={unifiedAnalysis}
                         recommendations={mfgRecommendations}
@@ -1528,7 +1574,7 @@ deepAnalysisSeq.current += 1;
 
                 {/* REPORT TAB */}
                 {tab === 'report' && (
-                  <div className="pt-4 space-y-4 relative">
+                  <div className="pt-1 space-y-4 relative">
                     {materialLoading && (
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 rounded-sm">
                         <div className="text-xs font-mono text-primary animate-pulse">&#x258b; {t('recalculating')}</div>
@@ -1649,7 +1695,14 @@ deepAnalysisSeq.current += 1;
 
                 {/* AGENTS TAB */}
                 {tab === 'agents' && (
-                  <div className="pt-4 space-y-4">
+                  <div className="!-mt-6 space-y-3">
+                    {/* Live Floor — small-screen live view of the agents' 3D
+                        office. The full scene is too heavy for the tab strip,
+                        so the frame embeds the office page and hands off to the
+                        fullscreen overlay on click. Replaces the old 2x2
+                        FactoryScene grid and its consensus table. */}
+                    <AgentOfficeEntry t={t} variant="live" />
+
                     {agentLoading && (
                       <div className="border border-primary/30 rounded-sm p-6 text-center">
                         <div className="text-xs font-mono text-primary animate-pulse mb-2">\u258b {t('multiAgentRunning')}</div>
@@ -1668,34 +1721,78 @@ deepAnalysisSeq.current += 1;
 
                     {agentRun && !agentLoading && (
                       <>
-                        {/* Consensus Score */}
-                        <div className="border border-border rounded-sm bg-card p-5 text-center">
-                          <div className="text-xs font-mono text-muted-foreground mb-2">{t('consensusScore')}</div>
-                          <div className={`text-4xl font-mono font-bold ${
-                            agentRun.consensus.verdict === 'pass' ? 'text-emerald-400'
-                              : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
-                              : 'text-red-400'
-                          }`}>
-                            {agentRun.consensus.overallScore}
-                            <span className="text-lg text-muted-foreground/40">/100</span>
+                        {/* Consensus Score — Jev Decision Engine */}
+                        <div className="border border-border rounded-sm bg-card p-5">
+                          <div className="text-center mb-4">
+                            <div className="text-xs font-mono text-muted-foreground mb-2">{t('consensusScore')}</div>
+                            <div className={`text-4xl font-mono font-bold ${
+                              agentRun.consensus.verdict === 'pass' ? 'text-emerald-400'
+                                : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
+                                : 'text-red-400'
+                            }`}>
+                              {agentRun.consensus.overallScore}
+                              <span className="text-lg text-muted-foreground/40">/100</span>
+                            </div>
+                            <div className={`mt-1 text-xs font-mono uppercase ${
+                              agentRun.consensus.verdict === 'pass' ? 'text-emerald-400'
+                                : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
+                                : 'text-red-400'
+                            }`}>
+                              {agentRun.consensus.verdict === 'pass' ? t('verdictPass') : agentRun.consensus.verdict === 'warning' ? t('verdictWarning') : t('verdictFail')}
+                            </div>
                           </div>
-                          <div className={`mt-1 text-xs font-mono uppercase ${
-                            agentRun.consensus.verdict === 'pass' ? 'text-emerald-400'
-                              : agentRun.consensus.verdict === 'warning' ? 'text-yellow-400'
-                              : 'text-red-400'
-                          }`}>
-                            {agentRun.consensus.verdict === 'pass' ? t('verdictPass') : agentRun.consensus.verdict === 'warning' ? t('verdictWarning') : t('verdictFail')}
-                          </div>
-                          <div className="mt-2 text-xs text-muted-foreground/50">
-                            {agentRun.analysisSource === 'llm' ? (
-                              <span className="text-cyan-400">{t('deepAgentLlm')}</span>
-                            ) : (
-                              <><span className="text-primary">{t('deterministicEngine')}</span>{' \u2022 '}</>
-                            )}
-                            {agentRun.usedVision && <><span className="text-primary">{t('visionUsed')}</span>{' \u2022 '}</>}
-                            {agentRun.consensus.agreementDelta < 10 ? t('strongAgreement') : t('moderateAgreement')}
-                            {' \u2022 '}{agentRun.totalDurationMs}ms
-                          </div>
+
+                          {/* Jev Decision Details */}
+                          {agentRun.consensus.jev?.jevUsed ? (
+                            <div className="space-y-3">
+                              {/* Risk & Action Chips */}
+                              <div className="flex flex-wrap justify-center gap-2">
+                                {agentRun.consensus.jev.topRisk !== 'none' && (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 border rounded-sm text-orange-400 border-orange-400/30 bg-orange-400/5">
+                                    {agentRun.consensus.jev.topRisk}
+                                  </span>
+                                )}
+                                {agentRun.consensus.jev.primaryAction !== 'proceed' && (
+                                  <span className="text-[10px] font-mono px-2 py-0.5 border rounded-sm text-cyan-400 border-cyan-400/30 bg-cyan-400/5">
+                                    {agentRun.consensus.jev.primaryAction}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Confidence & Metadata */}
+                              <div className="grid grid-cols-3 gap-2 text-center">
+                                <div className="border border-border/30 rounded-sm p-2">
+                                  <div className="text-[10px] text-muted-foreground/50 mb-0.5">confidence</div>
+                                  <div className="text-xs font-mono text-primary">
+                                    {Math.round(agentRun.consensus.jev.jevConfidence * 100)}%
+                                  </div>
+                                </div>
+                                <div className="border border-border/30 rounded-sm p-2">
+                                  <div className="text-[10px] text-muted-foreground/50 mb-0.5">latency</div>
+                                  <div className="text-xs font-mono text-primary">
+                                    {agentRun.consensus.jev.jevLatencyMs}ms
+                                  </div>
+                                </div>
+                                <div className="border border-border/30 rounded-sm p-2">
+                                  <div className="text-[10px] text-muted-foreground/50 mb-0.5">cost</div>
+                                  <div className="text-xs font-mono text-primary">
+                                    ${agentRun.consensus.jev.jevCostUsd.toFixed(4)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center text-xs text-muted-foreground/50 mt-2">
+                              {agentRun.analysisSource === 'llm' ? (
+                                <span className="text-cyan-400">{t('deepAgentLlm')}</span>
+                              ) : (
+                                <><span className="text-primary">{t('deterministicEngine')}</span>{' \u2022 '}</>
+                              )}
+                              {agentRun.usedVision && <><span className="text-primary">{t('visionUsed')}</span>{' \u2022 '}</>}
+                              {agentRun.consensus.agreementDelta < 10 ? t('strongAgreement') : t('moderateAgreement')}
+                              {' \u2022 '}{agentRun.totalDurationMs}ms
+                            </div>
+                          )}
                         </div>
 
                         {/* Score methodology explanation — shown when both scores exist */}
@@ -1708,6 +1805,21 @@ deepAnalysisSeq.current += 1;
                               {t('scoreComparisonDesc')}
                             </p>
                           </details>
+                        )}
+
+                        {/* Jev Recalibration Indicator */}
+                        {agentRun.recalibrations && agentRun.recalibrations.length > 0 && (
+                          <div className="border border-cyan-400/30 rounded-sm bg-cyan-400/5 p-3">
+                            <div className="text-[10px] font-mono text-cyan-400 mb-1">
+                              JEV RECALIBRATION
+                            </div>
+                            {agentRun.recalibrations.map((recal: { agentId: string; originalScore: number; blendedScore: number; reason: string }) => (
+                              <div key={recal.agentId} className="text-[10px] text-muted-foreground/70">
+                                {getAgentLabelLazy(recal.agentId, language)}: {recal.originalScore} → {recal.blendedScore}
+                                <span className="text-muted-foreground/40 ml-1">({recal.reason})</span>
+                              </div>
+                            ))}
+                          </div>
                         )}
 
                         {/* Per-Agent Cards */}
@@ -1820,8 +1932,8 @@ deepAnalysisSeq.current += 1;
                         </div>
                       </>
                     )}
-                    {/* Expert LLM review — a material-domain AI expert translates the
-                        deterministic metrics into plain-language advice */}
+
+                    {/* Expert LLM review — always visible when AGENTS tab is active */}
                     <ExpertReviewPanel
                       model={modelData}
                       material={material}
@@ -1832,9 +1944,6 @@ deepAnalysisSeq.current += 1;
                         const fgf = unifiedAnalysis?.fgf?.result;
                         const pbf = unifiedAnalysis?.pbf?.result;
                         const concrete = unifiedAnalysis?.concrete?.result;
-                        // Liquid-cooling context takes priority — a liquid-cooled SLM
-                        // part is simultaneously a pbf part, and the application-level
-                        // numbers matter most to that expert.
                         if (objectContext === 'liquid-cooling' && unifiedAnalysis) {
                           const lc = liquidCoolingFromUnified(unifiedAnalysis);
                           if (lc) return `LiquidCooling: leakRisk: ${(lc.leakRisk * 100).toFixed(0)}%, channelRisk: ${(lc.channelRisk * 100).toFixed(0)}%, heatExchangeProxy: ${(lc.heatExchangeProxy * 100).toFixed(0)}%, pressureWallMin: ${lc.pressureWall.minThicknessMm ?? 'n/a'}mm, threshold: ${lc.pressureWall.thresholdMm}mm`;
@@ -1859,7 +1968,7 @@ deepAnalysisSeq.current += 1;
                 {/* CAUSALITY TAB */}
                 {tab === 'causality' && (
                   <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
-                    <div className="pt-4 space-y-4">
+                    <div className="pt-1 space-y-4">
                       <CausalityPanel graph={causalityGraph} selectedId={selectedEventId} onSelect={setSelectedEventId} language={language} />
                       <div className="border-t border-border/20 my-2" />
                       {patternMatches.length > 0 && (
@@ -1909,7 +2018,7 @@ deepAnalysisSeq.current += 1;
                 {/* VERIFICATION TAB */}
                 {tab === 'verification' && (
                   <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
-                    <div className="pt-4">
+                    <div className="pt-1">
                       <PhysicalVerificationBoard language={language as any} />
                     </div>
                   </Suspense>
@@ -1917,7 +2026,7 @@ deepAnalysisSeq.current += 1;
 
                 {/* ORDERS TAB */}
                 {tab === 'orders' && (
-                  <div className="pt-4 space-y-4">
+                  <div className="pt-1 space-y-4">
                     {/* Create Order button */}
                     {uploadedModel ? (
                       <button
@@ -1954,14 +2063,17 @@ deepAnalysisSeq.current += 1;
 
             {/* Empty state — the drop zone above already prompts the upload.
                 Features sit lower with breathing room in between; the middle
-                stays open for future content. */}
+                stays open for future content. The Live Floor entry leads the
+                feature list (it is the only live, non-AI-key feature). */}
             {!uploadedModel && (
-              <div className="mt-28">
+              <div className="mt-6 space-y-3">
+                <AgentOfficeEntry t={t} variant="hero" />
                 <FeaturesSection t={t} onNavigate={handleFeatureNavigate} />
               </div>
             )}
 
           </div>
+        </div>
         </div>
 
         {/* Fixed footer — stays at bottom, never scrolls */}

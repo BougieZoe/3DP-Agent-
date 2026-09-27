@@ -833,6 +833,11 @@ const analysis = {
     ja: '推定不可: 体積がゼロです',
     zh: '无法估算: 体积为零',
   },
+  'printTime.unreliableVolume': {
+    en: 'Cannot estimate: the shell is not watertight, so its volume is unreliable',
+    ja: '推定不可: メッシュが水密でないため、体積を信頼できません',
+    zh: '无法估算: 模型不水密，体积不可信',
+  },
   'printTime.estimate': {
     en: 'Est. {minutes}min ({hours}h) at {layerHeight}mm layer height. Material: {weight}g (${materialCost}). Total cost: ${totalCost}. {layers} layers.',
     ja: '推定 {minutes}分（{hours}時間）、層高{layerHeight}mm。材料: {weight}g（${materialCost}）。合計コスト: ${totalCost}。{layers}層。',
@@ -1607,6 +1612,12 @@ const ruleReport = {
   'rule.processLarge': { en: 'FDM (large part)', ja: 'FDM（大型）', zh: 'FDM (大型件)' },
   'rule.processMid': { en: 'FDM / SLA', ja: 'FDM / SLA', zh: 'FDM / SLA' },
   'rule.processSmall': { en: 'SLA / SLS (fine detail)', ja: 'SLA / SLS（精細）', zh: 'SLA / SLS (精细件)' },
+  'rule.processUnknown': { en: 'Process TBD (open shell)', ja: '工法未定（非水密）', zh: '工艺待定（非水密件）' },
+  'rule.volumeUnmeasurable': {
+    en: 'Volume-based estimate unavailable: this mesh is not closed, so it encloses no defined volume. Seal the shell to enable volume, mass, time and cost estimates.',
+    ja: '体積ベースの推定は不可：メッシュが閉じていないため体積が定義されません。閉じたシェルにすると体積・重量・時間・コストの推定が有効になります。',
+    zh: '无法给出基于体积的估算：模型非水密，不存在封闭体积。封闭网格后即可启用体积、重量、时间与成本估算。',
+  },
   'rule.verdictOk': { en: '✓ Print-ready', ja: '✓ 印刷可能', zh: '✓ 可直接打印' },
   'rule.verdictFix': { en: '⚠ Needs fixes before printing', ja: '⚠ 修正が必要', zh: '⚠ 需要修复后打印' },
   'rule.dims': { en: 'Dims: {x} × {y} × {z} mm', ja: '寸法: {x} × {y} × {z} mm', zh: '尺寸: {x} × {y} × {z} mm' },

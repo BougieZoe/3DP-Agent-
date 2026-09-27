@@ -21,6 +21,7 @@ export function unifiedToModelData(
   const metrics = unifiedAnalysis.metrics.result;
   const topology = unifiedAnalysis.topology.result;
   const volume = metrics?.meshVolumeMm3 ?? 0;
+  const volumeReliable = metrics?.volumeReliable === true;
   const surfaceArea = metrics?.surfaceAreaMm2 ?? 0;
   const oh = metrics?.overhang;
   const dims = metrics?.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
@@ -51,6 +52,7 @@ export function unifiedToModelData(
       status: deriveOhStatus(oh?.ratio ?? 0),
     },
     volume,
+    volumeReliable,
     surfaceArea,
     dims,
   };
