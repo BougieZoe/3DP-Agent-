@@ -11,6 +11,7 @@ import { SHIPPING_TERMS } from '@shared/domain/order';
 import type { UploadedModel } from '@/components/STLUploadHandler';
 import type { Material } from '@shared/domain/material';
 import { MATERIALS } from '@shared/domain/material';
+import { isVolumeReportable } from '@/lib/volumeDisplay';
 
 interface OrderFormProps {
   model: UploadedModel;
@@ -89,7 +90,8 @@ export function OrderForm({ model, material, onSubmit, onCancel, language }: Ord
       stlFileName: model.fileName,
       specs: specs ? {
         dimensions: specs.boundingBoxDimensionsMm,
-        volumeMm3: specs.meshVolumeMm3,
+        volumeMm3: isVolumeReportable(specs) ? specs.meshVolumeMm3 : 0,
+        volumeReliable: isVolumeReportable(specs),
         surfaceAreaMm2: specs.surfaceAreaMm2,
         weightGrams: pt?.materialWeightGrams ?? 0,
       } : undefined,

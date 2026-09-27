@@ -169,6 +169,7 @@ function unifiedToAnalysisSummary(unifiedAnalysis: import('@/analysis').UnifiedA
       status: deriveOhStatus(oh?.ratio ?? 0),
     },
     volume: metrics?.meshVolumeMm3 ?? 0,
+    volumeReliable: metrics?.volumeReliable === true,
     surfaceArea: metrics?.surfaceAreaMm2 ?? 0,
   };
 }
@@ -1403,7 +1404,7 @@ deepAnalysisSeq.current += 1;
                       {unifiedAnalysis?.metrics.result?.minWallThicknessMm != null && (
                         <MetricRow label={t('minAbs')} value={toUnit(unifiedAnalysis.metrics.result.minWallThicknessMm).toFixed(3)} unit={unitSuffix} />
                       )}
-                      <MetricRow label={t('volume')} value={toUnit3(analysis.volume).toFixed(1)} unit={volumeUnit} />
+                      <MetricRow label={t('volume')} value={analysis.volumeReliable ? toUnit3(analysis.volume).toFixed(1) : '—'} unit={volumeUnit} />
                       <MetricRow label={t('surfaceArea')} value={toUnit2(analysis.surfaceArea).toFixed(1)} unit={areaUnit} />
                       <MetricRow label={t('dimX')} value={toUnit(modelData.dims.x).toFixed(2)} unit={unitSuffix} />
                       <MetricRow label={t('dimY')} value={toUnit(modelData.dims.y).toFixed(2)} unit={unitSuffix} />
