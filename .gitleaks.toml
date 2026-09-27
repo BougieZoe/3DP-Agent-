@@ -15,4 +15,10 @@ useDefault = true
     # silences the historical finding so the gate stays meaningful for NEW
     # leaks. History intentionally NOT rewritten (same policy as above).
     "462247ba61ff66851795287cf0b5113747234f73",
+    # 2026-09-27: 80adb359 added scripts/test-llm-integration.mjs with a live
+    # zhipu key hardcoded at line 112 (public repo, exposed since 2026-09-18).
+    # The key was ROTATED by the owner on 2026-09-27; the test script now reads
+    # the key from GLM_API_KEY / the gitignored server/config/llm-keys.yaml.
+    # Same policy as above: historical finding silenced, history NOT rewritten.
+    "80adb359a0e0408b690fe8d01fe0ad448187a9ed",
   ]
