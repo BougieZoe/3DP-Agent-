@@ -34,7 +34,7 @@
    本文件零外部依赖（只 import 同目录 three.module.min.js），可被任意页面 iframe 引用。
    ===================================================================== */
 
-import * as THREE from "/lib/three.module.min.js";
+/* Three.js is loaded as a global via <script> tag in office.html */
 
 /* ---------------- 常量 ---------------- */
 const ROOM = 12, WALL_H = 3.0, CX = 6, CZ = 6;

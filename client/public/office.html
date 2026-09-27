@@ -28,38 +28,28 @@
 <canvas id="gl"></canvas>
 <div class="vignette"></div>
 <div class="hud"><span class="live"></span><b>Live Floor</b><span>· Agent Office</span></div>
-<script type="module" src="/lib/office3d.js"></script>
+<script src="/lib/three.module.min.js"></script>
+<script src="/lib/office3d.js"></script>
 <script type="module">
-/* postMessage bridge — receives agent status from parent (AgentOfficeEntry.tsx).
-   No SSE, no local runs, no timeline. Pure real-time push from host. */
-
+/* postMessage bridge — receives agent status from parent (AgentOfficeEntry.tsx). */
 const AGENT_KEYS = ["geometry", "printability", "failure", "optimization"];
-
-/* AgentId from host → office角色键 */
 const HOST_KEY = {
   geometry_analyst: "geometry",
   printability_scorer: "printability",
   failure_predictor: "failure",
   optimization_advisor: "optimization"
 };
-
-/* Host status → office status (ignore unknown values) */
 function mapStatus(s) {
   if (s === "recalibrating" || s === "debating") return "running";
   return (s === "idle" || s === "running" || s === "done" || s === "error") ? s : null;
 }
-
 function office() { return window.__office; }
-
-/* Event queue — pace state changes for visual clarity */
 const queue = [];
 let draining = false;
-
 function enqueue(ev) {
   queue.push(ev);
   if (!draining) drain();
 }
-
 function drain() {
   if (!queue.length) { draining = false; return; }
   draining = true;
@@ -74,13 +64,10 @@ function drain() {
   }
   setTimeout(drain, (ev && ev.status === "running") ? 420 : 190);
 }
-
-/* Listen for postMessage from parent */
 window.addEventListener("message", (e) => {
   const d = e.data;
   const o = office();
   if (!d || !o) return;
-
   if (d.type === "office-event" && HOST_KEY[d.agent]) {
     const st = mapStatus(d.status);
     if (!st) return;
@@ -89,13 +76,10 @@ window.addEventListener("message", (e) => {
     enqueue({ agent: "consensus", score: d.score });
   }
 });
-
-/* Wait for office3d.js to initialize, then signal ready to parent */
 let waited = 0;
 const wait = setInterval(() => {
   if (office() || (waited += 1) > 80) {
     clearInterval(wait);
-    /* Handshake: tell parent we're ready for state push */
     if (window.parent && window.parent !== window) {
       try { window.parent.postMessage({ type: "office-ready" }, "*"); } catch (_) {}
     }
