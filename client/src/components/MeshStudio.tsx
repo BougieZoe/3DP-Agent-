@@ -6,6 +6,7 @@ import { Sparkles, Download, Box, CheckCircle2, AlertTriangle, XCircle } from 'l
 import { parseSTL } from '@/lib/stlParser';
 import { fitCameraToGeometry } from '@/lib/modelNormalization';
 import { countTriangles, decimateGeometry } from '@/lib/meshOps';
+import { formatVolume } from '@/lib/volumeDisplay';
 import { processMesh, type MeshProcessDiagnostics } from '@/lib/meshProcessClient';
 import { runCadAnalysis } from '@/lib/cadAnalysis';
 import { geometryToThreeMf } from '@/lib/threeMf';
@@ -433,7 +434,7 @@ export function MeshStudio({ language }: { language: Language }) {
                 <div className="p-2.5 border border-border/15 rounded-sm space-y-1">
                   <div className="flex justify-between text-[13px]">
                     <span className="text-muted-foreground/50 uppercase tracking-wider">{t('cadVolume')}</span>
-                    <span className="text-muted-foreground/70 tabular-nums">{Math.round(m.meshVolumeMm3 ?? 0)} mm³</span>
+                    <span className="text-muted-foreground/70 tabular-nums">{formatVolume(m, (v) => `${Math.round(v)} mm³`)}</span>
                   </div>
                   <div className="flex justify-between text-[13px]">
                     <span className="text-muted-foreground/50 uppercase tracking-wider">{t('cadAvgWall')}</span>

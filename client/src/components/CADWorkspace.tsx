@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { createLocalBridgeAdapter, generateDesign } from "@/design/generator";
 import { parseSTL } from "@/lib/stlParser";
+import { formatVolume } from "@/lib/volumeDisplay";
 import type { UnifiedAnalysis } from "@/analysis";
 import { getAPIKeys, getActiveProvider } from "@/lib/apiKeys";
 import type { AIProvider } from "@/lib/apiKeys";
@@ -2055,7 +2056,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
                     <div className="p-3 border border-border/15 rounded-sm">
                       <div className="text-sm text-muted-foreground/50 font-mono mb-2">{t('cadGeometry')}</div>
                       <div className="space-y-1.5">
-                        <TechRow label={t('cadVolume')} value={m?.meshVolumeMm3 != null ? `${Math.round(m.meshVolumeMm3)} mm³` : '—'} />
+                        <TechRow label={t('cadVolume')} value={formatVolume(m, (v) => `${Math.round(v)} mm³`)} />
                         <TechRow label={t('cadSurface')} value={m?.surfaceAreaMm2 != null ? `${Math.round(m.surfaceAreaMm2)} mm²` : '—'} />
                         {bb && <TechRow label={t('cadBBox')} value={`${bb.x.toFixed(0)} × ${bb.y.toFixed(0)} × ${bb.z.toFixed(0)} mm`} />}
                         <TechRow label={t('cadAvgWall')} value={m?.avgWallThicknessMm != null ? `${m.avgWallThicknessMm.toFixed(1)} mm` : '—'} />

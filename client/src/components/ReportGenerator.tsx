@@ -5,6 +5,7 @@ import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/
 import { getTrafficLight } from "./reportUtils";
 import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
 import { createShareLink, copyShareLink } from "@/lib/shareReport";
+import { formatVolume } from "@/lib/volumeDisplay";
 import type { ExpertReview } from "@/agents/expertReview";
 import type { ProductionSuitability } from "@/analysis/production";
 
@@ -686,8 +687,8 @@ async function generateClientPDF(
   if (pt?.materialCostUsd != null) {
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.cost', lang), `$${pt.materialCostUsd.toFixed(2)}`, y);
   }
-  if (metrics?.meshVolumeMm3 != null) {
-    y = drawDataRow(doc, translate(CONTENT, 'pdf.label.volume', lang), `${(metrics.meshVolumeMm3 / 1000).toFixed(2)} cm³`, y);
+  if (metrics) {
+    y = drawDataRow(doc, translate(CONTENT, 'pdf.label.volume', lang), formatVolume(metrics, (v) => `${(v / 1000).toFixed(2)} cm³`), y);
   }
 
   if (v) {
@@ -833,7 +834,7 @@ async function generateDesignerPDF(
   }
   y = drawDataRow(doc,
     translate(CONTENT, 'pdf.label.volume', lang),
-    metrics?.meshVolumeMm3 != null ? `${(metrics.meshVolumeMm3 / 1000).toFixed(2)} cm³` : "—",
+    formatVolume(metrics, (v) => `${(v / 1000).toFixed(2)} cm³`),
     y
   );
   y = drawDataRow(doc,
@@ -1116,7 +1117,7 @@ async function generateFactoryPDF(
     if (dims) {
       y = drawDataRow(doc, translate(CONTENT, 'pdf.label.dimensions', lang), `${dims.x.toFixed(1)} × ${dims.y.toFixed(1)} × ${dims.z.toFixed(1)} mm`, y);
     }
-    y = drawDataRow(doc, translate(CONTENT, 'pdf.label.volume', lang), metrics.meshVolumeMm3 != null ? `${(metrics.meshVolumeMm3 / 1000).toFixed(2)} cm³` : "—", y);
+    y = drawDataRow(doc, translate(CONTENT, 'pdf.label.volume', lang), formatVolume(metrics, (v) => `${(v / 1000).toFixed(2)} cm³`), y);
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.surfaceArea', lang), metrics.surfaceAreaMm2 != null ? `${(metrics.surfaceAreaMm2 / 100).toFixed(2)} cm²` : "—", y);
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.minWall', lang), metrics.minWallThicknessMm != null ? `${metrics.minWallThicknessMm.toFixed(3)} mm` : "—", y, false);
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.overhangFaces', lang), `${metrics.overhang.faceCount}`, y);
