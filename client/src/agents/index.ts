@@ -14,6 +14,5 @@ export type { AgentConsensus, AgentOutput, AgentId, RiskMarker } from '@shared/d
 
 // Core FPGA modules
 export { AgentRegistry, getAgentRegistry, type AgentSlot } from './core/agentRegistry';
-export { AgentBus, getAgentBus, type AgentMessage, type AgentMessageType } from './core/agentBus';
 export { TelemetryHub, getTelemetryHub, type AgentTelemetry, type AgentStatus } from './core/agentTelemetry';
 export { PipelineFactory, type PipelineConfig } from './core/pipelineFactory';

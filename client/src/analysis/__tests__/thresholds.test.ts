@@ -5,7 +5,6 @@ import {
 } from '@shared/domain/agent';
 import {
   DEFAULT_ANALYSIS_THRESHOLDS,
-  RULE_VERSION,
   getThresholds,
   validateThresholds,
   type ThresholdsOverride,
@@ -147,10 +146,6 @@ describe('DEFAULT_ANALYSIS_THRESHOLDS — byte-equivalence with legacy literals'
   it('mirrors the consensus boundaries owned by shared/domain/agent.ts', () => {
     expect(DEFAULT_ANALYSIS_THRESHOLDS.ruling.consensusPassMinScore).toBe(CONSENSUS_PASS_MIN_SCORE);
     expect(DEFAULT_ANALYSIS_THRESHOLDS.ruling.consensusWarningMinScore).toBe(CONSENSUS_WARNING_MIN_SCORE);
-  });
-
-  it('exposes a RULE_VERSION fingerprint', () => {
-    expect(RULE_VERSION).toMatch(/^rv-/);
   });
 });
 

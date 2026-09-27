@@ -28,7 +28,7 @@ export function computeOverallScore(categories: ConfidenceCategory[]): number {
 /**
  * Gate the per-model confidence score into the user-visible verdict.
  *
- * Boundaries come from `thresholds.ruling` (fingerprinted by RULE_VERSION).
+ * Boundaries come from `thresholds.ruling`.
  * The pre-migration body repeated the same `!hasFailedChecks` guard on three
  * score branches and returned the same 'WARN' for both `>= 80` and `>= 30`:
  * the middle `>= 50` branch was unreachable dead code and is intentionally not
