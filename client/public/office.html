@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live Floor · Agent Office</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{ --bg:#0b0f14; --accent:#39d0a5; --dim:#7c8ea6; }
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);overflow:hidden}
+  #gl{display:block;width:100vw;height:100vh;
+    background:radial-gradient(120% 100% at 50% -10%,#16212d 0%,#090d12 72%)}
+  .vignette{position:fixed;inset:0;pointer-events:none;
+    background:
+      linear-gradient(to bottom,rgba(11,15,20,.5) 0%,rgba(11,15,20,0) 15%),
+      linear-gradient(to top,rgba(11,15,20,.55) 0%,rgba(11,15,20,0) 17%)}
+  .hud{position:fixed;left:18px;top:15px;display:flex;align-items:center;gap:9px;
+    font:10.5px/1 -apple-system,"SF Mono",Menlo,Consolas,monospace;color:var(--dim);
+    letter-spacing:.2em;text-transform:uppercase;pointer-events:none;
+    text-shadow:0 1px 10px rgba(0,0,0,.85)}
+  .hud b{color:#dbe6f3;font-weight:500}
+  .live{width:6px;height:6px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 10px var(--accent);animation:beat 1.7s ease-in-out infinite}
+  @keyframes beat{50%{opacity:.2}}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div class="vignette"></div>
+<div class="hud"><span class="live"></span><b>Live Floor</b><span>· Agent Office</span></div>
+<script type="module" src="/lib/office3d.js"></script>
+<script type="module">
+/* postMessage bridge — receives agent status from parent (AgentOfficeEntry.tsx).
+   No SSE, no local runs, no timeline. Pure real-time push from host. */
+
+const AGENT_KEYS = ["geometry", "printability", "failure", "optimization"];
+
+/* AgentId from host → office角色键 */
+const HOST_KEY = {
+  geometry_analyst: "geometry",
+  printability_scorer: "printability",
+  failure_predictor: "failure",
+  optimization_advisor: "optimization"
+};
+
+/* Host status → office status (ignore unknown values) */
+function mapStatus(s) {
+  if (s === "recalibrating" || s === "debating") return "running";
+  return (s === "idle" || s === "running" || s === "done" || s === "error") ? s : null;
+}
+
+function office() { return window.__office; }
+
+/* Event queue — pace state changes for visual clarity */
+const queue = [];
+let draining = false;
+
+function enqueue(ev) {
+  queue.push(ev);
+  if (!draining) drain();
+}
+
+function drain() {
+  if (!queue.length) { draining = false; return; }
+  draining = true;
+  const ev = queue.shift();
+  const o = office();
+  if (o && ev) {
+    if (ev.agent === "consensus") {
+      if (typeof o.setConsensus === "function") o.setConsensus(ev.score);
+    } else if (AGENT_KEYS.indexOf(ev.agent) !== -1) {
+      if (typeof o.setAgent === "function") o.setAgent(ev.agent, ev.status);
+    }
+  }
+  setTimeout(drain, (ev && ev.status === "running") ? 420 : 190);
+}
+
+/* Listen for postMessage from parent */
+window.addEventListener("message", (e) => {
+  const d = e.data;
+  const o = office();
+  if (!d || !o) return;
+
+  if (d.type === "office-event" && HOST_KEY[d.agent]) {
+    const st = mapStatus(d.status);
+    if (!st) return;
+    enqueue({ agent: HOST_KEY[d.agent], status: st });
+  } else if (d.type === "office-consensus" && typeof o.setConsensus === "function") {
+    enqueue({ agent: "consensus", score: d.score });
+  }
+});
+
+/* Wait for office3d.js to initialize, then signal ready to parent */
+let waited = 0;
+const wait = setInterval(() => {
+  if (office() || (waited += 1) > 80) {
+    clearInterval(wait);
+    /* Handshake: tell parent we're ready for state push */
+    if (window.parent && window.parent !== window) {
+      try { window.parent.postMessage({ type: "office-ready" }, "*"); } catch (_) {}
+    }
+  }
+}, 250);
+</script>
+</body>
+</html>
