@@ -300,6 +300,12 @@ export interface UnifiedAnalysis {
   topology: AnalysisModuleResult<TopologyResult>;
   validation: AnalysisModuleResult<ValidationResult>;
   metrics: AnalysisModuleResult<MetricsResult>;
+  /**
+   * Scale / unit sentinel — ported from the Python engine's `scale_guard`.
+   * Read-only: flags implausible extents (oversize, inch/cm misread) and never
+   * auto-rescales. Null when the model has no usable extents.
+   */
+  scaleGuard?: AnalysisModuleResult<import('./scaleGuard').ScaleGuardResult> | null;
   bedFit: AnalysisModuleResult<BedFitResult> | null;
   support: AnalysisModuleResult<SupportResult> | null;
   printTime: AnalysisModuleResult<PrintTimeResult> | null;
