@@ -32,16 +32,6 @@ import {
   CONSENSUS_WARNING_MIN_SCORE,
 } from '@shared/domain/agent';
 
-/**
- * Rule-set fingerprint for the verdict-producing rules in this file.
- *
- * Bump whenever a threshold below changes, or whenever a verdict boundary that
- * consumes it is edited (e.g. cad-confidence's computeVerdict gate), so a stored
- * ruling can be attributed to the rule set that produced it — the same
- * convention as the Python engine's `rv-<hash>` fingerprint.
- */
-export const RULE_VERSION = 'rv-1';
-
 export interface AnalysisThresholds {
   /**
    * Overhang angle shared by `analyzeOverhang` (metrics.ts) and
@@ -278,8 +268,8 @@ export interface AnalysisThresholds {
   /**
    * Overall ruling boundaries — the two user-visible verdict chains.
    *
-   * Kept in one group (and fingerprinted by RULE_VERSION) because a stored
-   * ruling is only interpretable together with the rule set that produced it.
+   * Kept in one group because a stored ruling is only interpretable together
+   * with the rule set that produced it.
    * Nothing else in this file should hardcode a verdict boundary.
    */
   ruling: {

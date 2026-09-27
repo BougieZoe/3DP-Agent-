@@ -23,7 +23,7 @@ type T = (key: TKey) => string;
 const OFFICE_ORIGIN = (
   ((import.meta as unknown as { env?: Record<string, string> }).env?.VITE_OFFICE_URL as
     | string
-    | undefined) || 'http://127.0.0.1:8091'
+    | undefined) || `http://${window.location.hostname}:8091`
 ).replace(/\/+$/, '');
 const OFFICE_URL = `${OFFICE_ORIGIN}/office`;
 const OFFICE_HEALTH_URL = `${OFFICE_ORIGIN}/health`;

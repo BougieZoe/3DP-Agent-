@@ -24,7 +24,6 @@ import { getKey as getApiKey } from '@/lib/apiKeys';
 import { detectAnomalies, type AnomalyReport } from './jevAnomalyDetector';
 import { recalibrateFlaggedAgents, type RecalibrationResult } from './jevRecalibrator';
 import { getAgentRegistry, type AgentSlot } from './core/agentRegistry';
-import { getAgentBus } from './core/agentBus';
 import { getTelemetryHub } from './core/agentTelemetry';
 import { PipelineFactory } from './core/pipelineFactory';
 
@@ -58,7 +57,6 @@ function buildVisionGeometrySummary(
 export class AgentOrchestrator {
   private agents: Map<AgentId, BaseAgent> = new Map();
   private registry = getAgentRegistry();
-  private bus = getAgentBus();
   private telemetry = getTelemetryHub();
 
   constructor() {
@@ -115,8 +113,6 @@ export class AgentOrchestrator {
 
     const pipeline = PipelineFactory.build(material.technology as MaterialTechnology);
     const enabledAgents = Array.from(this.agents.values());
-
-    this.bus.publish({ from: 'orchestrator', to: 'broadcast', type: 'telemetry', payload: { phase: 'analysis_start', agents: enabledAgents.map(a => a.agentId) } });
 
     // Run agents and Jev Early Triage in parallel
     const dims = unifiedAnalysis.metrics.result.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
@@ -194,7 +190,6 @@ export class AgentOrchestrator {
 
       stateManager.setAgentStatus(agent.agentId, 'running');
       this.telemetry.update(agent.agentId, { status: 'running', currentPhase: 'analyzing', progress: 0 });
-      this.bus.publish({ from: agent.agentId, to: 'broadcast', type: 'telemetry', payload: { status: 'running' } });
 
       try {
         const result = await Promise.race([
@@ -212,7 +207,6 @@ export class AgentOrchestrator {
           markers: result.markers,
           durationMs: result.durationMs,
         });
-        this.bus.publish({ from: agent.agentId, to: 'broadcast', type: 'score', payload: { score: result.score, verdict: result.verdict } });
         return result;
       } catch (err) {
         stateManager.setAgentStatus(agent.agentId, 'error');
