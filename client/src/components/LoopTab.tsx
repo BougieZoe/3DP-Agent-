@@ -111,7 +111,7 @@ export function LoopTab({ unifiedAnalysis, material, language, onNavigate }: Pro
 
   if (!loop) {
     return (
-      <div className="pt-4">
+      <div className="pt-1">
         <Panel title={t.title}>
           <div className="text-xs font-mono text-muted-foreground/60">{t.noLoop}</div>
         </Panel>
@@ -124,7 +124,7 @@ export function LoopTab({ unifiedAnalysis, material, language, onNavigate }: Pro
   const eol = loop.eol;
 
   return (
-    <div className="pt-4 space-y-4">
+    <div className="pt-1 space-y-4">
       {/* Card 1 — first-time-right (band headline; the number is heuristic) */}
       <Panel title={`${t.title} · ${t.firstTime}`}>
         <div className="flex items-baseline justify-between">
