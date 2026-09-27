@@ -91,9 +91,21 @@ export function calculateAgreementDelta(scores: number[]): number {
   return Math.sqrt(variance);
 }
 
+/**
+ * Agent-consensus verdict boundaries.
+ *
+ * Owned here rather than in client/src/analysis/thresholds.ts because the
+ * shared layer must not import client code. The client mirrors both values in
+ * `thresholds.ruling` (consensusPassMinScore / consensusWarningMinScore) so the
+ * whole ruling rule set stays auditable in one place — see RULE_VERSION there.
+ * Changing either value changes rulings: treat it as a rule-set change.
+ */
+export const CONSENSUS_PASS_MIN_SCORE = 70;
+export const CONSENSUS_WARNING_MIN_SCORE = 40;
+
 export function computeConsensusVerdict(overallScore: number): AgentVerdict {
-  if (overallScore >= 70) return 'pass';
-  if (overallScore >= 40) return 'warning';
+  if (overallScore >= CONSENSUS_PASS_MIN_SCORE) return 'pass';
+  if (overallScore >= CONSENSUS_WARNING_MIN_SCORE) return 'warning';
   return 'fail';
 }
 

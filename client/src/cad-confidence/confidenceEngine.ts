@@ -1,4 +1,5 @@
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
+import { getThresholds } from '@/analysis/thresholds';
 import type { UnifiedAnalysis, OverhangSeverity, SupportDifficulty, SupportResult, BedFitResult } from '@/analysis';
 import type { ConfidenceCategory, ConfidenceExplanation, Impact, Issue, RepairSuggestion } from './types';
 
@@ -24,10 +25,21 @@ export function computeOverallScore(categories: ConfidenceCategory[]): number {
   return Math.round(weighted / totalWeight);
 }
 
+/**
+ * Gate the per-model confidence score into the user-visible verdict.
+ *
+ * Boundaries come from `thresholds.ruling` (fingerprinted by RULE_VERSION).
+ * The pre-migration body repeated the same `!hasFailedChecks` guard on three
+ * score branches and returned the same 'WARN' for both `>= 80` and `>= 30`:
+ * the middle `>= 50` branch was unreachable dead code and is intentionally not
+ * re-encoded. `hasWarningChecks` is kept for call-site compatibility — warnings
+ * do not downgrade the verdict today.
+ */
 export function computeVerdict(score: number, hasFailedChecks: boolean, hasWarningChecks: boolean): import('./types').Verdict {
-  if (score >= 80 && !hasFailedChecks) return 'PASS';
-  if (score >= 50 && !hasFailedChecks) return 'WARN';
-  if (score >= 30 && !hasFailedChecks) return 'WARN';
+  if (hasFailedChecks) return 'FAIL';
+  const ruling = getThresholds().ruling;
+  if (score >= ruling.cadPassMinScore) return 'PASS';
+  if (score >= ruling.cadWarnMinScore) return 'WARN';
   return 'FAIL';
 }
 
