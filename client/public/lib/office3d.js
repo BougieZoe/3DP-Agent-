@@ -24,14 +24,29 @@
      walls()               可透视墙分组：北墙 / 西墙的淡出透明度（自由环视用）
      card()                信息卡快照：悬停对象 / 锁定对象 / 是否带锁定样式（点击锁卡探针）
      鼠标：按住拖拽 = 360° 自由环绕（含绕到墙外自动透视）；滚轮 / 捏合 = 推拉缩放；
-           单击可锁定物件信息卡，再次单击或 Esc 解锁；1-7 / V / L 为机位 / 灯光快捷键
+           单击 = 锁定 / 解锁物件信息卡（锁定后卡片就地冻结，便于点卡上的按钮）；同一角色
+           300ms 内双击 = 进入 / 切换特写（单击不再聚焦）；1-7 / V / L 为机位 / 灯光快捷键
      hud(show)             显示 / 隐藏页内 HUD（等价 URL 参数 ?hud=0 关闭）
      roster()              五名角色的坐标 / 朝向 / 动作（调试与巡检用）
      audit()               场景自检：网格数 / 角色数 / 当前机位与灯光
+     focusRole(k) / exitFocus([opts]) / focusState()
+                           特写聚焦（P1-9：同一角色 300ms 内双击进入）：相机推近到半身 /
+                           头部取景、无发光特效；exitFocus 回进入前的机位；focusState 只读快照
      flowPulse(k[, tag]) / flows() / setFlows(on) / flowClear()   （P1-6 数据流线）
                            角色产出 / 异常流向的流光可视化：手动点亮一条 / 只读快照 /
                            总开关 / 立即清空；角色状态迁移到 done · error 时自动点亮
-   本文件零外部依赖（只 import 同目录 three.module.min.js），可被任意页面 iframe 引用。
+     loadRoleModel(k[, url][, opts]) / roleModels()         （P1-10 glTF · P1-11 VRM 管线）
+                           为指定角色异步加载并装配 glTF / VRM 模型（多实例走 SkeletonUtils.clone，
+                           动画由 AnimationMixer 驱动，装配状态记进 ch.gltf，roleModels() 只读快照）；
+                           VRM（.vrm）由 THREE.VRMLoaderPlugin 解析（含 MToon 卡通材质 / humanoid /
+                           expression / springBone / lookAt），加载完成后按角色身高自动缩放，
+                           按「面朝 +Z、脚底 y=0」对齐；本轮只铺能力、不接入模型文件：
+                           MODEL_SOURCES 为空时恒返回 { ok:false, reason:"no-source" }，
+                           并继续使用程序化角色。
+   本文件零外部依赖（THREE 来源见下方加载声明），可被任意页面 iframe 引用；
+   宿主页若用含 GLTFLoader / SkeletonUtils / VRMLoaderPlugin 的 three 全局包
+   （lib/three.global.min.js）加载，上述 glTF / VRM 角色管线才会生效；
+   缺失时自动回退程序化角色，不抛错。
    ===================================================================== */
 
 /* THREE is loaded as a global by office.html before this script runs */
@@ -414,10 +429,10 @@ const PALETTE = {
     shoulder: 1.07, chest: 1.04, waist: 0.96, armR: 1.05, jaw: 0.92,
     hip: 1.00, face: 0.98, soft: 0
   },
-  printability: {                               // 年轻韩系帅哥：黑 T 显肌肉 + 低位渐变 + 逗号刘海
-    accent: 0x34d399, skin: 0xc98d5f, hair: 0x120d09, hair2: 0x3d3428,
+  printability: {                               // 韩剧帅大叔：黑 T 显肌肉 + 侧分背头（露额 / 体积光泽 / 鬓角后颈利落）
+    accent: 0x34d399, skin: 0xc98d5f, hair: 0x120d09, hair2: 0x554839,
     outfit: "tee", cloth: 0x15181e, cloth2: 0x2a3038, pants: 0x2f3a48,
-    height: 1.85, build: "m", hairStyle: "taperFade", shoes: 0xe9edf2,
+    height: 1.85, build: "m", hairStyle: "koreanSwept", shoes: 0xe9edf2,
     headphones: true, watch: true, belt: true, socks: 0xdfe6ee, apron: true,
     shoeStyle: "sneaker", socksStyle: "high",
     iris: 0x241608, lip: 0x9c5b4a, brow: 0x140e08, blush: 0xdba980,
@@ -2154,6 +2169,16 @@ function shade(hex, k){
 }
 
 function buildCharacter(cfg){
+  /* ---- P1-10：glTF 角色分支骨架（管线实现见下方「角色 glTF 模型加载管线」段）----
+     cfg.model3d 命中 = 已加载完成的模型资源由 loadRoleModel 注入：
+       ① 先按原样装配程序化身体（保住 arms / legs / hands / props 契约，也是回退底牌）；
+       ② 再由 applyGltfVisual 把模型挂成视觉层（隐藏程序化身体、保留脚下阴影）；
+       ③ 装配失败 applyGltfVisual 返回 null → 原样返回程序化角色。
+     本轮 MODEL_SOURCES 为空 → 该分支恒不进入，构建结果与升级前逐字节一致。 */
+  if (cfg && cfg.model3d){
+    const base = buildCharacter(Object.assign({}, cfg, { model3d: null }));
+    return applyGltfVisual(base, cfg.model3d, base.cfg) || base;
+  }
   const P = cfg;
   const skinM   = grainMat(P.skin, "skin", 3, 3);            // 皮肤：带毛孔微质感
   const skinD   = grainMat(shade(P.skin, 0.90), "skin", 3, 3);
@@ -2180,6 +2205,7 @@ function buildCharacter(cfg){
   blob.position.y = 0.016;
   blob.renderOrder = 2;
   blob.userData.noOutline = true;
+  blob.userData.isShadowBlob = true;     // P1-10：脚下阴影不是"身体"，切 glTF 视觉层时保留
   root.add(blob);
 
   const torso = new THREE.Group();                      // 髋部原点
@@ -2192,27 +2218,44 @@ function buildCharacter(cfg){
               ar: P.armR || 1, jaw: P.jaw || 1,
               hip: P.hip || 1, face: P.face || 1, soft: P.soft || 0 };
   const waistW = (F ? 1.30 : 0.96) * S.wa * (1 + S.soft * 0.12);
-  const hipW   = (F ? 1.70 * S.hip : 1.12 * (0.62 + 0.38 * S.wa)) * (1 + S.soft * 0.06);
-  const chestW = (F ? 1.12 : 1.18) * (F ? 1.0 : S.ch) * (1 + S.soft * 0.05);
+  /* 髋宽（本项改造 ⑤）：旧版男性分支把 S.hip 整个丢掉，geometry / printability /
+     failure / optimization 的 hip 参数调了没有任何反应；这里补回同款系数 */
+  const hipW   = (F ? 1.70 * S.hip : 1.12 * (0.62 + 0.38 * S.wa) * S.hip) * (1 + S.soft * 0.06);
+  /* 样板修复（⑦ chest 参数对女性失效）：旧式 (F ? 1.12 : 1.18) * (F ? 1.0 : S.ch) 在
+     女性分支把 S.ch 整个乘掉，怎么调 chest 都没反应。改为全体生效；女性基础值
+     1.12 → 1.05，配合 coordinator 的 chest=1.12 得温和增益，避免上身宽过髋部，
+     BBW 体态保持"下宽上收"。 */
+  const chestW = (F ? 1.05 : 1.18) * S.ch * (1 + S.soft * 0.05);
+  /* 样板造型开关：针织开衫 + 高腰阔腿裤的 cozy 造型单独走"衣物层整体外置"方案 */
+  const cozyFit = (P.outfit === "cozy");
 
   /* ---------- 骨盆 / 腰 / 胸腔 ---------- */
   part(torso, new THREE.CylinderGeometry(0.150, 0.150, 0.24, 20), pantsM,
        [0, 0.00, 0], null, [hipW, 1, F ? 0.86 + S.soft * 0.14 : 0.78]);   // 髋
   part(torso, new THREE.CylinderGeometry(0.152, 0.146, 0.22, 20), clothM,
        [0, 0.22, 0], null, [waistW, 1, F ? 0.82 + S.soft * 0.16 : 0.66]); // 腰
-  const chest = part(torso, new THREE.CylinderGeometry(0.330, 0.162, 0.42, 22), clothM,
-       [0, 0.50, 0], null, [chestW * 1.04, 1, F ? 0.70 + S.soft * 0.10 : 0.60]); // 胸廓
+  /* 样板改造（⑤ 胸廓吞衣）：cozy 女生的胸廓顶部收窄（0.330 → 0.250）并整体压薄
+     （z 缩放 0.70 → 0.58）—— 旧版胸廓前缘（胸前 z≈0.23）盖过开衫前襟 / 翻领 / 工牌，
+     正面看就是"身体吞掉衣服"，半透明聚焦时更像裸露躯干。收薄后衣物层始终在最外层。
+     非 cozy 角色沿用原参数，其余角色观感不受影响。 */
+  const chest = part(torso, new THREE.CylinderGeometry(cozyFit ? 0.250 : 0.330, 0.162, 0.42, 22), clothM,
+       [0, 0.50, 0], null,
+       [chestW * 1.04, 1, cozyFit ? 0.52 + S.soft * 0.06 : (F ? 0.70 + S.soft * 0.10 : 0.60)]); // 胸廓
   if (F){
     /* 圆润臀线：BBW 体态的后侧量感（soft=0 时几乎不可见） */
     [-1, 1].forEach(s => part(torso, new THREE.SphereGeometry(0.118 + S.soft * 0.012, 16, 12), pantsM,
          [s * 0.118 * S.hip, -0.055, -0.088], null, [1.0, 0.92, 0.72 + S.soft * 0.14], false));
   }
 
-  /* 腰带 + 扣 */
-  part(torso, new THREE.CylinderGeometry(0.156, 0.156, 0.055, 20), toon(0x141a22),
-       [0, 0.075, 0], null, [hipW * 1.02, 1, F ? 0.86 : 0.80], false);
-  part(torso, new THREE.BoxGeometry(0.055, 0.035, 0.02), toon(0xb9c4d0),
-       [0, 0.075, 0.115], null, null, false);
+  /* 通用腰带 + 扣（样板改造 ⑥：补 outfit 门控 —— 针织开衫 + 高腰阔腿裤的 cozy 造型
+     不系这条通用腰带。旧版它大半被髋部吞掉，只剩一条深色横带配浅色方扣卡在裤腰高度，
+     是"内裤腰头"错觉的另一来源） */
+  if (!cozyFit){
+    part(torso, new THREE.CylinderGeometry(0.156, 0.156, 0.055, 20), toon(0x141a22),
+         [0, 0.075, 0], null, [hipW * 1.02, 1, F ? 0.86 : 0.80], false);
+    part(torso, new THREE.BoxGeometry(0.055, 0.035, 0.02), toon(0xb9c4d0),
+         [0, 0.075, 0.115], null, null, false);
+  }
 
   /* 胸肌 / 胸型（男性：分离双胸 + 胸中线 + 锁骨；女性：随 soft 变化的丰满胸型） */
   if (!F){
@@ -2224,14 +2267,24 @@ function buildCharacter(cfg){
     part(torso, new THREE.BoxGeometry(0.014, 0.106, 0.026), clothD,
          [0, 0.562, 0.158], null, null, false);
     /* 锁骨：脖子下面两道浅棱 */
+    /* 锁骨外移（本项改造 ⑤）：旧值 z=0.086 整条埋进胸廓（y=0.68 处前缘约 0.104）之内，
+       T 恤 / 卫衣这类低领角色根本看不到；挪到胸廓前表面之外 8mm */
     [-1, 1].forEach(s => part(torso, new THREE.BoxGeometry(0.115, 0.016, 0.018), skinM,
-         [s * 0.072, 0.674, 0.086], [0, 0, s * 0.16], null, false));
+         [s * 0.072, 0.678, 0.112], [0, 0, s * 0.16], null, false));
   } else {
+    /* 样板改造（① + ④）：胸型球不再用粉色 cloth2M（远看就是"粉色内衣"），cozy 造型下
+       改用与开衫同色系的针织色，并整体收进衣物层之内（前极 z≈0.166 < 内搭前表面 0.171），
+       只做贴体塑形、不再从开襟中央外凸 —— 旧版前极 z≈0.22 与胸廓前缘齐平、颜色又最艳，
+       是"衣服里看得见内衣"的主因。其它 outfit 的女角色沿用原参数。 */
     const bs = 1 + S.soft * 0.20;
+    const bustM  = cozyFit ? knitM : cloth2M;
+    const bustY  = 0.588 + S.soft * 0.006;
+    const bustZ  = cozyFit ? 0.060 : 0.062 + S.soft * 0.014;
+    const bustSZ = cozyFit ? 0.58  : 0.70 + S.soft * 0.12;
     [-1, 1].forEach(s => {
-      part(torso, new THREE.SphereGeometry(0.152 * bs, 22, 16), cloth2M,
-           [s * 0.084, 0.588 + S.soft * 0.006, 0.062 + S.soft * 0.014], null,
-           [1.00 + S.soft * 0.06, 0.78, 0.70 + S.soft * 0.12]);
+      part(torso, new THREE.SphereGeometry(0.152 * bs, 22, 16), bustM,
+           [s * 0.084, bustY, bustZ], null,
+           [1.00 + S.soft * 0.06, 0.78, bustSZ]);
     });
   }
 
@@ -2267,12 +2320,14 @@ function buildCharacter(cfg){
 
   /* ---------- BBW 软肉感：小腹 / 腰侧 / 圆肩 ---------- */
   if (F && S.soft > 0){
-    part(torso, new THREE.SphereGeometry(0.176, 20, 14), skinM,
-         [0, 0.300, 0.052], null, [1.02 + S.soft * 0.08, 0.84, 0.62 + S.soft * 0.14], false);
-    [-1, 1].forEach(s => part(torso, new THREE.SphereGeometry(0.086, 14, 10), skinM,
-         [s * 0.150 * S.hip, 0.238, -0.008], null, [0.92, 1.12, 0.82], false));
-    [-1, 1].forEach(s => part(torso, new THREE.SphereGeometry(0.070, 12, 10), skinM,
-         [s * 0.166 * S.sh, 0.652, 0.010], null, [1.0, 0.80, 0.95], false));   // 圆润肩头
+    /* 样板改造（④ 裸露小腹）：旧版这块裸露皮肤球前极外凸 25mm，直接从开襟中央露在衣服外，
+       是"露肚皮 / 像内衣"最扎眼的一处 —— 已整体移除；BBW 体态改由 waistW / hipW /
+       臀线球与裤腰共同表达，躯干上不再有任何裸露几何。
+       腰侧与肩头两块软肉同步收进衣物之内（旧版会从开衫侧面 / 肩头透出皮肤）。 */
+    [-1, 1].forEach(s => part(torso, new THREE.SphereGeometry(0.074, 14, 10), skinM,
+         [s * 0.124 * S.hip, 0.238, -0.008], null, [0.92, 1.12, 0.82], false));   // 腰侧软肉（收进腰线内）
+    [-1, 1].forEach(s => part(torso, new THREE.SphereGeometry(0.064, 12, 10), skinM,
+         [s * 0.156 * S.sh, 0.652, 0.010], null, [1.0, 0.80, 0.95], false));   // 圆润肩头（收进开衫内）
   }
 
   /* ---------- 服装细节 ---------- */
@@ -2309,15 +2364,27 @@ function buildCharacter(cfg){
            [s * 0.158, 0.42, 0.130], [0, 0, s * 0.06], null);
       part(torso, new THREE.BoxGeometry(0.075, 0.20, 0.03), clothD,
            [s * 0.108, 0.580, 0.150], [0, 0, s * 0.50], null, false);
+      /* 贴袋 + 袋口压线 + 下摆罗纹（本项改造 ③）：开衫原来只有两片光板前襟 */
+      part(torso, new THREE.BoxGeometry(0.075, 0.062, 0.016), clothM,
+           [s * 0.150, 0.300, 0.182], null, null, false);
+      part(torso, new THREE.BoxGeometry(0.079, 0.012, 0.018), clothD,
+           [s * 0.150, 0.328, 0.183], null, null, false);
+      part(torso, new THREE.BoxGeometry(0.160, 0.028, 0.108), clothD,
+           [s * 0.158, 0.158, 0.130], null, null, false);
     });
     part(torso, new THREE.BoxGeometry(0.225, 0.38, 0.045), cloth2M,
          [0, 0.545, 0.142], null, null, false);
+    /* 门襟纽扣（本项改造 ③）：旧版 3 颗扣落在开襟中央的内搭上（z=0.168、x=0），
+       读起来像里层衣服的扣子；移到开衫门襟外表面，外层衣物才有"开合结构" */
     for (let i = 0; i < 3; i++)
-      part(torso, new THREE.SphereGeometry(0.007, 6, 5), toon(0xcbd5e1),
-           [0, 0.63 - i * 0.078, 0.168], null, null, false);
-    /* 项链 */
-    part(torso, new THREE.TorusGeometry(0.075, 0.006, 6, 18), toon(0xd4af37),
-         [0, 0.665, 0.060], [1.25, 0, 0], null, false);
+      part(torso, new THREE.SphereGeometry(0.008, 8, 6), toon(0xcbd5e1),
+           [0.094, 0.63 - i * 0.078, 0.186], null, null, false);
+    /* 项链（本项改造 ④）：旧版整条 z=0.060 埋在胸口里，正脸一点看不见；
+       拆成"颈链 + 链坠"：颈链抬到胸廓顶面之上绕颈，链坠落在胸前肌之外 */
+    part(torso, new THREE.TorusGeometry(0.086, 0.005, 6, 20), toon(0xd4af37),
+         [0, 0.706, 0.008], [1.38, 0, 0], null, false);
+    part(torso, new THREE.SphereGeometry(0.010, 10, 8), toon(0xd4af37),
+         [0, 0.620, 0.138], null, [1, 1.2, 0.7], false);
   }
   if (P.outfit === "hoodie"){
     /* 帽兜：原来是一个 (0.205) 的球体挂在背后 z=-0.185，是整个角色最显眼的"背部凸起" bug，
@@ -2326,45 +2393,82 @@ function buildCharacter(cfg){
          [0, 0.552, -0.104], [0.24, 0, 0], [1.15, 0.44, 0.40], false);   // 披在主背上的帽身
     part(torso, new THREE.SphereGeometry(0.152, 18, 12), clothD,
          [0, 0.456, -0.116], [0.36, 0, 0], [1.06, 0.32, 0.32], false);   // 披落的下缘
-    part(torso, new THREE.TorusGeometry(0.105, 0.020, 8, 16), clothD,
-         [0, 0.680, -0.030], [1.30, 0, 0], null, false);                 // 领口环
+    /* 领口环 / 抽绳（本项改造 ③ + ④）：旧版两样都卡在躯干内部 —— 领口环 y=0.680 埋在
+       胸廓顶面（0.710）之下，抽绳 z=0.135 比胸前肌前缘（0.147）还浅，正脸全看不见。
+       领口环抬到肩线之上，抽绳提到胸前之外，另补一圈内领把"帽兜领口"读出来 */
+    part(torso, new THREE.TorusGeometry(0.108, 0.020, 8, 16), clothD,
+         [0, 0.712, -0.036], [1.30, 0, 0], null, false);                 // 帽兜领口环
+    part(torso, new THREE.TorusGeometry(0.098, 0.016, 8, 16), cloth2M,
+         [0, 0.714, 0.022], [1.34, 0, 0], null, false);                  // 内领圈
     part(torso, new THREE.CylinderGeometry(0.012, 0.012, 0.20, 6), whiteM,
-         [-0.045, 0.545, 0.135], [0.18, 0, 0.10], null, false);     // 抽绳
+         [-0.045, 0.535, 0.170], [0.18, 0, 0.10], null, false);     // 抽绳
     part(torso, new THREE.CylinderGeometry(0.012, 0.012, 0.20, 6), whiteM,
-         [0.048, 0.545, 0.135], [0.18, 0, -0.10], null, false);
+         [0.048, 0.535, 0.170], [0.18, 0, -0.10], null, false);
+    [-1, 1].forEach(s => part(torso, new THREE.TorusGeometry(0.009, 0.0035, 6, 12), clothD,
+         [s * 0.046, 0.638, 0.166], [1.30, 0, 0], null, false));        // 抽绳孔
     part(torso, new THREE.BoxGeometry(0.21, 0.075, 0.05), clothD,
          [0, 0.315, 0.132], null, null, false);                     // 口袋
   }
   if (P.outfit === "tee"){
-    part(torso, new THREE.TorusGeometry(0.088, 0.017, 8, 16), cloth2M,
-         [0, 0.680, 0.010], [1.35, 0, 0], null, false);             // 撞色领口
+    /* 撞色领口 + 下摆双针线（本项改造 ③）：旧领口环 y=0.680 埋在胸廓顶面（0.710）之下，
+       正脸被身体整个吞掉；现抬到肩线之上、领圈放到 0.096。下摆缝线改用与躯干同缩放的
+       圆柱环，贴合弧面、不会像平面片那样悬空 */
+    part(torso, new THREE.TorusGeometry(0.096, 0.017, 8, 16), cloth2M,
+         [0, 0.714, 0.026], [1.34, 0, 0], null, false);             // 撞色领口
+    part(torso, new THREE.CylinderGeometry(0.302, 0.306, 0.008, 20), cloth2M,
+         [0, 0.372, 0], null, [chestW * 1.04, 1, 0.60], false);     // 下摆上针线
+    part(torso, new THREE.CylinderGeometry(0.310, 0.314, 0.014, 20), clothD,
+         [0, 0.350, 0], null, [chestW * 1.04, 1, 0.60], false);     // 下摆罗纹
     part(torso, new THREE.BoxGeometry(0.125, 0.150, 0.018), accentM,
          [0, 0.520, 0.150], null, null, false);                      // 胸前印花
     part(torso, new THREE.BoxGeometry(0.086, 0.022, 0.020), cloth2M,
          [0, 0.556, 0.152], null, null, false);                      // 印花横杠
   }
   if (P.outfit === "cozy"){
-    /* 针织开衫：两片前襟敞开露出内搭，下摆与袖口做罗纹 */
+    /* 针织开衫：两片前襟敞开露出内搭，下摆与袖口做罗纹
+       （样板改造 ⑤：两片前襟 / 翻领 / 罗纹下摆整体前移 18~46mm，落在收薄后的胸廓之外，
+        正面能看清"开衫两片 + 内搭"的层次，不再被躯干吞掉） */
     [-1, 1].forEach(s => {
       part(torso, new THREE.BoxGeometry(0.150, 0.50, 0.115), knitM,
-           [s * 0.150, 0.430, 0.128], [0, 0, s * 0.05], null);
+           [s * 0.150, 0.430, 0.146], [0, 0, s * 0.05], null);
       part(torso, new THREE.BoxGeometry(0.070, 0.17, 0.032), knitM,
-           [s * 0.104, 0.600, 0.152], [0, 0, s * 0.52], null, false);   // 翻领
+           [s * 0.104, 0.600, 0.198], [0, 0, s * 0.52], null, false);   // 翻领（叠在前襟之上）
       part(torso, new THREE.CylinderGeometry(0.048, 0.048, 0.036, 14), clothD,
-           [s * 0.150, 0.180, 0.128], null, [1.0, 1, 0.94], false);     // 罗纹下摆
-      part(torso, new THREE.BoxGeometry(0.014, 0.44, 0.012), clothD,
-           [s * 0.083, 0.430, 0.152], null, null, false);              // 前襟针脚
+           [s * 0.150, 0.180, 0.146], null, [1.0, 1, 0.94], false);     // 罗纹下摆
+      part(torso, new THREE.BoxGeometry(0.022, 0.46, 0.050), clothD,
+           [s * 0.062, 0.428, 0.150], null, null, false);              // 门襟罗纹条（开襟内侧可见）
+      part(torso, new THREE.BoxGeometry(0.016, 0.44, 0.012), clothD,
+           [s * 0.108, 0.430, 0.202], null, null, false);              // 前襟压线
+      part(torso, new THREE.BoxGeometry(0.062, 0.055, 0.016), clothD,
+           [s * 0.152, 0.262, 0.208], [0, 0, s * 0.04], null, false);   // 贴袋
+      part(torso, new THREE.BoxGeometry(0.062, 0.012, 0.020), knitM,
+           [s * 0.152, 0.286, 0.208], [0, 0, s * 0.04], null, false);   // 袋口罗纹
     });
-    /* 内搭吊带 + 肩带 */
-    part(torso, new THREE.BoxGeometry(0.185, 0.30, 0.038), cloth2M,
-         [0, 0.520, 0.152], null, null, false);
-    [-1, 1].forEach(s => part(torso, new THREE.CylinderGeometry(0.010, 0.010, 0.16, 6), cloth2M,
-         [s * 0.070, 0.640, 0.126], [0, 0, s * 0.16], null, false));
-    /* 高腰阔腿裤腰头 */
-    part(torso, new THREE.CylinderGeometry(0.168, 0.174, 0.090, 20), pantsM,
-         [0, 0.298, 0], null, [1.04, 1, 0.94], false);
-    part(torso, new THREE.BoxGeometry(0.030, 0.024, 0.014), toon(0xd9c8a8),
-         [0, 0.298, 0.154], null, null, false);
+    /* 开衫纽扣 + 扣眼（单排三颗，落在右侧门襟罗纹条上，金属色提亮针织面） */
+    for (let i = 0; i < 3; i++){
+      part(torso, new THREE.TorusGeometry(0.014, 0.004, 6, 12), clothD,
+           [0.062, 0.548 - i * 0.108, 0.174], null, null, false);       // 扣眼
+      part(torso, new THREE.SphereGeometry(0.011, 10, 8), toon(0xc9a24a),
+           [0.062, 0.548 - i * 0.108, 0.176], null, [1, 1, 0.55], false);   // 纽扣
+    }
+    /* 内搭打底衫（样板改造 ②）：圆领 + 正常肩线 + 前胸褶线
+       —— 旧版"粉色吊带 + 两根细肩带"是内衣观感的直接来源，已整体替换 */
+    part(torso, new THREE.BoxGeometry(0.196, 0.34, 0.052), cloth2M,
+         [0, 0.505, 0.145], null, null, false);
+    part(torso, new THREE.TorusGeometry(0.086, 0.016, 8, 18), cloth2M,
+         [0, 0.664, 0.070], [1.42, 0, 0], null, false);                 // 圆领
+    [-1, 1].forEach(s => part(torso, new THREE.BoxGeometry(0.076, 0.048, 0.130), cloth2M,
+         [s * 0.104, 0.674, 0.100], null, null, false));                // 肩线（正常肩片）
+    part(torso, new THREE.BoxGeometry(0.150, 0.008, 0.006), clothD,
+         [0, 0.585, 0.173], null, null, false);                         // 胸下缘褶线
+    /* 高腰阔腿裤腰头（样板改造 ③）：正面（z 方向）收进腰线之内、只在两侧露出 3mm 的
+       深色裤线，中央浅色小方扣改深色小暗扣（仅前凸 4mm）—— 旧版整圈前凸 15mm 再配
+       浅色方扣，卡在裤腰高度，正是"内裤腰头"错觉的主因；顶面压在腰线以下，也不会在
+       上腹外侧形成一道束带。 */
+    part(torso, new THREE.CylinderGeometry(0.152, 0.158, 0.084, 20), pantsM,
+         [0, 0.288, 0], null, [1.56, 1, 0.92], false);
+    part(torso, new THREE.BoxGeometry(0.024, 0.020, 0.012), toon(0x2b3242),
+         [0, 0.288, 0.147], null, null, false);
   }
   if (P.apron){
     /* 3DP 工坊半身围裙：腰以下挡料，胸口留空，肌肉线条不被遮住 */
@@ -2398,8 +2502,13 @@ function buildCharacter(cfg){
          [-0.028, 0.500, 0.188], null, [1, 1, 0.6], false);           // 纽扣
     part(torso, new THREE.SphereGeometry(0.010, 10, 8), toon(0xc9a24a),
          [-0.028, 0.402, 0.190], null, [1, 1, 0.6], false);
-    [-1, 1].forEach(s => part(torso, new THREE.BoxGeometry(0.010, 0.014, 0.006), toon(0xd8dee6),
-         [s * 0.196, 0.332, 0.146], null, null, false));              // 袖口扣
+    /* 上衣下摆压线 + 胸袋压线（本项改造 ③）：旧版这一行标的是"袖口扣"，坐标却落在
+       x=±0.196 / y=0.332 —— 那是髋腰侧面的位置，既不是袖子也不在衣物外表面，是错位残留；
+       真正的袖口早在手臂段的袖口罗纹里，这里改作左右下摆明线 */
+    [-1, 1].forEach(s => part(torso, new THREE.BoxGeometry(0.130, 0.010, 0.008), toon(0xd8dee6),
+         [s * 0.152, 0.302, 0.188], null, null, false));              // 下摆压线
+    part(torso, new THREE.BoxGeometry(0.078, 0.008, 0.008), toon(0xd8dee6),
+         [-0.112, 0.566, 0.186], null, null, false);                  // 胸袋压线
   }
   if (P.outfit === "tee" || P.outfit === "hoodie"){
     part(torso, new THREE.CylinderGeometry(0.168, 0.172, 0.040, 20), clothD,
@@ -2423,25 +2532,35 @@ function buildCharacter(cfg){
          [0, 0.142, 0.136], null, null, false);
   }
 
-  /* 工牌挂绳 */
+  /* 工牌挂绳（样板改造 ⑤：cozy 造型下整组前移 —— 胸廓收薄后工牌缩进了打底衫之内，
+     前移后重新挂在开衫外侧；非 cozy 角色沿用原坐标，观感不变） */
+  /* 非 cozy 档位同步前移（本项改造 ④）：男性胸廓压薄后，胸前肌 / 胸廓前缘落在 z≈0.147，
+     而 4 个男性角色原来沿用的挂绳 0.128 / 牌面 0.150 正好卡在衣服里面，工牌只露半张 */
+  const badgeLip = cozyFit ? 0.178 : 0.166;    // 挂绳 z
+  const badgeZ   = cozyFit ? 0.196 : 0.188;    // 牌面 z
   part(torso, new THREE.BoxGeometry(0.016, 0.24, 0.010), toon(0x2b3a4d),
-       [-0.062, 0.615, 0.128], [0, 0, 0.22], null, false);
+       [-0.062, 0.615, badgeLip], [0, 0, 0.22], null, false);
   part(torso, new THREE.BoxGeometry(0.016, 0.24, 0.010), toon(0x2b3a4d),
-       [0.062, 0.615, 0.128], [0, 0, -0.22], null, false);
+       [0.062, 0.615, badgeLip], [0, 0, -0.22], null, false);
   part(torso, new THREE.BoxGeometry(0.105, 0.075, 0.014), toon(0xdfe7ef),
-       [0, 0.472, 0.150], null, null, false);
+       [0, 0.472, badgeZ], null, null, false);
   part(torso, new THREE.BoxGeometry(0.088, 0.014, 0.016), accentM,
-       [0, 0.492, 0.152], null, null, false);
+       [0, 0.492, badgeZ + 0.002], null, null, false);
   part(torso, new THREE.BoxGeometry(0.060, 0.006, 0.016), toon(0x9aa8b6),
-       [0, 0.462, 0.152], null, null, false);
+       [0, 0.462, badgeZ + 0.002], null, null, false);
 
   /* ---------- 颈 + 头 ---------- */
   const nk = F ? 0 : (S.sh - 1) * 0.55;                            // 肌肉男的粗颈
   part(torso, new THREE.CylinderGeometry(0.060 * (1 + nk), 0.076 * (1 + nk), 0.15, 14), skinM,
        [0, 0.705, 0.005]);
-  if (P.outfit === "suit" || P.outfit === "open"){                 // 衬衫领
-    part(torso, new THREE.CylinderGeometry(0.084 * (1 + nk * 0.8), 0.088 * (1 + nk * 0.8), 0.055, 16),
-         P.shirt ? toon(P.shirt) : whiteM, [0, 0.700, 0.004], null, null, false);
+  if (P.outfit === "suit" || P.outfit === "open"){
+    /* 衬衫领（本项改造 ③）：上移 6mm / 前移 8mm / 领口放大 6~10mm
+       —— 旧版领子前后同深、颜色又和上衣板重合，正脸只剩后脖颈一圈白边，读不出"翻领" */
+    part(torso, new THREE.CylinderGeometry(0.092 * (1 + nk * 0.8), 0.098 * (1 + nk * 0.8), 0.055, 16),
+         P.shirt ? toon(P.shirt) : whiteM, [0, 0.706, 0.012], null, null, false);
+    /* 左右翻开的两片领尖，压在衬衫前襟（领带结上方），领型这才立得住 */
+    [-1, 1].forEach(s => part(torso, new THREE.BoxGeometry(0.060, 0.072, 0.020),
+         P.shirt ? toon(P.shirt) : whiteM, [s * 0.058, 0.688, 0.174], [0, 0, s * 0.34], null, false));
   } else if (P.outfit === "cozy"){                                 // 针织圆领
     part(torso, new THREE.TorusGeometry(0.082, 0.017, 8, 16), knitM,
          [0, 0.698, 0.008], [1.45, 0, 0], null, false);
@@ -2452,7 +2571,9 @@ function buildCharacter(cfg){
   torso.add(headG);
 
   const headR = 0.116;
-  part(headG, new THREE.SphereGeometry(headR, 30, 24), skinM, [0, 0, 0], null, [0.98, 1.06, 1.00]);
+  /* 脸宽系数 S.face 原样透传（本项改造 ⑤）：旧版头球横向写死 0.98，face 怎么调都没反应。
+     现在大叔（0.98）脸偏窄长、青年（1.02）脸偏圆润，只影响横向宽窄，不动高度 */
+  part(headG, new THREE.SphereGeometry(headR, 30, 24), skinM, [0, 0, 0], null, [0.98 * S.face, 1.06, 1.00]);
   part(headG, new THREE.SphereGeometry(0.078, 24, 18), skinM,
        [0, -0.058, 0.026], null, [0.94 * S.jaw, 0.86, 0.92]);      // 下颌
   part(headG, new THREE.SphereGeometry(0.036, 18, 14), skinM,
@@ -2530,13 +2651,14 @@ function buildCharacter(cfg){
          [-s * 0.021, -0.002, 0.006], [0, 0, 0], [1, 0.8, 0.6], false); // 内眼角
     eyes.push(eye);
 
-    /* 眉：三段式拱形 */
+    /* 眉：三段式拱形（本项改造 ①：加厚 2mm、外移 4mm）
+       旧版眉片只有 10~13mm 厚且 z=0.099 紧贴头面，正中发片一压就整条消失 */
     const bx = s * 0.047, by = 0.052;
-    [[-s * 0.013, 0.000, 0.024, 0.012, s * 0.34],
-     [0, 0.004, 0.026, 0.013, s * 0.06],
-     [s * 0.015, 0.003, 0.021, 0.010, -s * 0.20]].forEach(([dx, dy, w, h, rz]) => {
-      brows.push(part(headG, new THREE.BoxGeometry(w, h, 0.013), browM,
-        [bx + dx, by + dy, 0.099], [0, 0, rz], null, false));
+    [[-s * 0.013, 0.000, 0.026, 0.014, s * 0.34],
+     [0, 0.004, 0.028, 0.015, s * 0.06],
+     [s * 0.015, 0.003, 0.023, 0.012, -s * 0.20]].forEach(([dx, dy, w, h, rz]) => {
+      brows.push(part(headG, new THREE.BoxGeometry(w, h, 0.015), browM,
+        [bx + dx, by + dy, 0.103], [0, 0, rz], null, false));
     });
     /* 眼窝阴影 + 卧蚕 */
     part(headG, new THREE.BoxGeometry(0.050, 0.010, 0.010), skinD,
@@ -2580,16 +2702,20 @@ function buildCharacter(cfg){
        [0, 0.0, -0.004], null, [1, 0.02, 1], false);
   part(headG, new THREE.SphereGeometry(0.014, 10, 8), skinD,
        [0, -0.100, 0.070], null, [1.4, 0.30, 0.50], false);            // 下巴窝
-  /* 耳：耳廓 + 耳窝 + 耳垂 */
+  /* 耳：耳廓 + 耳窝 + 耳垂（本项改造 ①）
+     旧版耳外缘只有 0.126，而各发型发壳的侧向包络在 0.13~0.147，侧脸基本看不到耳朵；
+     这里整体外移 7mm 并放大一圈。戴耳机的角色（printability）保持原位，
+     否则耳罩（内缘 0.112）包不住耳朵会露馅 */
+  const earX = P.headphones ? 0.112 : 0.119;
   [-1, 1].forEach(s => {
-    part(headG, new THREE.SphereGeometry(0.026, 12, 10), skinM,
-         [s * 0.112, -0.008, -0.004], null, [0.52, 1.0, 0.85], false);
-    part(headG, new THREE.SphereGeometry(0.014, 8, 6), skinD,
-         [s * 0.114, -0.010, -0.002], null, [0.40, 0.80, 0.70], false);
-    part(headG, new THREE.TorusGeometry(0.019, 0.0042, 6, 14, Math.PI * 1.25), skinD,
-         [s * 0.114, -0.002, -0.002], [0, s * 1.57, 0.5], null, false);  // 耳廓
-    part(headG, new THREE.SphereGeometry(0.0105, 8, 6), skinM,
-         [s * 0.111, -0.026, -0.004], null, [0.55, 0.9, 0.8], false);    // 耳垂
+    part(headG, new THREE.SphereGeometry(0.0285, 12, 10), skinM,
+         [s * earX, -0.008, -0.004], null, [0.52, 1.0, 0.85], false);
+    part(headG, new THREE.SphereGeometry(0.0145, 8, 6), skinD,
+         [s * (earX + 0.002), -0.010, -0.002], null, [0.40, 0.80, 0.70], false);
+    part(headG, new THREE.TorusGeometry(0.0205, 0.0042, 6, 14, Math.PI * 1.25), skinD,
+         [s * (earX + 0.002), -0.002, -0.002], [0, s * 1.57, 0.5], null, false);  // 耳廓
+    part(headG, new THREE.SphereGeometry(0.0115, 8, 6), skinM,
+         [s * (earX - 0.001), -0.027, -0.004], null, [0.55, 0.9, 0.8], false);   // 耳垂
   });
 
   /* ---------- 发型（分层 + 碎发 + 发际线，更接近真人） ---------- */
@@ -2630,8 +2756,10 @@ function buildCharacter(cfg){
     part(headG, new THREE.BoxGeometry(0.140, 0.046, 0.040), hairDark,
          [0, -0.032, -0.092], null, [1, 1, 0.85], false);               // 后颈发脚（短寸也需要，否则后脑露肤色）
   } else if (hs === "curl"){                              // 卷发
+    /* 发壳侧向 1.10 → 0.99（本项改造 ②）：旧值把侧脸连耳一起包住，耳朵完全不可见；
+       收窄后蓬松度交给 y/z 缩放维持，造型依旧是"顶上厚、两侧收" */
     part(headG, new THREE.SphereGeometry(headR + 0.018, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.62),
-         hairM, [0, 0.006, -0.004 - hairShift], null, [1.10, 1.14, 1.10 * hairSquash]);
+         hairM, [0, 0.006, -0.004 - hairShift], null, [0.99, 1.14, 1.10 * hairSquash]);
     for (let i = 0; i < 20; i++){
       const ang = (i / 20) * Math.PI * 2 + (i % 3) * 0.10;
       const layer = i % 2;
@@ -2640,9 +2768,11 @@ function buildCharacter(cfg){
            [Math.sin(ang) * rr, (layer ? 0.098 : 0.070) + Math.cos(ang * 2) * 0.018,
             Math.cos(ang) * rr * 0.95 - 0.010], null, null, false);
     }
+    /* 额前卷上移 12mm、后收 4mm（本项改造 ②）：旧版下缘落在 y=0.056 正好压住眉线，
+       卷发角色整张脸只剩眼睛以下，眉毛整条被埋掉 */
     for (let i = 0; i < 3; i++){                                       // 额前卷
       part(headG, new THREE.SphereGeometry(0.024, 10, 8), hairM,
-           [-0.045 + i * 0.045, 0.078, 0.088], null, [1, 0.9, 0.8], false);
+           [-0.045 + i * 0.045, 0.090, 0.084], null, [1, 0.9, 0.8], false);
     }
     [-1, 1].forEach(s => part(headG, new THREE.SphereGeometry(0.024, 10, 8), hairM,
          [s * 0.100, -0.012, 0.028], null, [0.7, 1.1, 0.8], false));
@@ -2650,7 +2780,7 @@ function buildCharacter(cfg){
     for (let i = 0; i < 6; i++){
       const ang = (i / 6) * Math.PI * 2 + 0.4;
       part(headG, new THREE.SphereGeometry(0.019, 8, 6), hairHi,
-           [Math.sin(ang) * 0.108, 0.086 + Math.cos(ang * 3) * 0.014,
+           [Math.sin(ang) * 0.108, 0.092 + Math.cos(ang * 3) * 0.014,
             Math.cos(ang) * 0.098 - 0.008], null, null, false);
     }
     /* 外翘碎发：耳侧几撮不服帖 */
@@ -2660,6 +2790,19 @@ function buildCharacter(cfg){
       part(headG, new THREE.CapsuleGeometry(0.011, 0.034, 6, 10), hairM,
            [s * 0.106, -0.048, 0.010], [0.16, 0, s * 0.40], null, false);
     });
+    /* 发际线过渡 + 鬓角收尖 + 侧发高光（本项改造 ③）：
+       卷发原来是整块"蓬蓬壳"，额角与鬓前补暗色碎发后边界自然、不再闷 */
+    [-1, 1].forEach(s => {
+      part(headG, new THREE.BoxGeometry(0.046, 0.014, 0.026), hairDark,
+           [s * 0.068, 0.098, 0.062], [0.36, 0, s * 0.14], null, false);
+      part(headG, new THREE.SphereGeometry(0.013, 8, 6), hairD,
+           [s * 0.102, -0.034, 0.026], null, [0.62, 1.28, 0.72], false);
+      part(headG, new THREE.BoxGeometry(0.010, 0.048, 0.016), hairL,
+           [s * 0.110, 0.046, 0.024], [0, 0, s * 0.12], null, false);
+    });
+    /* 后颈碎发：层次收尾，后脑不塌 */
+    [-1, 1].forEach(s => part(headG, new THREE.BoxGeometry(0.034, 0.016, 0.024), hairL,
+         [s * 0.048, -0.050, -0.092], [0.22, 0, s * 0.10], null, false));
   } else if (hs === "ponytail"){                          // 高马尾（协调员）
     part(headG, new THREE.SphereGeometry(headR + 0.014, 22, 18, 0, Math.PI * 2, 0, Math.PI * 0.62),
          hairM, [0, 0.002, -0.006 - hairShift], null, [1.06, 1.10, 1.06 * hairSquash]);
@@ -2699,9 +2842,24 @@ function buildCharacter(cfg){
          [0, 0.086, 0.058], [0.18, 0, 0], null, false);                // 发带
     part(headG, new THREE.BoxGeometry(0.13, 0.05, 0.042), hairDark,
          [0, -0.034, -0.096], null, null, false);                      // 后颈碎发（避免后脑露肤色）
+    /* 发际线过渡 + 发丝高光 + 鬓角收尖（本项改造 ③）：
+       头发全扎上去后额角最易"光板"，补一圈碎发与高光丝才不生硬 */
+    [-1, 1].forEach(s => {
+      part(headG, new THREE.BoxGeometry(0.048, 0.012, 0.026), hairDark,
+           [s * 0.070, 0.100, 0.058], [0.36, 0, s * 0.12], null, false);
+      part(headG, new THREE.BoxGeometry(0.010, 0.046, 0.016), hairHi,
+           [s * 0.112, 0.048, 0.028], [0, 0, s * 0.12], null, false);
+      part(headG, new THREE.SphereGeometry(0.013, 8, 6), hairD,
+           [s * 0.104, -0.032, 0.030], null, [0.62, 1.26, 0.72], false);
+    });
+    for (let i = 0; i < 3; i++)
+      part(headG, new THREE.BoxGeometry(0.009, 0.044, 0.062), i === 1 ? hairHi : hairL,
+           [-0.048 + i * 0.048, 0.104, 0.044], [0.24, 0, (i - 1) * 0.12], null, false);
   } else if (hs === "sidePart"){                          // 侧分背头（韩日帅大叔）
+    /* 发壳侧向 1.05 → 0.99（本项改造 ②）：发壳包络原来 0.137，比耳外缘（0.134）还大，
+       耳朵整个埋在发壳里；收窄后耳廓从发壳外侧探出，侧脸能读出发际—耳—下颌的轮廓 */
     part(headG, new THREE.SphereGeometry(headR + 0.015, 22, 18, 0, Math.PI * 2, 0, Math.PI * 0.58),
-         hairM, [0, 0.006, -0.004 - hairShift], null, [1.05, 1.12, 1.06 * hairSquash]);
+         hairM, [0, 0.006, -0.004 - hairShift], null, [0.99, 1.12, 1.06 * hairSquash]);
     /* 大侧背片：向斜后方梳，越上层越亮 */
     for (let i = 0; i < 3; i++){
       part(headG, new THREE.BoxGeometry(0.198 - i * 0.016, 0.028, 0.118 - i * 0.018), i === 1 ? hairHi : hairM,
@@ -2718,14 +2876,68 @@ function buildCharacter(cfg){
            [s * 0.099, -0.014, 0.026], null, [0.60, 1.22, 0.80], false); // 鬓角
       part(headG, new THREE.BoxGeometry(0.011, 0.068, 0.020), hairHi,
            [s * 0.118, 0.050, 0.020], [0, 0, s * 0.12], null, false);  // 侧发高光丝
+      part(headG, new THREE.BoxGeometry(0.014, 0.040, 0.030), hairL,
+           [s * 0.113, -0.006, 0.018], [0.10, 0, s * 0.14], null, false); // 鬓前层次丝
+      part(headG, new THREE.SphereGeometry(0.014, 8, 6), hairD,
+           [s * 0.101, -0.032, 0.028], null, [0.60, 1.30, 0.70], false);  // 鬓角收尖
     });
     part(headG, new THREE.BoxGeometry(0.152, 0.060, 0.052), hairM,
          [0, 0.012, -0.114], null, null, false);                       // 后颈发脚
     part(headG, new THREE.BoxGeometry(0.122, 0.028, 0.040), hairD,
          [0, -0.026, -0.098], null, [1, 1, 0.85], false);
+    /* 发际线过渡（本项改造 ③）：额角碎发顺向，发壳与额头之间不再有硬边 */
+    [-1, 1].forEach(s => part(headG, new THREE.BoxGeometry(0.050, 0.012, 0.028), hairD,
+         [s * 0.070, 0.100, 0.062], [0.34, 0, s * 0.12], null, false));
+    /* 发丝分层：顶部三撮走向细丝，光泽有节奏 */
+    for (let i = 0; i < 3; i++)
+      part(headG, new THREE.BoxGeometry(0.010, 0.052, 0.072), i === 1 ? hairHi : hairL,
+           [-0.056 + i * 0.056, 0.106, 0.036], [0.26, 0, (i - 1) * 0.14], null, false);
+    /* 后颈碎发：两侧收尾，脖颈线条利落 */
+    [-1, 1].forEach(s => part(headG, new THREE.BoxGeometry(0.036, 0.016, 0.024), hairL,
+         [s * 0.050, -0.048, -0.094], [0.22, 0, s * 0.10], null, false));
+  } else if (hs === "koreanSwept"){                       // 韩剧帅大叔侧分背头（printability 本项改造）
+    /* 发壳整体后移 14mm、抬高（theta 0.58π → 0.54π）：额头整片让空，五官不被压；
+       侧向 0.97 贴颅收薄，耳位留给耳机耳罩（耳罩内缘 0.112），发壳不再顶到罩沿 */
+    part(headG, new THREE.SphereGeometry(headR + 0.013, 24, 18, 0, Math.PI * 2, 0, Math.PI * 0.54),
+         hairM, [0, 0.010, -0.014 - hairShift], null, [0.97, 1.10, 1.03 * hairSquash]);
+    /* 顶部四层背片：越上层越亮（hairM→hairL→hairHi），向后上方梳出体积与光泽层次 */
+    for (let i = 0; i < 4; i++){
+      part(headG, new THREE.BoxGeometry(0.196 - i * 0.020, 0.030 - i * 0.002, 0.126 - i * 0.020),
+           i === 3 ? hairHi : (i === 2 ? hairL : hairM),
+           [0.010 - i * 0.004, 0.104 - i * 0.024, 0.050 - i * 0.028], [0.30 + i * 0.10, 0, 0.06], null, false);
+    }
+    /* 侧分缝 + 缝两侧走向分明的大片（主侧提亮压出光泽带） */
+    part(headG, new THREE.BoxGeometry(0.005, 0.010, 0.112), hairD,
+         [-0.040, 0.118, 0.010], [0.14, 0, 0.22], null, false);        // 侧分缝
+    part(headG, new THREE.BoxGeometry(0.092, 0.026, 0.086), hairHi,
+         [0.058, 0.116, 0.048], [0.30, 0, -0.14], null, false);        // 主侧高光斜片
+    part(headG, new THREE.BoxGeometry(0.070, 0.024, 0.070), hairL,
+         [-0.086, 0.112, 0.044], [0.28, 0, 0.18], null, false);        // 副侧亮片
+    /* 发际线：额角后收成利落 M 线，额头露出、不被发丝压住 */
+    [-1, 1].forEach(s => part(headG, new THREE.BoxGeometry(0.058, 0.012, 0.030), hairD,
+         [s * 0.062, 0.104, 0.070], [0.36, 0, s * 0.10], null, false));
+    /* 两鬓：贴颅短推（undercut）+ 压暗过渡 + 收尖鬓角 + 侧发高光丝 */
+    [-1, 1].forEach(s => {
+      part(headG, new THREE.BoxGeometry(0.016, 0.086, 0.088), hairM,
+           [s * 0.100, 0.030, -0.014], [0, 0, s * 0.06], null, false);
+      part(headG, new THREE.BoxGeometry(0.010, 0.058, 0.020), hairD,
+           [s * 0.104, -0.014, 0.014], null, null, false);
+      part(headG, new THREE.SphereGeometry(0.020, 10, 8), hairM,
+           [s * 0.101, -0.030, 0.020], null, [0.52, 1.28, 0.72], false);   // 利落鬓角尖
+      part(headG, new THREE.BoxGeometry(0.009, 0.060, 0.018), hairHi,
+           [s * 0.103, 0.052, 0.006], [0, 0, s * 0.10], null, false);
+    });
+    /* 后颈：后脑发脚 + 颈部打薄 + 两撮收尾，干净不拖沓 */
+    part(headG, new THREE.BoxGeometry(0.150, 0.052, 0.048), hairM,
+         [0, 0.004, -0.118], null, null, false);
+    part(headG, new THREE.BoxGeometry(0.120, 0.026, 0.036), hairD,
+         [0, -0.032, -0.100], null, [1, 1, 0.85], false);
+    [-1, 1].forEach(s => part(headG, new THREE.BoxGeometry(0.030, 0.018, 0.026), hairL,
+         [s * 0.052, -0.046, -0.096], [0.20, 0, s * 0.10], null, false));
   } else if (hs === "taperFade"){                         // 低位渐变 + 逗号刘海（年轻韩系）
+    /* 发壳侧向 1.03 → 1.00（本项改造 ②）：低位渐变人设本就该两侧收薄，顺带把耳位让出来 */
     part(headG, new THREE.SphereGeometry(headR + 0.011, 22, 18, 0, Math.PI * 2, 0, Math.PI * 0.58),
-         hairM, [0, 0.002, -hairShift], null, [1.03, 1.06, 1.02 * hairSquash]);
+         hairM, [0, 0.002, -hairShift], null, [1.00, 1.06, 1.02 * hairSquash]);
     /* 渐变过渡带：耳上收薄压暗 */
     part(headG, new THREE.SphereGeometry(headR + 0.004, 20, 16, 0, Math.PI * 2, Math.PI * 0.34, Math.PI * 0.20),
          hairD, [0, 0.002, -hairShift], null, [1.01, 1.0, 1.0 * hairSquash], false);
@@ -2747,8 +2959,9 @@ function buildCharacter(cfg){
     part(headG, new THREE.BoxGeometry(0.144, 0.050, 0.042), hairD,
          [0, -0.030, -0.094], null, [1, 1, 0.85], false);              // 后颈发脚
   } else if (hs === "wolfcut"){                           // 狼尾层次（银发帅大叔）
+    /* 发壳侧向 1.08 → 0.98（本项改造 ②）：银发大叔原来两侧最厚，耳位被彻底盖住 */
     part(headG, new THREE.SphereGeometry(headR + 0.020, 22, 18, 0, Math.PI * 2, 0, Math.PI * 0.60),
-         hairM, [0, 0.008, -0.004 - hairShift], null, [1.08, 1.14, 1.08 * hairSquash]);
+         hairM, [0, 0.008, -0.004 - hairShift], null, [0.98, 1.14, 1.08 * hairSquash]);
     /* 上层蓬松：交错两排大卷，银丝层穿插 */
     for (let i = 0; i < 12; i++){
       const ang = (i / 12) * Math.PI * 2;
@@ -2758,12 +2971,13 @@ function buildCharacter(cfg){
            [Math.sin(ang) * rr, (up ? 0.098 : 0.072) + Math.cos(ang * 2) * 0.014,
             Math.cos(ang) * rr * 0.92 - 0.012], null, null, false);
     }
-    /* 两侧鬃状长片 + 后颈狼尾 */
+    /* 两侧鬃状长片 + 后颈狼尾（本项改造 ②：长片从"盖耳"后移到"披在耳后"，
+       狼尾该有的耳后垂落感才对，同时把耳前让空） */
     [-1, 1].forEach(s => {
       part(headG, new THREE.BoxGeometry(0.030, 0.118, 0.070), hairHi,
-           [s * 0.112, -0.008, -0.016], [0, 0, s * 0.10], null, false);
+           [s * 0.114, -0.008, -0.046], [0, 0, s * 0.10], null, false);
       part(headG, new THREE.BoxGeometry(0.024, 0.082, 0.048), hairM,
-           [s * 0.108, -0.060, -0.032], [0.14, 0, s * 0.14], null, false);  // 层次碎尾
+           [s * 0.112, -0.060, -0.052], [0.14, 0, s * 0.14], null, false);  // 层次碎尾
     });
     part(headG, new THREE.CapsuleGeometry(0.062, 0.10, 10, 14), hairM,
          [0, -0.070, -0.112], [0.30, 0, 0], null, false);              // 后颈尾发
@@ -2771,6 +2985,18 @@ function buildCharacter(cfg){
          [0.036, -0.104, -0.120], [0.40, 0, 0.16], null, false);       // 挑染碎尾
     part(headG, new THREE.BoxGeometry(0.188, 0.028, 0.086), hairHi,
          [0, 0.104, 0.038], [0.22, 0, 0], null, false);                // 额前蓬松片
+    /* 发际线过渡 + 银丝高光（本项改造 ③）：银发靠"明暗对比"读数，额角与鬓前补层次后更透亮 */
+    [-1, 1].forEach(s => {
+      part(headG, new THREE.BoxGeometry(0.052, 0.012, 0.028), hairD,
+           [s * 0.072, 0.100, 0.060], [0.36, 0, s * 0.12], null, false);
+      part(headG, new THREE.BoxGeometry(0.012, 0.062, 0.020), hairHi,
+           [s * 0.114, 0.044, 0.006], [0, 0, s * 0.12], null, false);
+      part(headG, new THREE.SphereGeometry(0.014, 8, 6), hairD,
+           [s * 0.104, -0.034, 0.024], null, [0.60, 1.30, 0.70], false); // 鬓角收尖
+    });
+    for (let i = 0; i < 3; i++)
+      part(headG, new THREE.BoxGeometry(0.011, 0.056, 0.078), i === 1 ? hairL : hairHi,
+           [-0.052 + i * 0.052, 0.110, 0.030], [0.26, 0, (i - 1) * 0.14], null, false);
   } else {
     part(headG, new THREE.SphereGeometry(headR + 0.012, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.58),
          hairM, [0, 0.006, -0.010 - hairShift], null, [1.06, 1.12, 1.08 * hairSquash]);
@@ -2782,20 +3008,22 @@ function buildCharacter(cfg){
          [0, -0.030, -0.094], null, [1, 1, 0.85], false);              // 后颈发脚（避免后脑露肤色）
   }
 
-  /* 配饰：眼镜（方框 / 金丝圆框） */
+  /* 配饰：眼镜（方框 / 金丝圆框）
+     （本项改造 ①：框面/鼻托/鼻梁架整体外移 6~8mm —— 旧版镜框 z=0.104
+     与头球正面 0.105 几乎重合，geometry 的方框直接被脸吞掉，只剩两条镜腿） */
   if (P.glasses || P.roundGlasses){
     const frameM = toon(P.roundGlasses ? 0xc9a24a : 0xb9c4d0);
     const lensR  = P.roundGlasses ? 0.0315 : 0.030;
     [-1, 1].forEach(s => {
       part(headG, new THREE.TorusGeometry(lensR, P.roundGlasses ? 0.0034 : 0.0042, 8, 18), frameM,
-           [s * 0.047, 0.010, 0.104], null, [1.0, P.roundGlasses ? 0.90 : 0.86, 1.0], false);
+           [s * 0.047, 0.010, 0.112], null, [1.0, P.roundGlasses ? 0.90 : 0.86, 1.0], false);
       part(headG, new THREE.BoxGeometry(0.038, 0.005, 0.005), frameM,
            [s * 0.100, 0.014, 0.062], [0, s * 0.45, 0], null, false);   // 镜腿
-      part(headG, new THREE.BoxGeometry(0.010, 0.006, 0.010), frameM,
-           [s * 0.022, 0.004, 0.100], null, null, false);               // 鼻托
+      part(headG, new THREE.BoxGeometry(0.010, 0.006, 0.012), frameM,
+           [s * 0.022, 0.004, 0.108], null, null, false);               // 鼻托
     });
     part(headG, new THREE.BoxGeometry(P.roundGlasses ? 0.038 : 0.030, 0.005, 0.005), frameM,
-         [0, 0.014, 0.112], null, null, false);                         // 鼻梁架
+         [0, 0.014, 0.119], null, null, false);                         // 鼻梁架
   }
   /* 耳饰：珍珠钉 + 小环 */
   if (P.earrings){
@@ -3151,7 +3379,387 @@ function buildCharacter(cfg){
   headG.userData.mouth = mouth;
   headG.userData.mouthIn = mouthIn;
   return { root, torso, head: headG, arms, legs, hands, props, cfg: P,
+           gltf: null,            // P1-10：视觉层句柄（未接入模型时恒为 null）
            celebrateStyle: Math.floor(Math.random() * 3) };
+}
+
+/* =====================================================================
+   P1-10：角色 glTF 模型加载管线（本轮只铺管线，不接入任何模型文件）
+   ---------------------------------------------------------------------
+   后续把角色形象升级为日漫 / 韩漫风 3D 模型时，按下面这套约定接入即可，
+   既有对外接口（roster / focus / plates / setView / hud）签名不变。
+
+   1) 资源来源：MODEL_SOURCES[key]（按角色键）→ MODEL_SOURCES.default（兜底），
+      两张表默认都为空 = 未接入模型 → 全流程退回程序化角色，行为与升级前一致。
+   2) 单次下载：loadGltfAsset(url) 复用同一个 GLTFLoader 实例，并把 Promise 缓存进
+      MODEL_CACHE —— 同款模型多角色只下载 / 解析一次；失败不进缓存，允许重试。
+   3) 多实例：instantiateRoleModel() 优先 THREE.SkeletonUtils.clone（骨骼独立、
+      几何与贴图共享），addon 缺失时降级 clone(true) 并只告警一次。
+   4) 动画：每个实例一个 AnimationMixer，clip 名 → action 由 hookGltfAnimations 装配，
+      主循环 updateRoleModels(dt) 推进（未接入模型时零开销）。
+   5) 回退：loader 缺失 / 网络失败 / 解析失败 / 装配异常 → 一律保留程序化角色，
+      loadRoleModel 返回 { ok:false, reason }，绝不抛错、绝不把角色从场景里摘掉。
+   6) 视觉层：模型挂在角色 root 下的独立 holder（userData.isGltfRole = true），
+      装配成功才隐藏程序化身体；脚下阴影（userData.isShadowBlob）与 root 本体始终保留，
+      所以走位 / 朝向 / 悬停拾取 / 特写取景全部沿用既有逻辑。
+   7) VRM（P1-11）：URL 去掉 query / hash 后以 .vrm 结尾即按 VRM 资源处理。
+      插件注册进同一个 GLTFLoader，但 .vrm 走「fetch ArrayBuffer → loader.parse」独立实例链路：
+      每个角色一份干净 parse（vrm 管理器与自身骨架绑定，vrm.update 才作用于本角色），
+      原始字节按 URL 缓存复用，避免重复下载；
+      VRM 1.0 规范本身就是「面朝 +Z、脚底 y=0」，与 fitRoleModel 的落点约定天然一致；
+      v0 导入（meta.metaVersion === "0"）的模型用 VRMUtils.rotateVRM0 旋到 +Z（prepareVrmAsset）。
+      插件缺失（页面加载的还是旧 three 全局包）时 .vrm 一律返回 { ok:false, reason:"no-vrm-plugin" }，
+      继续用程序化角色，且完全不影响 .glb 路径。
+   8) vrm 实例（humanoid / expression / springBone / lookAt 管理器）随装配记进 ch.gltf.vrm，
+      主循环里按需 vrm.update(dt)，供接入具体模型后驱动表情与弹簧骨骼。
+   ===================================================================== */
+const MODEL_SOURCES = {};      // 例：{ geometry: "/models/geometry.glb", default: "/models/role.glb" }
+const MODEL_CACHE = new Map(); // url → Promise<gltf>（仅成功项常驻）
+let gltfLoader = null;
+let gltfLoaderWarned = false;
+let vrmPluginWarned = false;   // VRM 插件缺失只告警一次（P1-11）
+
+/* 惰性创建 loader；three 全局里没有 GLTFLoader（旧 three.module.min.js 只含核心）时返回 null */
+function ensureGltfLoader(){
+  if (gltfLoader) return gltfLoader;
+  const G = (typeof THREE !== "undefined") ? THREE.GLTFLoader : null;
+  if (typeof G !== "function"){
+    if (!gltfLoaderWarned){
+      gltfLoaderWarned = true;
+      console.warn("[office3d] THREE.GLTFLoader 不可用：跳过 glTF 角色加载，继续使用程序化角色。");
+    }
+    return null;
+  }
+  try { gltfLoader = new G(); }
+  catch (err){
+    console.warn("[office3d] GLTFLoader 实例化失败：" + ((err && err.message) || err));
+    return null;
+  }
+  ensureVrmPlugin(gltfLoader);   // P1-11：插件可用就一次注册，.glb / .vrm 共用同一 loader
+  return gltfLoader;
+}
+
+/* ---- P1-11：VRM（.vrm）支持 ----
+   与 glTF 完全共用一条加载链路，只多两步：
+     ① 插件：THREE.VRMLoaderPlugin（由 lib/three.global.min.js 挂到 three 全局）注册进
+        GLTFLoader 后，.vrm 里的 MToon 卡通材质 / humanoid / expression / springBone /
+        lookAt / meta 各子插件由它按需装配，VRM 0.x 走其内置的 v0 导入分支；
+     ② 对齐：VRM 1.0 规范就是「面朝 +Z、脚底 y=0」，直接交给 fitRoleModel 归一化身高落位；
+        v0 模型先 rotateVRM0 旋转 180° 对齐到 +Z，避免出现「背对房间」的角色。 */
+const VRM_URL_RE = /\.vrm$/i;
+function isVrmUrl(url){
+  return VRM_URL_RE.test(String(url || "").split("?")[0].split("#")[0]);
+}
+/* 插件取用：独立挂载点优先，其次 VRM 命名空间（两种产物布局都取得到） */
+function vrmPluginCtor(){
+  if (typeof THREE === "undefined") return null;
+  const P = THREE.VRMLoaderPlugin || (THREE.VRM && THREE.VRM.VRMLoaderPlugin);
+  return (typeof P === "function") ? P : null;
+}
+/* 幂等注册：同一 loader 只注册一次；插件缺失只告警一次，绝不抛错 */
+function ensureVrmPlugin(loader){
+  if (!loader) return false;
+  if (loader.__vrmPlugin === true) return true;
+  const P = vrmPluginCtor();
+  if (!P){
+    if (!vrmPluginWarned){
+      vrmPluginWarned = true;
+      console.warn("[office3d] THREE.VRMLoaderPlugin 不可用：.vrm 角色模型无法解析，继续使用程序化角色。");
+    }
+    return false;
+  }
+  try { loader.register(parser => new P(parser)); loader.__vrmPlugin = true; }
+  catch (err){
+    console.warn("[office3d] VRM 插件注册失败：" + ((err && err.message) || err));
+    return false;
+  }
+  return true;
+}
+/* 装配前的 VRM 侧整理：取 vrm 实例 + 把 v0 模型旋到「面朝 +Z」；异常按原样装配 */
+function prepareVrmAsset(gltf){
+  const info = { vrm: null, metaVersion: "" };
+  try {
+    const vrm = gltf && gltf.userData && gltf.userData.vrm;
+    if (!vrm) return info;
+    info.vrm = vrm;
+    const meta = vrm.meta || {};
+    info.metaVersion = String(meta.metaVersion == null ? "" : meta.metaVersion);
+    const U = (typeof THREE !== "undefined") ? THREE.VRMUtils : null;
+    if (info.metaVersion === "0" && U && typeof U.rotateVRM0 === "function") U.rotateVRM0(vrm);
+  } catch (err){
+    console.warn("[office3d] VRM 资源整理失败（按原样装配）：" + ((err && err.message) || err));
+  }
+  return info;
+}
+
+/* 单次下载 + Promise 缓存（同一 URL 的多角色实例共用一次网络 / 解析开销） */
+function loadGltfAsset(url, onProgress){
+  const u = String(url || "");
+  if (!u) return Promise.reject(new Error("empty-url"));
+  if (MODEL_CACHE.has(u)) return MODEL_CACHE.get(u);
+  const loader = ensureGltfLoader();
+  if (!loader) return Promise.reject(new Error("no-loader"));
+  const p = new Promise((resolve, reject) => {
+    loader.load(u, resolve,
+      ev => { if (typeof onProgress === "function"){ try { onProgress(ev); } catch (_) {} } },
+      err => reject(err || new Error("gltf-load-failed: " + u)));
+  });
+  MODEL_CACHE.set(u, p);
+  p.catch(() => MODEL_CACHE.delete(u));   // 失败不进缓存，避免残留 rejected 触发 unhandledrejection
+  return p;
+}
+
+/* ---- P1-11：VRM 独立实例链路 ----
+   蒙皮实例（VRM / 带骨骼 glb）经 SkeletonUtils.clone 克隆后，vrm 管理器（humanoid /
+   expression / springBone / lookAt）仍指向克隆源，vrm.update(dt) 作用不到本角色；
+   且部分环境（SwiftShader 软渲染）下克隆实例的包围盒计算会抛错导致装配失败。
+   因此 VRM 单独走「fetch ArrayBuffer → loader.parse 独立实例」链路，每个角色一份干净实例。 */
+const VRM_BUFFER_CACHE = new Map();   // url → Promise<ArrayBuffer>（仅成功项常驻）
+function loadVrmBuffer(url){
+  const u = String(url || "");
+  if (!u) return Promise.reject(new Error("empty-url"));
+  if (VRM_BUFFER_CACHE.has(u)) return VRM_BUFFER_CACHE.get(u);
+  if (typeof fetch !== "function") return Promise.reject(new Error("no-fetch"));
+  const p = fetch(u).then(res => {
+    if (!res || !res.ok) throw new Error("vrm-fetch-failed: " + (res && res.status));
+    return res.arrayBuffer();
+  });
+  VRM_BUFFER_CACHE.set(u, p);
+  p.catch(() => VRM_BUFFER_CACHE.delete(u));   // 失败不进缓存
+  return p;
+}
+/* 独立 parse：返回的 gltf.userData.vrm 与本次实例骨架绑定，vrm.update(dt) 才作用在本角色上 */
+function parseVrmInstance(buffer, url){
+  const loader = ensureGltfLoader();
+  if (!loader) return Promise.reject(new Error("no-loader"));
+  if (typeof loader.parse !== "function") return Promise.reject(new Error("no-parse"));
+  const base = String(url || "").replace(/[^/]*$/, "");
+  return new Promise((resolve, reject) => {
+    try {
+      loader.parse(buffer, base, resolve, err => reject(err || new Error("vrm-parse-failed")));
+    } catch (err){ reject(err || new Error("vrm-parse-threw")); }
+  });
+}
+
+/* 多实例复制：优先 SkeletonUtils.clone（蒙皮骨骼独立），缺 addon 时降级普通 clone */
+function instantiateRoleModel(gltf, opts){
+  const src = gltf && (gltf.scene || (gltf.scenes && gltf.scenes[0]));
+  if (!src) return null;
+  const SU = (typeof THREE !== "undefined") ? THREE.SkeletonUtils : null;
+  if (SU && typeof SU.clone === "function") return SU.clone(src);
+  console.warn("[office3d] 未找到 THREE.SkeletonUtils：降级为 clone(true)，蒙皮模型可能共享骨骼。");
+  return src.clone(true);
+}
+
+/* 程序化身体节点：root 下除脚下阴影 / glTF holder 之外的全部子节点 */
+function proceduralVisuals(ch){
+  return ch.root.children.filter(o => !(o.userData &&
+         (o.userData.isShadowBlob || o.userData.isGltfRole)));
+}
+
+/* 安全包围盒：Box3.setFromObject 在蒙皮实例上可能抛错（软渲染下
+   SkinnedMesh 取不到骨骼 offset）或算出无效值，此时退化为遍历聚合各 mesh 的
+   geometry.boundingBox（按各自 matrixWorld 变换后求并集）。
+   注：SkinnedMesh 的包围盒会被 three 缓存（Box3.setFromObject 仅在其 boundingBox 为 null 时计算），
+   若首次测量发生在骨骼世界矩阵刷新之前，缓存下来的盒会永久失真（典型表现：模型整体下沉/悬空），
+   故测量前统一 refreshRoleBoxes 强制刷新并清缓存重算。 */
+function refreshRoleBoxes(obj){
+  if (!obj) return;
+  try { obj.updateMatrixWorld(true); } catch (_) {}
+  obj.traverse(o => {
+    if (!o || o.isSkinnedMesh !== true) return;
+    try { if (o.skeleton && typeof o.skeleton.update === "function") o.skeleton.update(); } catch (_) {}
+    try { o.boundingBox = null; } catch (_) {}
+    if (typeof o.computeBoundingBox === "function"){ try { o.computeBoundingBox(); } catch (_) {} }
+  });
+}
+
+function measureRoleBox(obj){
+  const box = new THREE.Box3();
+  if (!obj) return box;
+  refreshRoleBoxes(obj);
+  try {
+    const fast = new THREE.Box3().setFromObject(obj);
+    const s = new THREE.Vector3();
+    fast.getSize(s);
+    if (isFinite(s.x) && isFinite(s.y) && isFinite(s.z) && s.y > 1e-4) return fast;
+  } catch (_) {}
+  const tmp = new THREE.Box3();
+  try { obj.updateWorldMatrix(false, true); }
+  catch (_) { try { obj.updateMatrixWorld(true); } catch (__) {} }
+  obj.traverse(o => {
+    const g = o && o.geometry;
+    if (!g) return;
+    try {
+      if (!g.boundingBox && typeof g.computeBoundingBox === "function") g.computeBoundingBox();
+      if (!g.boundingBox) return;
+      tmp.copy(g.boundingBox).applyMatrix4(o.matrixWorld);
+      box.union(tmp);
+    } catch (_) {}
+  });
+  return box;
+}
+
+/* 按角色身高归一化模型尺度，并把脚底对齐 root 原点（y = 0）、水平居中。
+   朝向约定：装配进来的模型一律「面朝 +Z」—— glTF 角色模型按此导出；VRM 1.0 规范本身即 +Z，
+   v0 模型已由 prepareVrmAsset 用 rotateVRM0 旋正，所以这里不做任何旋转。 */
+function fitRoleModel(obj, P, opts){
+  const o = opts || {};
+  const target = o.height || (P && P.height) || 1.86;
+  const box = measureRoleBox(obj);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  obj.scale.setScalar((size.y > 1e-4) ? target / size.y : 1);
+  const box2 = measureRoleBox(obj);
+  const c = new THREE.Vector3();
+  box2.getCenter(c);
+  obj.position.x -= c.x;
+  obj.position.z -= c.z;
+  obj.position.y -= box2.min.y;
+  return obj;
+}
+
+/* clip 名 → action 注册（后续按状态机选段时读 ch.gltf.actions）；顺手挑一个待机段 */
+function hookGltfAnimations(mixer, clips){
+  const actions = {};
+  (clips || []).forEach(clip => {
+    if (!clip || !clip.name) return;
+    let act = null;
+    try { act = mixer.clipAction(clip); } catch (_) { return; }
+    act.enabled = true;
+    actions[clip.name] = act;
+    if (!actions.__idle && /idle|stand|breath|wait/i.test(clip.name)) actions.__idle = act;
+  });
+  return actions;
+}
+
+/* 装配视觉层：原子操作 —— 全部准备成功后才隐藏程序化身体；异常时不留半个模型 */
+function applyGltfVisual(ch, model3d, P){
+  try {
+    if (!ch || !ch.root || !model3d) return null;
+    const src = model3d.instance || model3d.scene || (model3d.gltf && model3d.gltf.scene);
+    if (!src) return null;
+    if (ch.gltf) detachRoleModel(ch);            // 换装：先摘旧的视觉层
+    const holder = new THREE.Group();
+    holder.name = "gltf-role";
+    holder.userData.isGltfRole = true;
+    const model = fitRoleModel(src, P || ch.cfg || {}, model3d);
+    holder.add(model);
+    const clips = model3d.clips || (model3d.gltf && model3d.gltf.animations) || [];
+    const mixer = (clips.length && THREE.AnimationMixer) ? new THREE.AnimationMixer(model) : null;
+    const actions = mixer ? hookGltfAnimations(mixer, clips) : {};
+    ch.root.add(holder);
+    proceduralVisuals(ch).forEach(o => { o.visible = false; });   // 只隐藏身体，阴影保留
+    ch.gltf = { url: model3d.url || "", holder, model, mixer, clips, actions,
+                scale: model.scale.x, mode: model3d.mode || "gltf",
+                vrm: model3d.vrm || null };
+    if (actions.__idle) actions.__idle.play();
+    return ch;
+  } catch (err){
+    console.warn("[office3d] glTF 视觉层装配失败，继续使用程序化角色：" + ((err && err.message) || err));
+    return null;
+  }
+}
+
+/* 摘除视觉层并恢复程序化身体（回退 / 降级用） */
+function detachRoleModel(ch){
+  if (!ch || !ch.gltf) return false;
+  const g = ch.gltf;
+  try {
+    if (g.mixer) g.mixer.stopAllAction();
+    if (g.holder && g.holder.parent) g.holder.parent.remove(g.holder);
+  } catch (_) {}
+  proceduralVisuals(ch).forEach(o => { o.visible = true; });
+  ch.gltf = null;
+  return true;
+}
+
+/* 主循环钩子：推进所有已装配实例的动画（未接入模型时零开销） */
+function updateRoleModels(dt){
+  for (const k in characters){
+    const g = characters[k] && characters[k].gltf;
+    if (!g) continue;
+    if (g.mixer) g.mixer.update(dt);
+    /* P1-11：VRM 的表情 / 弹簧骨骼 / lookAt 由 vrm.update 驱动（未装配 VRM 时 g.vrm 为空，零开销） */
+    if (g.vrm && typeof g.vrm.update === "function"){
+      try { g.vrm.update(dt); } catch (_) {}
+    }
+  }
+}
+
+/* 对外入口：为某角色异步加载并装配 glTF 模型
+   key  角色键（geometry / printability / failure / optimization / coordinator / 插件角色）
+   url  模型地址（可选：缺省取 MODEL_SOURCES[key] → MODEL_SOURCES.default）
+   opts { attach:false 只加载不装配 / onProgress / height 覆盖身高 }
+   （onProgress 仅 .glb 路径可用；.vrm 走 fetch 一次性取字节，不提供进度回调）
+   返回 { ok, key, url, reason?, clips?, actions? }；失败一定 ok:false 且不改动场景 */
+async function loadRoleModel(key, url, opts){
+  const o = Object.assign({ attach: true }, opts || {});
+  const k = String(key == null ? "" : key);
+  const src = url || MODEL_SOURCES[k] || MODEL_SOURCES.default || "";
+  if (!src) return { ok: false, key: k, url: "", reason: "no-source" };
+  const fmt = isVrmUrl(src) ? "vrm" : "gltf";    // P1-11：按扩展名分流，其余链路完全共用
+  const loader = ensureGltfLoader();
+  if (!loader) return { ok: false, key: k, url: src, reason: "no-loader" };
+  if (fmt === "vrm" && !ensureVrmPlugin(loader))
+    return { ok: false, key: k, url: src, reason: "no-vrm-plugin", format: "vrm" };
+  let gltf;
+  if (fmt === "vrm"){
+    /* VRM：独立解析链路（每实例一份 parse），vrm 管理器与自身骨架绑定 */
+    try { gltf = await parseVrmInstance(await loadVrmBuffer(src), src); }
+    catch (err){
+      console.warn("[office3d] VRM 角色模型加载失败，继续使用程序化角色（" + k + "）：" +
+                   ((err && err.message) || err));
+      return { ok: false, key: k, url: src, reason: "load-failed", format: fmt,
+               error: String((err && err.message) || err) };
+    }
+  } else {
+    try { gltf = await loadGltfAsset(src, o.onProgress); }
+    catch (err){
+      console.warn("[office3d] 角色模型加载失败，继续使用程序化角色（" + k + "）：" +
+                   ((err && err.message) || err));
+      return { ok: false, key: k, url: src, reason: "load-failed", format: fmt,
+               error: String((err && err.message) || err) };
+    }
+  }
+  const ch = characters[k];
+  const model3d = { url: src, gltf, clips: (gltf && gltf.animations) || [],
+                    height: o.height, mode: fmt };
+  if (fmt === "vrm"){
+    /* VRM：取 vrm 实例；v0 模型先旋到「面朝 +Z」（VRM 1.0 本身即 +Z，不动） */
+    const vrmInfo = prepareVrmAsset(gltf);
+    model3d.vrm = vrmInfo.vrm;
+    model3d.metaVersion = vrmInfo.metaVersion;
+    if (!vrmInfo.vrm)
+      console.warn("[office3d] .vrm 解析结果里没有 userData.vrm，按普通 glTF 装配（" + k + "）。");
+  }
+  /* VRM 已是独立实例（勿再 clone，否则 vrm 管理器会指向克隆源）；glb 仍走 clone 复制 */
+  const instance = (fmt === "vrm")
+    ? (gltf.scene || (gltf.scenes && gltf.scenes[0]))
+    : instantiateRoleModel(gltf, o);
+  if (!instance) return { ok: false, key: k, url: src, reason: "no-scene", format: fmt };
+  model3d.instance = instance;
+  if (o.attach === false)
+    return { ok: true, key: k, url: src, attached: false, format: fmt,
+             clips: model3d.clips, gltf, vrm: model3d.vrm || null };
+  if (!ch) return { ok: false, key: k, url: src, reason: "no-character", format: fmt };
+  const done = applyGltfVisual(ch, model3d, ch.cfg || {});
+  if (!done) return { ok: false, key: k, url: src, reason: "attach-failed", format: fmt };
+  return { ok: true, key: k, url: src, attached: true, mode: fmt, format: fmt,
+           metaVersion: model3d.metaVersion || "",
+           clips: model3d.clips.map(c => c && c.name).filter(Boolean),
+           actions: Object.keys(done.gltf.actions) };
+}
+
+/* 启动预热：按 MODEL_SOURCES 给已注册角色挂模型（表为空 → 直接返回，零副作用） */
+function preloadRoleModels(){
+  if (!Object.keys(MODEL_SOURCES).length) return [];
+  const jobs = [];
+  Object.keys(characters).forEach(k => {
+    if (!MODEL_SOURCES[k] && !MODEL_SOURCES.default) return;
+    jobs.push(loadRoleModel(k, "", { attach: true }));
+  });
+  return jobs;
 }
 
 /* ---------------- 组装场景实体 ---------------- */
@@ -6465,6 +7073,60 @@ tipDiv.addEventListener("click", e => {
   applyHint();
 });
 
+/* =====================================================================
+   P1-9 改造二：信息卡"位置冻结 + 可点窗口"状态机（纯新增，不改任何对外接口）
+   ---------------------------------------------------------------------
+   · 冻结（LOCK_AT）：点击锁定后卡片屏幕位置就地冻住、不再跟随鼠标 —— 原先锁定卡仍按
+     指针位置重排，指针还没走到「通话」上卡片就先跑开了，这正是"点不中"的根因。
+   · 保持窗口（TIP_HOLD）：指针离开角色 / 离开画布后，卡片内容与位置再保持 TIP_HOLD_S 秒
+     （需求给定 1.5–2s）才收起，给出"从角色走到卡片上点通话"的时间；窗口内的位置锚点 =
+     离开瞬间的指针位置，所以卡片期间同样不漂移。
+   · 指针落进卡片区域（cardHit）：计时暂停、卡片原地不动，不会"手还没点到就没了"。
+   · 三条出口：指针悬停到新对象 → 立刻换内容；窗口到期 → 收起；再点同一件 / Esc / 点空白
+     → 解锁并收起。锁定态 pointer-events 由 TIP_CSS 的 .is-pinned 保持可用。
+   ===================================================================== */
+const TIP_HOLD_S = 1.8;                              // 离场保持窗口（秒）：需求给定 1.5–2s
+const TIP_HOLD = { on: false, t: 0, x: 0, y: 0 };    // 保持窗口：位置锚点 = 离开时的指针
+const LOCK_AT  = { on: false, x: 0, y: 0 };          // 锁定卡：位置锚点 = 按下锁定时的指针
+const CLICK_GAP = 300;                               // 双击判定窗口（毫秒）
+const CLICK = { role: null, t: 0 };                  // 上一击落在哪个角色 / 何时
+
+const nowMs = () => (typeof performance !== "undefined" && performance.now)
+  ? performance.now() : Date.now();
+
+/* 卡片当前该显示哪个对象：锁定优先，其余看悬停（保持窗口内沿用旧的悬停对象） */
+function tipShown(){ return pinnedTip || hoverTip; }
+
+/* 卡片此刻的落点：锁定 / 保持窗口 → 冻结锚点；null = 跟着指针走 */
+function tipAnchor(){
+  if (pinnedTip && LOCK_AT.on) return LOCK_AT;
+  if (TIP_HOLD.on) return TIP_HOLD;
+  return null;
+}
+/* 指针是否落在卡片区域内（不用 pointerenter：悬停卡 pointer-events:none，事件到不了卡片） */
+function cardHit(){
+  if (tipDiv.style.display === "none") return false;
+  const r = tipDiv.getBoundingClientRect();
+  if (!r.width && !r.height) return false;           // 无头环境 / 未布局：一律视为未命中
+  return mouseX >= r.left - 2 && mouseX <= r.right + 2 &&
+         mouseY >= r.top - 2 && mouseY <= r.bottom + 2;
+}
+/* 锁定 / 解锁（锁定的那一刻记下就地冻结的锚点） */
+function tipLock(){
+  LOCK_AT.on = true; LOCK_AT.x = mouseX; LOCK_AT.y = mouseY;
+  TIP_HOLD.on = false; TIP_HOLD.t = 0;
+}
+function tipUnlock(){ LOCK_AT.on = false; TIP_HOLD.on = false; TIP_HOLD.t = 0; }
+function tipHoldClear(){ TIP_HOLD.on = false; TIP_HOLD.t = 0; }
+/* 推进保持窗口：返回原对象（继续显示）或 null（窗口到期，可以收起了） */
+function tipHoldStep(dt, tip){
+  if (!tip){ tipHoldClear(); return null; }
+  if (!TIP_HOLD.on){ TIP_HOLD.on = true; TIP_HOLD.t = 0; TIP_HOLD.x = mouseX; TIP_HOLD.y = mouseY; }
+  TIP_HOLD.t += dt;
+  if (TIP_HOLD.t >= TIP_HOLD_S){ tipHoldClear(); return null; }
+  return tip;
+}
+
 const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g,
   c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const TIP_DASH = '<span style="opacity:.42">—</span>';
@@ -6574,9 +7236,13 @@ function applyHint(){
   tipDiv.classList.toggle("is-pinned", pinned);
   tipDiv.style.display = "block";
   const w = tipDiv.offsetWidth, h = tipDiv.offsetHeight;
-  let x = mouseX + 16, y = mouseY - 14;
-  if (x + w > window.innerWidth - 8) x = Math.max(8, mouseX - w - 16);
-  if (y + h > window.innerHeight - 8) y = Math.max(8, mouseY - h - 10);
+  /* P1-9 改造二：锁定卡（以及"离场保持窗口"内的卡片）用冻结锚点取位 —— 卡片不再随鼠标
+     漂移，指针可以从角色稳稳走到卡片的「通话」按钮上；其余情况照旧跟随指针。 */
+  const at = tipAnchor();
+  const ax = at ? at.x : mouseX, ay = at ? at.y : mouseY;
+  let x = ax + 16, y = ay - 14;
+  if (x + w > window.innerWidth - 8) x = Math.max(8, ax - w - 16);
+  if (y + h > window.innerHeight - 8) y = Math.max(8, ay - h - 10);
   if (y < 8) y = 8;
   tipDiv.style.left = x + "px";
   tipDiv.style.top = y + "px";
@@ -7448,7 +8114,7 @@ function unmountRole(id){
   if (social.act && (social.act.host === ch || social.act.guest === ch)) social.act = null;
   const tip = ch.root.userData.tip;
   if (tip && hoverTip === tip) hoverTip = null;
-  if (tip && pinnedTip === tip) pinnedTip = null;
+  if (tip && pinnedTip === tip){ pinnedTip = null; tipUnlock(); }
   const q = questionMarks[id];
   if (q && q.el && q.el.parentNode) q.el.parentNode.removeChild(q.el);
   delete questionMarks[id];
@@ -7874,14 +8540,24 @@ function loop(){
   holo.material.opacity = active ? 0.16 + pulse * 0.22 : 0.08 + pulse * 0.05;
   holo.material.color.setHex(active ? 0x22d3ee : 0x2f6f88);
 
-  updateFocus(dt);          // P1-5：点击聚焦（相机缓动 / 光环呼吸 / 设备标记脉冲 / 路径流光）
+  updateFocus(dt);          // P1-5 / P1-9 改造一：双击特写（只做相机缓动，无发光特效）
   updateFlows(dt);          // P1-6：数据流线（产出 / 异常流向的流光粒子推进与回收）
+  updateRoleModels(dt);     // P1-10：glTF 角色动画推进（未接入模型时零开销）
   hoverTick += dt;
   if (hoverTick > 0.08){
-    hoverTick = 0;
-    hoverTip = pointerActive ? pickAt() : null;
+    const step = hoverTick; hoverTick = 0;
+    /* P1-9 改造二：指针已落在卡片区域 → 不重取拾取、不重排内容，卡片原地冻结；
+       指针移开角色后 → 内容与位置再保持 TIP_HOLD_S 秒（可点窗口）才收起，期间位置锚点
+       仍是离开瞬间的指针，卡片不会跟着鼠标漂移。 */
+    if (!pinnedTip && cardHit()){
+      /* 指针在卡片上：什么都不做，保持 */
+    }else{
+      const hit = pointerActive ? pickAt() : null;
+      if (hit){ hoverTip = hit; tipHoldClear(); }          // 有新对象：立刻换内容
+      else if (!pinnedTip) hoverTip = tipHoldStep(step, hoverTip);   // 锁定卡不吃保持窗口
+    }
     applyHint();
-    refreshPlates(pinnedTip || hoverTip);
+    refreshPlates(tipShown());
   }
   placeTags();
   updateBubbles(dt);
@@ -7889,10 +8565,11 @@ function loop(){
   renderer.render(scene, camera);
 }
 
-/* ---------------- 鼠标交互：拖拽环绕 / 滚轮缩放 / 悬停 / 单击锁卡 ----------------
-   同一套指针事件承担两种语义（P0-4）：
-     · 按下到抬起位移 < CONFIG.controls.dragGate → 当作"点击"：锁定 / 解锁信息卡（P0-3 行为不变）
-     · 位移 ≥ dragGate / 按下滚轮              → 当作"拖拽"：接管相机自由环绕，抬起时不再锁卡
+/* ---------------- 鼠标交互：拖拽环绕 / 滚轮缩放 / 悬停 / 单击锁卡 · 双击特写 ----------------
+   同一套指针事件承担三种语义（P0-4；P1-9 改造一把"点击"再分成单击 / 双击）：
+     · 位移 < CONFIG.controls.dragGate 的单击 → 锁定 / 解锁信息卡（P0-3 行为不变，但不再聚焦）
+     · 同一角色 CLICK_GAP 毫秒内的第二击     → 双击：进入 / 切换特写（focusRole）
+     · 位移 ≥ dragGate / 按下滚轮            → 拖拽：接管相机自由环绕，抬起时不锁卡、不特写
    拖拽过程中持续刷新悬停拾取，卡片跟着指针走，不会"拖完还挂着旧对象的信息"。 */
 let pointerActive = false;
 const dom = renderer.domElement;
@@ -7943,15 +8620,24 @@ function endDrag(e){
   if (d.orbiting) return;              // 拖过 → 只当视角操作，不动卡片
   if (e && e.clientX != null) setPointerFrom(e);
   const tip = pickAt();
-  /* P1-5 点击角色聚焦：单击角色 = 聚焦该角色（照旧把它的信息卡锁定，一个手势两件事）；
-     单击空白处 = 退出聚焦（相机缓动回进入前的机位）；点在别的物件上不动聚焦状态。 */
+  /* P1-9 改造一：单击只锁信息卡，不再聚焦；同一角色 CLICK_GAP 毫秒内双击才进 / 切特写。
+     单击空白处 = 退出特写（相机缓动回进入前的机位）；点在别的物件上不动特写状态。 */
   const role = ownerKey(tip);
-  if (role) focusRole(role);
-  else if (FOCUS.on && !tip) exitFocus();
-  pinnedTip = (tip && tip === pinnedTip) ? null : tip;   // 再点同一件 = 解锁
+  const now = nowMs();
+  const dbl = !!role && role === CLICK.role && (now - CLICK.t) <= CLICK_GAP;
+  CLICK.role = dbl ? null : role;      // 双击后清零，避免三连击连着触发
+  CLICK.t = now;
+  if (dbl){
+    focusRole(role);                   // 特写：相机推近到半身 / 头部，无发光特效
+    pinnedTip = tip;                   // 双击同时把卡片钉住（位置冻结，便于点「通话」）
+  }else{
+    if (!role && FOCUS.on && !tip) exitFocus();
+    pinnedTip = (tip && tip === pinnedTip) ? null : tip;   // 再点同一件 = 解锁
+  }
   hoverTip = tip;
+  if (pinnedTip) tipLock(); else tipUnlock();   // P1-9 改造二：锁定即冻结卡片落点
   applyHint();
-  refreshPlates(pinnedTip || hoverTip);
+  refreshPlates(tipShown());
 }
 dom.addEventListener("pointerup", endDrag);
 dom.addEventListener("pointercancel", endDrag);
@@ -7978,6 +8664,7 @@ window.addEventListener("keydown", e => {
     /* P1-5：Esc 退出聚焦（相机缓动回进入前的机位），同时照旧解锁信息卡 */
     if (FOCUS.on) exitFocus();
     pinnedTip = null;
+    tipUnlock();                       // P1-9 改造二：解锁同时放开冻结锚点
     applyHint();
   }
   /* calling v0：C 键对锁定 / 悬停的角色接通或挂断通话（输入框内不触发） */
@@ -8008,24 +8695,34 @@ window.addEventListener("keydown", e => {
 /* =====================================================================
    P1-5 点击角色聚焦（新增能力 · 不改动任何既有对外接口与方法签名）
    ---------------------------------------------------------------------
-   · 进入：单击任一角色（= 锁定其信息卡的同一手势）→ 相机平滑推近并框住该角色；
-          角色脚下光环跟随、关联设备亮环标记、作业路径亮点朝设备流动；
-          其余角色 / 家具 / 设备统一淡化，只留主体清晰。
+   · 进入（P1-9 改造一）：同一角色 300ms 内双击 → 相机平滑推近到该角色的半身 / 头部特写；
+          单击角色只锁信息卡、不再聚焦；拖拽视角永不触发特写（判定见 endDrag）。
+   · 视觉（P1-9 改造一 / 本轮样板修复）：不生成任何发光特效 —— 原脚下光环 / 光柱 / 设备
+          标记环 / 作业路径流光已整体移除；其余角色 / 家具 / 设备不透明度，只做整体压暗
+          （FOCUS_DIM）退到背景，外壳保持不透明，内部结构永不透出。
    · 退出：单击空白处 / 按 Esc / 切任意预设机位 → 相机缓动回进入前的机位（含当时的
-          自由缩放系数），光环与淡化逐项还原，零残留。
+          自由缩放系数），压暗逐项还原，零残留。
    · 与既有系统互不打架：只走"聚焦缓动"独立通道（不触发 onView、不改 activeView），
           开始拖拽即让位，导览中点击角色 = 先停导览再聚焦。
-   · 角色 → 关联设备 / 作业路径映射：
+   · 角色 → 关联设备映射（P1-9 起只用于划定"保持清晰"的豁免范围，不再画路径）：
           geometry      工位台                  自工位一动不动的静态复核
           printability  工业机 · 桌面机 · 取件台   工业机 → 桌面机（投件 → 出件）
           failure       工位台 · 异常信标          信标（异常上报）
           optimization  工位台 · 共识台            共识台（方案复议）
           consensus     共识台 · 取件台            共识台（结果汇总上会）
-          插件角色（P1-a 注册进来的）无内置映射时：只亮角色本体，不硬凑设备。
-   · 淡化用"高亮集合 + 材质克隆"实现：只淡不删、不改几何、不改可见性；为避免共享材质
-     被连带淡化，克隆按"材质 → 克隆体"去重，并在每次进入时重建（退出即 dispose）。
+          插件角色（P1-a 注册进来的）无内置映射时：只把角色本体留在"保持清晰"集合里，不硬凑设备。
+   · 压暗靠"高亮集合 + 材质克隆"实现：只暗不删、不改几何、不改可见性、不改透明字段；
+     为避免共享材质被连带压暗，克隆按"材质 → 克隆体"去重，并在每次进入时重建（退出即 dispose）。
    ===================================================================== */
-const FOCUS_DIM = 0.13;                 // 非主体内容的淡化透明度
+/* 非主体内容的"退场"参数（本轮样板修复：半透明淡化 → 整体压暗）
+   —— 旧实现把非聚焦网格逐个改成 transparent + opacity 0.72 + depthWrite=false：
+      外壳一透明，内层皮肤球（skinM / whiteM）与描边背壁（OUTLINE_MAT）全部透出来，
+      双击聚焦后其他角色像被"解剖"，观感恐怖。
+      新实现只克隆材质并压暗颜色（一律不动 transparent / depthWrite / opacity），
+      外壳保持不透明 → 内部结构永远被挡住；退出聚焦仍逐个写回原材质并 dispose 克隆体。 */
+const FOCUS_DIM = 0.50;                 // 压暗系数：颜色混入远景灰后再乘该系数
+const FOCUS_DIM_MIX = 0.28;             // 混入"远景灰"的比例（0=纯压暗，1=完全灰化）
+const FOCUS_DIM_AIR = 0x1b232c;         // 远景灰：带一点冷调，让配角自然退到背景
 const FOCUS_PICK = 1.25;                // 角色高亮半径（米）：本体 + 随身道具
 const FOCUS_STATION = {                 // 关联设备（位置即高亮判据中心，r 为半径）
   desk:        { p: DESK_AT,          r: 1.35 },
@@ -8049,10 +8746,9 @@ const FOCUS = {
   tween: null,     // 聚焦相机缓动 { from, to, t, dur }
   snap: null,      // 进入前的机位快照
   free: false,     // 进入前是否处于自由环绕态
-  visual: null,    // 可视化组 { group, ring, pillar, marks, dashes }
-  dimmed: [],      // 被淡化的网格（保留原材质引用，退出时逐项写回）
-  mats: [],        // 本次进入克隆出的材质（退出即 dispose）
-  phase: 0         // 动效相位（光环呼吸 / 路径流动）
+  visual: null,    // P1-9 改造一起恒为 null：发光特效已整体移除（字段保留以兼容既有探针）
+  dimmed: [],      // 被压暗的网格（保留原材质引用，退出时逐项写回）
+  mats: []         // 本次进入克隆出的材质（退出即 dispose）
 };
 
 /* ---------------- 聚焦文案条（进入聚焦后出现，点它 = 退出） ---------------- */
@@ -8122,94 +8818,13 @@ function focusStations(k){
   const tags = spec ? spec.stations : [];
   return tags.map(tag => focusAnchor(tag, k)).filter(Boolean);
 }
-/* 作业路径折线：角色当前站位 →（沿用场景既有寻路函数 pathPoints，绕开中央台与家具）
-   依次经过路线上的关联设备。无内置路径映射时退回"角色 → 第一个关联设备"。 */
-function focusPathDots(k, ch, stations){
-  if (!stations.length) return [];
-  const spec = FOCUS_SPEC[k] || {};
-  const order = (spec.path && spec.path.length) ? spec.path : [stations[0].tag];
-  const line = [];
-  let from = [ch.root.position.x, ch.root.position.z];
-  /* 角色恰好站在第一个目标设备上时（如 error 态守在异常信标旁），改从该角色的工位起画：
-     否则整段会退化成零长度、看不到任何"作业路径"亮点。既无工位又与目标重合（如 geometry
-     一直在自己的工位台前），则如实不画路径，只留设备亮环。 */
-  const head = stations.find(s => s.tag === order[0]);
-  if (head && Math.hypot(from[0] - head.p[0], from[1] - head.p[1]) < 0.40){
-    const home = (typeof DESK_AT !== "undefined") ? DESK_AT[k] : null;
-    if (home && Math.hypot(home[0] - head.p[0], home[1] - head.p[1]) > 0.40) from = [+home[0], +home[1]];
-  }
-  order.forEach(tag => {
-    const st = stations.find(s => s.tag === tag);
-    if (!st) return;
-    const seg = (typeof pathPoints === "function")
-      ? pathPoints(from[0], from[1], st.p[0], st.p[1])
-      : [[st.p[0], st.p[1]]];
-    seg.forEach(p => line.push([+p[0], +p[1]]));
-    from = st.p;
-  });
-  /* 按 0.42m 等距铺亮点，最多 48 个（既看得到"流向"，也不至于糊成一条实线） */
-  const out = [];
-  const STEP = 0.42;
-  let carry = 0;
-  for (let i = 0; i < line.length - 1 && out.length < 48; i++){
-    const ax = line[i][0], az = line[i][1], bx = line[i + 1][0], bz = line[i + 1][1];
-    const len = Math.hypot(bx - ax, bz - az);
-    if (len < 1e-4) continue;
-    for (let d = carry; d < len && out.length < 48; d += STEP){
-      const u = d / len;
-      out.push([ax + (bx - ax) * u, az + (bz - az) * u]);
-    }
-    carry = (carry + Math.ceil(Math.max(0, len - carry) / STEP) * STEP) - len;
-    if (carry < 0) carry = 0;
-  }
-  return out;
-}
-
-/* ---------------- 聚焦可视化（光环 / 光柱 / 设备标记环 / 路径亮点） ---------------- */
-function focusVisualMesh(geo, mat, x, y, z, renderOrder){
-  const m = new THREE.Mesh(geo, mat);
-  m.position.set(x, y, z);
-  m.renderOrder = renderOrder || 6;
-  return m;
-}
-function focusBuildVisual(tint, ch, stations, dots){
-  const g = new THREE.Group();
-  g.userData.focusVisual = true;
-  const x = ch.root.position.x, z = ch.root.position.z;
-  const flat = (geo, opacity, order) => {
-    const mat = new THREE.MeshBasicMaterial({
-      color: tint, transparent: true, opacity: opacity, side: THREE.DoubleSide,
-      depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
-    return focusVisualMesh(geo, mat, 0, 0, 0, order);
-  };
-  const ring = flat(new THREE.RingGeometry(0.50, 0.66, 48), 0.75, 6);
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.set(x, 0.030, z);
-  g.add(ring);
-  const pillar = flat(new THREE.CylinderGeometry(0.60, 0.60, 2.40, 22, 1, true), 0.09, 5);
-  pillar.position.set(x, 1.20, z);
-  g.add(pillar);
-  const marks = [];
-  stations.forEach((st, i) => {
-    const m = flat(new THREE.RingGeometry(st.r * 0.74, st.r * 0.94, 40), 0.42, 6);
-    m.rotation.x = -Math.PI / 2;
-    m.position.set(st.p[0], 0.028, st.p[1]);
-    g.add(m);
-    marks.push({ mesh: m, mat: m.material, phase: i * 0.9 });
-  });
-  const dashes = [];
-  dots.forEach(p => {
-    const d = flat(new THREE.CircleGeometry(0.135, 14), 0.30, 7);
-    d.rotation.x = -Math.PI / 2;
-    d.position.set(p[0], 0.032, p[1]);
-    g.add(d);
-    dashes.push({ mesh: d, mat: d.material });
-  });
-  scene.add(g);
-  return { group: g, ring: ring, pillar: pillar, marks: marks, dashes: dashes };
-}
-
-/* ---------------- 淡化（只淡不删；退出逐项还原） ---------------- */
+/* ---------------- 聚焦可视化：P1-9 改造一已整体移除 ----------------
+   原 focusVisualMesh / focusBuildVisual 构建的"脚下光环 / 光柱 / 关联设备标记环 / 作业路径
+   光点"全部删除（去掉冗余光效，视觉保持简单清爽）；FOCUS.visual 恒为 null，
+   focusState() 的 dots / marks 探针字段保留但恒为 0，既有调用方无须改动。 */
+/* ---------------- 压暗退场（只暗不删；退出逐项还原） ----------------
+   与旧"半透明淡化"的关键差别：完全不碰 transparent / depthWrite / opacity，
+   只把材质颜色向远景灰混一点并整体压暗 —— 外壳始终不透明，内部结构不会透出。 */
 function focusOwned(o){
   for (let p = o; p; p = p.parent){ if (p.userData && p.userData.focusVisual) return true; }
   return false;
@@ -8231,18 +8846,25 @@ function focusDim(ch, stations){
     dim.push(o);
   });
   const matMap = new Map(), clones = [];
+  const air = new THREE.Color(FOCUS_DIM_AIR);
   dim.forEach(o => {
     const src = o.material;
     let copy = matMap.get(src);
-    /* 同一个原材质只克隆一份给所有被淡化的网格共用：原材质（可能同时被高亮主体用着）
-       保持不动，既不会"连坐淡化"主体，也不会为每张椅子多占一份材质。 */
+    /* 同一个原材质只克隆一份给所有被压暗的网格共用：原材质（可能同时被高亮主体用着）
+       保持不动，既不会"连坐压暗"主体，也不会为每张椅子多占一份材质。 */
     if (!copy){
       copy = src.clone();
       matMap.set(src, copy);
       clones.push(copy);
-      copy.transparent = true;
-      copy.opacity = FOCUS_DIM;
-      copy.depthWrite = false;
+      /* 只调颜色（向远景灰混一点 + 整体压暗），一律不动 transparent / depthWrite /
+         opacity —— 这三个字段正是旧版穿帮的根源：外壳一旦透明，内层皮肤球与描边
+         背壁就会透出来。外壳保持不透明，内部结构永远被挡住。 */
+      if (copy.color && copy.color.isColor){
+        copy.color.lerp(air, FOCUS_DIM_MIX).multiplyScalar(FOCUS_DIM);
+      }
+      if (copy.emissive && copy.emissive.isColor){
+        copy.emissive.multiplyScalar(FOCUS_DIM);
+      }
     }
     o.userData.focusMat = src;
     o.material = copy;
@@ -8251,14 +8873,6 @@ function focusDim(ch, stations){
   FOCUS.mats = clones;
 }
 function focusClearVisual(){
-  if (FOCUS.visual){
-    scene.remove(FOCUS.visual.group);
-    FOCUS.visual.group.traverse(o => {
-      if (o.isMesh && o.geometry) o.geometry.dispose();
-      if (o.material && o.material.dispose) o.material.dispose();
-    });
-    FOCUS.visual = null;
-  }
   FOCUS.dimmed.forEach(m => {
     if (m.userData.focusMat){
       m.material = m.userData.focusMat;
@@ -8268,22 +8882,29 @@ function focusClearVisual(){
   FOCUS.dimmed = [];
   FOCUS.mats.forEach(c => { if (c && c.dispose) c.dispose(); });
   FOCUS.mats = [];
-  FOCUS.phase = 0;
 }
 
 /* ---------------- 进入 / 退出 ---------------- */
-/* 聚焦机位：小取景盒（角色） + 低 minH（推近）；azim / dist / elev 从当前机位平滑接续，
-   避免"点一下角色整个房间翻个面"的突兀感。 */
+/* 特写机位（P1-9 改造一）：取景盒只框"腰部 → 头顶上方"这一段，配合 pad 收敛得到半身 /
+   头部特写 —— 不再把整个人连同脚下地面一起塞进画面，也不会贴脸到只剩一颗头。
+   正交成像大小只由取景半高决定（box 与 minH / maxH 求交），dist 照旧接续即可。
+   azim / dist 从当前机位平滑接续，避免"双击一下整个房间翻个面"的突兀感。 */
 function focusEnterTween(ch){
   const cx = ch.root.position.x, cz = ch.root.position.z;
+  /* 角色建模以 1.86m 为基准（root.scale = height / 1.86），这里按实际身高取景，
+     身高不同的角色都不会多留头顶空白。 */
+  const H = (ch.cfg && ch.cfg.height) || 1.86;
+  const yTop = +(H * 1.10 + 0.10).toFixed(3);    // 头顶上方留一点余量
+  const yBot = +(H * 0.46).toFixed(3);           // 约在腰部 → 半身取景
+  const hw = 0.44;                               // 半宽（米）：略宽于肩，四周留呼吸位
   const to = {
     tag: "FOCUS",
     azim: camNow.azim,
-    elev: clampN(camNow.elev, 0.40, 0.62),
+    elev: clampN(camNow.elev, 0.26, 0.42),       // 压低俯角，避免俯视头顶
     dist: clampN(camNow.dist, 9.5, 13.0),
-    look: [cx, 1.00, cz],
-    box: { min: [cx - 1.15, 0.00, cz - 1.15], max: [cx + 1.15, 2.15, cz + 1.15] },
-    minH: 1.16, maxH: 4.60, pad: 1.10, zoomK: 1
+    look: [cx, +((yTop + yBot) / 2).toFixed(3), cz],
+    box: { min: [cx - hw, yBot, cz - hw], max: [cx + hw, yTop, cz + hw] },
+    minH: 0.60, maxH: 2.40, pad: 1.06, zoomK: 1
   };
   ctrl.zoomTarget = 1;
   FOCUS.tween = { from: cloneView(camNow), to: cloneView(to), t: 0,
@@ -8295,7 +8916,7 @@ function focusRole(k){
   if (!ch) return { ok: false, reason: "unknown-role", role: key };
   if (FOCUS.on === key){ focusSyncChip(); return { ok: true, role: key, again: true }; }
   if (TOUR.active) tourStop("focus");            // 导览中点击角色：先中断导览（快照随之复位）
-  /* 换焦点：先清掉上一个角色的可视化与淡化，但相机连续交棒（快照沿用第一次进入前的机位） */
+  /* 换焦点：先清掉上一个角色的可视化与压暗，但相机连续交棒（快照沿用第一次进入前的机位） */
   let snap = null, free = false;
   if (FOCUS.on){
     snap = FOCUS.snap; free = FOCUS.free;
@@ -8305,20 +8926,21 @@ function focusRole(k){
   }
   camTween = null;                               // 聚焦独占相机通道
   if (!snap) snap = cloneView(camNow);
-  const tint = focusTint(key), stations = focusStations(key);
-  const dots = focusPathDots(key, ch, stations);
+  const stations = focusStations(key);
   FOCUS.on = key;
   FOCUS.snap = snap;
   FOCUS.free = free;
-  FOCUS.phase = 0;
   FOCUS.tween = null;
-  FOCUS.visual = focusBuildVisual(tint, ch, stations, dots);
+  /* P1-9 改造一：不再构建任何聚焦可视化对象（光环 / 光柱 / 标记环 / 路径光点已整体移除），
+     只做"相机推近 + 其余极弱化"两件事；FOCUS.visual 恒为 null（字段保留，探针形状不变）。 */
+  FOCUS.visual = null;
   focusDim(ch, stations);
   camFree = true;                                // 聚焦中不属于任何预设机位（HUD 不再高亮）
   syncHud();
   focusEnterTween(ch);
   focusSyncChip();
-  return { ok: true, role: key, stations: stations.map(s => s.tag), dots: dots.length };
+  /* dots：路径光点已随发光特效移除，恒为 0（字段保留以兼容既有探针） */
+  return { ok: true, role: key, stations: stations.map(s => s.tag), dots: 0 };
 }
 function exitFocus(opts){
   const o = opts || {};
@@ -8360,7 +8982,7 @@ function focusState(){
   };
 }
 
-/* 每帧：聚焦相机缓动 + 光环呼吸 + 设备标记脉冲 + 作业路径流光 */
+/* 每帧：聚焦相机缓动（P1-9 改造一起不再驱动任何发光特效，函数体只剩缓动收尾） */
 function updateFocus(dt){
   if (FOCUS.tween){
     const T = FOCUS.tween;
@@ -8384,35 +9006,6 @@ function updateFocus(dt){
     applyCam();
     if (k >= 1){ camNow.tag = b.tag; FOCUS.tween = null; }
   }
-  if (!FOCUS.on || !FOCUS.visual) return;
-  const ch = characters[FOCUS.on];
-  if (!ch) return;
-  FOCUS.phase += dt;
-  const p = FOCUS.phase;
-  const breathe = 0.5 + 0.5 * Math.sin(p * 3.0);
-  const ring = FOCUS.visual.ring, pillar = FOCUS.visual.pillar;
-  ring.position.set(ch.root.position.x, 0.030, ch.root.position.z);   // 角色可能仍在走动
-  ring.material.opacity = 0.42 + 0.36 * breathe;
-  ring.scale.setScalar(1 + 0.06 * breathe);
-  pillar.position.set(ring.position.x, 1.20, ring.position.z);
-  pillar.material.opacity = 0.055 + 0.055 * breathe;
-  FOCUS.visual.marks.forEach(m => {
-    const b = 0.5 + 0.5 * Math.sin(p * 2.1 + m.phase);
-    m.mat.opacity = 0.26 + 0.30 * b;
-    m.mesh.scale.setScalar(1 + 0.05 * b);
-  });
-  const n = FOCUS.visual.dashes.length;
-  if (n){
-    const head = (p * 1.30) % 1;              // 亮点从角色端流向设备端（方向 = 作业流向）
-    FOCUS.visual.dashes.forEach((d, i) => {
-      let gap = head - i / n;
-      gap -= Math.floor(gap);
-      const glow = Math.pow(1 - Math.min(1, gap / 0.40), 2.2);
-      /* 实机验收反馈"路径流光偏弱"：抬高基底与峰值不透明度、放大点径（几何尺寸见下方 0.135） */
-      d.mat.opacity = 0.10 + 0.82 * glow;
-      d.mesh.scale.setScalar(0.90 + 0.34 * glow);
-    });
-  }
 }
 
 /* =====================================================================
@@ -8432,7 +9025,7 @@ function updateFocus(dt){
    · 怎么收：单条流寿命 3.4s，头尾各留淡入淡出包络，自然消散；同时最多 6 条，
      超出丢弃最旧一条；reset() / 总开关关闭时整体清空，材质逐个 dispose（几何体
      为模块级共享，不随流销毁），零残留。
-   · 与聚焦的关系：只加不减——聚焦淡化遍历时显式跳过流线（flowOwned），
+   · 与聚焦的关系：只加不减——聚焦压暗遍历时显式跳过流线（flowOwned），
      故聚焦任意角色时数据流线照常可见。
    ===================================================================== */
 const FLOW_TINT = { geometry: 0x22d3ee, printability: 0x34d399, failure: 0xfb923c,
@@ -8468,7 +9061,7 @@ function flowGeos(){
   }
   return [_flowGeoTrack, _flowGeoPart];
 }
-/* 流线归属判定：供聚焦淡化跳过（与 focusOwned 同构） */
+/* 流线归属判定：供聚焦压暗跳过（与 focusOwned 同构） */
 function flowOwned(o){
   for (let p = o; p; p = p.parent){ if (p.userData && p.userData.flowVisual) return true; }
   return false;
@@ -8692,6 +9285,22 @@ function frameEdgeOf(box){
 }
 
 window.__office = {
+  /* P1-10：角色 glTF 模型管线（本轮只铺管线，MODEL_SOURCES 为空 → 恒回退程序化角色）
+     用法：await __office.loadRoleModel("geometry", "/models/geometry.glb")
+     返回 { ok, key, url, reason? }；加载 / 装配失败不改动场景，既有接口语义一律不变 */
+  loadRoleModel(key, url, opts){ return loadRoleModel(key, url, opts); },
+  /* P1-10 只读快照：各角色当前视觉层状态（未接入模型时全部 mode:"procedural"） */
+  roleModels(){
+    const out = {};
+    Object.keys(characters).forEach(k => {
+      const g = characters[k] && characters[k].gltf;
+      out[k] = g
+        ? { mode: g.mode, url: g.url, scale: g.scale,
+            clips: (g.clips || []).length, actions: Object.keys(g.actions || {}) }
+        : { mode: "procedural" };
+    });
+    return out;
+  },
   setAgent(k, status){
     /* P0-2：八态语义，未知状态直接忽略（不猜测）；优先级与保鲜期由 applyAgentState 裁决，
        被高优先级压制的调用直接返回 false 且不产生任何可见副作用 */
@@ -9067,9 +9676,18 @@ window.__office = {
                part: tip.where ? (tip.machine + ":" + tip.where) : null,
                title: tip.title || tip.titleKey || "" };
     };
+    const at = tipAnchor();
     return { hover: info(hoverTip), pinned: info(pinnedTip),
              visible: tipDiv.style.display !== "none",
-             pinnedCls: tipDiv.classList.contains("is-pinned") };
+             pinnedCls: tipDiv.classList.contains("is-pinned"),
+             /* P1-9 改造二探针：frozen = 位置已冻结（不再跟随鼠标）；hold = 保持窗口已计时；
+                at = 冻结锚点；box = 卡片实际落点；events = 计算后的 pointer-events */
+             frozen: !!at,
+             hold: +TIP_HOLD.t.toFixed(2),
+             at: at ? { x: +at.x.toFixed(1), y: +at.y.toFixed(1) } : null,
+             box: { x: tipDiv.offsetLeft, y: tipDiv.offsetTop,
+                    w: tipDiv.offsetWidth, h: tipDiv.offsetHeight },
+             events: getComputedStyle(tipDiv).pointerEvents };
   },
   /* 程序化环绕 / 缩放（等价于一次鼠标拖拽 / 滚轮；自动化验收与插件调用都用它） */
   orbit(dx, dy){ orbitBy(dx, dy); return this.camera(); },
@@ -9125,7 +9743,9 @@ window.__office = {
   },
   nextView(){ return useView(nextView(1)); },
   /* P1-5 点击角色聚焦（纯新增，既有方法签名与行为一律不动）：
-     focusRole("geometry") 聚焦指定角色（相机推近 + 高亮关联设备与作业路径 + 其余淡化）；
+     P1-9 改造一：交互入口改为"同一角色 300ms 内双击"，且不再有任何发光特效
+     （原脚下光环 / 光柱 / 设备标记环 / 作业路径流光整体移除），接口本身逐字不变。
+     focusRole("geometry") 聚焦指定角色（相机推近到半身 / 头部特写 + 其余极弱化）；
      exitFocus() 退出聚焦（相机缓动回进入前的机位）；exitFocus({instant:true}) 瞬时收尾；
      focusState() 只读快照，供自动化探针核对（不产生任何副作用）。 */
   focusRole(k){ return focusRole(k); },
@@ -9373,6 +9993,9 @@ buildHud();
 if (VIEW_BY_PARAM) useView(VIEW_BY_PARAM, { instant: true });
 if (LIGHTS_BY_PARAM) useLights(LIGHTS_BY_PARAM);
 if (HUDDLE_BY_PARAM){ startHuddle("big"); huddle.t = 1e9; }   // 演示模式：会诊常驻
+/* P1-10：按 MODEL_SOURCES 预热角色模型（表为空 = 未接入模型 → 零副作用、零请求）。
+   异步进行不阻塞首帧；失败一律保留程序化角色，告警由 loadRoleModel 内部负责。 */
+preloadRoleModels();
 requestAnimationFrame(() => { layout(); frameDelta(); loop(); });
 
 
