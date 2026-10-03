@@ -2,6 +2,7 @@ import type { AIProviderId } from '@shared/domain/providers';
 import type { Material } from '@shared/domain/material';
 import { getActiveProvider, getKey, hasAnyKey } from './apiKeys';
 import { getAuthSnapshot } from './authStore';
+import { MUSE_GLIMMER_MODEL } from './llmProxy';
 
 // Hosted default: the cheapest server-side provider for signed-in users
 // (the server holds the key — the browser sends nothing).
@@ -11,6 +12,8 @@ export interface LLMAccess {
   provider: AIProviderId;
   /** Empty string = server-hosted key (signed-in user). */
   key: string;
+  /** Optional per-call model override (server allowlist is the security boundary). */
+  model?: string;
 }
 
 /**
@@ -77,7 +80,15 @@ function findAvailableProvider(
 export function getLLMProviderForMaterial(material: Material): LLMAccess | null {
   const isSignedIn = !!getAuthSnapshot().user;
   const priorityList = PROVIDER_PRIORITY[material.technology] ?? PROVIDER_PRIORITY.fdm;
-  return findAvailableProvider(priorityList, isSignedIn);
+  const access = findAvailableProvider(priorityList, isSignedIn);
+  if (access && access.provider === 'fireworks') {
+    // fireworks 是单 provider 多模型：解析到它就默认出 Muse Glimmer（Meta 开源 agent 脑，
+    // $0.35/$1.5，比 Claude 便宜一个数量级，tool-use 基准同级最强）。
+    // 注：accounts 里的 deepseek-v4-pro 在该 Fireworks 账号 serverless 已不可用，
+    // glimmer 需 on-demand 部署后生效；部署前保持可调用结构不断。
+    return { ...access, model: MUSE_GLIMMER_MODEL };
+  }
+  return access;
 }
 
 export function isLLMAvailable(): boolean {

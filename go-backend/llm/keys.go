@@ -22,6 +22,7 @@ type LLMProviderConfig struct {
 	ID      string         `yaml:"id"`
 	BaseURL string         `yaml:"baseUrl"`
 	Model   string         `yaml:"model"`
+	Models  []string       `yaml:"models,omitempty"`
 	Keys    []LLMKeyEntry  `yaml:"keys"`
 }
 

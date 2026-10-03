@@ -58,6 +58,7 @@ const COST_PER_1M_TOKENS: Record<string, { input: number; output: number }> = {
   'deepseek-chat':              { input: 0.14,  output: 0.28  },
   'kimi-k3':                    { input: 0.70,  output: 2.10  },
   'accounts/fireworks/models/deepseek-v4-pro': { input: 0.90, output: 0.90 },
+  'accounts/fireworks/models/muse-glimmer-30b': { input: 0.35, output: 1.50 },
   'glm-4.7':                    { input: 0.35,  output: 1.40  },
   'Qwen/Qwen3-8B':             { input: 0,     output: 0     },
 };
@@ -94,8 +95,9 @@ function buildLLMBodyStream(
   systemPrompt: string,
   userMessage: string,
   maxTokens = 1024,
+  modelOverride?: string,
 ): Record<string, unknown> {
-  const base = buildLLMBodyBase(provider, systemPrompt, userMessage, maxTokens);
+  const base = buildLLMBodyBase(provider, systemPrompt, userMessage, maxTokens, modelOverride);
   // All providers support stream:true for SSE
   return { ...base, stream: true };
 }
@@ -105,6 +107,7 @@ function buildLLMBodyBase(
   systemPrompt: string,
   userMessage: string,
   maxTokens = 1024,
+  modelOverride?: string,
 ): Record<string, unknown> {
   if (provider === 'claude') {
     return {
@@ -120,7 +123,7 @@ function buildLLMBodyBase(
       contents: [{ parts: [{ text: `${systemPrompt}\n\n${userMessage}` }] }],
     };
   }
-  const model = CHAT_COMPLETION_MODELS[provider];
+  const model = modelOverride ?? CHAT_COMPLETION_MODELS[provider];
   if (!model) throw new Error(`Unknown provider: ${provider}`);
   return {
     model,
@@ -169,6 +172,7 @@ export async function callAIEnhanced(
   language?: string,
   signal?: AbortSignal,
   retryConfig: Partial<RetryConfig> = {},
+  modelOverride?: string,
 ): Promise<LLMResponse> {
   const config = { ...DEFAULT_RETRY, ...retryConfig };
   let lastError: Error | null = null;
@@ -214,7 +218,7 @@ export async function callAIEnhanced(
       }
 
       // Keyed providers via relay
-      const body = buildLLMBodyBase(provider, systemPrompt + langSuffix, userMessage);
+      const body = buildLLMBodyBase(provider, systemPrompt + langSuffix, userMessage, 1024, modelOverride);
       const res = await callLLMProxy(provider, apiKey, body, signal);
       if (!res.ok) throw new Error(`${provider} API error: ${res.status}`);
       const data = (await res.json()) as Record<string, unknown>;
@@ -245,6 +249,7 @@ export async function* callAIStream(
   userMessage: string,
   language?: string,
   signal?: AbortSignal,
+  modelOverride?: string,
 ): AsyncGenerator<StreamChunk, LLMUsage, void> {
   const langSuffix = language
     ? `\n\nPlease respond in ${language}. Use natural and professional terms.`
@@ -277,7 +282,7 @@ export async function* callAIStream(
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const payload: Record<string, unknown> = {
     provider,
-    body: buildLLMBodyStream(provider, systemPrompt + langSuffix, userMessage),
+    body: buildLLMBodyStream(provider, systemPrompt + langSuffix, userMessage, 1024, modelOverride),
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   else payload.apiKey = apiKey;

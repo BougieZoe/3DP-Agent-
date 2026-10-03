@@ -126,7 +126,7 @@ function langInstruction(language?: string): string {
 }
 
 /** Build the provider-specific request body for the /api/llm relay. */
-function buildLLMBody(provider: AIProvider, systemPrompt: string, userMessage: string): Record<string, unknown> {
+function buildLLMBody(provider: AIProvider, systemPrompt: string, userMessage: string, modelOverride?: string): Record<string, unknown> {
   if (provider === 'claude') {
     return {
       model: CLAUDE_MODEL,
@@ -141,7 +141,7 @@ function buildLLMBody(provider: AIProvider, systemPrompt: string, userMessage: s
       contents: [{ parts: [{ text: `${systemPrompt}\n\n${userMessage}` }] }],
     };
   }
-  const model = CHAT_COMPLETION_MODELS[provider];
+  const model = modelOverride ?? CHAT_COMPLETION_MODELS[provider];
   if (!model) {
     throw new Error('Unknown provider');
   }
@@ -175,6 +175,7 @@ export async function callAI(
   userMessage: string,
   language?: string,
   signal?: AbortSignal,
+  modelOverride?: string,
 ): Promise<string> {
   systemPrompt += langInstruction(language);
 
@@ -202,7 +203,7 @@ export async function callAI(
 
   // Every keyed provider goes through the same-origin /api/llm relay — the
   // browser cannot call Anthropic/Moonshot/Gemini directly (CORS).
-  const res = await callLLMProxy(provider, apiKey, buildLLMBody(provider, systemPrompt, userMessage), signal);
+  const res = await callLLMProxy(provider, apiKey, buildLLMBody(provider, systemPrompt, userMessage, modelOverride), signal);
   if (!res.ok) throw new Error(`${provider} API error: ${res.status}`);
   const data = (await res.json()) as Record<string, unknown>;
   return extractAIResponseText(provider, data);

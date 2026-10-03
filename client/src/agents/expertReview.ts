@@ -172,7 +172,7 @@ export async function runExpertReview(input: ExpertReviewInput): Promise<ExpertR
   const timer = setTimeout(() => controller.abort(), EXPERT_REVIEW_TIMEOUT_MS);
   const signal = input.signal ?? controller.signal;
   try {
-    const raw = await callAI(llm.provider, llm.key, system, user, input.language, signal);
+    const raw = await callAI(llm.provider, llm.key, system, user, input.language, signal, llm.model);
     return parseExpertReview(raw);
   } catch {
     return null;

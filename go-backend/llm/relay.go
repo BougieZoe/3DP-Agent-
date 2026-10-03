@@ -37,7 +37,16 @@ func isModelAllowed(provider, model string) bool {
 	if providerConfig.Model == "" {
 		return true
 	}
-	return providerConfig.Model == model
+	if providerConfig.Model == model {
+		return true
+	}
+	// Extra allowlisted models (e.g. fireworks hosts several models behind one provider id)
+	for _, m := range providerConfig.Models {
+		if m == model {
+			return true
+		}
+	}
+	return false
 }
 
 func resolveEndpoint(provider, model string) string {
