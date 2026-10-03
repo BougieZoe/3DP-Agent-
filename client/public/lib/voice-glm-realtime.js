@@ -156,7 +156,12 @@
       }
       office.callReply(text);
     } else if (d.type === "error") {
-      console.warn("[voice-rt] GLM error:", d.code, d.message);
+      /* 后端错误（欠费/配额/端点不可用）必须进面板，否则用户只看到"没声音"。
+         例：GLM 1113 欠费、Fireworks ASR 503 未开通。 */
+      console.warn("[voice-rt] 后端 error:", d.code, d.message);
+      try {
+        office.say(RT.peer || "coordinator", "语音服务出错：" + (d.message || d.code || "未知错误"));
+      } catch (e) {}
     }
   }
 

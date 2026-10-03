@@ -24,6 +24,8 @@ export const CHAT_COMPLETION_MODELS: Partial<Record<AIProviderId, string>> = {
 
 export const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
 export const GEMINI_MODEL = 'gemini-3.6-flash';
+// Meta Muse Glimmer 30B via Fireworks (server allowlist: llm-keys.yaml fireworks.models)
+export const MUSE_GLIMMER_MODEL = 'accounts/fireworks/models/muse-glimmer-30b';
 
 /**
  * POST a provider-specific body to the /api/llm relay.

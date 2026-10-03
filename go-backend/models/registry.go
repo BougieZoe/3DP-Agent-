@@ -91,6 +91,7 @@ var hardcodedModels = []ModelInfo{
 	{ID: "kimi-k3", Provider: "kimi", Label: "Kimi K3", Source: "hardcoded"},
 	// Fireworks
 	{ID: "accounts/fireworks/models/deepseek-v4-pro", Provider: "fireworks", Label: "DeepSeek V4 Pro (Fireworks)", Source: "hardcoded"},
+	{ID: "accounts/fireworks/models/muse-glimmer-30b", Provider: "fireworks", Label: "Muse Glimmer 30B (Meta)", Released: "2026-08-10", Pricing: &ModelPricing{InputPer1K: 0.00035, OutputPer1K: 0.0015, Currency: "USD"}, Source: "hardcoded"},
 	// Zhipu
 	{ID: "glm-4.7", Provider: "zhipu", Label: "GLM-4.7", Source: "hardcoded"},
 	// Gemini

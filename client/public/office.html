@@ -40,8 +40,11 @@
     console.error("[office] three.js 全局包未就绪：/lib/three.global.min.js");
   }
   await import("/lib/office3d.js");
-  /* GLM-Realtime 全双工语音：注册为 office3d.js 的 onCallEvent 插件，通话时自动接管语音 */
-  await import("/lib/voice-glm-realtime.js");
+  /* GLM-Realtime 全双工语音：注册为 office3d.js 的 onCallEvent 插件，通话时自动接管语音。
+     2026-10-03 起临时停用：GLM 1113 欠费、Fireworks 音频域无权限，云端两条路都不通；
+     停用后通话回落 v0 免费链（speechSynthesis 播报 + webkitSpeechRecognition 聆听，需 Chrome）。
+     任一云通路恢复后，把下面这行的注释解开即回实时语音。 */
+  // await import("/lib/voice-glm-realtime.js");
 </script>
 <script type="module">
 /* postMessage bridge — receives agent status from parent (AgentOfficeEntry.tsx). */
