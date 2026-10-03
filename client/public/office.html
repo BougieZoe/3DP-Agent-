@@ -28,11 +28,20 @@
 <canvas id="gl"></canvas>
 <div class="vignette"></div>
 <div class="hud"><span class="live"></span><b>Live Floor</b><span>· Agent Office</span></div>
+<!-- three.js 全局单文件：核心 + GLTFLoader + SkeletonUtils。
+     经典 script 同步加载 → 执行到下方模块脚本时 window.THREE 必已就绪；
+     不再走模块 import 方式（该方式在部分静态服务 / iframe 环境下会因 MIME
+     或加载时序问题失败，表现为「THREE is not defined」黑屏）。
+     产物由 `pnpm build:office-lib` 生成（入口 scripts/office-three/three-global-entry.js）。 -->
+<script src="/lib/three.global.min.js"></script>
 <script type="module">
-  /* Load Three.js as ES module, expose as global, then load office3d.js */
-  const THREE = await import("/lib/three.module.min.js");
-  window.THREE = THREE;
+  /* office3d.js 约定：THREE 由其自行从 window 取用（见文件头「加载约定」） */
+  if (!window.THREE || typeof window.THREE.Scene !== "function") {
+    console.error("[office] three.js 全局包未就绪：/lib/three.global.min.js");
+  }
   await import("/lib/office3d.js");
+  /* GLM-Realtime 全双工语音：注册为 office3d.js 的 onCallEvent 插件，通话时自动接管语音 */
+  await import("/lib/voice-glm-realtime.js");
 </script>
 <script type="module">
 /* postMessage bridge — receives agent status from parent (AgentOfficeEntry.tsx). */
@@ -69,6 +78,9 @@ function drain() {
   setTimeout(drain, (ev && ev.status === "running") ? 420 : 190);
 }
 window.addEventListener("message", (e) => {
+  /* 只接受同源宿主页的指令：office.html 以同源 iframe 嵌入（src='/office.html'），
+     跨源页面即使能嵌进来也驱动不了场景。 */
+  if (e.origin !== location.origin) return;
   const d = e.data;
   const o = office();
   if (!d || !o) return;
@@ -85,7 +97,7 @@ const wait = setInterval(() => {
   if (office() || (waited += 1) > 80) {
     clearInterval(wait);
     if (window.parent && window.parent !== window) {
-      try { window.parent.postMessage({ type: "office-ready" }, "*"); } catch (_) {}
+      try { window.parent.postMessage({ type: "office-ready" }, location.origin); } catch (_) {}
     }
   }
 }, 250);

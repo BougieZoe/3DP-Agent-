@@ -142,6 +142,21 @@ export default defineConfig({
         target: "http://127.0.0.1:8888",
         changeOrigin: true,
       },
+      // Dev: 办公室角色语音通话 —— 本机 Pipecat 语音服务（~/3dp-agent/voice_service）
+      // WebSocket 升级必须显式开 ws: true，否则握手会被当成普通 HTTP 拦掉
+      // Dev: GLM-Realtime 全双工语音桥（~/3dp-agent/voice_service/glm_realtime_bridge.py, :7871）
+      // 必须排在 "/voice" 之前：vite 的 proxy 是按声明顺序做 startsWith 前缀匹配，
+      // "/voice" 会吃掉 "/voice-rt"。
+      "/voice-rt": {
+        target: "ws://127.0.0.1:7871",
+        ws: true,
+        changeOrigin: true,
+      },
+      "/voice": {
+        target: "ws://127.0.0.1:7870",
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
 });

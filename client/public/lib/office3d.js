@@ -3419,7 +3419,7 @@ let gltfLoader = null;
 let gltfLoaderWarned = false;
 let vrmPluginWarned = false;   // VRM 插件缺失只告警一次（P1-11）
 
-/* 惰性创建 loader；three 全局里没有 GLTFLoader（旧 three.module.min.js 只含核心）时返回 null */
+/* 惰性创建 loader；three 全局里没有 GLTFLoader（宿主未用 lib/three.global.min.js 加载）时返回 null */
 function ensureGltfLoader(){
   if (gltfLoader) return gltfLoader;
   const G = (typeof THREE !== "undefined") ? THREE.GLTFLoader : null;

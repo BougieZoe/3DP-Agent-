@@ -33,7 +33,8 @@ function useOfficeBridge(iframeRef: RefObject<HTMLIFrameElement | null>) {
     (agentId: string, status: string) => {
       const w = iframeRef.current?.contentWindow;
       if (!w) return;
-      w.postMessage({ type: 'office-event', agent: agentId, status }, '*');
+      // 同源嵌入：targetOrigin 收紧到 location.origin，不向任意源广播状态。
+      w.postMessage({ type: 'office-event', agent: agentId, status }, window.location.origin);
     },
     [iframeRef],
   );
@@ -41,6 +42,9 @@ function useOfficeBridge(iframeRef: RefObject<HTMLIFrameElement | null>) {
   // Handshake: once the office page reports ready, flush a full snapshot.
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
+      // 只认同源、且只认自己这个 iframe 发来的 ready（同页可能挂多个 office iframe）。
+      if (e.origin !== window.location.origin) return;
+      if (e.source !== iframeRef.current?.contentWindow) return;
       if ((e.data as { type?: string })?.type !== 'office-ready') return;
       readyRef.current = true;
       for (const a of getTelemetryHub().getAll()) push(a.agentId, a.status);
