@@ -1,0 +1,21 @@
+{
+  "id": "hanevex-fgf",
+  "vendor": "Hanevex（青岛瀚海常青科技有限公司）",
+  "source": "Formnext Asia Shenzhen 2026 sighting — specs from show display, verify before quoting",
+  "process": "FGF",
+  "feedstock": "pellet (incl. molding-grade pellets)",
+  "nozzleDiameterMm": { "min": 0.15, "max": 1.0 },
+  "nozzleTempC": { "max": 550 },
+  "chamberTempC": { "max": 300 },
+  "demoPart": {
+    "widthMm": 800,
+    "material": "ABS",
+    "note": "ribs, bosses and thin-wall features reproduced; surface near FFF quality"
+  },
+  "engineeringPlastics": ["PEEK"],
+  "warpingNote": "heated chamber reduces warping on large parts",
+  "priceBand": "low-mid",
+  "fit": ["prototype", "small-batch"],
+  "status": "candidate — needs on-machine calibration before production use",
+  "todo": "wire into server/slicerRouter.ts bed profiles + thermal material table once build volume is confirmed"
+}
