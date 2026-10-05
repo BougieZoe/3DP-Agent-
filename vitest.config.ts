@@ -11,6 +11,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
     include: ['**/*.test.ts', '**/*.test.tsx'],
+    // mcp/notion ships its own runner (node --test); root vitest must not collect it.
+    exclude: ['**/node_modules/**', 'mcp/**'],
   },
   resolve: {
     alias: {
