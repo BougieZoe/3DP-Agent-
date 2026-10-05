@@ -1400,6 +1400,14 @@ const pdf = {
     ja: '次のステップ: このレポートをデザイナーと共有するか、3dp-agent.vercel.app にアクセスして支援を受けてください。',
     zh: '下一步: 与设计师分享此报告，或访问 3dp-agent.vercel.app 获取帮助。',
   },
+  'handoff.quoteTitle': { en: 'Quote (draft)', ja: '見積書（ドラフト）', zh: '报价单（草稿）' },
+  'handoff.copyQuote': { en: 'COPY QUOTE', ja: '見積コピー', zh: '复制报价' },
+  'handoff.copied': { en: '✓ Copied — fill in rates', ja: '✓ コピー済 — 金額を記入', zh: '✓ 已复制 — 请填写金额' },
+  'handoff.quoteFooter': {
+    en: 'Rates to fill: material / machine time / failure cover (see docs/handoff).',
+    ja: '金額欄は手入力：材料費 / 機時 / 失敗保険（docs/handoff参照）。',
+    zh: '金额栏请手填：材料费 / 机时 / 失败险（见 docs/handoff）。',
+  },
   'pdf.disclaimer': {
     en: 'This report is an automated estimate. Actual print results may vary based on material, slicer settings, and printer calibration. Report ID: {id}',
     ja: 'このレポートは自動推定です。実際の印刷結果は素材・スライサー設定・プリンター校正により異なる場合があります。レポート ID: {id}',

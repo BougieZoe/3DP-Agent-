@@ -5,6 +5,7 @@ import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/
 import { getTrafficLight } from "./reportUtils";
 import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
 import { createShareLink, copyShareLink } from "@/lib/shareReport";
+import { buildQuoteText } from "@/lib/handoffPack";
 import { formatVolume, isVolumeReportable } from "@/lib/volumeDisplay";
 import type { ExpertReview } from "@/agents/expertReview";
 import type { ProductionSuitability } from "@/analysis/production";
@@ -75,14 +76,15 @@ function detectTone(messages: ChatMessage[]): ToneMode {
 
 // ─── Weight / Time ranges ──────────────────────────────────────────────────────
 
-function computeWeightRange(grams: number, lang: Language): string {
+// Canonical estimate formatters — also used by handoffPack (single writer).
+export function computeWeightRange(grams: number, lang: Language): string {
   if (!Number.isFinite(grams) || grams <= 0) return "—";
   const lo = (grams * 0.05 * 1.2).toFixed(0);
   const hi = (grams * 1.0 * 1.2).toFixed(0);
   return `${lo}–${hi}g (${translate(CONTENT, 'pdf.labelWeightNote', lang)})`;
 }
 
-function computeTimeRange(minutes: number, lang: Language): string {
+export function computeTimeRange(minutes: number, lang: Language): string {
   if (!Number.isFinite(minutes) || minutes <= 0) return "—";
   const lo = Math.round(minutes * 0.7);
   const hi = Math.round(minutes * 1.3);
@@ -694,7 +696,7 @@ async function generateClientPDF(
   if (metrics) {
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.volume', lang), formatVolume(metrics, (v) => `${(v / 1000).toFixed(2)} cm³`), y);
   }
-  if (!isVolumeReportable(metrics) || pt?.materialWeightGrams == null || pt.materialWeightGrams <= 0) {
+  if (!isVolumeReportable(metrics)) {
     y = drawDataRow(doc,
       translate(CONTENT, 'pdf.label.status', lang),
       translate(CONTENT, 'pdf.estimate.unavailable', lang),
@@ -1282,6 +1284,7 @@ export function ReportGenerator({
   const [tier, setTier] = useState<PdfTier>("client");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
+  const [quoteCopied, setQuoteCopied] = useState(false);
 
   const handleShare = useCallback(async () => {
     setShareLoading(true);
@@ -1295,6 +1298,16 @@ export function ReportGenerator({
       setShareLoading(false);
     }
   }, [analysis, fileName, expertReview]);
+
+  const handleCopyQuote = useCallback(async () => {
+    try {
+      const ok = await copyShareLink(buildQuoteText(analysis, fileName, lang));
+      setQuoteCopied(ok);
+      if (ok) setTimeout(() => setQuoteCopied(false), 2500);
+    } catch (err) {
+      console.error('Quote copy failed:', err);
+    }
+  }, [analysis, fileName, lang]);
 
   return (
     <div className="space-y-2">
@@ -1338,7 +1351,7 @@ export function ReportGenerator({
         </select>
       </div>
 
-      {/* Share button */}
+      {/* Share + quote buttons */}
       <div className="flex items-center gap-2">
         <button
           onClick={handleShare}
@@ -1346,6 +1359,13 @@ export function ReportGenerator({
           className="flex-1 py-2 text-[11px] font-mono border border-border/50 text-muted-foreground hover:text-foreground hover:border-border rounded-sm transition-all disabled:opacity-50"
         >
           {shareLoading ? '...' : shareUrl ? '✓ Link Copied' : 'Share Report'}
+        </button>
+        <button
+          onClick={handleCopyQuote}
+          title={translate(CONTENT, 'handoff.quoteFooter', language)}
+          className="flex-1 py-2 text-[11px] font-mono border border-border/50 text-muted-foreground hover:text-foreground hover:border-border rounded-sm transition-all"
+        >
+          {quoteCopied ? translate(CONTENT, 'handoff.copied', language) : translate(CONTENT, 'handoff.copyQuote', language)}
         </button>
       </div>
       {shareUrl && (
