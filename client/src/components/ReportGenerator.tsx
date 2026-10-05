@@ -5,7 +5,7 @@ import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/
 import { getTrafficLight } from "./reportUtils";
 import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
 import { createShareLink, copyShareLink } from "@/lib/shareReport";
-import { formatVolume } from "@/lib/volumeDisplay";
+import { formatVolume, isVolumeReportable } from "@/lib/volumeDisplay";
 import type { ExpertReview } from "@/agents/expertReview";
 import type { ProductionSuitability } from "@/analysis/production";
 
@@ -76,12 +76,14 @@ function detectTone(messages: ChatMessage[]): ToneMode {
 // ─── Weight / Time ranges ──────────────────────────────────────────────────────
 
 function computeWeightRange(grams: number, lang: Language): string {
+  if (!Number.isFinite(grams) || grams <= 0) return "—";
   const lo = (grams * 0.05 * 1.2).toFixed(0);
   const hi = (grams * 1.0 * 1.2).toFixed(0);
   return `${lo}–${hi}g (${translate(CONTENT, 'pdf.labelWeightNote', lang)})`;
 }
 
 function computeTimeRange(minutes: number, lang: Language): string {
+  if (!Number.isFinite(minutes) || minutes <= 0) return "—";
   const lo = Math.round(minutes * 0.7);
   const hi = Math.round(minutes * 1.3);
   const f = (m: number) => `${Math.floor(m / 60)}h ${Math.round(m % 60)}m`;
@@ -676,19 +678,29 @@ async function generateClientPDF(
   }
   y = drawDataRow(doc,
     translate(CONTENT, 'pdf.label.weight', lang),
-    pt?.materialWeightGrams != null ? computeWeightRange(pt.materialWeightGrams, lang) : "—",
+    pt?.materialWeightGrams != null && pt.materialWeightGrams > 0 ? computeWeightRange(pt.materialWeightGrams, lang) : "—",
     y
   );
   y = drawDataRow(doc,
     translate(CONTENT, 'pdf.label.time', lang),
-    pt?.estimatedPrintTimeMinutes != null ? computeTimeRange(pt.estimatedPrintTimeMinutes, lang) : "—",
+    pt?.estimatedPrintTimeMinutes != null && pt.estimatedPrintTimeMinutes > 0 ? computeTimeRange(pt.estimatedPrintTimeMinutes, lang) : "—",
     y
   );
-  if (pt?.materialCostUsd != null) {
+  if (pt?.materialCostUsd != null && pt.materialCostUsd > 0) {
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.cost', lang), `$${pt.materialCostUsd.toFixed(2)}`, y);
+  } else {
+    y = drawDataRow(doc, translate(CONTENT, 'pdf.label.cost', lang), "—", y);
   }
   if (metrics) {
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.volume', lang), formatVolume(metrics, (v) => `${(v / 1000).toFixed(2)} cm³`), y);
+  }
+  if (!isVolumeReportable(metrics) || pt?.materialWeightGrams == null || pt.materialWeightGrams <= 0) {
+    y = drawDataRow(doc,
+      translate(CONTENT, 'pdf.label.status', lang),
+      translate(CONTENT, 'pdf.estimate.unavailable', lang),
+      y,
+      true
+    );
   }
 
   if (v) {
@@ -728,6 +740,18 @@ async function generateClientPDF(
       PAGE_M, y
     );
     y += 7;
+  }
+
+  // ── Cheapest next step (only when not clean) ──
+  if (light !== "green") {
+    const twr = metrics?.thinWallRatio ?? 0;
+    const cheapest = v && !v.isWatertight
+      ? translate(CONTENT, 'pdf.cheapest.repair', lang)
+      : twr >= 0.2
+        ? translate(CONTENT, 'pdf.cheapest.scale', lang)
+        : translate(CONTENT, 'pdf.cheapest.support', lang);
+    y = drawDataRow(doc, translate(CONTENT, 'pdf.nextStep.cheapest', lang), cheapest, y);
+    y += 2;
   }
 
   // ── AI expert review (if run) ──
@@ -839,12 +863,12 @@ async function generateDesignerPDF(
   );
   y = drawDataRow(doc,
     lang === "ja" ? "推定重量" : "Est. weight",
-    pt?.materialWeightGrams != null ? computeWeightRange(pt.materialWeightGrams, lang) : "—",
+    pt?.materialWeightGrams != null && pt.materialWeightGrams > 0 ? computeWeightRange(pt.materialWeightGrams, lang) : "—",
     y
   );
   y = drawDataRow(doc,
     lang === "ja" ? "推定印刷時間" : "Est. print time",
-    pt?.estimatedPrintTimeMinutes != null ? computeTimeRange(pt.estimatedPrintTimeMinutes, lang) : "—",
+    pt?.estimatedPrintTimeMinutes != null && pt.estimatedPrintTimeMinutes > 0 ? computeTimeRange(pt.estimatedPrintTimeMinutes, lang) : "—",
     y
   );
 

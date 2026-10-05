@@ -1304,7 +1304,7 @@ const pdf = {
   'pdf.brand': { en: '3DP AGENT · PRINTABILITY ASSESSMENT', ja: '3DPエージェント · プリント性評価', zh: '3DP 智能体 · 可打印性评估' },
   'pdf.verdict.ready': { en: 'Ready to print', ja: '印刷可能です', zh: '可直接打印' },
   'pdf.verdict.review': { en: 'Review recommended', ja: '要確認', zh: '建议复核' },
-  'pdf.verdict.notReady': { en: 'Not ready to print', ja: '印刷には不向きです', zh: '暂不建议打印' },
+  'pdf.verdict.notReady': { en: 'High print-failure risk', ja: '印刷リスクが高い', zh: '打印失败风险较高' },
   'pdf.verdict.readyShort': { en: 'Ready to print', ja: '印刷可能', zh: '可直接打印' },
   'pdf.verdict.issuesFound': { en: 'Issues found', ja: '問題が検出されました', zh: '发现问题' },
   'pdf.verdictDesc.noIssues': { en: 'No issues detected', ja: '特に問題はありません', zh: '未发现问题' },
@@ -1374,6 +1374,27 @@ const pdf = {
   'pdf.suggestion.runRepair': { en: 'Run mesh repair', ja: 'メッシュ修復を実行してください', zh: '运行网格修复' },
   'pdf.suggest': { en: 'Suggest: {parts}', ja: '推奨: {parts}', zh: '建议: {parts}' },
   'pdf.reviewIssues': { en: 'Review issues and adjust', ja: '問題点を確認して調整してください', zh: '复核问题并调整' },
+  'pdf.estimate.unavailable': {
+    en: 'Weight / time / cost unavailable — open shell. Repair first, then re-export.',
+    ja: '体積未確定のため重量・時間・コストは算出不可。修復後に再出力してください。',
+    zh: '体积未确定，重量/时间/成本无法计算。请修复后再重新导出。',
+  },
+  'pdf.nextStep.cheapest': { en: 'Cheapest next step', ja: '最安の次の一手', zh: '成本最低的下一步' },
+  'pdf.cheapest.repair': {
+    en: 'Run mesh repair first — estimates return once the shell is closed.',
+    ja: 'まずメッシュ修復 — 閉じれば推定が出ます。',
+    zh: '先运行网格修复 — 封闭后即可给出估算。',
+  },
+  'pdf.cheapest.scale': {
+    en: 'Scale up 2× or switch to SLA — cheapest way out of thin walls.',
+    ja: '2倍に拡大かSLAへ — 薄肉の最安回避策。',
+    zh: '放大2倍或改用SLA — 薄壁最省钱的解法。',
+  },
+  'pdf.cheapest.support': {
+    en: 'Enable supports / adjust orientation — cheapest fix for overhangs.',
+    ja: 'サポート有効化か向き調整 — 張り出しの最安修正。',
+    zh: '启用支撑或调整方向 — 悬垂最省钱的修正。',
+  },
   'pdf.nextStep': {
     en: 'Next step: share this report with your designer, or visit 3dp-agent.vercel.app for assistance.',
     ja: '次のステップ: このレポートをデザイナーと共有するか、3dp-agent.vercel.app にアクセスして支援を受けてください。',
