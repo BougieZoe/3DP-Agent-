@@ -28,6 +28,7 @@ const OFFICE_URL = '/office.html';
 function useOfficeBridge(iframeRef: RefObject<HTMLIFrameElement | null>) {
   const readyRef = useRef(false);
   const lastRef = useRef<Record<string, string>>({});
+  const pendingScoreRef = useRef<number | null>(null);
 
   const push = useCallback(
     (agentId: string, status: string) => {
@@ -35,6 +36,19 @@ function useOfficeBridge(iframeRef: RefObject<HTMLIFrameElement | null>) {
       if (!w) return;
       // 同源嵌入：targetOrigin 收紧到 location.origin，不向任意源广播状态。
       w.postMessage({ type: 'office-event', agent: agentId, status }, window.location.origin);
+    },
+    [iframeRef],
+  );
+
+  const pushConsensus = useCallback(
+    (score: number) => {
+      const w = iframeRef.current?.contentWindow;
+      if (!w) return;
+      if (!readyRef.current) {
+        pendingScoreRef.current = score;
+        return;
+      }
+      w.postMessage({ type: 'office-consensus', score }, window.location.origin);
     },
     [iframeRef],
   );
@@ -48,10 +62,25 @@ function useOfficeBridge(iframeRef: RefObject<HTMLIFrameElement | null>) {
       if ((e.data as { type?: string })?.type !== 'office-ready') return;
       readyRef.current = true;
       for (const a of getTelemetryHub().getAll()) push(a.agentId, a.status);
+      if (pendingScoreRef.current != null) {
+        pushConsensus(pendingScoreRef.current);
+        pendingScoreRef.current = null;
+      }
     };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
-  }, [push]);
+  }, [push, pushConsensus]);
+
+  // Consensus score from the orchestrator (CustomEvent 'agent-consensus').
+  useEffect(() => {
+    const onConsensus = (e: Event) => {
+      const score = (e as CustomEvent<{ score?: unknown }>).detail?.score;
+      if (typeof score !== 'number' || !Number.isFinite(score)) return;
+      pushConsensus(score);
+    };
+    window.addEventListener('agent-consensus', onConsensus);
+    return () => window.removeEventListener('agent-consensus', onConsensus);
+  }, [pushConsensus]);
 
   // Subscribe to telemetry; only status *changes* cross the frame boundary.
   useEffect(() => {
