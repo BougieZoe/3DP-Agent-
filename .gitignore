@@ -52,3 +52,6 @@ XPRIZE/
 
 # === Runtime data ===
 deploy/amd/*.jsonl
+
+# Arena chat log stays local — unedited record, never published
+arena/data/
