@@ -6,6 +6,7 @@
 import type { UnifiedAnalysis } from '../analysis/types';
 import { isVolumeReportable } from './volumeDisplay';
 import { buildAuditTrail } from './auditTrail';
+import { cheapestStep } from './cheapestStep';
 
 export interface HandoffJson {
   schema: 'handoff/1';
@@ -38,11 +39,7 @@ export function buildHandoffJson(
   const blocked =
     !metrics || !isVolumeReportable(metrics) ||
     pt?.materialWeightGrams == null || pt.materialWeightGrams <= 0;
-  const twr = metrics?.thinWallRatio ?? 0;
-  const cheapestStep =
-    audit.light === 'green' ? 'none'
-    : v && !v.isWatertight ? 'repair'
-    : twr >= 0.2 ? 'scale' : 'support';
+  const step = cheapestStep(analysis);
 
   return {
     schema: 'handoff/1',
@@ -65,7 +62,7 @@ export function buildHandoffJson(
     },
     verdict: { score: audit.score, light: audit.light },
     audit,
-    cheapestStep,
+    cheapestStep: step,
   };
 }
 

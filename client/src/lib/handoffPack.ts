@@ -12,6 +12,7 @@ import type { UnifiedAnalysis } from '../analysis/types';
 import { getTrafficLight } from '../components/reportUtils';
 import { isVolumeReportable } from './volumeDisplay';
 import { computeWeightRange, computeTimeRange } from '../components/ReportGenerator';
+import { cheapestStep } from './cheapestStep';
 
 type Language = ContentLang;
 
@@ -50,13 +51,14 @@ export function buildQuoteText(
       : '—';
   const volumeBlocked = !metrics || !isVolumeReportable(metrics);
 
-  const twr = metrics?.thinWallRatio ?? 0;
-  const cheapest =
-    v && !v.isWatertight
-      ? translate(CONTENT, 'pdf.cheapest.repair', lang)
-      : twr >= 0.2
-        ? translate(CONTENT, 'pdf.cheapest.scale', lang)
-        : translate(CONTENT, 'pdf.cheapest.support', lang);
+  const step = cheapestStep(analysis);
+  const cheapestMap = {
+    repair: translate(CONTENT, 'pdf.cheapest.repair', lang),
+    scale: translate(CONTENT, 'pdf.cheapest.scale', lang),
+    support: translate(CONTENT, 'pdf.cheapest.support', lang),
+    none: '',
+  } as const;
+  const cheapest = cheapestMap[step];
 
   const L = (key: string, vars?: Record<string, string | number>) =>
     translate(CONTENT, key, lang, vars);

@@ -7,6 +7,7 @@ import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
 import { createShareLink, copyShareLink } from "@/lib/shareReport";
 import { buildQuoteText } from "@/lib/handoffPack";
 import { downloadHandoffJson } from "@/lib/handoffJson";
+import { cheapestStep } from "@/lib/cheapestStep";
 import { formatVolume, isVolumeReportable } from "@/lib/volumeDisplay";
 import type { ExpertReview } from "@/agents/expertReview";
 import type { ProductionSuitability } from "@/analysis/production";
@@ -748,12 +749,12 @@ async function generateClientPDF(
     y += 7;
   }
 
-  // ── Cheapest next step (only when not clean) ──
+  // ── Cheapest next step (only when not clean; single writer: lib/cheapestStep) ──
   if (light !== "green") {
-    const twr = metrics?.thinWallRatio ?? 0;
-    const cheapest = v && !v.isWatertight
+    const step = cheapestStep(analysis);
+    const cheapest = step === 'repair'
       ? translate(CONTENT, 'pdf.cheapest.repair', lang)
-      : twr >= 0.2
+      : step === 'scale'
         ? translate(CONTENT, 'pdf.cheapest.scale', lang)
         : translate(CONTENT, 'pdf.cheapest.support', lang);
     y = drawDataRow(doc, translate(CONTENT, 'pdf.nextStep.cheapest', lang), cheapest, y);
