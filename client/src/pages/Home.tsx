@@ -1610,6 +1610,8 @@ deepAnalysisSeq.current += 1;
     language={language}
     expertReview={expertReview}
     production={productionFromUnified(unifiedAnalysis, material)}
+    materialName={materialName}
+    processId={materialFamily}
   />
 )}
 {unifiedAnalysis && (

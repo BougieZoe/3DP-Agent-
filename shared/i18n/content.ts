@@ -1403,8 +1403,13 @@ const pdf = {
   'handoff.quoteTitle': { en: 'Quote (draft)', ja: '見積書（ドラフト）', zh: '报价单（草稿）' },
   'handoff.copyQuote': { en: 'COPY QUOTE', ja: '見積コピー', zh: '复制报价' },
   'handoff.copied': { en: '✓ Copied — fill in rates', ja: '✓ コピー済 — 金額を記入', zh: '✓ 已复制 — 请填写金额' },
-  'handoff.quoteFooter': {
-    en: 'Rates to fill: material / machine time / failure cover (see docs/handoff).',
+  'handoff.jsonExport': { en: 'JSON', ja: 'JSON出力', zh: '导出 JSON' },
+  'handoff.jsonHint': {
+    en: 'Download handoff.json — one machine-readable file for optimizers and factory systems.',
+    ja: 'handoff.jsonを保存 — 最適化・工場システム用の機械可読ファイル。',
+    zh: '下载 handoff.json — 给优化器和工厂系统的机器可读文件。',
+  },
+  'handoff.quoteFooter': {    en: 'Rates to fill: material / machine time / failure cover (see docs/handoff).',
     ja: '金額欄は手入力：材料費 / 機時 / 失敗保険（docs/handoff参照）。',
     zh: '金额栏请手填：材料费 / 机时 / 失败险（见 docs/handoff）。',
   },
