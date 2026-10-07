@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildAuditTrail, RULES_VERSION } from '../auditTrail';
 import { buildHandoffJson } from '../handoffJson';
+import { cheapestStep } from '../cheapestStep';
+import { buildQuoteText } from '../handoffPack';
 import {
   buildMockUnifiedAnalysis,
   normalMetrics,
@@ -34,6 +36,24 @@ describe('buildAuditTrail', () => {
     const w = t.rows.find((r) => r.rule === 'WATERTIGHT');
     expect(w?.status).toBe('fail');
     expect(w?.deduction).toBe(30);
+  });
+});
+
+describe('cheapestStep single writer', () => {
+  it('quote text, handoff.json and the rule agree on every fixture', () => {
+    const open = buildMockUnifiedAnalysis({
+      metrics: { ...normalMetrics(), meshVolumeMm3: 0, volumeReliable: false },
+      validation: { ...normalValidation(), isWatertight: false, holeCount: 1 },
+    });
+    const closed = buildMockUnifiedAnalysis({
+      metrics: normalMetrics(),
+      validation: normalValidation(),
+    });
+    expect(cheapestStep(open)).toBe('repair');
+    expect(buildHandoffJson(open, 'o.stl', { process: 'FDM', material: 'PLA' }).cheapestStep).toBe('repair');
+    expect(buildQuoteText(open, 'o.stl', 'en')).toContain('mesh repair');
+    const cs = cheapestStep(closed);
+    expect(buildHandoffJson(closed, 'c.stl', { process: 'FDM', material: 'PLA' }).cheapestStep).toBe(cs);
   });
 });
 
