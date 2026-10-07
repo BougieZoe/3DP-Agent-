@@ -6,6 +6,7 @@ import { getTrafficLight } from "./reportUtils";
 import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
 import { createShareLink, copyShareLink } from "@/lib/shareReport";
 import { buildQuoteText } from "@/lib/handoffPack";
+import { downloadHandoffJson } from "@/lib/handoffJson";
 import { formatVolume, isVolumeReportable } from "@/lib/volumeDisplay";
 import type { ExpertReview } from "@/agents/expertReview";
 import type { ProductionSuitability } from "@/analysis/production";
@@ -31,6 +32,9 @@ interface ReportGeneratorProps {
   expertReview?: ExpertReview | null;
   /** Production-suitability estimate (computed by the caller) — embedded into the PDF. */
   production?: ProductionSuitability | null;
+  /** Selected material / process for handoff exports (falls back to FDM/—. */
+  materialName?: string;
+  processId?: string;
 }
 
 // ─── Language Detection ─────────────────────────────────────────────────────────
@@ -1254,6 +1258,8 @@ export function ReportGenerator({
   language = "en",
   expertReview,
   production,
+  materialName = "—",
+  processId = "FDM",
 }: ReportGeneratorProps) {
   const tone = detectTone(chatHistory);
   const lang = language ?? detectLanguage(chatHistory);
@@ -1308,6 +1314,14 @@ export function ReportGenerator({
       console.error('Quote copy failed:', err);
     }
   }, [analysis, fileName, lang]);
+
+  const handleJsonExport = useCallback(() => {
+    try {
+      downloadHandoffJson(analysis, fileName, { process: processId, material: materialName });
+    } catch (err) {
+      console.error('JSON export failed:', err);
+    }
+  }, [analysis, fileName, processId, materialName]);
 
   return (
     <div className="space-y-2">
@@ -1366,6 +1380,13 @@ export function ReportGenerator({
           className="flex-1 py-2 text-[11px] font-mono border border-border/50 text-muted-foreground hover:text-foreground hover:border-border rounded-sm transition-all"
         >
           {quoteCopied ? translate(CONTENT, 'handoff.copied', language) : translate(CONTENT, 'handoff.copyQuote', language)}
+        </button>
+        <button
+          onClick={handleJsonExport}
+          title={translate(CONTENT, 'handoff.jsonHint', language)}
+          className="flex-1 py-2 text-[11px] font-mono border border-border/50 text-muted-foreground hover:text-foreground hover:border-border rounded-sm transition-all"
+        >
+          {translate(CONTENT, 'handoff.jsonExport', language)}
         </button>
       </div>
       {shareUrl && (
