@@ -33,6 +33,8 @@ import { autoOrientGeometry } from '@/lib/autoOrient';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
 import { parseSTL } from '@/lib/stlParser';
 import { processMesh } from '@/lib/meshProcessClient';
+import { applyRepairAsync } from '@/lib/meshRepair';
+import { classifyBridgeError, pickWasmSuggestion } from '@/lib/repairTiers';
 import { geometryToStl } from '@/lib/meshOps';
 import { geometryToThreeMf } from '@/lib/threeMf';
 import { LENGTH_UNIT_TO_MM, type LengthUnit } from '@shared/domain/geometry';
@@ -687,15 +689,16 @@ export default function Home() {
   // (diagnostics, best-effort watertight repair, place on plate), then re-run
   // the analysis so the report reflects the processed model.
   const [repairing, setRepairing] = useState(false);
+  // Mirrors counterfactualSuggestions (declared below) for the repair fallback.
+  // A ref avoids the use-before-declaration trap: the handler only reads it at event time.
+  const wasmSuggestionsRef = useRef<any[]>([]);
   const handleRepairProcess = useCallback(async () => {
     if (!uploadedModel) return;
     setRepairing(true);
-    try {
-      const result = await processMesh(geometryToStl(uploadedModel.geometry), {});
-      const processed = parseSTL(result.stlBytes);
+    const commitRepaired = async (processed: THREE.BufferGeometry, note: string, pre?: import('@/analysis').UnifiedAnalysis) => {
       processed.computeVertexNormals();
       processed.computeBoundingBox();
-      const newUnified = await runAnalysisInWorker(fromThreeBufferGeometry(processed), {
+      const newUnified = pre ?? await runAnalysisInWorker(fromThreeBufferGeometry(processed), {
         fileName: uploadedModel.fileName,
         material,
       });
@@ -706,12 +709,18 @@ export default function Home() {
         unifiedAnalysis: newUnified,
         rawGeometry: processed.clone(),
       });
-deepAnalysisSeq.current += 1;
-    setDeepAgentRun(null);
-    setDeepSteps([]);
-    setDeepError(null);
+      deepAnalysisSeq.current += 1;
+      setDeepAgentRun(null);
+      setDeepSteps([]);
+      setDeepError(null);
+      toast.success(note);
+    };
+    try {
+      const result = await processMesh(geometryToStl(uploadedModel.geometry), {});
+      const processed = parseSTL(result.stlBytes);
       const d = result.diagnostics;
-      toast.success(
+      await commitRepaired(
+        processed,
         d.repaired
           ? `repaired to watertight · ${d.bodyCount ?? 1} bodies`
           : d.watertight
@@ -719,7 +728,34 @@ deepAnalysisSeq.current += 1;
             : 'processed · repair unavailable',
       );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      // Tier 2 (browser WASM): no server needed. Only thin walls are appliable;
+      // open shells honestly stop here instead of printing fake numbers.
+      if (classifyBridgeError(err) === 'bridge-absent') {
+        const sug = pickWasmSuggestion(wasmSuggestionsRef.current);
+        if (sug) {
+          try {
+            const beforeMin = uploadedModel.unifiedAnalysis?.metrics?.result?.minWallThicknessMm ?? null;
+            const repaired = await applyRepairAsync(uploadedModel.geometry, sug);
+            const check = await runAnalysisInWorker(fromThreeBufferGeometry(repaired), {
+              fileName: uploadedModel.fileName,
+              material,
+            });
+            const afterMin = check.metrics?.result?.minWallThicknessMm ?? null;
+            // Guardrail: never commit a repair that made walls thinner.
+            if (beforeMin != null && afterMin != null && afterMin < beforeMin) {
+              toast.error(`wasm repair regressed (${beforeMin.toFixed(3)}→${afterMin.toFixed(3)}mm) — discarded, use desktop/server repair`);
+            } else {
+              await commitRepaired(repaired, 'wasm thin-wall repair applied · re-analyzed', check);
+            }
+          } catch (wasmErr) {
+            toast.error(wasmErr instanceof Error ? wasmErr.message : String(wasmErr));
+          }
+          return;
+        }
+        toast.error('bridge unavailable here — thin-wall-only WASM found nothing to apply; open shells need desktop/server repair');
+      } else {
+        toast.error(err instanceof Error ? err.message : String(err));
+      }
     } finally {
       setRepairing(false);
     }
@@ -827,6 +863,9 @@ deepAnalysisSeq.current += 1;
     const sug = counterfactualSuggestions.find(s => s.id === selectedSuggestionId);
     return sug ? sug.affectedPositions : [];
   }, [selectedSuggestionId, counterfactualSuggestions]);
+  useEffect(() => {
+    wasmSuggestionsRef.current = counterfactualSuggestions;
+  }, [counterfactualSuggestions]);
 
   const selectedPatternPositions = useMemo(() => {
     if (!selectedPatternId) return [];
