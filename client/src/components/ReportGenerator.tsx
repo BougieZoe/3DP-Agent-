@@ -3,6 +3,7 @@ import { CONTENT, translate, type ContentLang } from "@shared/i18n/content";
 import type { UnifiedAnalysis, NormalOrientation } from "../analysis/types";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
 import { getTrafficLight } from "./reportUtils";
+import { weightRangeGrams, timeRangeMinutes } from "./reportUtils";
 import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
 import { createShareLink, copyShareLink } from "@/lib/shareReport";
 import { buildQuoteText } from "@/lib/handoffPack";
@@ -81,18 +82,17 @@ function detectTone(messages: ChatMessage[]): ToneMode {
 
 // ─── Weight / Time ranges ──────────────────────────────────────────────────────
 
-// Canonical estimate formatters — also used by handoffPack (single writer).
+// Canonical estimate formatters — math lives in reportUtils (single writer);
+// these only add the translated note. Also used by handoffPack.
 export function computeWeightRange(grams: number, lang: Language): string {
   if (!Number.isFinite(grams) || grams <= 0) return "—";
-  const lo = (grams * 0.05 * 1.2).toFixed(0);
-  const hi = (grams * 1.0 * 1.2).toFixed(0);
+  const [lo, hi] = weightRangeGrams(grams);
   return `${lo}–${hi}g (${translate(CONTENT, 'pdf.labelWeightNote', lang)})`;
 }
 
 export function computeTimeRange(minutes: number, lang: Language): string {
   if (!Number.isFinite(minutes) || minutes <= 0) return "—";
-  const lo = Math.round(minutes * 0.7);
-  const hi = Math.round(minutes * 1.3);
+  const [lo, hi] = timeRangeMinutes(minutes);
   const f = (m: number) => `${Math.floor(m / 60)}h ${Math.round(m % 60)}m`;
   return `${f(lo)} – ${f(hi)} (${translate(CONTENT, 'pdf.labelTimeNote', lang)})`;
 }

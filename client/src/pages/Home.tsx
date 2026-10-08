@@ -31,10 +31,7 @@ import { fromThreeBufferGeometry, runAnalysisInWorker, assessContext, liquidCool
 import { normalizeModelGeometry, fitCameraToGeometry } from '@/lib/modelNormalization';
 import { autoOrientGeometry } from '@/lib/autoOrient';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
-import { parseSTL } from '@/lib/stlParser';
-import { processMesh } from '@/lib/meshProcessClient';
-import { applyRepairAsync } from '@/lib/meshRepair';
-import { classifyBridgeError, pickWasmSuggestion } from '@/lib/repairTiers';
+import { runTieredRepair } from '@/lib/repairFlow';
 import { geometryToStl } from '@/lib/meshOps';
 import { geometryToThreeMf } from '@/lib/threeMf';
 import { LENGTH_UNIT_TO_MM, type LengthUnit } from '@shared/domain/geometry';
@@ -695,71 +692,34 @@ export default function Home() {
   const handleRepairProcess = useCallback(async () => {
     if (!uploadedModel) return;
     setRepairing(true);
-    const commitRepaired = async (processed: THREE.BufferGeometry, note: string, pre?: import('@/analysis').UnifiedAnalysis) => {
-      processed.computeVertexNormals();
-      processed.computeBoundingBox();
-      const newUnified = pre ?? await runAnalysisInWorker(fromThreeBufferGeometry(processed), {
-        fileName: uploadedModel.fileName,
+    try {
+      const beforeMin = uploadedModel.unifiedAnalysis?.metrics?.result?.minWallThicknessMm ?? null;
+      const outcome = await runTieredRepair(
+        uploadedModel.geometry,
+        uploadedModel.fileName,
         material,
-      });
+        wasmSuggestionsRef.current,
+        beforeMin,
+      );
       commitModel({
         ...uploadedModel,
-        geometry: processed,
-        mesh: createMeshFromGeometry(processed),
-        unifiedAnalysis: newUnified,
-        rawGeometry: processed.clone(),
+        geometry: outcome.geometry,
+        mesh: createMeshFromGeometry(outcome.geometry),
+        unifiedAnalysis: outcome.analysis,
+        rawGeometry: outcome.geometry.clone(),
       });
       deepAnalysisSeq.current += 1;
       setDeepAgentRun(null);
       setDeepSteps([]);
       setDeepError(null);
-      toast.success(note);
-    };
-    try {
-      const result = await processMesh(geometryToStl(uploadedModel.geometry), {});
-      const processed = parseSTL(result.stlBytes);
-      const d = result.diagnostics;
-      await commitRepaired(
-        processed,
-        d.repaired
-          ? `repaired to watertight · ${d.bodyCount ?? 1} bodies`
-          : d.watertight
-            ? `mesh OK · ${d.bodyCount ?? 1} bodies`
-            : 'processed · repair unavailable',
-      );
+      toast.success(outcome.note);
     } catch (err) {
-      // Tier 2 (browser WASM): no server needed. Only thin walls are appliable;
-      // open shells honestly stop here instead of printing fake numbers.
-      if (classifyBridgeError(err) === 'bridge-absent') {
-        const sug = pickWasmSuggestion(wasmSuggestionsRef.current);
-        if (sug) {
-          try {
-            const beforeMin = uploadedModel.unifiedAnalysis?.metrics?.result?.minWallThicknessMm ?? null;
-            const repaired = await applyRepairAsync(uploadedModel.geometry, sug);
-            const check = await runAnalysisInWorker(fromThreeBufferGeometry(repaired), {
-              fileName: uploadedModel.fileName,
-              material,
-            });
-            const afterMin = check.metrics?.result?.minWallThicknessMm ?? null;
-            // Guardrail: never commit a repair that made walls thinner.
-            if (beforeMin != null && afterMin != null && afterMin < beforeMin) {
-              toast.error(`wasm repair regressed (${beforeMin.toFixed(3)}→${afterMin.toFixed(3)}mm) — discarded, use desktop/server repair`);
-            } else {
-              await commitRepaired(repaired, 'wasm thin-wall repair applied · re-analyzed', check);
-            }
-          } catch (wasmErr) {
-            toast.error(wasmErr instanceof Error ? wasmErr.message : String(wasmErr));
-          }
-          return;
-        }
-        toast.error('bridge unavailable here — thin-wall-only WASM found nothing to apply; open shells need desktop/server repair');
-      } else {
-        toast.error(err instanceof Error ? err.message : String(err));
-      }
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setRepairing(false);
     }
   }, [uploadedModel, material]);
+
 
   const handleDownloadStl = () => {
     if (!uploadedModel) return;
