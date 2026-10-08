@@ -106,6 +106,14 @@ feature needs this. Revisit only if the roadmap adds real-time print control.
 - `pnpm run build` — must succeed
 - Enforced automatically by `.github/workflows/ci.yml` on every push/PR; no branch lands without it.
 
+## Ops Discipline (irreversible actions)
+- Any irreversible op — `kill`/`pkill`, `rm -rf`, force-push, irreversible
+  migrations, killing ports/processes owned by someone else — must be announced
+  with target, blast radius, and rollback plan, and explicitly approved BEFORE
+  execution. No exceptions.
+- Prefer reversible simulations first: mock the failure, point a proxy at a
+  dead port, or test on a staging port. "Restartable in theory" is not approval.
+
 ## Post-Verification Reflection
 
 After a human confirms (via diff review or bidirectional stash/pop testing)
