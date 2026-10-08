@@ -87,15 +87,23 @@ export function getTrafficLight(analysis: UnifiedAnalysis): {
 
 // ─── Weight / Time ranges ──────────────────────────────────────────────────────
 
+// Canonical estimate math — single writer. The i18n variants in
+// ReportGenerator add the translated note on top of these parts.
+export function weightRangeGrams(grams: number): [string, string] {
+  return [(grams * 0.05 * 1.2).toFixed(0), (grams * 1.0 * 1.2).toFixed(0)];
+}
+
+export function timeRangeMinutes(minutes: number): [number, number] {
+  return [Math.round(minutes * 0.7), Math.round(minutes * 1.3)];
+}
+
 export function computeWeightRange(grams: number): string {
-  const lo = (grams * 0.05 * 1.2).toFixed(0);
-  const hi = (grams * 1.0 * 1.2).toFixed(0);
+  const [lo, hi] = weightRangeGrams(grams);
   return `${lo}–${hi}g (varies by infill)`;
 }
 
 export function computeTimeRange(minutes: number): string {
-  const lo = Math.round(minutes * 0.7);
-  const hi = Math.round(minutes * 1.3);
+  const [lo, hi] = timeRangeMinutes(minutes);
   const f = (m: number) => `${Math.floor(m / 60)}h ${Math.round(m % 60)}m`;
   return `${f(lo)} – ${f(hi)} (excl. supports)`;
 }
