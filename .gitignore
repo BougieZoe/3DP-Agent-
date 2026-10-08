@@ -35,6 +35,7 @@ FEATURE_PLAN.md
 IMPLEMENTATION_PLAN.md
 MIGRATION_PLAN.md
 docs/*.png
+docs/**/*.png
 # Real numbers stay local: client names, rates, CASE evidence, vendor quotes.
 # Templates (docs/handoff/*, docs/cases/TEMPLATE.md) are safe to publish.
 docs/private/
