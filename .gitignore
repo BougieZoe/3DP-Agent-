@@ -30,7 +30,6 @@ server/config/llm-keys.yaml
 # === Logs ===
 *.log
 server.pid
-
 # === Internal docs (not for public repo) ===
 FEATURE_PLAN.md
 IMPLEMENTATION_PLAN.md
@@ -47,6 +46,7 @@ docs/cases/photos/
 
 # === Temp / scratch ===
 research/
+temp/
 .local-notes/
 XPRIZE/
 
