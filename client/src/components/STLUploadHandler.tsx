@@ -16,6 +16,7 @@ import { notifyAnalysisComplete } from '@/lib/notifications';
 import { DEFAULT_MATERIAL, type Material } from '@shared/domain/material';
 import type { LengthUnit } from '@shared/domain/geometry';
 import * as THREE from 'three';
+import { ViewfinderCorners } from '@/components/decorative/ViewfinderCorners';
 
 export interface UploadedModel {
   /** Render/analysis geometry: scaled to mm and centered on the build plate. */
@@ -72,9 +73,11 @@ const labels = {
     complete: 'COMPLETE ✓',
     error: 'ERROR',
     drop: '[  DROP  ]',
-    stl: '[ STL · OBJ · 3MF ]',
+    stl: 'STL · OBJ · 3MF',
     releaseToUpload: '— RELEASE TO UPLOAD —',
-    dragOrClick: 'DRAG FILE HERE OR CLICK TO BROWSE',
+    dropModel1: 'Drop a model.',
+    dropModel2: "Let's look inside.",
+    browseFiles: 'or browse files',
     units: 'UNITS',
   },
   ja: {
@@ -90,9 +93,11 @@ const labels = {
     complete: '完了 ✓',
     error: 'エラー',
     drop: '[  ドロップ  ]',
-    stl: '[ STL · OBJ · 3MF ]',
+    stl: 'STL · OBJ · 3MF',
     releaseToUpload: '— リリースしてアップロード —',
-    dragOrClick: 'ファイルをドラッグするか、クリックして参照',
+    dropModel1: 'モデルを、ここに。',
+    dropModel2: '中を、見ていく。',
+    browseFiles: 'またはファイルを選ぶ',
     units: '単位',
   },
   zh: {
@@ -108,9 +113,11 @@ const labels = {
     complete: '完成 ✓',
     error: '错误',
     drop: '[  放下  ]',
-    stl: '[ STL · OBJ · 3MF ]',
+    stl: 'STL · OBJ · 3MF',
     releaseToUpload: '— 释放以上传 —',
-    dragOrClick: '拖放文件到此处或点击浏览',
+    dropModel1: '模型，放这儿。',
+    dropModel2: '我们看看里面。',
+    browseFiles: '或点击选择文件',
     units: '单位',
   },
 };
@@ -372,11 +379,39 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
       className={`
         relative border rounded-sm py-12 px-6 cursor-pointer transition-all duration-200 text-center
         ${isDragging
-          ? 'border-primary bg-primary/5 border-glow'
+          ? 'border-solid border-primary/85 bg-primary/6'
           : 'border-dashed border-border hover:border-primary/50 hover:bg-card'
         }
       `}
     >
+      <style>{`
+        @keyframes vf-breathe {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 0.8; }
+        }
+        .vf-corner-breathe {
+          animation: vf-breathe 4s ease-in-out infinite;
+        }
+        .vf-corner-breathe span {
+          transition: width 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                      height 180ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                      opacity 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .vf-corner-hover .vf-corner-breathe span {
+          width: 24px !important;
+          height: 24px !important;
+          opacity: 0.9;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .vf-corner-breathe { animation: none; }
+          .vf-corner-breathe span { transition: opacity 180ms; }
+        }
+      `}</style>
+
+      <div className={`vf-corner-breathe ${isDragging ? 'vf-corner-hover' : ''}`}>
+        <ViewfinderCorners />
+      </div>
+
       <input
         ref={fileInputRef}
         type="file"
@@ -387,12 +422,16 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
       />
 
       <div className="space-y-3">
-        <div className="text-3xl font-mono text-primary/30 select-none">
-          {isDragging ? t.drop : t.stl}
+        <div className="text-[28px] font-mono text-foreground" style={{fontSize:'28px',color:'rgb(190, 232, 232)'}}>
+          {t.dropModel1}
         </div>
 
-        <div className="text-xs font-mono text-muted-foreground">
-          {isDragging ? t.releaseToUpload : t.dragOrClick}
+        <div className="text-xs font-mono" style={{fontSize:'13px', color:'rgb(150, 190, 190)'}}>
+          {t.dropModel2}
+        </div>
+
+        <div className="font-mono select-none text-[12px]" style={{fontSize:'12px',color:'rgb(115, 150, 155)'}}>
+          {t.stl}
         </div>
 
         {/* Declared source units — STL carries no unit metadata; changing the

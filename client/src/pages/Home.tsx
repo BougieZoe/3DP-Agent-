@@ -42,10 +42,7 @@ import { Language, getTranslation } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
 import type { AgentId } from '@shared/domain/agent';
 import { deriveSupportStatus } from '@/analysis/metrics';
-import { ViewfinderCorners } from '@/components/decorative/ViewfinderCorners';
 import { ScanlineSweep } from '@/components/decorative/ScanlineSweep';
-import { BedStatusTicker } from '@/components/decorative/BedStatusTicker';
-import { LayerHeightLabel } from '@/components/decorative/LayerHeightLabel';
 import { FeaturesSection } from '@/pages/home/FeaturesSection';
 import { AgentOfficeEntry } from '@/components/factory/AgentOfficeEntry';
 import type { FeatureDestination } from '@/pages/home/featuresNavigation';
@@ -1209,10 +1206,7 @@ export default function Home() {
                   material={material}
                 />
                 {/* Decorative presentation-only touches — remove any one freely */}
-                <ViewfinderCorners />
                 <ScanlineSweep />
-                <BedStatusTicker />
-                <LayerHeightLabel />
               </div>
             </div>
 
