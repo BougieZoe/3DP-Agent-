@@ -1618,7 +1618,9 @@ function makeDesk(accent, facing, key){
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
-  tex.repeat.x = -1; tex.offset.x = 1;                 // 反向显示，避免镜像
+  /* ⑪ 镜像修正：旧版 repeat.x=-1 + rotation.y=PI 双重翻转，屏幕文字一直是反的
+     （用户截图里「状态」也呈镜像）。PlaneGeometry 正面法线 +Z，平面已 rotation.y=PI
+     面向工位外侧（角色入座视角），此视角下只需 plane 自身旋转、不再翻纹理 */
   const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.645, 0.372),
     new THREE.MeshBasicMaterial({ map: tex, fog: false, toneMapped: false,
       side: THREE.DoubleSide }));
@@ -1812,7 +1814,7 @@ function makeChair(facing){
 }
 
 /* =====================================================================
-   左墙（西墙 x≈0）：茶水间 + 健身房 —— 参照「Marvis 办公室」的休闲区气质
+   左墙（西墙 x≈0）：茶水间 + 健身房 —— 参照协作式 3D 打印办公室的休闲区气质
    ===================================================================== */
 const steelM  = new THREE.MeshStandardMaterial({ color: 0x9fb3c6, roughness: 0.30, metalness: 0.74 });
 const darkM   = toon(0x141d28);
@@ -2443,6 +2445,10 @@ function buildCharacter(cfg){
     part(torso, new THREE.SphereGeometry(0.102, 16, 12), clothM,
          [s * 0.330 * S.sh, 0.648, 0], null, [0.92 * S.sh, 0.95, 0.95]);
   });
+  /* ⑪ 斜方肌坡度：颈根→肩峰补一道斜面，削掉"衣架直角肩"（男女通用，藏在衣物层下） */
+  [-1, 1].forEach(s => part(torso, new THREE.BoxGeometry(0.245, 0.026, 0.078), clothM,
+       [s * 0.150, 0.710, -0.006], [0, 0, -s * 0.30],
+       [1, F ? 0.65 : 1, 1], false));
 
   /* ---------- 男性肌肉线条：背阔肌 / 前锯肌 / 腹直肌 / 颈根 ---------- */
   if (!F){
@@ -2706,6 +2712,10 @@ function buildCharacter(cfg){
     part(torso, new THREE.SphereGeometry(0.0075, 8, 6), skinM,
          [0, 0.752, 0.058], null, [1, 0.80, 0.70], false);
   }
+  /* ⑪ 胸锁乳突肌：耳后→胸骨柄的两条斜索，露领角色（西装/衬衫）颈部不再是一根光管 */
+  [-1, 1].forEach(s => part(torso, new THREE.BoxGeometry(0.013, 0.088, 0.015), skinM,
+       [s * 0.030, 0.730, 0.056], [-0.40, 0, s * 0.34],
+       [1, 1, F ? 0.6 : 1], false));
   if (P.outfit === "suit" || P.outfit === "open"){
     /* 衬衫领（本项改造 ③）：上移 6mm / 前移 8mm / 领口放大 6~10mm
        —— 旧版领子前后同深、颜色又和上衣板重合，正脸只剩后脖颈一圈白边，读不出"翻领" */
@@ -3350,11 +3360,17 @@ function buildCharacter(cfg){
         part(arm, new THREE.TorusGeometry(upperR + 0.012, 0.016, 8, 16), clothD,
              [0, -0.055, 0], [1.57, 0, 0], null, false);               // 短袖口
       }
-      part(arm, new THREE.SphereGeometry(0.055 * (F ? 0.9 : 1.0), 12, 10), skinM,
-           [0, -0.115, 0.008], null, [1.0, 0.9, 0.95], false);         // 肱二头肌
-      if (!F) part(arm, new THREE.SphereGeometry(0.040, 10, 8), skinM,
-           [0, -0.085, -0.026], null, [1.0, 1.25, 0.70], false);       // 肱三头肌
     }
+
+    /* ⑪ 上臂肌群（全衣型统一）：肱二头肌前凸 + 肱三头肌后满——长袖用布色撑轮廓、
+       短袖裸肤用肤色；旧版只在 open 衫分支有，西装/卫衣/针织全是"圆柱臂"人台感 */
+    const musM = longSleeve ? sleeve : skinM;
+    part(arm, new THREE.SphereGeometry(upperR * (F ? 0.82 : 0.94), 12, 10), musM,
+         [0, -0.118, upperR * (F ? 0.28 : 0.36)], null,
+         [1.0, 1.40, F ? 0.78 : 0.88], false);                         // 肱二头肌
+    part(arm, new THREE.SphereGeometry(upperR * (F ? 0.68 : 0.82), 12, 10), musM,
+         [0, -0.098, -upperR * (F ? 0.34 : 0.44)], null,
+         [1.0, 1.50, 0.70], false);                                    // 肱三头肌
 
     const elbow = new THREE.Group();
     elbow.position.y = -0.30;
@@ -3379,6 +3395,14 @@ function buildCharacter(cfg){
          [s * 0.012, -0.024, 0.018], null, [1.0, 1.30, 0.60], false);   // 掌垫（拇指球）
     part(hand, new THREE.SphereGeometry(0.016, 8, 6), skinM,
          [s * -0.014, -0.052, 0.020], null, [1.0, 1.15, 0.60], false);  // 掌根
+    /* ⑪ 手背指节排：四枚掌指关节背侧隆起 + 伸肌腱浅棱 */
+    for (let i = 0; i < 4; i++){
+      const fx = -0.020 + i * 0.0145;
+      part(hand, new THREE.SphereGeometry(0.0062, 6, 5), skinM,
+           [fx, -0.066, -0.012], null, [1.15, 0.80, 0.75], false);
+      part(hand, new THREE.BoxGeometry(0.0035, 0.030, 0.004), skinM,
+           [fx, -0.048, -0.016], [0.15, 0, 0], null, false);
+    }
     /* 四指：指根 → 指节 两级分组，可按姿态做真实握持（捏/握/松） */
     const fingers = [];
     for (let i = 0; i < 4; i++){
@@ -3471,6 +3495,16 @@ function buildCharacter(cfg){
              [0, yy, calfR * (1.12 - i * 0.06)], [0.06, 0, 0], null, false));
     }
 
+    /* ⑪ 腓肠肌双头：内侧头低而大、外侧头高而小——小腿后侧轮廓不再是直筒。
+       材质恒用 pantsM：短裤角色的小腿圆柱本就是裤色（露肤层半径更小埋在内层），
+       若用肤色球会从裤管透出色斑；这里只做轮廓起伏，不改色 */
+    if (!F){
+      part(knee, new THREE.SphereGeometry(calfR * 0.74, 12, 10), pantsM,
+           [-s * 0.020, -0.155, -calfR * 0.40], null, [0.78, 1.40, 0.70], false);
+      part(knee, new THREE.SphereGeometry(calfR * 0.66, 12, 10), pantsM,
+           [s * 0.018, -0.118, -calfR * 0.40], null, [0.74, 1.32, 0.66], false);
+    }
+
     /* 运动袜：高筒袜/中筒袜/隐形袜三档 */
     if (shorts){
       const st = P.socksStyle || "mid";
@@ -3484,12 +3518,21 @@ function buildCharacter(cfg){
              [0, -0.412 + sockH, 0], [Math.PI / 2, 0, 0], null, false);   // 袜口罗纹
       }
     }
+    /* ⑪ 髌骨：膝前骨点（裤管正面关键鼓包；材质随裤色，避免短裤角色透肤色斑） */
+    part(knee, new THREE.SphereGeometry(calfR * 0.58, 10, 8), pantsM,
+         [0, -0.028, calfR * 0.82], null, [0.90, 1.20, 0.55], false);
     part(knee, new THREE.SphereGeometry(calfR * 0.86, 10, 8), skinM, [0, -0.415, 0], null, [1, 0.8, 1], false);
 
     /* 踝关节分组：脚掌可相对小腿旋转（走路的提踵/落地） */
     const ankle = new THREE.Group();
     ankle.position.y = -0.455;
     knee.add(ankle);
+
+    /* ⑪ 内外踝骨点：内踝高于外踝，脚踝不再是光圆柱（鞋口上方微露） */
+    part(ankle, new THREE.SphereGeometry(0.0125, 8, 6), skinM,
+         [-s * 0.026, 0.076, 0.004], null, [0.75, 1.0, 0.80], false);
+    part(ankle, new THREE.SphereGeometry(0.0115, 8, 6), skinM,
+         [s * 0.027, 0.062, 0.004], null, [0.75, 1.0, 0.80], false);
 
     /* 鞋：按 shoeStyle 分型（乐福鞋 / 跑鞋 / 基础板鞋） */
     const shoe = new THREE.Group();
@@ -7270,13 +7313,32 @@ const CAD_WIRE = (function(){
 })();
 
 const IDLE_SCREENS = ["code", "cad", "chat", "game", "video", "chart", "social"];
-/* ③ 岗位专属屏：几何看模型、可打印性看切片/曲线、失效看数据与日志、优化看曲线与协作面板 */
+/* ③ 岗位专属屏：几何看模型、可打印性看切片/层预览、失效看日志与清单、优化看曲线与建议 */
 const ROLE_SCREENS = {
-  geometry:     ["cad", "cad", "code", "chart"],
-  printability: ["cad", "chart", "code", "video"],
-  failure:      ["code", "chart", "cad", "social"],
-  optimization: ["chart", "social", "code", "cad"]
+  geometry:     ["cad", "cad", "code", "chart", "chat"],
+  printability: ["layers", "cad", "chart", "code", "chat"],
+  failure:      ["log", "table", "code", "chart", "chat"],
+  optimization: ["suggest", "chart", "social", "code", "chat"],
+  coordinator:  ["dash", "chart", "chat", "video", "social"]
 };
+/* ⑪ 逐岗位代码屏：不同工位跑不同脚本，不再是全员 pipe.py */
+const ROLE_CODE = {
+  geometry:     { file: "watertight.py",  fn: "check_watertight", cls: "Geometry", err: "MeshError",     chk: "g.watertight",  cmd: "python watertight.py --mesh part.stl",    ok: "水密校验通过 · " },
+  printability: { file: "layer_check.py", fn: "scan_layers",      cls: "Slice",    err: "ThinWallError", chk: "g.thin_wall",   cmd: "python layer_check.py --gcode out.gcode", ok: "层间粘接 OK · " },
+  failure:      { file: "crack_probe.py", fn: "probe_cracks",     cls: "FMEA",     err: "Delamination",  chk: "g.crack_risk",  cmd: "python crack_probe.py --part fail.stl",  ok: "裂纹扫描 0 命中 · " },
+  optimization: { file: "topo_density.py", fn: "relax_density",   cls: "Topology", err: "Overstress",    chk: "g.converged",   cmd: "python topo_density.py --load caseA",    ok: "密度场收敛 · " },
+  coordinator:  { file: "pipe.py",        fn: "run_pipeline",     cls: "Geometry", err: "MeshError",     chk: "g.watertight",  cmd: "python pipe.py --mesh part.stl",         ok: "校验通过 · " }
+};
+/* ⑪ 逐工位 CAD 文件名 + 屏幕数值散列：同屏不再全员一份 mesh_view.stl / 同一组面数 */
+const ROLE_CAD_FILE = {
+  geometry: "bracket_v3.stl", printability: "duct_v7.3mf", failure: "hinge_fail.stl",
+  optimization: "lightweight_v2.stl", coordinator: "mesh_view.stl"
+};
+function scrSeed(str){
+  let h = 0;
+  for (let i = 0; i < String(str).length; i++) h = (h * 31 + String(str).charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
 
 function scrHead(ctx, W, H, accent, title, right){
   ctx.fillStyle = "#070c13"; ctx.fillRect(0, 0, W, H);
@@ -7325,7 +7387,8 @@ function drawScreen(ch, dt, t){
   ctx.globalAlpha = 1;
 
   if (m === "cad"){
-    scrHead(ctx, W, H, A, "mesh_view.stl", "BambuVision 3D");
+    scrHead(ctx, W, H, A, ROLE_CAD_FILE[S.role] || "mesh_view.stl",
+            S.role === "printability" ? "层检" : "BambuVision 3D");
     ctx.strokeStyle = "rgba(120,200,255,0.16)";
     ctx.lineWidth = 1;
     for (let gx = 0; gx < W; gx += 24){ ctx.beginPath(); ctx.moveTo(gx, 28); ctx.lineTo(gx, H - 22); ctx.stroke(); }
@@ -7355,9 +7418,38 @@ function drawScreen(ch, dt, t){
     ctx.beginPath(); ctx.moveTo(20, H - 26); ctx.lineTo(120, H - 26); ctx.stroke();
     ctx.fillStyle = "rgba(190,220,240,0.9)";
     ctx.font = "11px monospace";
-    ctx.fillText("86.40 mm", 22, H - 32);
+    ctx.fillText((82 + scrSeed(S.key || "mm") % 90 / 10).toFixed(2) + " mm", 22, H - 32);
     ctx.fillStyle = A;
-    ctx.fillText("V 12,486  F 24,972  T 0.42", 10, H - 10);
+    {
+      const sd = scrSeed(S.key || S.role || "cad");
+      ctx.fillText("V " + (11200 + (sd % 2900)).toLocaleString() +
+                   "  F " + (22800 + (sd % 4100)).toLocaleString() +
+                   "  T " + (0.38 + (sd % 9) * 0.01).toFixed(2), 10, H - 10);
+    }
+  } else if (m === "layers"){
+    scrHead(ctx, W, H, A, "G-code 层预览", "0.2mm");
+    /* ⑪ 逐层剖面：26 根层柱随时间上滚，红层=悬垂预警，扫掠线标当前层 */
+    {
+      const sd = scrSeed(S.key || "ly");
+      const base = Math.floor(t * 2.2) % 14;
+      for (let i = 0; i < 26; i++){
+        const li = base + i;
+        const h = 8 + Math.abs(Math.sin(li * 0.9 + sd * 0.01)) * 78 + (li % 7 === 0 ? 14 : 0);
+        const warn = li % 11 === 3;
+        ctx.globalAlpha = warn ? 0.95 : 0.35 + 0.5 * Math.abs(Math.sin(li * 1.3 + sd * 0.013));
+        ctx.fillStyle = warn ? "#f87171" : A;
+        ctx.fillRect(14 + i * 13.4, H - 36 - h, 10, h);
+      }
+      ctx.globalAlpha = 1;
+      const scanX = 14 + ((t * 55) % (W - 32));
+      ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(scanX, 30); ctx.lineTo(scanX, H - 30); ctx.stroke();
+      ctx.fillStyle = "rgba(180,210,235,0.85)";
+      ctx.font = "10px monospace";
+      ctx.fillText("L" + (base * 12 + 40 + Math.floor(t * 2) % 90) + "  z=" +
+                   ((base * 12 + 40) * 0.2).toFixed(1) + "mm   悬垂角 " +
+                   (42 + (sd % 160) / 10).toFixed(1) + "°", 12, H - 14);
+    }
   } else if (m === "print"){
     scrHead(ctx, W, H, A, "打印监控", "LIVE");
     const job = printJobs.big;
@@ -7389,6 +7481,40 @@ function drawScreen(ch, dt, t){
     ctx.beginPath(); ctx.arc(W - 44, 132, 22, 0, Math.PI * 2 * 0.72); ctx.stroke();
     ctx.font = "10px monospace";
     ctx.fillText(FILAMENT.material + " " + FILAMENT.remainPct + "%", W - 74, 164);
+  } else if (m === "log"){
+    scrHead(ctx, W, H, A, "失效日志", "stream");
+    /* ⑪ 滚动日志屏：时间戳 + 级别 + 消息，底部闪烁光标——失效工位的"tail -f" */
+    {
+      const L = [
+        ["12:04", "INFO ", "#34d399", "scan.start layer=842"],
+        ["12:04", "WARN ", "#fbbf24", "overhang 57.3° @ (42,18)"],
+        ["12:04", "INFO ", "#34d399", "FMEA: 层间剥离 S=8 中"],
+        ["12:05", "ERROR", "#f87171", "E_WARP edge +0.42mm"],
+        ["12:05", "INFO ", "#34d399", "suggest: brim 5mm / bed -4°C"],
+        ["12:05", "WARN ", "#fbbf24", "nozzle ΔT 2.1°C drift"],
+        ["12:06", "INFO ", "#34d399", "recheck pass  ✓"]
+      ];
+      const off = Math.floor(t * 0.7);
+      for (let i = 0; i < 7; i++){
+        const row = L[(off + i) % L.length];
+        const y = 36 + i * 22;
+        ctx.fillStyle = "rgba(255,255,255,0.03)";
+        ctx.fillRect(6, y - 12, W - 12, 20);
+        ctx.font = "10px monospace";
+        ctx.fillStyle = "rgba(150,180,210,0.8)";
+        ctx.fillText(row[0] + ":" + String(10 + ((off + i) * 7) % 50).padStart(2, "0"), 10, y);
+        ctx.fillStyle = row[2];
+        ctx.fillText(row[1], 58, y);
+        ctx.fillStyle = "rgba(205,220,237,0.92)";
+        ctx.font = "11px monospace";
+        ctx.fillText(row[3], 104, y);
+      }
+      if (Math.floor(t * 2) % 2){
+        ctx.fillStyle = A;
+        ctx.fillRect(10, H - 24, 8, 12);
+        ctx.fillRect(12, H - 20, 18, 2);
+      }
+    }
   } else if (m === "table"){
     scrHead(ctx, W, H, A, "FMEA 失效模式清单", "RPN");
     const rows = [["层间剥离", "8", "中"], ["喷嘴堵塞", "6", "低"],
@@ -7433,15 +7559,25 @@ function drawScreen(ch, dt, t){
     });
     scrBar(ctx, 14, H - 30, W - 28, 10, 0.35 + 0.45 * Math.abs(Math.sin(t * 0.6)), A);
   } else if (m === "chat"){
-    scrHead(ctx, W, H, A, "Marvis", "在线");
-    const msgs = [["M", "帮我出一版可打印的最优结构", A],
-                  ["A", "已收到，正在生成优化建议…", "#2b3646"],
-                  ["M", "顺便把支撑降到最少", A],
-                  ["A", "好的，正在重算悬垂与支撑", "#2b3646"]];
+    scrHead(ctx, W, H, A, "Agent 协作", "在线");
+    /* ⑪ 岗位话术池：本角色与协作方的真实工序对话（替代旧版 Marvis 残留） */
+    const CHAT_POOL = {
+      geometry:     [["几", "网格体检完成，水密 ✓", A], ["优", "收到，马上做拓扑优化", "#2b3646"],
+                     ["几", "V/F 面数已归档", A], ["优", "减重方案明早同步", "#2b3646"]],
+      printability: [["打", "悬垂 >55° 标了 3 处", A], ["失", "收到，评估翘边风险中", "#2b3646"],
+                     ["打", "壁厚 1.2mm 复检通过 ✓", A], ["失", "RPN 最高项：层间剥离", "#2b3646"]],
+      failure:      [["失", "FMEA 清单更新至 v3", A], ["打", "打印参数已按建议收紧", "#2b3646"],
+                     ["失", "热漂移风险降为低", A], ["打", "新料卷上机，余量 87%", "#2b3646"]],
+      optimization: [["优", "减重 12% 方案已出", A], ["几", "包围盒复核无冲突 ✓", "#2b3646"],
+                     ["优", "圆角 R2 建议已采纳", A], ["几", "新一轮网格已就绪", "#2b3646"]],
+      coordinator:  [["协", "四道工序看板已刷新", A], ["几", "几何体检完成", "#2b3646"],
+                     ["优", "优化建议待评审", "#2b3646"], ["打", "打印机就位，随时可打", "#2b3646"]]
+    };
+    const msgs = CHAT_POOL[S.role] || CHAT_POOL.coordinator;
     const n = Math.min(msgs.length, 1 + Math.floor((t % 8) / 1.6));
     msgs.slice(0, n).forEach((mm, i) => {
       const y = 38 + i * 40;
-      const right = mm[0] === "M";
+      const right = i % 2 === 0;
       const bw = 150 + (i % 2) * 40;
       ctx.fillStyle = mm[2];
       roundRectPath(ctx, right ? W - bw - 12 : 12, y, bw, 30, 10); ctx.fill();
@@ -7453,7 +7589,7 @@ function drawScreen(ch, dt, t){
       ctx.fillStyle = A; ctx.fillRect(14, H - 22, 26, 9);
     }
   } else if (m === "game"){
-    scrHead(ctx, W, H, A, "BREAKOUT", "SCORE 1280");
+    scrHead(ctx, W, H, A, "BREAKOUT", "SCORE " + (900 + scrSeed(S.key || "g") % 1600));
     const bx = W / 2 + Math.sin(t * 1.3) * 120, by = H / 2 + Math.cos(t * 0.9) * 60;
     for (let r = 0; r < 3; r++)
       for (let c = 0; c < 7; c++){
@@ -7492,9 +7628,13 @@ function drawScreen(ch, dt, t){
     for (let i = 1; i < 4; i++){
       ctx.beginPath(); ctx.moveTo(14, H - 34 - i * 30); ctx.lineTo(W - 12, H - 34 - i * 30); ctx.stroke();
     }
-    ctx.fillStyle = "rgba(180,210,235,0.85)";
-    ctx.font = "11px monospace";
-    ctx.fillText("打印 128 件   成功率 96.1%", 14, H - 12);
+    {
+      const sd = scrSeed(S.key || "ch");
+      ctx.fillStyle = "rgba(180,210,235,0.85)";
+      ctx.font = "11px monospace";
+      ctx.fillText("打印 " + (96 + sd % 80) + " 件   成功率 " +
+                   (94 + (sd % 45) / 10).toFixed(1) + "%", 14, H - 12);
+    }
   } else if (m === "social"){
     scrHead(ctx, W, H, A, "动态", "12 条新");
     for (let i = 0; i < 4; i++){
@@ -7505,7 +7645,7 @@ function drawScreen(ch, dt, t){
       ctx.beginPath(); ctx.arc(28, y + 17, 11, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#d6e3f0";
       ctx.font = "11px -apple-system,'PingFang SC',sans-serif";
-      ctx.fillText(["优化师", "打工人", "打印哥", "小助理"][i] + "：搞定一版新结构 ✓", 46, y + 17);
+      ctx.fillText(["几何", "打印", "分析", "优化"][i] + "：搞定一版新结构 ✓", 46, y + 17);
       ctx.fillStyle = "#f87171";
       ctx.fillText("♥", W - 34, y + 17);
     }
@@ -7529,13 +7669,14 @@ function drawScreen(ch, dt, t){
     ctx.font = "12px monospace";
     ctx.fillText("E_TIMEOUT @ step " + (3 + Math.floor(t) % 4), 20, H / 2 + 20);
   } else {
-    /* code：代码编辑器 */
-    scrHead(ctx, W, H, A, "pipe.py", "Python");
+    /* code：代码编辑器（⑪ 按岗位换脚本 / 函数 / 报错类型 / 终端命令） */
+    const C = ROLE_CODE[S.role] || ROLE_CODE.coordinator;
+    scrHead(ctx, W, H, A, C.file, "Python");
     const lines = [
-      [["def ", "#c084fc"], ["run_pipeline", "#7dd3fc"], ["(mesh):", "#e2e8f0"]],
-      [["    ", "#e2e8f0"], ["g = ", "#e2e8f0"], ["Geometry", "#7dd3fc"], ["(mesh)", "#e2e8f0"]],
-      [["    ", "#e2e8f0"], ["if ", "#c084fc"], ["g.watertight", "#93c5fd"], [" is ", "#c084fc"], ["False", "#fca5a5"], [":", "#e2e8f0"]],
-      [["        ", "#e2e8f0"], ["raise ", "#c084fc"], ["MeshError", "#fca5a5"], ["()", "#e2e8f0"]],
+      [["def ", "#c084fc"], [C.fn, "#7dd3fc"], ["(mesh):", "#e2e8f0"]],
+      [["    ", "#e2e8f0"], ["g = ", "#e2e8f0"], [C.cls, "#7dd3fc"], ["(mesh)", "#e2e8f0"]],
+      [["    ", "#e2e8f0"], ["if ", "#c084fc"], [C.chk, "#93c5fd"], [" is ", "#c084fc"], ["False", "#fca5a5"], [":", "#e2e8f0"]],
+      [["        ", "#e2e8f0"], ["raise ", "#c084fc"], [C.err, "#fca5a5"], ["()", "#e2e8f0"]],
       [["    ", "#e2e8f0"], ["return ", "#c084fc"], ["solver", "#7dd3fc"], [".", "#e2e8f0"], ["optimize", "#7dd3fc"], [".", "#e2e8f0"], ["go", "#7dd3fc"], ["()", "#e2e8f0"]]
     ];
     const scroll = Math.floor((t * 2) % 2);
@@ -7556,9 +7697,9 @@ function drawScreen(ch, dt, t){
     ctx.fillRect(0, H - 40, W, 40);
     ctx.fillStyle = "rgba(52,211,153,0.9)";
     ctx.font = "11px monospace";
-    ctx.fillText("$ python pipe.py --mesh part.stl", 10, H - 26);
+    ctx.fillText("$ " + C.cmd, 10, H - 26);
     ctx.fillStyle = "rgba(200,220,240,0.75)";
-    ctx.fillText("✓ 校验通过 · " + (42 + Math.floor(t) % 9) + " ms", 10, H - 10);
+    ctx.fillText("✓ " + C.ok + (42 + scrSeed(S.key || S.role) % 9 + Math.floor(t) % 4) + " ms", 10, H - 10);
   }
   S.tex.needsUpdate = true;
 }
@@ -10353,6 +10494,15 @@ window.__office = {
         screen: (ch.desk && ch.desk.userData.screen && ch.desk.userData.screen.mode) || ""
       };
     });
+  },
+  /* 调试探针：钉住某工位屏幕到指定模式（layers/log/chat/code/…），
+     防止随机轮换在截图前把画面换走；无工位的角色（协调员）返回 false */
+  scrSet(k, mode){
+    const ch = characters[k];
+    const S = ch && ch.desk && ch.desk.userData.screen;
+    if (!S) return false;
+    S.mode = mode; S.hold = 1e9; S.timer = 1e9; S.phase = 0;
+    return true;
   },
   /* 落地抖动探针（只读，P1 验收用）：逐帧采样各角色 root.position.y，返回
        span    峰峰值（整段最大-最小，米）
