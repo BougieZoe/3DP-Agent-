@@ -1,5 +1,35 @@
 # Reflections
 
+## 2026-10-12 — office3d 行为扩展（坐姿弯举/卧推/电话/高脚凳/端详/拍照 + 闲聊线程）
+
+**Diff:** `client/public/lib/office3d.js` +532/−77（含 Marvis 先前未提交的 451 行，本会话净增约 80 行）。未提交；`pnpm check` / `pnpm test` 801 绿 / `pnpm run build` EXIT=0。Stash/pop 双向验证：HEAD 基线探针 6 个新模式全部消失、旧模式 `camera` 仍在（对照成立），pop 后与 stash 前字节一致。
+
+### Checkpoint 1: "7 个新模式"（表述有误）
+
+**Claimed:** 分阶段报告称新增 7 个姿态模式（sitCurl/benchPress/phoneCall/sipStool/phoneStool/admire/camera），全部截图验证。
+
+**Diff actually showed:** stash 到 HEAD 后基线探针里 `camera` 仍然出现——它是旧模式（failure Agent 的 `act:"camera"` 拍照），本会话只给它加了 `printerBig` 走位和 worker/leisure 池入口。真实的新 dispatch case 是 6 个。截图验证本身没问题（7 种行为都实拍过），但"新增模式"的计数把复用旧行为算成了新模式。
+
+**Root cause:** 报告按"本会话让它出现在漫游里的行为"数，没有对照 HEAD 的 `case` 分发数新模式；两个口径混在一句话里。
+
+**Prevention:** 报"N 个新模式"前先 `git show HEAD:...office3d.js | rg 'case "'` 对一遍 dispatch，复用旧行为的写"新增走位"而不是"新增模式"。
+
+### Checkpoint 2: 截图探针两轮空转
+
+**Claimed:** （内部过程，未向用户报告为完成）探针 1 用 `__office.view()` 推近镜头失败——正交相机的画幅由 `camNow`/`applyCam` 驱动，`camera.position` 单独 set 会被下帧覆盖；改用 `registerView` 解决。探针 4 首两跑 SEEN 为空：先每 8s `reset()` 把走路中的角色拽回工位，后每 2.5s reset 而 work left=3~9s 永远等不到到期。
+
+**Diff actually showed:** 无代码损失（探针是 /tmp 脚本），浪费约 20 分钟挂钟时间。期间一次 benchPress 截图拍到角色起立瞬间，险些误判为"仰卧姿势不生效"，补拍紧机位后确认姿势正确。
+
+**Root cause:** 写探针前没读相机驱动路径和 roam 状态机的计时语义，按"看起来能用"的 API 直接堆 harness。
+
+**Prevention:** 给 office3d 写自动化前先读 `applyCam`/`roamWant`/`reset` 三处的驱动方；reset 类干扰只能在全员 `roam.phase==="work"` 时打，且打完要等满 left 上限。
+
+### Checkpoint 3: 双向验证（本次补上）
+
+2026-10-07 的 Checkpoint 4 把 stash-direction 列为流程债。本任务按合同执行：stash → 120s 基线探针（6 新模式缺席 + 旧模式在场 + 0 报错）→ pop → `cmp` 字节一致。结论与 diff 因果对齐：可见行为的变化恰好被这份 diff 解释。
+
+**Zero-gap claim: not made.** Checkpoint 1 的计数口径错误是真实的 claim-vs-diff 缝隙（影响报告精度，不影响代码）；Checkpoint 2 是探针工程的两次自伤，均在向用户报告前自查发现并修正。
+
 ## 2026-09-10 — estimate fixes + auto-orient coplanarity (wall_tower)
 
 **Commits:** `ea8729e4` fix(estimate), `beb521ec` fix(auto-orient). Human reviewed the full diff before commit; new tests were additionally verified bidirectional (fail on stashed old code, pass on new).
