@@ -2268,14 +2268,53 @@ const podium = new THREE.Group();
 
   /* 台面全息柱 */
   const holo = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.5, 16, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0x22d3ee, fog: false, transparent: true, opacity: 0.12,
-      side: THREE.DoubleSide }));
+    new THREE.MeshBasicMaterial({ color: 0x22d3ee, fog: false, transparent: true, opacity: 0.14,
+      side: THREE.DoubleSide, depthWrite: false }));
   holo.position.y = 1.05;
+  holo.userData.noOutline = true;
   podium.add(holo);
 
-  const halo = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.02, 20),
-    new THREE.MeshBasicMaterial({ color: 0x22d3ee, fog: false, transparent: true, opacity: 0.16 }));
+  /* 柱内全息零件：半透明实体 + 描边线（wireframe 会把圆柱密集三角全透出来，糊成鸟巢）。
+     用直齿轮——轮廓一眼能认出是打印件；共识进行时在 tick 里加速旋转+提亮。 */
+  const holoMat = new THREE.MeshBasicMaterial({
+    color: 0x22d3ee, fog: false, transparent: true, opacity: 0.30,
+    depthWrite: false, side: THREE.DoubleSide });
+  const holoEdgeMat = new THREE.LineBasicMaterial({
+    color: 0x7ef0ff, fog: false, transparent: true, opacity: 0.85 });
+  const holoModel = new THREE.Group();
+  {
+    const raw = PART_LIB.gear.build(holoMat);
+    const meshes = [];
+    raw.traverse(o => { if (o.isMesh) meshes.push(o); });
+    meshes.forEach(o => {
+      o.material = holoMat;
+      o.castShadow = false; o.receiveShadow = false;
+      o.userData.noOutline = true;
+      const eg = new THREE.EdgesGeometry(o.geometry, 28);
+      const line = new THREE.LineSegments(eg, holoEdgeMat);
+      line.scale.copy(o.scale);
+      line.position.copy(o.position);
+      line.rotation.copy(o.rotation);
+      line.userData.noOutline = true;
+      o.parent.add(line);
+    });
+    const boxed = normPart(raw);
+    boxed.scale.setScalar(0.34);
+    boxed.position.y = 0.95;                // 柱心 y≈1.05，零件高 0.34 → 悬浮不贴台面
+    holoModel.add(boxed);
+  }
+  podium.add(holoModel);
+  podium.userData.holoModel = holoModel;
+  podium.userData.holoMat = holoMat;
+  podium.userData.holoEdgeMat = holoEdgeMat;
+
+  /* 顶部光环改成细环，实心圆盘在深色背景上像一顶黑帽子 */
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.40, 0.018, 8, 36),
+    new THREE.MeshBasicMaterial({ color: 0x22d3ee, fog: false, transparent: true, opacity: 0.35,
+      depthWrite: false }));
+  halo.rotation.x = -Math.PI / 2;
   halo.position.y = 1.31;
+  halo.userData.noOutline = true;
   podium.add(halo);
   podium.userData.halo = halo;
   podium.userData.holo = holo;
@@ -4161,6 +4200,7 @@ Object.keys(DESK_AT).forEach((k, idx) => {
   const chair = makeChair(facing);
   chair.position.set(seatX, 0, seatZ);
   chair.userData.tip = { title: "工位椅", desc: "可升降人体工学椅", color: 0x35455a };
+  chair.userData.home = { x: seatX, z: seatZ, yaw: facing, fx: fx, fz: fz };
   scene.add(chair);
 
   const [hx, hz] = homeSpot(k);
@@ -6366,9 +6406,10 @@ function poseLimbs(ch, mode, t, dt, look){
   if (ch.props){
     Object.keys(ch.props).forEach(n => { ch.props[n].visible = (n === T.prop || n === T.propL); });
   }
-  /* 说话 / 欢呼时嘴部开合 */
-  const talking = (mode === "talk" || mode === "point" || mode === "cheer");
-  const mv = talking ? Math.max(0, Math.sin(t * 11.0) * 0.5 + 0.5) : 0;
+  /* 说话 / 欢呼 / 凳上聊天时嘴部开合（ch.offset 错开相位，双人对坐不同频） */
+  const talking = (mode === "talk" || mode === "point" || mode === "cheer"
+                || mode === "pantryChat" || mode === "sipChat");
+  const mv = talking ? Math.max(0, Math.sin(t * 11.0 + (ch.offset || 0)) * 0.5 + 0.5) : 0;
   if (ch.head.userData.mouthIn){
     ch.head.userData.mouthIn.scale.y = 0.02 + mv * 0.85;
     ch.head.userData.mouth.scale.y = 1 + mv * 0.35;
@@ -6542,8 +6583,11 @@ function takePart(k, part){
   obj.scale.multiplyScalar(s);
   obj.traverse(o => { if (o.isMesh) o.castShadow = true; });
   attachTip(obj, partTip(k, key, "held"));  // P0-3：手里抱着的件也能悬停看字段
-  ch.root.add(obj);
-  obj.position.set(0, 1.02, 0.30);         // 胸前抱着
+  /* 挂 torso 而不是 root：躯干呼吸/走路微扭时箱子跟身体走，不会相对手臂滑动。
+     torso 枢轴在 root 的 y=1.00，胸前 → 局部 (0, 0.02, 0.30) ≈ 原来的世界位 */
+  const torso = ch.torso || ch.root;
+  torso.add(obj);
+  obj.position.set(0, torso === ch.root ? 1.02 : 0.02, 0.30);  // 胸前抱着
   op.held = obj;
   op.heldKey = key;
   ch.actLabel = "取下了 " + (part || "打印件");
@@ -7034,8 +7078,10 @@ const ROAM_POOL_WORKER = [
   { key: "tea",      act: "brewTea", dur: 15, label: "在茶水间泡了壶茶",       face: -Math.PI / 2 },
   { key: "water",    act: "sip",     dur: 8,  label: "到饮水机倒水" },
   { key: "pantry",   act: "tidy",    dur: 9,  label: "在茶水间收拾杯具" },
+  { key: "pantry",   act: "crouch",  dur: 8,  label: "蹲身整理下层柜里的杯具" },
   { key: "board",    act: "write",   dur: 14, label: "在白板上推演方案" },
   { key: "window",   act: "lookOut", dur: 12, label: "站在窗边放空" },
+  { key: "window",   act: "yawn",    dur: 9,  label: "站在窗边打了个哈欠伸懒腰" },
   { key: "treadmill",act: "jog",     dur: 14, label: "上跑步机跑了几分钟" },
   { key: "dumbbell", act: "lift",    dur: 12, label: "在哑铃架前做弯举" },
   { key: "mat",      act: "yoga",    dur: 12, label: "在瑜伽垫上拉伸" },
@@ -7045,6 +7091,8 @@ const ROAM_POOL_WORKER = [
   { key: "seat",     act: "tidy",    dur: 10, label: "顺手把工位上的样品归整一下" },
   { key: "seat",     act: "hip",     dur: 8,  label: "叉腰对着屏幕出神" },
   { key: "seat",     act: "stretch", dur: 7,  label: "坐久了站起来伸个懒腰" },
+  { key: "seat",     act: "turn",    dur: 8,  label: "原地转了圈活动颈椎" },
+  { key: "mat",      act: "crouch",  dur: 7,  label: "蹲下系了个鞋带" },
   /* ⑥ 茶水间坐着聊天：就近挑一张高脚凳坐下，聊一会儿再回工位 */
   { key: "stoolA",   act: "pantryChat", dur: 24, label: "在茶水间高脚凳上坐着聊天" },
   { key: "stoolB",   act: "pantryChat", dur: 24, label: "在茶水间高脚凳上坐着聊天" },
@@ -7065,6 +7113,7 @@ const ROAM_POOL_WORKER = [
 ];
 const ROAM_POOL_HOST = [
   { key: "podium",   act: "point",   dur: 14, label: "在共识台前串讲进度" },
+  { key: "podium",   act: "clap",    dur: 8,  label: "为刚才的串讲鼓了鼓掌" },
   { key: "board",    act: "write",   dur: 16, label: "更新白板上的排期" },
   { key: "coffee",   act: "brew",    dur: 13, label: "在水吧给自己冲了杯咖啡" },
   { key: "pour",     act: "pourOver",dur: 14, label: "在手冲区慢慢冲了杯咖啡", face: -Math.PI / 2 },
@@ -7072,6 +7121,7 @@ const ROAM_POOL_HOST = [
   { key: "water",    act: "drink",   dur: 9,  label: "到饮水机接了杯水喝" },
   { key: "pantry",   act: "tidy",    dur: 9,  label: "把茶水间台面擦了一遍" },
   { key: "window",   act: "lookOut", dur: 12, label: "在窗边看看天气" },
+  { key: "window",   act: "yawn",    dur: 9,  label: "在窗边打了个哈欠" },
   { key: "mat",      act: "yoga",    dur: 12, label: "在瑜伽垫上拉伸放松" },
   { key: "treadmill",act: "run",     dur: 12, label: "上跑步机跑了一会儿" },
   { key: "seat",     act: "nod",     dur: 8,  label: "低头对着清单逐项确认" },
@@ -7094,10 +7144,16 @@ const ROAM_LEISURE = [
   { key: "gym",      act: "side",    dur: 10, label: "在健身区做体侧拉伸" },
   { key: "seat",     act: "squat",   dur: 9,  label: "在工位旁做几组深蹲" },
   { key: "seat",     act: "stretch", dur: 7,  label: "坐久了伸个懒腰" },
+  { key: "seat",     act: "turn",    dur: 8,  label: "原地转了圈活动颈椎" },
+  { key: "mat",      act: "crouch",  dur: 7,  label: "蹲下系了个鞋带" },
+  { key: "window",   act: "yawn",    dur: 9,  label: "站在窗边打了个哈欠" },
   { key: "window",   act: "phoneCall", dur: 12, label: "在窗边接了个电话" },
   { key: "printerBig", act: "admire", dur: 10, label: "端详大型机刚下线的打印件" },
   { key: "printerBig", act: "camera", dur: 9,  label: "给打印件拍了张存档照" },
   { key: "podium",   act: "admire",  dur: 11, label: "欣赏全息台上的模型" },
+  /* 高脚凳对坐聊天（LEISURE：四名 Agent 的池是 role.concat(LEISURE)，pantryChat 必须在这里才抽得到） */
+  { key: "stoolA",   act: "pantryChat", dur: 24, label: "在茶水间高脚凳上坐着聊天" },
+  { key: "stoolB",   act: "pantryChat", dur: 24, label: "在茶水间高脚凳上坐着聊天" },
   { key: "stoolA",   act: "sipStool",   dur: 16, label: "坐在高脚凳上喝咖啡" },
   { key: "stoolA",   act: "sipChat",    dur: 20, label: "坐在高脚凳上端着杯子聊天" },
   { key: "stoolB",   act: "sipChat",    dur: 20, label: "坐在高脚凳上端着杯子聊天" },
@@ -7163,7 +7219,32 @@ function pickRoam(ch, force){
       : [spots[0] + (Math.random() - 0.5) * 0.5, spots[1] + (Math.random() - 0.5) * 0.5],
     dur: p.dur
   };
+  if (ch.roam.face == null){
+    const cf = stoolChatFace(ch, p.act, ch.roam.spot);
+    if (cf != null) ch.roam.face = cf;
+  }
   ch.actLabel = p.label;
+}
+
+/* 高脚凳聊天朝向：配对凳上（或正在落座的）有人则面向对方，独坐则面向茶水台。
+   出 pickRoam 与 act 阶段共用 —— 后到的人会把先到的人"转"过来面对自己。 */
+function stoolChatFace(ch, act, spot){
+  if (act !== "pantryChat" && act !== "sipChat") return null;
+  const key = (Math.hypot(spot[0] - DEST.stoolA[0], spot[1] - DEST.stoolA[1]) < 0.5)
+    ? "stoolB" : "stoolA";
+  const pairSpot = DEST[key];
+  let partnerPos = null;
+  Object.keys(characters).forEach(ck => {
+    if (ck === ch.key) return;
+    const c = characters[ck];
+    if (!c) return;
+    const a = c.roam && c.roam.act;
+    if (a !== "pantryChat" && a !== "sipChat") return;
+    const ps = (c.roam && c.roam.spot) || c.current;
+    if (ps && Math.hypot(ps[0] - pairSpot[0], ps[1] - pairSpot[1]) < 0.45) partnerPos = ps;
+  });
+  const toward = partnerPos || DEST.coffee;
+  return Math.atan2(toward[0] - spot[0], toward[1] - spot[1]);
 }
 
 function roamWant(ch, dt){
@@ -7202,7 +7283,11 @@ function roamWant(ch, dt){
       ch.seatHome = null;
       return { dest: r.spot, mode: (r.carryBack ? "carryCup" : "stand"), face: ch.facing };
     }
-    return { dest: r.spot, mode: r.act, face: (r.face != null ? r.face : ch.facing) };
+    /* 凳上聊天：每帧重解析朝向 —— 对方后到/先走都会即时转头，不用等下一轮 pickRoam */
+    let actFace = (r.face != null ? r.face : ch.facing);
+    const cf = stoolChatFace(ch, r.act, r.spot);
+    if (cf != null){ actFace = cf; r.face = cf; }
+    return { dest: r.spot, mode: r.act, face: actFace };
   }
   /* back：冲了咖啡/茶就端着杯子走回工位 */
   const arrived = walkTo(ch, ch.seat, dt);
@@ -7827,6 +7912,21 @@ function tick(dt, t){
     const seated = arrived && !ch.isHost && SIT_MODES.indexOf(want.mode) >= 0
                  && seatAtDest(ch, want.dest) && seatAtDest(ch, ch.current);
     ch.seated = seated;   // 供 poseLimbs 判断"坐姿腿基线"是否生效：与 seatLean 反解成败解耦
+    /* 工位椅反应：入座时跟转角色、起身沿背向桌方向让开 ~0.14m；只作用于自己的工位椅
+       （seatTop 非空 = 高脚凳/训练凳，那边没有这把椅子）。纯视觉，不碰 seatAtDest/标定。 */
+    if (ch.chair && ch.chair.userData.home){
+      const H = ch.chair.userData.home;
+      const atDesk = seated && ch.seatTop == null;
+      const yawT = atDesk ? ch.root.rotation.y : H.yaw;
+      let dYaw = yawT - ch.chair.rotation.y;
+      while (dYaw > Math.PI) dYaw -= Math.PI * 2;
+      while (dYaw < -Math.PI) dYaw += Math.PI * 2;
+      ch.chair.rotation.y += dYaw * Math.min(1, dt * 5);
+      const back = atDesk ? 0 : 0.14;
+      const cx = H.x - H.fx * back, cz = H.z - H.fz * back;
+      ch.chair.position.x += (cx - ch.chair.position.x) * Math.min(1, dt * 4);
+      ch.chair.position.z += (cz - ch.chair.position.z) * Math.min(1, dt * 4);
+    }
     let wantY = -C.standGap * sc;    // 站立/走动基准：把鞋底压到地面（模型鞋底离髋略短）
     ch.seatLean = 0;
     if (seated){
@@ -9159,7 +9259,9 @@ function tourWant(ch, k){
   if (T.phase === "summoning" || T.phase === "greeting" || T.phase === "farewell"){
     const tgt = isGuide ? T.entrySpot : tourRing(T.entrySpot, vi, count, T.entryFace);
     if (tourDist(ch, tgt) > TOUR_ARRIVE) return { dest: tgt, mode: "walk" };
-    return { dest: tgt, mode: isGuide ? "talk" : (T.phase === "farewell" ? "listen" : "stand"),
+    /* 导游：召集时招手喊人，迎送时挥手致意；访客迎客时站定，告别时听讲 */
+    const gMode = (T.phase === "summoning") ? "talk" : "wave";
+    return { dest: tgt, mode: isGuide ? gMode : (T.phase === "farewell" ? "listen" : "stand"),
              face: T.entryFace };
   }
   const stop = T.stops[Math.min(T.i, T.stops.length - 1)];
@@ -9475,11 +9577,19 @@ function loop(){
   /* 共识台全息呼吸 */
   const halo = podium.userData.halo;
   const holo = podium.userData.holo;
+  const holoModel = podium.userData.holoModel;
+  const holoMat = podium.userData.holoMat;
+  const holoEdgeMat = podium.userData.holoEdgeMat;
   const active = state.consensus === "running";
   const pulse = 0.5 + 0.5 * Math.sin(tGlobal * (active ? 3.4 : 1.1));
-  halo.material.opacity = active ? 0.30 + pulse * 0.45 : 0.10 + pulse * 0.06;
-  holo.material.opacity = active ? 0.16 + pulse * 0.22 : 0.08 + pulse * 0.05;
+  halo.material.opacity = active ? 0.40 + pulse * 0.40 : 0.22 + pulse * 0.10;
+  holo.material.opacity = active ? 0.14 + pulse * 0.16 : 0.07 + pulse * 0.04;
   holo.material.color.setHex(active ? 0x22d3ee : 0x2f6f88);
+  if (holoModel){
+    holoModel.rotation.y += dt * (active ? 1.5 : 0.45);
+    if (holoMat) holoMat.opacity = active ? 0.34 + pulse * 0.16 : 0.24 + pulse * 0.08;
+    if (holoEdgeMat) holoEdgeMat.opacity = active ? 0.80 + pulse * 0.20 : 0.55 + pulse * 0.15;
+  }
 
   updateFocus(dt);          // P1-5 / P1-9 改造一：双击特写（只做相机缓动，无发光特效）
   updateFlows(dt);          // P1-6：数据流线（产出 / 异常流向的流光粒子推进与回收）

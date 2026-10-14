@@ -68,6 +68,7 @@
     peer: null,
     active: false,
     greeted: false,
+    lastFail: "",        // 最近一次后端根因（欠费/端点不可用），用于避免被"连接已断开"覆盖
     inCtx: null,
     micStream: null,
     srcNode: null,
@@ -160,7 +161,11 @@
          例：GLM 1113 欠费、Fireworks ASR 503 未开通。 */
       console.warn("[voice-rt] 后端 error:", d.code, d.message);
       try {
-        office.say(RT.peer || "coordinator", "语音服务出错：" + (d.message || d.code || "未知错误"));
+        var vfail = "语音服务出错：" + (d.message || d.code || "未知错误");
+        RT.lastFail = vfail;   /* 记住根因，防被后续"连接已断开"顶掉 */
+        /* 面板常驻红字优先（不会被随后的对话文本顶掉）；老宿主无此接口才回落气泡 */
+        if (typeof office.voiceFail === "function") office.voiceFail(vfail);
+        else office.say(RT.peer || "coordinator", vfail);
       } catch (e) {}
     }
   }
@@ -205,9 +210,14 @@
           /* 通话中意外断开：翻下状态、清资源、面板留一句，避免 RT.active 永远为 true */
           console.warn("[voice-rt] 语音桥已断开");
           var peer = RT.peer;
+          var lastFail = RT.lastFail;   /* stop() 会清状态，先取出根因 */
           stop();
           try {
-            if (peer) office.say(peer, "语音连接已断开，请重新发起通话。");
+            /* 根因（欠费 / 端点不可用）若已提示过就保留它，不要用"连接已断开"顶掉 ——
+               否则用户会把欠费误判成网络问题、反复重连 */
+            var cutMsg = lastFail || "语音连接已断开，请重新发起通话。";
+            if (typeof office.voiceFail === "function") office.voiceFail(cutMsg);
+            else if (peer) office.say(peer, cutMsg);
           } catch (e) {}
         }
       };
@@ -279,6 +289,7 @@
     RT.active = true;
     RT.greeted = false;
     RT.sentFrames = 0;
+    RT.lastFail = "";   /* 新一通：清掉上一通的根因，避免旧故障误导 */
 
     if (GREETINGS[peer]) office.callReply(GREETINGS[peer]); // 同步占位，压掉内置兜底问候
     try {
@@ -289,10 +300,15 @@
       .then(openMic)
       .then(function () {
         console.debug("[voice-rt] 语音已接通：", peer);
+        try { if (typeof office.voiceFail === "function") office.voiceFail(""); } catch (e3) {}
       })
       .catch(function (e) {
         console.error("[voice-rt] 启动失败", e);
-        office.say(peer, "语音接通失败：" + (e && e.message ? e.message : e));
+        try {
+          var vfailMsg = "语音接通失败：" + (e && e.message ? e.message : e);
+          if (typeof office.voiceFail === "function") office.voiceFail(vfailMsg);
+          else office.say(peer, vfailMsg);
+        } catch (e2) {}
         stop();
       });
   }
