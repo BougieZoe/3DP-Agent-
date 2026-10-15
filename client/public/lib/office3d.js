@@ -239,7 +239,35 @@ const I18N = {
         ["The printer's mid-run on batch three.",
          "I'll grab the finished parts in a minute.",
          "Mind measuring them before you log it?",
-         "On it."]
+         "On it."],
+        ["Coffee machine's acting up again.",
+         "Second time this week. I'll descale it after this layer.",
+         "You're a saint. I'll bring you a cup when it's fixed.",
+         "Deal."],
+        ["That overhang came out better than expected.",
+         "I dropped the layer height to 0.12 just for that section.",
+         "Smart. Swapping mid-print never works for me.",
+         "Takes a bit of guts, but the gcode allows it."],
+        ["Gym later? Legs are getting soft from all this sitting.",
+         "Five on the treadmill, then dumbbells?",
+         "Deal. Last one there buys the protein bars.",
+         "You're on."],
+        ["The client wants the bracket lighter by Friday.",
+         "Topology optimization already carved eighteen percent out.",
+         "Send me the STL when it converges — I'll check printability.",
+         "Uploading now."],
+        ["Nozzle temp drifted two degrees on the last run.",
+         "PID autotune should fix that. Want me to queue it?",
+         "Do it after the current batch. Don't want to interrupt.",
+         "Will do."],
+        ["You see the tolerance report? Sub-0.1mm all around.",
+         "That new calibration coupon paid off.",
+         "Framed it and hung it on the wall, honestly.",
+         "Ha! Deserved."],
+        ["Pour-over or espresso today?",
+         "Pour-over. The Kenya lot finally opened.",
+         "Save me a cup? I'll grab mugs.",
+         "They're already on the scale."]
       ]
     }
   },
@@ -338,7 +366,14 @@ const I18N = {
         ["早，新版结构稳住了吗？", "稳了，外壳昨晚打得很干净。", "好，那我先复核壁厚再排队打印。", "行，好了叫我。"],
         ["失效分析结果干净吗？", "两个小风险，等级都很低。", "好，记得记进日志。", "已经记好了。"],
         ["叶轮改版卡住了吗？", "凸台旁边有一处偏薄。", "要我加厚那条筋吗？", "麻烦你了，我先不排队打印。"],
-        ["大机器已经打到第三批了。", "我一会儿去取成品件。", "取之前顺手量一下尺寸？", "没问题。"]
+        ["大机器已经打到第三批了。", "我一会儿去取成品件。", "取之前顺手量一下尺寸？", "没问题。"],
+        ["咖啡机又闹脾气了。", "这周第二次，打完这层我去除垢。", "你太靠谱了，修好我给你带一杯。", "成交。"],
+        ["那个悬垂面打得出乎意料地好。", "那一段我把层高降到了 0.12。", "厉害，我中途换参数总是翻车。", "得有点魄力，切片允许就行。"],
+        ["一会儿去健身房吗？", "跑步机五分钟，再练哑铃？", "成交。谁最后到谁买蛋白棒。", "等着瞧。"],
+        ["客户想让支架再减重，周五要。", "拓扑优化已经挖掉 18% 了。", "收敛了把 STL 发我，我过一遍可打印性。", "正在上传。"],
+        ["上一轮喷嘴温度漂了两度。", "跑一遍 PID 自整定就好，要现在排吗？", "等这批打完，别中途打断。", "好。"],
+        ["看见公差报告没？全程 0.1 毫米以内。", "新校准试片立功了。", "说实话我已经想裱起来挂墙上了。", "哈哈，值！"],
+        ["今天手冲还是意式？", "手冲吧，肯尼亚那包刚开。", "给我留一杯，我去拿杯子。", "杯子已经放秤上了。"]
       ]
     }
   }
@@ -449,15 +484,15 @@ const PALETTE = {
     shoulder: 1.02, chest: 1.00, waist: 0.97, armR: 1.00, jaw: 0.98,
     hip: 1.00, face: 1.02, soft: 0
   },
-  optimization: {                               // 银发帅大叔：狼尾层次 + 敞开亚麻衬衫 + 白 T
-    accent: 0xa78bfa, skin: 0x8a5a3b, hair: 0xb4bac2, hair2: 0xeef2f6,
+  optimization: {                               // ⑧ 银发大叔→白净可爱：皮肤提亮、去胡茬、眉唇柔化、下颌收圆
+    accent: 0xa78bfa, skin: 0xf0c8a2, hair: 0xb4bac2, hair2: 0xeef2f6,
     outfit: "open", cloth: 0x707f8e, cloth2: 0xf3f5f7, pants: 0x2c3340,
     height: 1.84, build: "m", hairStyle: "wolfcut", shoes: 0x5b6472,
-    chain: true, watch: true, stubble: true, belt: true,
+    chain: true, watch: true, stubble: false, belt: true,
     shoeStyle: "runner", socksStyle: "neon",
-    iris: 0x2b1c10, lip: 0x8a4a3c, brow: 0x9aa3ad, blush: 0x9c6a48,
-    shoulder: 1.06, chest: 1.03, waist: 0.99, armR: 1.06, jaw: 1.00,
-    hip: 1.00, face: 1.00, soft: 0
+    iris: 0x3a2a1c, lip: 0xc07f6c, brow: 0x6d5238, blush: 0xf2bda4,
+    shoulder: 1.06, chest: 1.03, waist: 0.99, armR: 1.06, jaw: 0.95,
+    hip: 1.00, face: 1.04, soft: 0
   },
   coordinator: {                                // 可爱 BBW 女生：针织开衫 + 高腰阔腿裤 + 高马尾蝴蝶结
     accent: 0xf0abfc, skin: 0xdbaa86, hair: 0x3a2418, hair2: 0x7a5230,
@@ -475,14 +510,19 @@ const PALETTE = {
 const DEST = {
   /* 左墙（西墙 x≈0）：茶水间 + 健身房 */
   coffee:   [1.58, 4.55],    // 咖啡台前
+  pour:     [1.58, 4.85],    // 手冲区前（V60/鹅颈壶）
+  tea:      [1.60, 5.90],    // 茶区前（茶盘/茶壶）
   water:    [1.55, 3.15],    // 饮水机前
   sink:     [1.58, 6.25],    // 水槽前
   fridge:   [1.60, 7.30],    // 冰箱前
   pantry:   [1.62, 5.45],    // 茶水间中段
+  stoolA:   [1.18, 4.25],    // 茶水间高脚凳 A（坐着聊天）
+  stoolB:   [1.18, 5.35],    // 茶水间高脚凳 B（坐着聊天）
   treadmill:[1.48, 8.70],    // 跑步机前
   gym:      [1.98, 9.02],    // 健身房空地（避开壶铃）
   dumbbell: [1.60, 10.45],   // 哑铃架前
   bench:    [1.02, 11.72],   // 训练凳前（俯身划船位）
+  benchSeat:[1.02, 10.95],   // 训练凳上（坐姿弯举 / 仰卧卧推，臀部锚点）
   kettle:   [1.45, 9.12],    // 壶铃前
   mat:      [1.80, 10.95],   // 瑜伽垫上
 
@@ -1558,9 +1598,11 @@ function makeDesk(accent, facing, key){
   });
   const tray = new THREE.Mesh(new THREE.BoxGeometry(1.30, 0.05, 0.14), legMat);
   tray.position.set(-0.05, 0.60, -0.34); g.add(tray);
+  /* ② 走线：5 根线全部收进走线槽内近乎水平躺平，不再以 20°~30° 仰角穿出桌面 */
   for (let i = 0; i < 5; i++){
-    const cw = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 6), toon(0x0c131b));
-    cw.position.set(-0.4 + i * 0.16, 0.66, -0.365); cw.rotation.z = 0.35 + i * 0.05;
+    const cw = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.30, 6), toon(0x0c131b));
+    cw.position.set(-0.34 + i * 0.16, 0.585, -0.345);
+    cw.rotation.z = 1.32 + (i % 2) * 0.10;
     g.add(cw);
   }
 
@@ -1576,7 +1618,9 @@ function makeDesk(accent, facing, key){
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
-  tex.repeat.x = -1; tex.offset.x = 1;                 // 反向显示，避免镜像
+  /* ⑪ 镜像修正：旧版 repeat.x=-1 + rotation.y=PI 双重翻转，屏幕文字一直是反的
+     （用户截图里「状态」也呈镜像）。PlaneGeometry 正面法线 +Z，平面已 rotation.y=PI
+     面向工位外侧（角色入座视角），此视角下只需 plane 自身旋转、不再翻纹理 */
   const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.645, 0.372),
     new THREE.MeshBasicMaterial({ map: tex, fog: false, toneMapped: false,
       side: THREE.DoubleSide }));
@@ -1597,21 +1641,24 @@ function makeDesk(accent, facing, key){
   standBase.position.set(0, 0.765, 0.14); g.add(standBase);
 
   /* 键盘（键帽可见） + 鼠标垫 + 鼠标 */
+  /* ④ 键鼠移到桌沿一侧（真实桌面键盘就在身前）：肩到腕 0.585m 才够得到，
+     原先贴屏幕放导致手悬空 0.55m；显示屏不动，仍留在里侧 */
   const pad = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.008, 0.26), toon(0x1a2330));
-  pad.position.set(-0.02, 0.786, -0.30); g.add(pad);
+  pad.position.set(0.00, 0.786, -0.33); g.add(pad);
   const kb = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.022, 0.155), toon(0x101821));
-  kb.position.set(-0.11, 0.801, -0.30); kb.castShadow = true; g.add(kb);
+  kb.name = "desk-keyboard";
+  kb.position.set(0.00, 0.801, -0.33); kb.castShadow = true; g.add(kb);
   for (let r = 0; r < 4; r++){
     const row = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.006, 0.026), toon(0x2b3a4d));
-    row.position.set(-0.11, 0.814, -0.352 + r * 0.036);
+    row.position.set(0.00, 0.814, -0.382 + r * 0.036);
     g.add(row);
   }
   const mouse = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 8), toon(0x101821));
   mouse.scale.set(0.7, 0.5, 1.0);
-  mouse.position.set(0.25, 0.798, -0.30);
+  mouse.position.set(0.30, 0.798, -0.30);
   g.add(mouse);
   const mcord = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.22, 6), toon(0x0c131b));
-  mcord.position.set(0.30, 0.795, -0.19); mcord.rotation.x = 1.35; g.add(mcord);
+  mcord.position.set(0.35, 0.795, -0.19); mcord.rotation.x = 1.35; g.add(mcord);
 
   /* 桌角小物：杯子 / 笔筒 / 便签 / 小绿植 / 文件 */
   const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.04, 0.11, 12), toon(accent));
@@ -1626,12 +1673,16 @@ function makeDesk(accent, facing, key){
 
   const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.038, 0.10, 10), toon(0x1b2734));
   cup.position.set(-0.56, 0.83, -0.30); g.add(cup);
-  for (let i = 0; i < 4; i++){
-    const pen = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.19, 6), toon(i % 2 ? 0xf59e0b : 0x60a5fa));
-    pen.position.set(-0.57 + (i % 2) * 0.022, 0.88, -0.31 + (i > 1 ? 0.02 : -0.01));
-    pen.rotation.z = 0.16 - 0.08 * i;
+  /* ② 笔筒：3 支短笔收进筒内只露笔尾，另 1 支平放台面，桌面不再出现 4 根竖杆 */
+  for (let i = 0; i < 3; i++){
+    const pen = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.12, 6), toon(i % 2 ? 0xf59e0b : 0x60a5fa));
+    pen.position.set(-0.57 + (i % 2) * 0.020, 0.848, -0.31 + (i > 1 ? 0.02 : -0.01));
+    pen.rotation.z = 0.14 - 0.07 * i;
     g.add(pen);
   }
+  const penFlat = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.16, 6), toon(0x60a5fa));
+  penFlat.position.set(-0.50, 0.7865, -0.32); penFlat.rotation.set(0, 0.35, 1.5708);
+  g.add(penFlat);
   const note = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.006, 0.10), toon(0xfcd34d));
   note.position.set(0.62, 0.783, 0.10); note.rotation.y = 0.3; g.add(note);
   const note2 = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.006, 0.10), toon(0xfda4af));
@@ -1643,27 +1694,77 @@ function makeDesk(accent, facing, key){
   const paper = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.006, 0.27), toon(0xdbe4ec));
   paper.position.set(0.44, 0.784, -0.12); paper.rotation.y = 0.18; g.add(paper);
 
+  /* ③ 工位差异化：每张桌子按职责摆自己的"专业物件"，桌沿再压一条本岗主色条，
+     四张桌子不靠颜色也认得出是谁的工位 */
+  {
+  const edgeBar = new THREE.Mesh(new THREE.BoxGeometry(1.28, 0.014, 0.035), toon(accent));
+  edgeBar.position.set(0, 0.756, -0.60); g.add(edgeBar);
+  if (key === "geometry"){
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.016, 0.022), toon(0x9fb3c8));
+    beam.position.set(-0.62, 0.795, 0.40); beam.rotation.y = 0.12; g.add(beam);
+    const jawA = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.052, 0.018), toon(0x9fb3c8));
+    jawA.position.set(-0.74, 0.812, 0.40); g.add(jawA);
+    const jawB = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.036, 0.018), toon(0x9fb3c8));
+    jawB.position.set(-0.50, 0.804, 0.40); g.add(jawB);
+    const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.30, 12), toon(0x3b82f6));
+    roll.position.set(-0.30, 0.822, 0.46); roll.rotation.set(1.5708, 0, 0.35); g.add(roll);
+  } else if (key === "printability"){
+    const spoolA = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.028, 14), toon(0x10b981));
+    spoolA.position.set(-0.60, 0.812, 0.42); spoolA.rotation.set(1.5708, 0, 0.2); g.add(spoolA);
+    const spoolB = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.028, 14), toon(0xf59e0b));
+    spoolB.position.set(-0.42, 0.812, 0.50); spoolB.rotation.set(1.5708, 0, -0.15); g.add(spoolB);
+    [0xef4444, 0x3b82f6, 0x22c55e].forEach((c, i) => {
+      const chip = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.008, 0.075), toon(c));
+      chip.position.set(0.34 + i * 0.10, 0.790, 0.44); chip.rotation.y = 0.12 * i; g.add(chip);
+    });
+  } else if (key === "failure"){
+    const standF = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.05, 12), toon(0x475569));
+    standF.position.set(-0.60, 0.808, 0.42); g.add(standF);
+    const part1 = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.10), toon(0x94a3b8));
+    part1.position.set(-0.60, 0.850, 0.42); part1.rotation.y = 0.3; g.add(part1);
+    const part2 = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.05, 0.08), toon(0x94a3b8));
+    part2.position.set(-0.46, 0.846, 0.36); part2.rotation.set(0, -0.5, 0.25); g.add(part2);
+    const magRing = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.012, 8, 18), toon(0xfacc15));
+    magRing.position.set(0.42, 0.880, 0.42); magRing.rotation.x = 1.1; g.add(magRing);
+    const magRod = new THREE.Mesh(new THREE.CylinderGeometry(0.010, 0.010, 0.16, 8), toon(0x334155));
+    magRod.position.set(0.42, 0.812, 0.38); magRod.rotation.x = 0.5; g.add(magRod);
+  } else {
+    [[0.30, 0.040], [0.40, 0.065], [0.50, 0.090], [0.60, 0.055]].forEach(([x, h], i) => {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.055, h, 0.075), toon(i === 3 ? 0xf472b6 : accent));
+      bar.position.set(x, 0.784 + h / 2, 0.46); g.add(bar);
+    });
+    const tray = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.010, 0.13), toon(0x334155));
+    tray.position.set(0.45, 0.780, 0.46); g.add(tray);
+    const note3 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.008, 0.09), toon(0xa7f3d0));
+    note3.position.set(-0.58, 0.790, -0.30); note3.rotation.y = -0.25; g.add(note3);
+  }
+  }
+
   /* 桌角落地灯 */
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 1.55, 8), legMat);
+  /* ② 落地灯：补底盘 + 加粗灯杆 + 放大压低灯罩，整体读作"一盏灯"而非一根裸杆 */
+  const lampBase = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 0.03, 16), legMat);
+  lampBase.position.set(0.86, 0.015, 0.30); lampBase.castShadow = true;
+  g.add(lampBase);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.030, 0.034, 1.55, 10), legMat);
   pole.position.set(0.86, 0.775, 0.30); pole.castShadow = true;
   g.add(pole);
-  const shade = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.20, 12, 1, true), toon(0x233242));
-  shade.position.set(0.86, 1.62, 0.30); shade.rotation.x = Math.PI;
+  const shade = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.26, 16, 1, true), toon(0x233242));
+  shade.position.set(0.86, 1.55, 0.30); shade.rotation.x = Math.PI;
   g.add(shade);
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8),
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8),
     new THREE.MeshBasicMaterial({ color: accent, fog: false }));
-  bulb.position.set(0.86, 1.54, 0.30);
+  bulb.position.set(0.86, 1.44, 0.30);
   bulb.userData.noOutline = true;
   g.add(bulb);
   const lampLight = new THREE.PointLight(accent, 3.4, 4.2, 2);
-  lampLight.position.set(0.86, 1.52, 0.30);
+  lampLight.position.set(0.86, 1.42, 0.30);
   g.add(lampLight);
   /* P0-2：工位灯可转红告警（error 态），平时保持 accent 原色 */
   g.userData.lamp = { light: lampLight, bulb, base: accent, baseIntensity: 3.4, alarm: false };
 
   /* 屏幕内容状态（由 tick 驱动重绘） */
   g.userData.screen = {
-    canvas, ctx: canvas.getContext("2d"), tex, key: key || "",
+    canvas, ctx: canvas.getContext("2d"), tex, key: key || "", role: key || "",
     accent: "#" + new THREE.Color(accent).getHexString(),
     mode: "cad", sub: 0, timer: 1.5 + Math.random() * 3, phase: 0,
     scroll: 0, flash: 0, hold: 0
@@ -1713,7 +1814,7 @@ function makeChair(facing){
 }
 
 /* =====================================================================
-   左墙（西墙 x≈0）：茶水间 + 健身房 —— 参照「Marvis 办公室」的休闲区气质
+   左墙（西墙 x≈0）：茶水间 + 健身房 —— 参照协作式 3D 打印办公室的休闲区气质
    ===================================================================== */
 const steelM  = new THREE.MeshStandardMaterial({ color: 0x9fb3c6, roughness: 0.30, metalness: 0.74 });
 const darkM   = toon(0x141d28);
@@ -1815,6 +1916,50 @@ function buildPantry(){
     mug.castShadow = true;
   }
 
+  /* 手冲区：鹅颈壶 + V60 滤杯 + 分享壶 + 电子秤 */
+  const po = new THREE.Group(); po.position.set(0.48, 0.915, 4.85); g.add(po);
+  /* 电子秤底座 */
+  part(po, new THREE.BoxGeometry(0.22, 0.022, 0.18), toon(0x1a2330), [0, 0.011, 0], null, null, false);
+  part(po, new THREE.PlaneGeometry(0.08, 0.04),
+       new THREE.MeshBasicMaterial({ color: 0x5eead4, fog: false, toneMapped: false }),
+       [0, 0.024, 0.07], [-1.57, 0, 0], null, false).userData.noOutline = true;
+  /* 分享壶（下壶） */
+  part(po, new THREE.CylinderGeometry(0.055, 0.062, 0.10, 14),
+       new THREE.MeshStandardMaterial({ color: 0xc8dce8, roughness: 0.12, metalness: 0.05,
+         transparent: true, opacity: 0.40 }), [0, 0.075, 0], null, null, false);
+  /* V60 滤杯（上壶，锥形） */
+  part(po, new THREE.ConeGeometry(0.055, 0.07, 14, 1, true),
+       new THREE.MeshStandardMaterial({ color: 0xf3f6fa, roughness: 0.35, metalness: 0.0,
+         side: THREE.DoubleSide }), [0, 0.16, 0], null, null, false);
+  part(po, new THREE.TorusGeometry(0.055, 0.006, 6, 14), toon(0xd97706), [0, 0.195, 0], null, null, false);
+  /* 鹅颈手冲壶（立在秤旁） */
+  part(po, new THREE.CylinderGeometry(0.042, 0.050, 0.11, 12), toon(0x1f2937), [0.14, 0.055, -0.02], null, null, false);
+  part(po, new THREE.TorusGeometry(0.030, 0.007, 6, 12, Math.PI), toon(0x64748b), [0.14, 0.118, -0.02], [0, 1.57, 0], null, false);
+  part(po, new THREE.CylinderGeometry(0.008, 0.006, 0.12, 6), toon(0x9aa7b6),
+       [0.14, 0.10, -0.08], [0.9, 0, 0], null, false);
+  part(po, new THREE.CylinderGeometry(0.005, 0.004, 0.035, 6), toon(0x9aa7b6),
+       [0.14, 0.055, -0.14], [1.2, 0, 0], null, false);
+
+  /* 茶区：茶盘 + 茶壶 + 品茗杯 ×2 + 茶叶罐 */
+  const tea = new THREE.Group(); tea.position.set(0.50, 0.915, 5.90); g.add(tea);
+  part(tea, new THREE.BoxGeometry(0.28, 0.018, 0.20), toon(0x3d2b1f), [0, 0.009, 0], null, null, false);
+  part(tea, new THREE.BoxGeometry(0.30, 0.008, 0.22), toon(0x5c4033), [0, 0.002, 0], null, null, false);
+  /* 茶壶 */
+  part(tea, new THREE.SphereGeometry(0.050, 12, 10), toon(0xd97706), [0, 0.068, 0], null, [1, 0.82, 1], false);
+  part(tea, new THREE.CylinderGeometry(0.016, 0.026, 0.030, 10), toon(0xb45309), [0, 0.115, 0], null, null, false);
+  part(tea, new THREE.CylinderGeometry(0.008, 0.006, 0.050, 6), toon(0xd97706), [0.046, 0.062, 0], [0, 0, -0.85], null, false);
+  part(tea, new THREE.TorusGeometry(0.026, 0.006, 6, 10, Math.PI), toon(0x92400e), [0, 0.075, -0.048], [0, 1.57, 0], null, false);
+  /* 品茗杯 ×2 */
+  [[-0.07, 0.06], [0.07, 0.06]].forEach(([cx, cz]) => {
+    part(tea, new THREE.CylinderGeometry(0.028, 0.020, 0.038, 10), toon(0xf5f0e6), [cx, 0.038, cz], null, null, false);
+    part(tea, new THREE.CylinderGeometry(0.022, 0.022, 0.006, 10), toon(0x6b4423), [cx, 0.052, cz], null, null, false);
+  });
+  /* 茶叶罐 ×2（立在茶盘后） */
+  [[-0.10, 0x8b4513], [0.02, 0x2f4f2f]].forEach(([cx, col], i) => {
+    part(tea, new THREE.CylinderGeometry(0.032, 0.032, 0.09, 12), toon(col), [cx, 0.065, -0.10 - i * 0.07], null, null, false);
+    part(tea, new THREE.CylinderGeometry(0.034, 0.034, 0.014, 12), toon(0x1f2937), [cx, 0.115, -0.10 - i * 0.07], null, null, false);
+  });
+
   /* 立式饮水机（纯净水桶） */
   const disp = new THREE.Group(); disp.position.set(0.53, 0, 3.25); g.add(disp);
   part(disp, new THREE.BoxGeometry(0.42, 0.98, 0.46), toon(0xdfe7ef), [0, 0.49, 0], null, null, false);
@@ -1846,12 +1991,14 @@ function buildPantry(){
   }
   part(fr, new THREE.BoxGeometry(0.30, 0.16, 0.26), toon(0x8b9bb0), [0, 1.80, 0.02], null, null, false);
 
-  /* 吧台高脚凳 ×2 */
+  /* 吧台高脚凳 ×2 —— 座面加宽加厚、垫面提亮：0.38m 的小圆盘会被坐者的宽髋从背后
+     完全挡住，只剩一根细立柱，读作"悬空蹲 + 一根棍"；加宽到 0.51 后任何角度
+     都能从髋侧露出一圈凳缘，坐姿一眼可读 */
   [[4.25], [5.35]].forEach(([z]) => {
     const st = new THREE.Group(); st.position.set(1.18, 0, z); g.add(st);
-    part(st, new THREE.CylinderGeometry(0.19, 0.19, 0.055, 16), toon(0x2f4358), [0, 0.63, 0], null, null, false);
-    part(st, new THREE.CylinderGeometry(0.16, 0.16, 0.04, 16), toon(0x22303f), [0, 0.60, 0], null, null, false);
-    part(st, new THREE.CylinderGeometry(0.032, 0.032, 0.58, 12), steelM, [0, 0.30, 0], null, null, false);
+    part(st, new THREE.CylinderGeometry(0.255, 0.255, 0.07, 20), toon(0x3d5a75), [0, 0.625, 0], null, null, false);
+    part(st, new THREE.CylinderGeometry(0.225, 0.225, 0.045, 20), toon(0x22303f), [0, 0.59, 0], null, null, false);
+    part(st, new THREE.CylinderGeometry(0.04, 0.04, 0.58, 12), steelM, [0, 0.30, 0], null, null, false);
     part(st, new THREE.TorusGeometry(0.16, 0.014, 8, 16), steelM, [0, 0.20, 0], [1.57, 0, 0], null, false);
     for (let i = 0; i < 4; i++){
       const a = i / 4 * Math.PI * 2 + 0.78;
@@ -2121,14 +2268,53 @@ const podium = new THREE.Group();
 
   /* 台面全息柱 */
   const holo = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.5, 16, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0x22d3ee, fog: false, transparent: true, opacity: 0.12,
-      side: THREE.DoubleSide }));
+    new THREE.MeshBasicMaterial({ color: 0x22d3ee, fog: false, transparent: true, opacity: 0.14,
+      side: THREE.DoubleSide, depthWrite: false }));
   holo.position.y = 1.05;
+  holo.userData.noOutline = true;
   podium.add(holo);
 
-  const halo = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.02, 20),
-    new THREE.MeshBasicMaterial({ color: 0x22d3ee, fog: false, transparent: true, opacity: 0.16 }));
+  /* 柱内全息零件：半透明实体 + 描边线（wireframe 会把圆柱密集三角全透出来，糊成鸟巢）。
+     用直齿轮——轮廓一眼能认出是打印件；共识进行时在 tick 里加速旋转+提亮。 */
+  const holoMat = new THREE.MeshBasicMaterial({
+    color: 0x22d3ee, fog: false, transparent: true, opacity: 0.30,
+    depthWrite: false, side: THREE.DoubleSide });
+  const holoEdgeMat = new THREE.LineBasicMaterial({
+    color: 0x7ef0ff, fog: false, transparent: true, opacity: 0.85 });
+  const holoModel = new THREE.Group();
+  {
+    const raw = PART_LIB.gear.build(holoMat);
+    const meshes = [];
+    raw.traverse(o => { if (o.isMesh) meshes.push(o); });
+    meshes.forEach(o => {
+      o.material = holoMat;
+      o.castShadow = false; o.receiveShadow = false;
+      o.userData.noOutline = true;
+      const eg = new THREE.EdgesGeometry(o.geometry, 28);
+      const line = new THREE.LineSegments(eg, holoEdgeMat);
+      line.scale.copy(o.scale);
+      line.position.copy(o.position);
+      line.rotation.copy(o.rotation);
+      line.userData.noOutline = true;
+      o.parent.add(line);
+    });
+    const boxed = normPart(raw);
+    boxed.scale.setScalar(0.34);
+    boxed.position.y = 0.95;                // 柱心 y≈1.05，零件高 0.34 → 悬浮不贴台面
+    holoModel.add(boxed);
+  }
+  podium.add(holoModel);
+  podium.userData.holoModel = holoModel;
+  podium.userData.holoMat = holoMat;
+  podium.userData.holoEdgeMat = holoEdgeMat;
+
+  /* 顶部光环改成细环，实心圆盘在深色背景上像一顶黑帽子 */
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.40, 0.018, 8, 36),
+    new THREE.MeshBasicMaterial({ color: 0x22d3ee, fog: false, transparent: true, opacity: 0.35,
+      depthWrite: false }));
+  halo.rotation.x = -Math.PI / 2;
   halo.position.y = 1.31;
+  halo.userData.noOutline = true;
   podium.add(halo);
   podium.userData.halo = halo;
   podium.userData.holo = holo;
@@ -2257,12 +2443,13 @@ function buildCharacter(cfg){
          [0, 0.075, 0.115], null, null, false);
   }
 
-  /* 胸肌 / 胸型（男性：分离双胸 + 胸中线 + 锁骨；女性：随 soft 变化的丰满胸型） */
+  /* 胸肌 / 胸型（男性：分离双胸 + 胸中线 + 锁骨；女性：随 soft 变化的丰满胸型）
+     ⑧ 身材瘦身：胸肌球 0.162+0.112 双层叠出"盔甲胸"，收到 0.142+0.092 并压薄 */
   if (!F){
-    part(torso, new THREE.SphereGeometry(0.162, 24, 16), clothM,
-         [0, 0.572, 0.030], null, [1.30, 0.58, 0.72]);
-    [-1, 1].forEach(s => part(torso, new THREE.SphereGeometry(0.112 * (0.55 + 0.45 * S.ch), 18, 14), clothM,
-         [s * 0.152, 0.560, 0.020], null, [1.0, 0.74, 0.80], false));
+    part(torso, new THREE.SphereGeometry(0.142, 24, 16), clothM,
+         [0, 0.572, 0.026], null, [1.16, 0.52, 0.62]);
+    [-1, 1].forEach(s => part(torso, new THREE.SphereGeometry(0.092 * (0.55 + 0.45 * S.ch), 18, 14), clothM,
+         [s * 0.148, 0.558, 0.016], null, [1.0, 0.66, 0.68], false));
     /* 胸中线：左右胸肌之间的浅沟，肌肉感的关键一笔 */
     part(torso, new THREE.BoxGeometry(0.014, 0.106, 0.026), clothD,
          [0, 0.562, 0.158], null, null, false);
@@ -2288,31 +2475,38 @@ function buildCharacter(cfg){
     });
   }
 
-  /* 斜方肌 + 三角肌（肩宽随 shoulder 系数变化，肌肉男呈宽肩倒三角） */
+  /* 斜方肌 + 三角肌（肩宽随 shoulder 系数变化。
+     ⑧ 身材瘦身：旧版三角肌球 0.132 + 缩放 1.0 → 肩头一颗 0.29m 的"健美球"，
+     配合 0.366 的肩关节外展，正面看就是充气球肩膀；收到 0.102 并内收压扁 */
   [-1, 1].forEach(s => {
-    part(torso, new THREE.SphereGeometry(0.085 * (0.72 + 0.28 * S.sh), 12, 10), clothM,
-         [s * 0.115, 0.695, -0.005], null, [1.5, 0.62 + (S.sh - 1) * 0.10, 0.95]);
-    part(torso, new THREE.SphereGeometry(0.132, 16, 12), clothM,
-         [s * 0.338 * S.sh, 0.645, 0], null, [1.0 * S.sh, 1.02, 1.0]);
+    part(torso, new THREE.SphereGeometry(0.075 * (0.72 + 0.28 * S.sh), 12, 10), clothM,
+         [s * 0.115, 0.695, -0.005], null, [1.35, 0.54 + (S.sh - 1) * 0.10, 0.92]);
+    part(torso, new THREE.SphereGeometry(0.102, 16, 12), clothM,
+         [s * 0.330 * S.sh, 0.648, 0], null, [0.92 * S.sh, 0.95, 0.95]);
   });
+  /* ⑪ 斜方肌坡度：颈根→肩峰补一道斜面，削掉"衣架直角肩"（男女通用，藏在衣物层下） */
+  [-1, 1].forEach(s => part(torso, new THREE.BoxGeometry(0.245, 0.026, 0.078), clothM,
+       [s * 0.150, 0.710, -0.006], [0, 0, -s * 0.30],
+       [1, F ? 0.65 : 1, 1], false));
 
   /* ---------- 男性肌肉线条：背阔肌 / 前锯肌 / 腹直肌 / 颈根 ---------- */
   if (!F){
-    /* 背阔肌：从腋下向腰收，形成 V 字倒三角（隔着 T 恤也能看出轮廓） */
-    [-1, 1].forEach(s => part(torso, new THREE.SphereGeometry(0.150, 18, 14), clothM,
-         [s * 0.152 * S.sh, 0.500, -0.086], null, [0.88, 1.08, 0.60], false));
+    /* 背阔肌：从腋下向腰收，形成 V 字倒三角（隔着 T 恤也能看出轮廓）
+       ⑧ 身材瘦身：0.150 → 0.120，收薄收进躯干轮廓内 */
+    [-1, 1].forEach(s => part(torso, new THREE.SphereGeometry(0.120, 18, 14), clothM,
+         [s * 0.140 * S.sh, 0.500, -0.076], null, [0.80, 1.02, 0.52], false));
     /* 前锯肌：肋侧三枚小齿 */
     [-1, 1].forEach(s => { for (let i = 0; i < 3; i++)
-      part(torso, new THREE.SphereGeometry(0.034, 8, 6), clothM,
-           [s * (0.146 - i * 0.012), 0.436 - i * 0.054, 0.070 - i * 0.006], null,
+      part(torso, new THREE.SphereGeometry(0.027, 8, 6), clothM,
+           [s * (0.140 - i * 0.012), 0.436 - i * 0.054, 0.066 - i * 0.006], null,
            [0.72, 1.0, 0.60], false); });
     /* 腹直肌：面料下隐约的块面（越往下越收） */
     for (let i = 0; i < 2; i++) [-1, 1].forEach(s =>
-      part(torso, new THREE.SphereGeometry(0.044, 10, 8), clothM,
-           [s * 0.052, 0.362 - i * 0.074, 0.106 - i * 0.004], null,
+      part(torso, new THREE.SphereGeometry(0.037, 10, 8), clothM,
+           [s * 0.048, 0.362 - i * 0.074, 0.096 - i * 0.004], null,
            [1.15, 0.82, 0.50], false));
     /* 颈根斜方肌 + 喉结 */
-    [-1, 1].forEach(s => part(torso, new THREE.SphereGeometry(0.060, 10, 8), skinM,
+    [-1, 1].forEach(s => part(torso, new THREE.SphereGeometry(0.050, 10, 8), skinM,
          [s * 0.050, 0.700, -0.030], null, [1.25, 0.60, 0.90], false));
     part(torso, new THREE.SphereGeometry(0.019, 10, 8), skinM,
          [0, 0.742, 0.062], null, [1.0, 1.05, 0.85], false);
@@ -2550,9 +2744,17 @@ function buildCharacter(cfg){
        [0, 0.462, badgeZ + 0.002], null, null, false);
 
   /* ---------- 颈 + 头 ---------- */
-  const nk = F ? 0 : (S.sh - 1) * 0.55;                            // 肌肉男的粗颈
+  const nk = F ? 0 : (S.sh - 1) * 0.35;                            /* ⑧ 瘦身：粗颈系数 0.55 → 0.35 */
   part(torso, new THREE.CylinderGeometry(0.060 * (1 + nk), 0.076 * (1 + nk), 0.15, 14), skinM,
        [0, 0.705, 0.005]);
+  if (!F){                                                             /* ⑨ 喉结：男性颈部细节 */
+    part(torso, new THREE.SphereGeometry(0.0075, 8, 6), skinM,
+         [0, 0.752, 0.058], null, [1, 0.80, 0.70], false);
+  }
+  /* ⑪ 胸锁乳突肌：耳后→胸骨柄的两条斜索，露领角色（西装/衬衫）颈部不再是一根光管 */
+  [-1, 1].forEach(s => part(torso, new THREE.BoxGeometry(0.013, 0.088, 0.015), skinM,
+       [s * 0.030, 0.730, 0.056], [-0.40, 0, s * 0.34],
+       [1, 1, F ? 0.6 : 1], false));
   if (P.outfit === "suit" || P.outfit === "open"){
     /* 衬衫领（本项改造 ③）：上移 6mm / 前移 8mm / 领口放大 6~10mm
        —— 旧版领子前后同深、颜色又和上衣板重合，正脸只剩后脖颈一圈白边，读不出"翻领" */
@@ -2619,36 +2821,49 @@ function buildCharacter(cfg){
   const lashM  = toon(0x120e0a);
   const scleraM = toon(0xf4f8fc);
 
-  /* 眼：眼白 + 虹膜环 + 虹膜 + 瞳孔 + 双高光 + 眼睑/睫毛（眨眼整体 Y 压缩） */
+  /* 眼：眼白 + 虹膜环 + 虹膜 + 瞳孔 + 双高光 + 眼睑/睫毛（眨眼整体 Y 压缩）
+     ⑨ 细节轮：虹膜 54%→62% 眼占比（远景不再是黑点眼）、瞳孔/高光同步放大、
+     上眼睑双段杏仁坡、双眼皮褶（headG 静态，不随眨眼压缩） */
+  const scleraHi = toon(0xf8fbfe);
   [-1, 1].forEach(s => {
     const eye = new THREE.Group();
     eye.position.set(s * 0.047, 0.010, 0.088);
     headG.add(eye);
     part(eye, new THREE.SphereGeometry(0.0245, 14, 12), scleraM,
          [0, 0, 0], null, [0.92, 1.0, 0.62], false);
-    part(eye, new THREE.TorusGeometry(0.0138, 0.0032, 8, 20), toon(shade(P.iris || 0x2a1d12, 0.70)),
+    part(eye, new THREE.SphereGeometry(0.0220, 12, 10), scleraHi,
+         [s * 0.003, 0.003, 0.004], null, [0.86, 0.92, 0.55], false); // 眼白受光面
+    part(eye, new THREE.TorusGeometry(0.0158, 0.0034, 8, 20), toon(shade(P.iris || 0x2a1d12, 0.70)),
          [0, -0.001, 0.011], null, [1, 1, 0.60], false);              // 虹膜外环
-    part(eye, new THREE.SphereGeometry(0.0132, 14, 12), irisM,
-         [0, -0.001, 0.011], null, [1, 1, 0.52], false);              // 虹膜
-    part(eye, new THREE.SphereGeometry(0.0062, 10, 8), toon(0x08090c),
-         [0, -0.001, 0.0165], null, [1, 1, 0.5], false);              // 瞳孔
-    part(eye, new THREE.SphereGeometry(0.0050, 8, 6), toon(0xffffff),
-         [s * 0.008, 0.009, 0.019], null, null, false);               // 主高光
-    part(eye, new THREE.SphereGeometry(0.0026, 6, 5), toon(0xdff1ff),
-         [-s * 0.007, -0.008, 0.018], null, null, false);             // 副高光
-    part(eye, new THREE.BoxGeometry(0.052, 0.016, 0.016), skinM,
-         [0, 0.021, 0.002], [0.18, 0, 0], null, false);               // 上眼睑
-    part(eye, new THREE.BoxGeometry(0.050, 0.008, 0.012), lashM,
-         [0, 0.026, 0.006], [0, 0, -s * 0.05], null, false);          // 上睑线
+    part(eye, new THREE.SphereGeometry(0.0152, 14, 12), irisM,
+         [0, -0.001, 0.011], null, [1, 1, 0.50], false);              // 虹膜
+    part(eye, new THREE.SphereGeometry(0.0100, 10, 8), toon(shade(P.iris || 0x2a1d12, 1.35)),
+         [0, -0.001, 0.0125], null, [1, 1, 0.46], false);             // 虹膜内圈（放射感）
+    part(eye, new THREE.SphereGeometry(0.0070, 10, 8), toon(0x08090c),
+         [0, -0.001, 0.0168], null, [1, 1, 0.5], false);              // 瞳孔
+    part(eye, new THREE.SphereGeometry(0.0058, 8, 6), toon(0xffffff),
+         [s * 0.008, 0.009, 0.0195], null, null, false);              // 主高光
+    part(eye, new THREE.SphereGeometry(0.0030, 6, 5), toon(0xdff1ff),
+         [-s * 0.007, -0.009, 0.0185], null, null, false);            // 副高光
+    /* 上眼睑双段：内眼角段平缓、外眼角段上挑，杏仁形轮廓 */
+    part(eye, new THREE.BoxGeometry(0.028, 0.015, 0.016), skinM,
+         [-s * 0.013, 0.020, 0.002], [0.16, 0, s * 0.06], null, false);
+    part(eye, new THREE.BoxGeometry(0.028, 0.016, 0.016), skinM,
+         [s * 0.013, 0.022, 0.002], [0.20, 0, -s * 0.04], null, false);
+    part(eye, new THREE.BoxGeometry(0.050, 0.009, 0.012), lashM,
+         [0, 0.027, 0.006], [0, 0, -s * 0.05], null, false);          // 上睑线（加粗）
     for (let i = 0; i < 3; i++){                                       // 睫毛（外眼角渐长）
       part(eye, new THREE.BoxGeometry(0.010, 0.0035, 0.006), lashM,
-           [s * (0.020 + i * 0.004), 0.028 + i * 0.002, 0.008],
+           [s * (0.020 + i * 0.004), 0.029 + i * 0.002, 0.008],
            [0, 0, -s * (0.30 + i * 0.16)], null, false);
     }
     part(eye, new THREE.BoxGeometry(0.044, 0.005, 0.010), skinD,
          [0, -0.020, 0.006], null, null, false);                       // 下眼睑
     part(eye, new THREE.SphereGeometry(0.0058, 8, 6), skinD,
          [-s * 0.021, -0.002, 0.006], [0, 0, 0], [1, 0.8, 0.6], false); // 内眼角
+    /* 双眼皮褶：静态挂 headG，眨眼只压缩 eye 组，褶线不动才真实 */
+    part(headG, new THREE.BoxGeometry(0.040, 0.004, 0.009), skinD,
+         [s * 0.047, 0.036, 0.098], [0.14, 0, s * 0.06], null, false);
     eyes.push(eye);
 
     /* 眉：三段式拱形（本项改造 ①：加厚 2mm、外移 4mm）
@@ -2659,6 +2874,11 @@ function buildCharacter(cfg){
      [s * 0.015, 0.003, 0.023, 0.012, -s * 0.20]].forEach(([dx, dy, w, h, rz]) => {
       brows.push(part(headG, new THREE.BoxGeometry(w, h, 0.015), browM,
         [bx + dx, by + dy, 0.103], [0, 0, rz], null, false));
+    });
+    /* ⑨ 野生眉：眉身上缘两根走向毛丝，顺眉拱外上挑，近看有毛流感 */
+    [[-s * 0.008, 0.010, s * 0.30], [s * 0.010, 0.008, -s * 0.22]].forEach(([dx, dy, rz]) => {
+      part(headG, new THREE.BoxGeometry(0.004, 0.015, 0.012), browM,
+           [bx + dx, by + dy + 0.004, 0.101], [0.10, 0, rz], null, false);
     });
     /* 眼窝阴影 + 卧蚕 */
     part(headG, new THREE.BoxGeometry(0.050, 0.010, 0.010), skinD,
@@ -2682,6 +2902,11 @@ function buildCharacter(cfg){
     part(headG, new THREE.SphereGeometry(0.0048, 6, 5), toon(shade(P.skin, 0.62)),
          [s * 0.0125, -0.043, 0.0995], null, [1, 0.8, 0.7], false);
   });
+  /* ⑨ 鼻梁受光条 + 鼻头中脊：软团五件套有了明暗脊线才有"挺"感 */
+  part(headG, new THREE.BoxGeometry(0.008, 0.052, 0.010), toon(shade(P.skin, 1.12)),
+       [0, -0.008, 0.104], [0.12, 0, 0], null, false);
+  part(headG, new THREE.BoxGeometry(0.003, 0.016, 0.008), skinD,
+       [0, -0.032, 0.112], [0.20, 0, 0], null, false);
   /* 嘴：人中 + 唇珠 + 上下唇 + 唇线 + 可开合口腔 + 下巴窝 */
   part(headG, new THREE.BoxGeometry(0.004, 0.017, 0.008), skinD,
        [0, -0.046, 0.098], null, null, false);
@@ -2702,6 +2927,9 @@ function buildCharacter(cfg){
        [0, 0.0, -0.004], null, [1, 0.02, 1], false);
   part(headG, new THREE.SphereGeometry(0.014, 10, 8), skinD,
        [0, -0.100, 0.070], null, [1.4, 0.30, 0.50], false);            // 下巴窝
+  /* ⑨ 口角锚点：两颗暗点压住嘴角（淡压扁，远看是表情深度、不是钉） */
+  [-1, 1].forEach(s => part(headG, new THREE.SphereGeometry(0.0030, 6, 5), toon(shade(P.skin, 0.78)),
+       [s * 0.022, -0.066, 0.090], null, [1, 0.62, 0.55], false));
   /* 耳：耳廓 + 耳窝 + 耳垂（本项改造 ①）
      旧版耳外缘只有 0.126，而各发型发壳的侧向包络在 0.13~0.147，侧脸基本看不到耳朵；
      这里整体外移 7mm 并放大一圈。戴耳机的角色（printability）保持原位，
@@ -2740,6 +2968,13 @@ function buildCharacter(cfg){
     });
     part(headG, new THREE.BoxGeometry(0.150, 0.058, 0.050), hairM,
          [0, 0.016, -0.112], null, null, false);                       // 后颈发脚
+    /* ⑨ 细节轮：发流沟 + 头顶飞发 + 发际毛囊点 */
+    [-1, 1].forEach(s => part(headG, new THREE.BoxGeometry(0.004, 0.004, 0.090), hairD,
+         [s * 0.048, 0.110, 0.026], [0.26, 0, s * 0.08], null, false));
+    part(headG, new THREE.CapsuleGeometry(0.006, 0.028, 6, 8), hairL,
+         [0.022, 0.130, 0.008], [0.50, 0, 0.35], null, false);
+    [-1, 1].forEach(s => part(headG, new THREE.SphereGeometry(0.006, 6, 5), hairD,
+         [s * 0.048, 0.100, 0.076], null, [1, 0.6, 0.7], false));
   } else if (hs === "fade"){                              // 渐变短寸
     part(headG, new THREE.SphereGeometry(headR + 0.009, 22, 18, 0, Math.PI * 2, 0, Math.PI * 0.56),
          hairM, [0, 0.002, -hairShift], null, [1.03, 1.05, 1.02 * hairSquash]);
@@ -2755,6 +2990,8 @@ function buildCharacter(cfg){
          [s * 0.096, -0.016, 0.030], null, [0.55, 1.05, 0.75], false)); // 鬓角
     part(headG, new THREE.BoxGeometry(0.140, 0.046, 0.040), hairDark,
          [0, -0.032, -0.092], null, [1, 1, 0.85], false);               // 后颈发脚（短寸也需要，否则后脑露肤色）
+    part(headG, new THREE.CapsuleGeometry(0.005, 0.020, 6, 8), hairL,   // ⑨ 顶上飞发
+         [-0.018, 0.118, 0.014], [0.55, 0, -0.30], null, false);
   } else if (hs === "curl"){                              // 卷发
     /* 发壳侧向 1.10 → 0.99（本项改造 ②）：旧值把侧脸连耳一起包住，耳朵完全不可见；
        收窄后蓬松度交给 y/z 缩放维持，造型依旧是"顶上厚、两侧收" */
@@ -2764,7 +3001,7 @@ function buildCharacter(cfg){
       const ang = (i / 20) * Math.PI * 2 + (i % 3) * 0.10;
       const layer = i % 2;
       const rr = (0.104 + (i % 3) * 0.013) * (layer ? 0.86 : 1.0);
-      part(headG, new THREE.SphereGeometry(0.027 + (i % 2) * 0.009, 10, 8), layer ? hairL : hairM,
+      part(headG, new THREE.SphereGeometry(0.024 + (i % 3) * 0.008, 10, 8), layer ? hairL : hairM,   // ⑨ 三档卷径节奏
            [Math.sin(ang) * rr, (layer ? 0.098 : 0.070) + Math.cos(ang * 2) * 0.018,
             Math.cos(ang) * rr * 0.95 - 0.010], null, null, false);
     }
@@ -2803,6 +3040,11 @@ function buildCharacter(cfg){
     /* 后颈碎发：层次收尾，后脑不塌 */
     [-1, 1].forEach(s => part(headG, new THREE.BoxGeometry(0.034, 0.016, 0.024), hairL,
          [s * 0.048, -0.050, -0.092], [0.22, 0, s * 0.10], null, false));
+    /* ⑨ 外翘细卷：两根不安分的细卷发丝，剪影更有生活感 */
+    [-1, 1].forEach(s => part(headG, new THREE.CapsuleGeometry(0.007, 0.030, 6, 8), hairHi,
+         [s * 0.078, 0.116, 0.036], [0.60, 0, s * 0.70], null, false));
+    part(headG, new THREE.CapsuleGeometry(0.006, 0.024, 6, 8), hairL,
+         [0.030, 0.124, -0.010], [0.45, 0, -0.40], null, false);
   } else if (hs === "ponytail"){                          // 高马尾（协调员）
     part(headG, new THREE.SphereGeometry(headR + 0.014, 22, 18, 0, Math.PI * 2, 0, Math.PI * 0.62),
          hairM, [0, 0.002, -0.006 - hairShift], null, [1.06, 1.10, 1.06 * hairSquash]);
@@ -2855,6 +3097,13 @@ function buildCharacter(cfg){
     for (let i = 0; i < 3; i++)
       part(headG, new THREE.BoxGeometry(0.009, 0.044, 0.062), i === 1 ? hairHi : hairL,
            [-0.048 + i * 0.048, 0.104, 0.044], [0.24, 0, (i - 1) * 0.12], null, false);
+    /* ⑨ 马尾发束暗丝 + 刘海中缝：一束一束的扎发质感，刘海不再是一整块门帘 */
+    [-1, 1].forEach(s => part(headG, new THREE.BoxGeometry(0.005, 0.150, 0.005), hairD,
+         [s * 0.018, -0.055, -0.208], [0.46, 0, 0], null, false));
+    part(headG, new THREE.BoxGeometry(0.006, 0.030, 0.012), hairD,
+         [0, 0.094, 0.084], [0.22, 0, 0], null, false);
+    part(headG, new THREE.CapsuleGeometry(0.006, 0.026, 6, 8), hairHi,  // 额角碎飞发
+         [-0.070, 0.098, 0.068], [0.55, 0, -0.55], null, false);
   } else if (hs === "sidePart"){                          // 侧分背头（韩日帅大叔）
     /* 发壳侧向 1.05 → 0.99（本项改造 ②）：发壳包络原来 0.137，比耳外缘（0.134）还大，
        耳朵整个埋在发壳里；收窄后耳廓从发壳外侧探出，侧脸能读出发际—耳—下颌的轮廓 */
@@ -2865,9 +3114,9 @@ function buildCharacter(cfg){
       part(headG, new THREE.BoxGeometry(0.198 - i * 0.016, 0.028, 0.118 - i * 0.018), i === 1 ? hairHi : hairM,
            [0.008, 0.098 - i * 0.026, 0.044 - i * 0.030], [0.24 + i * 0.10, 0, 0.05], null, false);
     }
-    part(headG, new THREE.BoxGeometry(0.006, 0.009, 0.100), hairD,
+    part(headG, new THREE.BoxGeometry(0.008, 0.009, 0.100), hairD,       // ⑨ 缝加深
          [-0.030, 0.116, 0.014], [0.12, 0, 0.16], null, false);        // 侧分缝
-    part(headG, new THREE.BoxGeometry(0.086, 0.028, 0.074), hairHi,
+    part(headG, new THREE.BoxGeometry(0.086, 0.028, 0.074), hairL,       /* ⑨ 大片降亮：hairHi→hairL，告别"创可贴" */
          [0.062, 0.112, 0.046], [0.26, 0, -0.10], null, false);        // 顶部高光斜片
     [-1, 1].forEach(s => {
       part(headG, new THREE.BoxGeometry(0.028, 0.084, 0.058), hairM,
@@ -2895,21 +3144,27 @@ function buildCharacter(cfg){
     /* 后颈碎发：两侧收尾，脖颈线条利落 */
     [-1, 1].forEach(s => part(headG, new THREE.BoxGeometry(0.036, 0.016, 0.024), hairL,
          [s * 0.050, -0.048, -0.094], [0.22, 0, s * 0.10], null, false));
+    /* ⑨ 发流沟 + 飞发（geometry 侧分背头） */
+    [-1, 1].forEach(s => part(headG, new THREE.BoxGeometry(0.004, 0.004, 0.086), hairD,
+         [s * 0.042 + 0.008, 0.112, 0.028], [0.25, 0, s * 0.10], null, false));
+    part(headG, new THREE.CapsuleGeometry(0.006, 0.030, 6, 8), hairL,
+         [0.040, 0.132, 0.004], [0.55, 0, 0.30], null, false);
   } else if (hs === "koreanSwept"){                       // 韩剧帅大叔侧分背头（printability 本项改造）
     /* 发壳整体后移 14mm、抬高（theta 0.58π → 0.54π）：额头整片让空，五官不被压；
        侧向 0.97 贴颅收薄，耳位留给耳机耳罩（耳罩内缘 0.112），发壳不再顶到罩沿 */
     part(headG, new THREE.SphereGeometry(headR + 0.013, 24, 18, 0, Math.PI * 2, 0, Math.PI * 0.54),
          hairM, [0, 0.010, -0.014 - hairShift], null, [0.97, 1.10, 1.03 * hairSquash]);
-    /* 顶部四层背片：越上层越亮（hairM→hairL→hairHi），向后上方梳出体积与光泽层次 */
+    /* 顶部四层背片：越上层越亮（hairM→hairL），向后上方梳出体积与光泽层次
+       ⑨ hairHi 大片降为 hairL：黑发上 hair2 棕片像贴了张便签 */
     for (let i = 0; i < 4; i++){
       part(headG, new THREE.BoxGeometry(0.196 - i * 0.020, 0.030 - i * 0.002, 0.126 - i * 0.020),
-           i === 3 ? hairHi : (i === 2 ? hairL : hairM),
+           i === 3 ? hairL : hairM,
            [0.010 - i * 0.004, 0.104 - i * 0.024, 0.050 - i * 0.028], [0.30 + i * 0.10, 0, 0.06], null, false);
     }
     /* 侧分缝 + 缝两侧走向分明的大片（主侧提亮压出光泽带） */
     part(headG, new THREE.BoxGeometry(0.005, 0.010, 0.112), hairD,
          [-0.040, 0.118, 0.010], [0.14, 0, 0.22], null, false);        // 侧分缝
-    part(headG, new THREE.BoxGeometry(0.092, 0.026, 0.086), hairHi,
+    part(headG, new THREE.BoxGeometry(0.092, 0.026, 0.086), hairL,       /* ⑨ 大片降亮 */
          [0.058, 0.116, 0.048], [0.30, 0, -0.14], null, false);        // 主侧高光斜片
     part(headG, new THREE.BoxGeometry(0.070, 0.024, 0.070), hairL,
          [-0.086, 0.112, 0.044], [0.28, 0, 0.18], null, false);        // 副侧亮片
@@ -2934,6 +3189,11 @@ function buildCharacter(cfg){
          [0, -0.032, -0.100], null, [1, 1, 0.85], false);
     [-1, 1].forEach(s => part(headG, new THREE.BoxGeometry(0.030, 0.018, 0.026), hairL,
          [s * 0.052, -0.046, -0.096], [0.20, 0, s * 0.10], null, false));
+    /* ⑨ 发流沟 + 外翘飞发（printability 韩系侧分） */
+    [-1, 1].forEach(s => part(headG, new THREE.BoxGeometry(0.004, 0.004, 0.088), hairD,
+         [s * 0.040 + 0.010, 0.114, 0.024], [0.28, 0, s * 0.08], null, false));
+    part(headG, new THREE.CapsuleGeometry(0.006, 0.028, 6, 8), hairL,
+         [0.048, 0.128, -0.006], [0.60, 0, 0.40], null, false);
   } else if (hs === "taperFade"){                         // 低位渐变 + 逗号刘海（年轻韩系）
     /* 发壳侧向 1.03 → 1.00（本项改造 ②）：低位渐变人设本就该两侧收薄，顺带把耳位让出来 */
     part(headG, new THREE.SphereGeometry(headR + 0.011, 22, 18, 0, Math.PI * 2, 0, Math.PI * 0.58),
@@ -2958,6 +3218,8 @@ function buildCharacter(cfg){
            [-0.040 + i * 0.040, 0.112 + (i % 2) * 0.008, 0.020 - i * 0.014], [0.20, 0, 0], null, false);
     part(headG, new THREE.BoxGeometry(0.144, 0.050, 0.042), hairD,
          [0, -0.030, -0.094], null, [1, 1, 0.85], false);              // 后颈发脚
+    part(headG, new THREE.CapsuleGeometry(0.006, 0.024, 6, 8), hairHi,  // ⑨ 顶上飞发
+         [0.014, 0.126, 0.020], [0.50, 0, 0.25], null, false);
   } else if (hs === "wolfcut"){                           // 狼尾层次（银发帅大叔）
     /* 发壳侧向 1.08 → 0.98（本项改造 ②）：银发大叔原来两侧最厚，耳位被彻底盖住 */
     part(headG, new THREE.SphereGeometry(headR + 0.020, 22, 18, 0, Math.PI * 2, 0, Math.PI * 0.60),
@@ -2970,6 +3232,13 @@ function buildCharacter(cfg){
       part(headG, new THREE.SphereGeometry(0.032 + (i % 2) * 0.008, 10, 8), up ? hairHi : hairM,
            [Math.sin(ang) * rr, (up ? 0.098 : 0.072) + Math.cos(ang * 2) * 0.014,
             Math.cos(ang) * rr * 0.92 - 0.012], null, null, false);
+    }
+    /* ⑨ 白发层次：卷球间隙补深色内层球，银丝云不再白茫茫一片 */
+    for (let i = 0; i < 5; i++){
+      const ang = (i / 5) * Math.PI * 2 + 0.35;
+      part(headG, new THREE.SphereGeometry(0.015, 8, 6), hairD,
+           [Math.sin(ang) * 0.092, 0.088 + Math.cos(ang * 2) * 0.012,
+            Math.cos(ang) * 0.084 - 0.010], null, null, false);
     }
     /* 两侧鬃状长片 + 后颈狼尾（本项改造 ②：长片从"盖耳"后移到"披在耳后"，
        狼尾该有的耳后垂落感才对，同时把耳前让空） */
@@ -2995,8 +3264,15 @@ function buildCharacter(cfg){
            [s * 0.104, -0.034, 0.024], null, [0.60, 1.30, 0.70], false); // 鬓角收尖
     });
     for (let i = 0; i < 3; i++)
-      part(headG, new THREE.BoxGeometry(0.011, 0.056, 0.078), i === 1 ? hairL : hairHi,
+      part(headG, new THREE.BoxGeometry(0.011, 0.056, 0.078), i === 1 ? hairHi : hairL,
            [-0.052 + i * 0.052, 0.110, 0.030], [0.26, 0, (i - 1) * 0.14], null, false);
+    /* ⑨ 银丝飞发 + 狼尾细丝（optimization 狼尾层次） */
+    part(headG, new THREE.CapsuleGeometry(0.007, 0.032, 6, 8), hairHi,
+         [-0.030, 0.134, 0.010], [0.50, 0, -0.45], null, false);
+    part(headG, new THREE.CapsuleGeometry(0.006, 0.026, 6, 8), hairHi,
+         [0.056, 0.126, 0.018], [0.55, 0, 0.50], null, false);
+    [-1, 1].forEach(s => part(headG, new THREE.CapsuleGeometry(0.005, 0.036, 6, 8), hairL,
+         [s * 0.048, -0.118, -0.128], [0.50, 0, s * 0.22], null, false));
   } else {
     part(headG, new THREE.SphereGeometry(headR + 0.012, 20, 16, 0, Math.PI * 2, 0, Math.PI * 0.58),
          hairM, [0, 0.006, -0.010 - hairShift], null, [1.06, 1.12, 1.08 * hairSquash]);
@@ -3010,20 +3286,33 @@ function buildCharacter(cfg){
 
   /* 配饰：眼镜（方框 / 金丝圆框）
      （本项改造 ①：框面/鼻托/鼻梁架整体外移 6~8mm —— 旧版镜框 z=0.104
-     与头球正面 0.105 几乎重合，geometry 的方框直接被脸吞掉，只剩两条镜腿） */
+     与头球正面 0.105 几乎重合，geometry 的方框直接被脸吞掉，只剩两条镜腿）
+     ⑨ 细节轮：镜腿从"38mm 短棍"改三段式（前段斜杆 + 耳弯钩 + 腿尖），
+     真正架到耳后；补铰链球与鼻梁拱——之前镜腿悬在半空根本没架住 */
   if (P.glasses || P.roundGlasses){
     const frameM = toon(P.roundGlasses ? 0xc9a24a : 0xb9c4d0);
     const lensR  = P.roundGlasses ? 0.0315 : 0.030;
     [-1, 1].forEach(s => {
       part(headG, new THREE.TorusGeometry(lensR, P.roundGlasses ? 0.0034 : 0.0042, 8, 18), frameM,
            [s * 0.047, 0.010, 0.112], null, [1.0, P.roundGlasses ? 0.90 : 0.86, 1.0], false);
-      part(headG, new THREE.BoxGeometry(0.038, 0.005, 0.005), frameM,
-           [s * 0.100, 0.014, 0.062], [0, s * 0.45, 0], null, false);   // 镜腿
+      /* 前段斜杆：镜框外缘 → 耳上点，沿颅侧后收 */
+      part(headG, new THREE.BoxGeometry(0.005, 0.005, 0.096), frameM,
+           [s * 0.096, 0.016, 0.066], [0, s * 0.38, 0], null, false);
+      /* 耳弯钩：耳上向后下勾，腿尖垂到耳后根 */
+      part(headG, new THREE.TorusGeometry(0.013, 0.0028, 6, 12, Math.PI * 0.85), frameM,
+           [s * 0.114, -0.002, 0.008], [0, s * 1.57, s * 0.35], null, false);
+      part(headG, new THREE.BoxGeometry(0.004, 0.020, 0.004), frameM,
+           [s * 0.110, -0.022, -0.008], [0.15, 0, s * 0.08], null, false);
+      part(headG, new THREE.SphereGeometry(0.0042, 6, 5), frameM,      // 铰链球
+           [s * 0.074, 0.014, 0.104], null, null, false);
       part(headG, new THREE.BoxGeometry(0.010, 0.006, 0.012), frameM,
            [s * 0.022, 0.004, 0.108], null, null, false);               // 鼻托
+      /* 鼻梁拱：中梁 + 两侧上挑短杆，拱形贴鼻根 */
+      part(headG, new THREE.BoxGeometry(P.roundGlasses ? 0.038 : 0.030, 0.005, 0.005), frameM,
+           [0, 0.014, 0.119], null, null, false);
+      part(headG, new THREE.BoxGeometry(0.012, 0.004, 0.005), frameM,
+           [s * 0.020, 0.020, 0.117], [0, 0, -s * 0.42], null, false);
     });
-    part(headG, new THREE.BoxGeometry(P.roundGlasses ? 0.038 : 0.030, 0.005, 0.005), frameM,
-         [0, 0.014, 0.119], null, null, false);                         // 鼻梁架
   }
   /* 耳饰：珍珠钉 + 小环 */
   if (P.earrings){
@@ -3068,20 +3357,20 @@ function buildCharacter(cfg){
     arm.rotation.z = s * (F ? 0.10 : 0.13);
     torso.add(arm);
 
-    const upperR = (F ? 0.070 : 0.086) * (F ? 1.0 : S.ar);
-    const foreR  = (F ? 0.047 : 0.060) * (F ? 1.0 : S.ar);
+    const upperR = (F ? 0.060 : 0.066) * (F ? 1.0 : S.ar);   /* ⑧ 瘦身：0.086 → 0.066，上臂直径 18cm → 13cm */
+    const foreR  = (F ? 0.041 : 0.047) * (F ? 1.0 : S.ar);   /* 0.060 → 0.047 */
     const sleeve = (P.outfit === "cozy") ? knitM
                  : (P.outfit === "suit" || P.outfit === "hoodie" ||
                     P.outfit === "tee"  || P.outfit === "open") ? clothM : skinM;
     const longSleeve = (P.outfit === "suit" || P.outfit === "hoodie" || P.outfit === "cozy");
 
-    /* 肩：三角肌（男硬朗）/ 圆润肩头（女） */
-    part(arm, new THREE.SphereGeometry(upperR + (F ? 0.012 : 0.016), 12, 10), sleeve,
-         [0, 0.008, 0], null, [1.0, F ? 0.96 : 1.02, 1.0], false);
+    /* 肩：三角肌（男硬朗）/ 圆润肩头（女）—— ⑧ 瘦身：+0.016 → +0.010，肩帽收小 */
+    part(arm, new THREE.SphereGeometry(upperR + (F ? 0.008 : 0.010), 12, 10), sleeve,
+         [0, 0.008, 0], null, [1.0, F ? 0.94 : 0.96, 1.0], false);
 
     if (P.outfit === "tee" || P.outfit === "hoodie"){
-      part(arm, new THREE.CylinderGeometry(upperR + 0.014, upperR + 0.011, 0.18, 14), sleeve, [0, -0.090, 0]);
-      part(arm, new THREE.TorusGeometry(upperR + 0.016, 0.008, 6, 14), toon(shade(P.cloth, 0.85)),
+      part(arm, new THREE.CylinderGeometry(upperR + 0.010, upperR + 0.008, 0.18, 14), sleeve, [0, -0.090, 0]);
+      part(arm, new THREE.TorusGeometry(upperR + 0.012, 0.008, 6, 14), toon(shade(P.cloth, 0.85)),
            [0, -0.180, 0], [1.57, 0, 0], null, false);                 // 袖口罗纹
       const u = limb(arm, 0.20, upperR, foreR, skinM); u.position.y = -0.17;
       arm.add(u);
@@ -3089,7 +3378,7 @@ function buildCharacter(cfg){
       const u = limb(arm, 0.30, upperR, foreR, sleeve);
       arm.add(u);
       /* 卷起的袖口 + 袖扣 */
-      part(arm, new THREE.TorusGeometry(foreR + 0.016, 0.013, 8, 14), clothD,
+      part(arm, new THREE.TorusGeometry(foreR + 0.012, 0.012, 8, 14), clothD,
            [0, -0.255, 0], [1.57, 0, 0], null, false);
       part(arm, new THREE.CylinderGeometry(0.008, 0.008, 0.005, 8), accentM,
            [0, -0.252, foreR + 0.017], [1.57, 0, 0], null, false);
@@ -3107,14 +3396,20 @@ function buildCharacter(cfg){
         part(arm, new THREE.TorusGeometry(foreR + 0.010, 0.012, 8, 16), clothM,
              [0, -0.222, 0], [1.57, 0, 0], null, false);
       } else {
-        part(arm, new THREE.TorusGeometry(0.086, 0.018, 8, 16), clothD,
+        part(arm, new THREE.TorusGeometry(upperR + 0.012, 0.016, 8, 16), clothD,
              [0, -0.055, 0], [1.57, 0, 0], null, false);               // 短袖口
       }
-      part(arm, new THREE.SphereGeometry(0.070 * (F ? 0.9 : 1.0), 12, 10), skinM,
-           [0, -0.115, 0.010], null, [1.0, 0.9, 0.95], false);         // 肱二头肌
-      if (!F) part(arm, new THREE.SphereGeometry(0.052, 10, 8), skinM,
-           [0, -0.085, -0.030], null, [1.0, 1.25, 0.70], false);       // 肱三头肌
     }
+
+    /* ⑪ 上臂肌群（全衣型统一）：肱二头肌前凸 + 肱三头肌后满——长袖用布色撑轮廓、
+       短袖裸肤用肤色；旧版只在 open 衫分支有，西装/卫衣/针织全是"圆柱臂"人台感 */
+    const musM = longSleeve ? sleeve : skinM;
+    part(arm, new THREE.SphereGeometry(upperR * (F ? 0.82 : 0.94), 12, 10), musM,
+         [0, -0.118, upperR * (F ? 0.28 : 0.36)], null,
+         [1.0, 1.40, F ? 0.78 : 0.88], false);                         // 肱二头肌
+    part(arm, new THREE.SphereGeometry(upperR * (F ? 0.68 : 0.82), 12, 10), musM,
+         [0, -0.098, -upperR * (F ? 0.34 : 0.44)], null,
+         [1.0, 1.50, 0.70], false);                                    // 肱三头肌
 
     const elbow = new THREE.Group();
     elbow.position.y = -0.30;
@@ -3124,7 +3419,7 @@ function buildCharacter(cfg){
     /* 裸露前臂：肱桡肌起伏 + 手腕收细 */
     if (!longSleeve){
       if (!F) part(elbow, new THREE.SphereGeometry(foreR * 1.02, 10, 8), skinM,
-           [0, -0.085, 0.004], null, [1.0, 1.55, 0.95], false);
+           [0, -0.085, 0.004], null, [1.0, 1.35, 0.90], false);
       part(elbow, new THREE.SphereGeometry(foreR * 0.78, 10, 8), skinM,
            [0, -0.286, 0], null, [1.0, 0.72, 1.0], false);            // 腕骨
     }
@@ -3139,6 +3434,14 @@ function buildCharacter(cfg){
          [s * 0.012, -0.024, 0.018], null, [1.0, 1.30, 0.60], false);   // 掌垫（拇指球）
     part(hand, new THREE.SphereGeometry(0.016, 8, 6), skinM,
          [s * -0.014, -0.052, 0.020], null, [1.0, 1.15, 0.60], false);  // 掌根
+    /* ⑪ 手背指节排：四枚掌指关节背侧隆起 + 伸肌腱浅棱 */
+    for (let i = 0; i < 4; i++){
+      const fx = -0.020 + i * 0.0145;
+      part(hand, new THREE.SphereGeometry(0.0062, 6, 5), skinM,
+           [fx, -0.066, -0.012], null, [1.15, 0.80, 0.75], false);
+      part(hand, new THREE.BoxGeometry(0.0035, 0.030, 0.004), skinM,
+           [fx, -0.048, -0.016], [0.15, 0, 0], null, false);
+    }
     /* 四指：指根 → 指节 两级分组，可按姿态做真实握持（捏/握/松） */
     const fingers = [];
     for (let i = 0; i < 4; i++){
@@ -3197,8 +3500,8 @@ function buildCharacter(cfg){
     leg.position.set(s * (F ? 0.125 : 0.118), -0.02, 0);
     torso.add(leg);
 
-    const thighR = F ? 0.150 : 0.118;
-    const calfR  = F ? 0.098 : 0.078;
+    const thighR = F ? 0.150 : 0.105;                               /* ⑨ 瘦身：男西裤/休闲裤修长化 0.118→0.105 */
+    const calfR  = F ? 0.098 : 0.070;                               /* ⑨ 小腿 0.078→0.070 */
     const t = limb(leg, 0.46, thighR, calfR * 1.05, pantsM);
     leg.add(t);
     /* 裤缝 / 褶皱 */
@@ -3222,6 +3525,23 @@ function buildCharacter(cfg){
       /* 西装裤脚折线 / 阔腿裤脚口 */
       part(knee, new THREE.CylinderGeometry(calfR * 1.14, calfR * 1.06, 0.045, 16), toon(shade(P.pants, 0.88)),
            [0, -0.372, 0], null, null, false);
+      /* ⑩ 膝弯折痕 + 踝部堆褶：裤腿不再是"塑料管"——布料在关节处有积压、在脚踝处有堆叠 */
+      [-0.400, -0.430].forEach((yy, i) =>
+        part(leg, new THREE.BoxGeometry(0.050 - i * 0.006, 0.007, 0.010), toon(shade(P.pants, 0.84)),
+             [0, yy, calfR * 1.16], [0.12, 0, 0], null, false));
+      [-0.312, -0.340].forEach((yy, i) =>
+        part(knee, new THREE.BoxGeometry(0.048 - i * 0.004, 0.006, 0.009), toon(shade(P.pants, 0.86)),
+             [0, yy, calfR * (1.12 - i * 0.06)], [0.06, 0, 0], null, false));
+    }
+
+    /* ⑪ 腓肠肌双头：内侧头低而大、外侧头高而小——小腿后侧轮廓不再是直筒。
+       材质恒用 pantsM：短裤角色的小腿圆柱本就是裤色（露肤层半径更小埋在内层），
+       若用肤色球会从裤管透出色斑；这里只做轮廓起伏，不改色 */
+    if (!F){
+      part(knee, new THREE.SphereGeometry(calfR * 0.74, 12, 10), pantsM,
+           [-s * 0.020, -0.155, -calfR * 0.40], null, [0.78, 1.40, 0.70], false);
+      part(knee, new THREE.SphereGeometry(calfR * 0.66, 12, 10), pantsM,
+           [s * 0.018, -0.118, -calfR * 0.40], null, [0.74, 1.32, 0.66], false);
     }
 
     /* 运动袜：高筒袜/中筒袜/隐形袜三档 */
@@ -3237,12 +3557,21 @@ function buildCharacter(cfg){
              [0, -0.412 + sockH, 0], [Math.PI / 2, 0, 0], null, false);   // 袜口罗纹
       }
     }
+    /* ⑪ 髌骨：膝前骨点（裤管正面关键鼓包；材质随裤色，避免短裤角色透肤色斑） */
+    part(knee, new THREE.SphereGeometry(calfR * 0.58, 10, 8), pantsM,
+         [0, -0.028, calfR * 0.82], null, [0.90, 1.20, 0.55], false);
     part(knee, new THREE.SphereGeometry(calfR * 0.86, 10, 8), skinM, [0, -0.415, 0], null, [1, 0.8, 1], false);
 
     /* 踝关节分组：脚掌可相对小腿旋转（走路的提踵/落地） */
     const ankle = new THREE.Group();
     ankle.position.y = -0.455;
     knee.add(ankle);
+
+    /* ⑪ 内外踝骨点：内踝高于外踝，脚踝不再是光圆柱（鞋口上方微露） */
+    part(ankle, new THREE.SphereGeometry(0.0125, 8, 6), skinM,
+         [-s * 0.026, 0.076, 0.004], null, [0.75, 1.0, 0.80], false);
+    part(ankle, new THREE.SphereGeometry(0.0115, 8, 6), skinM,
+         [s * 0.027, 0.062, 0.004], null, [0.75, 1.0, 0.80], false);
 
     /* 鞋：按 shoeStyle 分型（乐福鞋 / 跑鞋 / 基础板鞋） */
     const shoe = new THREE.Group();
@@ -3279,6 +3608,11 @@ function buildCharacter(cfg){
       part(shoe, new THREE.BoxGeometry(0.088, 0.008, 0.012), toon(0xdbe4ec),
            [0, 0.052, 0.040], null, null, false);
     }
+    /* ⑨ 鞋底分层线：大底与中底之间一条暗缝，三种鞋型都更立体 */
+    part(shoe, new THREE.BoxGeometry(0.136, 0.004, 0.292), toon(0x32383f),
+         [0, style === "loafer" ? 0.002 : -0.002, 0.044], null, null, false);
+    /* ⑩ 外八字站脚：双脚脚尖各外旋 ~7°，"立正"平行脚是人台感的重要来源 */
+    shoe.rotation.y = s * 0.13;
 
     leg.userData.knee = knee;
     leg.userData.ankle = ankle;
@@ -3334,6 +3668,30 @@ function buildCharacter(cfg){
     });
   });
 
+  mkProp("barbell", g => {        /* 举铁：奥林匹克杠铃（右手握点=道具原点 x=0，左手实测握在 x≈-0.79~-0.89，
+                                      杆 [-1.19, 0.26]、配重 [-1.12, 0.19] 落在双手外侧 ≥8cm，不夹手不贴脸） */
+    part(g, new THREE.CylinderGeometry(0.014, 0.014, 1.45, 10), toon(0xb8c4d0),
+         [-0.465, 0, 0], [0, 0, 1.57], null, false);
+    [-1, 1].forEach(s => {
+      const x = s < 0 ? -1.12 : 0.19;
+      part(g, new THREE.CylinderGeometry(0.045, 0.045, 0.14, 16), toon(0x2b3542),
+           [x, 0, 0], [0, 0, 1.57], null, false);
+      part(g, new THREE.CylinderGeometry(0.032, 0.032, 0.03, 12), toon(0x64748b),
+           [x + s * -0.10, 0, 0], [0, 0, 1.57], null, false);
+    });
+  });
+  mkProp("gooseneck", g => {      /* 手冲细口壶（pour-over 鹅颈壶） */
+    part(g, new THREE.CylinderGeometry(0.042, 0.048, 0.10, 12), toon(0x1f2937), [0, -0.01, 0], null, null, false);
+    part(g, new THREE.TorusGeometry(0.030, 0.007, 6, 12, Math.PI), toon(0x64748b), [0, 0.055, 0], null, null, false);
+    part(g, new THREE.CylinderGeometry(0.008, 0.006, 0.13, 6), toon(0x9aa7b6), [0.035, 0.02, 0], [0, 0, -1.0], null, false);
+    part(g, new THREE.CylinderGeometry(0.005, 0.004, 0.04, 6), toon(0x9aa7b6), [0.075, -0.05, 0], [0, 0, -0.35], null, false);
+  });
+  mkProp("teapot", g => {         /* 茶壶（冲茶） */
+    part(g, new THREE.SphereGeometry(0.052, 12, 10), toon(0xd97706), [0, 0, 0], null, [1, 0.85, 1], false);
+    part(g, new THREE.CylinderGeometry(0.018, 0.028, 0.035, 10), toon(0xb45309), [0, 0.048, 0], null, null, false);
+    part(g, new THREE.CylinderGeometry(0.008, 0.006, 0.055, 6), toon(0xd97706), [0.048, 0.01, 0], [0, 0, -0.9], null, false);
+    part(g, new THREE.TorusGeometry(0.028, 0.006, 6, 10, Math.PI), toon(0x92400e), [0, 0.02, -0.05], [0, 1.57, 0], null, false);
+  });
   mkProp("kettlebell", g => {     /* 健身器材：壶铃（单手摇摆） */
     part(g, new THREE.SphereGeometry(0.072, 14, 12), toon(0x343b45), [0, -0.034, 0], null, [1, 0.86, 1], false);
     part(g, new THREE.CylinderGeometry(0.030, 0.046, 0.024, 14), toon(0x1f2937), [0, 0.026, 0], null, null, false);
@@ -3838,10 +4196,11 @@ Object.keys(DESK_AT).forEach((k, idx) => {
   addObst(dx, dz, 0.92, 0.46, facing, "desk", 0.30);      // 桌子碰撞体：角色绕行
 
   /* 椅子放在工位外侧，角色入座后面朝自己的屏幕 */
-  const seatX = dx - fx * 0.85, seatZ = dz - fz * 0.85;
+  const seatX = dx - fx * 0.70, seatZ = dz - fz * 0.70;   // ④ 座椅向桌内收 0.11：手才够得到桌前缘键盘
   const chair = makeChair(facing);
   chair.position.set(seatX, 0, seatZ);
   chair.userData.tip = { title: "工位椅", desc: "可升降人体工学椅", color: 0x35455a };
+  chair.userData.home = { x: seatX, z: seatZ, yaw: facing, fx: fx, fz: fz };
   scene.add(chair);
 
   const [hx, hz] = homeSpot(k);
@@ -5002,8 +5361,14 @@ outlineFurniture();
 const BODY_R = CONFIG.character.bodyR;
 const ROLE_GAP = CONFIG.character.roleGap;         // 两位角色的最小间距（避免互相穿身）
 function resolveObst(o){
+  /* 坐具豁免：正要坐 / 正坐在某张凳子（或训练凳）上时，允许身体与该坐具碰撞体重叠。
+     否则 freeSpot + 本函数会把人从凳面推出 0.3~0.4m，出现"凳子空着、人在旁边悬坐"。 */
+  const seatSpot = (o.roam && o.roam.seatTop != null && o.roam.spot) ? o.roam.spot
+                 : (o.seatTop != null && o.seatHome) ? o.seatHome : null;
   for (let i = 0; i < OBST.length; i++){
     const r = OBST[i];
+    if (seatSpot && (r.tag === "stool" || r.tag === "bench") &&
+        Math.hypot(r.cx - seatSpot[0], r.cz - seatSpot[1]) < 0.45) continue;
     const p = obstLocal(r, o.current[0], o.current[1]);
     const ox = r.hw + BODY_R - Math.abs(p[0]);
     const oz = r.hd + BODY_R - Math.abs(p[1]);
@@ -5095,31 +5460,158 @@ function frameDelta(){
 }
 let tGlobal = 0;
 
+/* 打字手指：四指在"静息微屈"基线上按各自相位独立起落（食指最活、小指偏僵），
+   中指节跟随近端关节做二级弯曲，拇指在空格键上轻点。b 为混合权重（0=完全不接管，
+   交给 applyGrip 的统一握持），保证非打字动作零影响。 */
+function applyType(hand, t, ph, b){
+  if (!hand || !hand.userData.fingers) return;
+  const fs = hand.userData.fingers;
+  for (let i = 0; i < fs.length; i++){
+    const f = fs[i];
+    const kk = f.userData.k || 1;
+    /* 单指下压脉冲：相位错开 1.31rad，避免四指同步（同步=机械感） */
+    const hit = Math.pow(Math.max(0, Math.sin(1.9 * t + ph + i * 1.31)), 1.7);
+    const curl = 0.22 + hit * (i === 0 ? 0.60 : i === 3 ? 0.40 : 0.50);
+    f.rotation.x += (-curl * kk - f.rotation.x) * b;
+    const m = f.userData.mid;
+    if (m) m.rotation.x += (-(0.14 + hit * 0.30) * (m.userData.k || 1) - m.rotation.x) * b;
+  }
+  const th = hand.userData.thumb;
+  if (th){
+    const target = (th.userData.base || 0) - 0.14 - 0.10 * Math.max(0, Math.sin(1.9 * t + ph));
+    th.rotation.x += (target - th.rotation.x) * b;
+  }
+}
+
 /* ===================== 姿态系统（目标角度 + 平滑插值） ===================== */
 /* 各动作的默认握持量 [左手, 右手]：0=完全松开 1=握实。
    只影响手指分组角度，不改任何既有肢体角度，故不会造成动作回归。 */
 const GRIP_MODE = {
   walk: [0.30, 0.30], turn: [0.30, 0.30], stand: [0.25, 0.25],
   work: [0.30, 0.55], mouse: [0.20, 0.50], read: [0.50, 0.50], phone: [0.25, 0.70],
+  pantryChat: [0.18, 0.28],
   write: [0.30, 0.90], camera: [0.80, 0.80], inspect: [0.75, 0.75], sip: [0.25, 0.92],
   carry: [0.92, 0.92], upload: [0.55, 0.30], lift: [0.95, 0.95], yoga: [0.10, 0.10],
   clap: [0.18, 0.18], talk: [0.30, 0.30], point: [0.20, 0.20], nod: [0.25, 0.25],
   tidy: [0.60, 0.60], cheer: [0.80, 0.80], watch: [0.15, 0.15], think: [0.20, 0.45],
   squat: [0.35, 0.35], hip: [0.55, 0.55], side: [0.15, 0.15], lookOut: [0.25, 0.25],
-  stretch: [0.20, 0.20], jog: [0.72, 0.72], run: [0.78, 0.78]
+  stretch: [0.20, 0.20], jog: [0.72, 0.72], run: [0.78, 0.78],
+  wave: [0.30, 0.12], yawn: [0.20, 0.20], crouch: [0.70, 0.70],
+  phoneCall: [0.25, 0.70], sitCurl: [0.95, 0.95], benchPress: [0.95, 0.95],
+  sipStool: [0.25, 0.92], phoneStool: [0.25, 0.70], admire: [0.25, 0.30],
+  pourOver: [0.45, 0.95], brewTea: [0.40, 0.95], sipChat: [0.22, 0.92], carryCup: [0.85, 0.92]
 };
 
-/* 手指握持：按组施加弯曲（食指最活、小指偏僵），拇指对指辅助 */
+/* 手指握持：按组施加弯曲（食指最活、小指偏僵），拇指对指辅助
+   ⑩ 去人台化：加"自然卷曲底线"（完全松开≠伸直成板）+ 逐指卷曲差
+   （五指同一角度=假手套；真人食指最直、小指最卷、拇指外展） */
 function applyGrip(hand, g){
   if (!hand || !hand.userData.fingers) return;
-  const v = Math.max(0, Math.min(1, g == null ? 0 : g));
-  hand.userData.fingers.forEach(f => {
-    f.rotation.x = -v * (f.userData.k || 1);
+  const raw = Math.max(0, Math.min(1, g == null ? 0 : g));
+  const v = 0.13 + raw * 0.87;                     // 松开时也保留 13% 自然卷
+  const FV = [0.80, 0.96, 1.08, 1.20];             // 食指→小指卷曲递增
+  hand.userData.fingers.forEach((f, i) => {
+    const vk = v * (FV[i] == null ? 1 : FV[i]);
+    f.rotation.x = -vk * (f.userData.k || 1);
     const m = f.userData.mid;
-    if (m) m.rotation.x = -v * (m.userData.k || 1);
+    if (m) m.rotation.x = -vk * (m.userData.k || 1);
   });
   const th = hand.userData.thumb;
-  if (th) th.rotation.x = (th.userData.base || 0) - v * 0.62;
+  if (th) th.rotation.x = (th.userData.base || 0) - v * 0.58;
+}
+
+/* ============ 坐姿打字手臂反解（先定目标点，再解关节角） ============
+   验收问题：坐姿打字时"手跑到桌子下面"（实测原参数下腕心落在键帽顶下方约 16cm、
+   指尖下方约 25cm，整只手垂到桌面以下）。根因是上臂 -0.42 / 肘 -0.30 / 腕下压 1.30
+   三条手调角度之间没有任何几何约束，任意叠加都可能把手甩到桌子下面。
+   这里换成按真人尺度反解：
+     ① 读运行时真实肩点（世界坐标 → 根局部），不猜挂点；
+     ② 腕目标锁在键面正上方（键区左右两半中心）；
+     ③ 肘 = 上臂/前臂两杆解析求交，肘心朝"外/后/下"（真人打字时肘自然外张下垂）；
+     ④ 掌心朝下、指根线朝前下方 30°，指尖自然压在键面上。
+   肩-肘-腕-指四段角度全部由这套解算出，不再依赖手调常数。输出仍是 poseTargets 的
+   普通目标角度，照走 poseLimbs 的平滑插值，不新增状态机、不改任何外部接口。 */
+const IK_ARM = {
+  upper: 0.30, fore: 0.315,                     // 上臂/前臂长（建模 arm.elbow.y=-0.30、hand.y=-0.315）
+  keyTop: 0.817, keyZ: 0.345,                   // 键帽顶高（世界 y）/ 键区中心（根局部 z）
+  handX: 0.095, wristUp: 0.118,                 // 键盘：两手中心偏移 / 腕高于键面（0.105→0.118：实测指尖最低点下探 2.3cm 入键面，抬高后指腹压到键帽顶）
+  mouseTop: 0.820, mouseZ: 0.345,               // 鼠标：球顶高 / 腕落点（球心后缘）
+  mouseX: 0.300, mouseUp: 0.100,                // 鼠标：横向位置 / 腕高于球顶（0.075→0.100：实测右手最低顶点 0.7744 插进桌面板下 1.6cm，抬 2.5cm 后 0.799 落在桌面之上）
+  slope: 0.50                                   // 指根线前下倾角（rad，约 29°）
+};
+const _ikv1 = new THREE.Vector3(), _ikv2 = new THREE.Vector3(), _ikv3 = new THREE.Vector3();
+const _ikm1 = new THREE.Matrix4(), _ikm2 = new THREE.Matrix4();
+const _ikq1 = new THREE.Quaternion(), _ikq2 = new THREE.Quaternion(), _ikq3 = new THREE.Quaternion();
+const _ike1 = new THREE.Euler(0, 0, 0, "XYZ"), _ike2 = new THREE.Euler(0, 0, 0, "XYZ");
+const _ikX = new THREE.Vector3(1, 0, 0);
+
+/* 解一条坐姿手臂并写入 o（side: -1=左手 / +1=右手）
+   tgt = { x: 横向偏移量(取绝对值), z: 根局部前后, top: 目标面世界高度, up: 腕高于该面 } */
+function sitArmIK(ch, side, o, tgt){
+  const K = side < 0 ? "L" : "R";
+  const arm = ch && ch.arms && ch.arms[K];
+  const elbowG = arm && arm.userData && arm.userData.elbow;
+  const root = ch && ch.root;
+  if (!elbowG || !root) return false;
+  let hand = null;
+  elbowG.children.forEach(c => { if (c.userData && c.userData.fingers) hand = c; });
+  if (!hand) return false;
+  const A = IK_ARM;
+  /* ① 肩关节：读真实世界坐标，换算到根局部（含角色缩放），不依赖建模常数 */
+  root.updateWorldMatrix(true, false);
+  _ikm1.copy(root.matrixWorld).invert();
+  arm.getWorldPosition(_ikv1).applyMatrix4(_ikm1);
+  const Sx = _ikv1.x, Sy = _ikv1.y, Sz = _ikv1.z;
+  /* ② 腕目标：目标面正上方（指尖再往前下压落到面上）
+     注意 top 是世界高度、root.position.y 也是世界量，而肩坐标已换算到"含缩放的根局部系"，
+     所以这里的世界高差必须除以角色缩放 sc 才是同一坐标系里的局部量 —— 否则除 1.86m 的
+     geometry 外，其余身高的角色手掌会整体偏高/偏低于键面（实测 failure 指尖低于键帽顶 5cm）。 */
+  const sc = (ch.cfg && ch.cfg.height) ? ch.cfg.height / 1.86 : 1;
+  const Wx = side * tgt.x, Wy = (tgt.top - root.position.y) / sc + tgt.up, Wz = tgt.z;
+  /* ③ 两杆解析 IK：肘心朝外/后/下，避免肘向身体内侧翻 */
+  const dx = Wx - Sx, dy = Wy - Sy, dz = Wz - Sz;
+  const dl0 = Math.hypot(dx, dy, dz) || 1e-6;
+  const Ux = dx / dl0, Uy = dy / dl0, Uz = dz / dl0;
+  const dl = Math.min(dl0, (A.upper + A.fore) * 0.999);
+  const a1 = (A.upper * A.upper - A.fore * A.fore + dl * dl) / (2 * dl);
+  const hh = Math.sqrt(Math.max(0, A.upper * A.upper - a1 * a1));
+  let rx = side * 0.9, ry = -1.0, rz = -0.35;
+  const rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
+  const rp = rx * Ux + ry * Uy + rz * Uz;
+  let px = rx - rp * Ux, py = ry - rp * Uy, pz = rz - rp * Uz;
+  const pl = Math.hypot(px, py, pz) || 1; px /= pl; py /= pl; pz /= pl;
+  const Ex = Sx + Ux * a1 + px * hh, Ey = Sy + Uy * a1 + py * hh, Ez = Sz + Uz * a1 + pz * hh;
+  const ux = (Ex - Sx) / A.upper, uy = (Ey - Sy) / A.upper, uz = (Ez - Sz) / A.upper;
+  const vx = (Wx - Ex) / A.fore, vy = (Wy - Ey) / A.fore, vz = (Wz - Ez) / A.fore;
+  let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+  const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+  /* 肩部姿态：肩局部 X=腕侧平面法向、Y=-上臂方向、Z=上臂×法向 */
+  const zx = uy * nz - uz * ny, zy = uz * nx - ux * nz, zz = ux * ny - uy * nx;
+  _ikm1.makeBasis(_ikv1.set(nx, ny, nz), _ikv2.set(-ux, -uy, -uz), _ikv3.set(zx, zy, zz));
+  _ike1.setFromRotationMatrix(_ikm1, "XYZ");
+  const shx = _ike1.x, shy = _ike1.y, shz = _ike1.z;
+  /* 肘弯角：0=伸直；在肩局部系里是绕 -X 的折角 */
+  const eAng = Math.atan2(-(vx * zx + vy * zy + vz * zz), vx * ux + vy * uy + vz * uz);
+  /* ④ 腕/掌朝向：掌心朝下（把 (0,-1,0) 正交到与指根线垂直）、指根线朝前下 slope */
+  const cs = Math.cos(A.slope), ss = Math.sin(A.slope);
+  const fx = 0, fy = -ss, fz = cs;
+  const pd = -fy;                                  // (0,-1,0)·F
+  let cx = -pd * fx, cy = -1 - pd * fy, cz = -pd * fz;
+  const cl = Math.hypot(cx, cy, cz) || 1; cx /= cl; cy /= cl; cz /= cl;
+  const yx = -fx, yy = -fy, yz = -fz;
+  const xx = yy * cz - yz * cy, xy = yz * cx - yx * cz, xz = yx * cy - yy * cx;
+  _ikm2.makeBasis(_ikv1.set(xx, xy, xz), _ikv2.set(yx, yy, yz), _ikv3.set(cx, cy, cz));
+  _ikq1.setFromRotationMatrix(_ikm2);                              // 手的目标（世界）朝向
+  _ikq2.setFromEuler(_ike2.set(o.tx, o.tw || 0, o.tz || 0, "XYZ")) // 躯干
+       .multiply(_ikq3.setFromEuler(_ike1.set(shx, shy, shz, "XYZ")))   // × 肩局部
+       .multiply(_ikq3.setFromAxisAngle(_ikX, eAng));                   // × 肘弯
+  _ikq1.premultiply(_ikq2.invert());                               // 腕在肘局部系下的朝向
+  _ike1.setFromQuaternion(_ikq1, "XYZ");
+  /* ⑤ 写回目标角度 */
+  o["a" + K + "x"] = shx; o["a" + K + "y"] = shy; o["a" + K + "z"] = shz;
+  o["e" + K] = eAng;
+  o["w" + K] = _ike1.x; o["w" + K + "y"] = _ike1.y; o["w" + K + "z"] = _ike1.z;
+  return true;
 }
 
 function poseTargets(ch, mode, t){
@@ -5127,8 +5619,11 @@ function poseTargets(ch, mode, t){
               hx: 0.02, hy: 0, hz: 0,
               aLx: 0.0, aLz: -0.15, eL: -0.20, aLy: 0,
               aRx: 0.0, aRz: 0.15, eR: -0.20, aRy: 0,
-              lLx: 0.02, kL: 0.0, lRx: -0.02, kR: 0.0,
+              lLx: 0.02, kL: 0.065, lRx: -0.02, kR: 0.05,
               anL: 0.0, anR: 0.0,                      // 踝：提踵/勾脚
+              wL: 0.0, wR: 0.0,                        // 腕：下压角（打字时手掌压向键盘面）
+              wLy: 0.0, wLz: 0.0, wRy: 0.0, wRz: 0.0,  // 腕：掌心朝向的另外两轴（坐姿打字反解用）
+              tFL: 0.0, tFR: 0.0,                      // 打字手势权重：四指按各自相位独立起落
               gL: -1, gR: -1,                          // 握持量：-1=按模式默认，0=松开 1=握紧
               prop: null, propL: null };
   const S = (ph, amp) => Math.sin(ph) * (amp == null ? 1 : amp);
@@ -5169,18 +5664,35 @@ function poseTargets(ch, mode, t){
     case "work": {
       const kk = t * 13.0;
       o.lLx = -1.50; o.lRx = -1.50; o.kL = 1.50; o.kR = 1.50;
-      o.aLx = -1.02 + S(kk, 0.055); o.aRx = -1.02 + S(kk + 1.7, 0.05);
-      o.aLz = -0.20; o.aRz = 0.20; o.eL = -0.92; o.eR = -0.92;
-      o.ty = S(t * 2.2) * 0.008; o.tx = 0.10;
-      o.hx = 0.20; o.hz = S(t * 0.9) * 0.05; o.hy = S(t * 0.37) * 0.10;
+      /* ④ 真人敲键盘：手部不再是"三条手调角度叠加"，改为腕目标锁键面 → 反解肩/肘/腕
+         （sitArmIK）。掌心朝下扣在键盘左右两半上，指尖落在键帽顶，四指再按各自相位
+         独立起落；躯干的呼吸微动会被反解自动吸收，手始终不离开键面 */
+      o.ty = S(t * 2.2) * 0.008; o.tx = 0.12 + S(kk, 0.006);   // 坐直只微微含胸（原 0.42 是"肩够不到桌面"的权宜：手臂已由 sitArmIK 按世界坐标反解，
+                                                              //   不再依赖躯干前倾去凑距离；前倾过大会把大腿带成下垂、离座悬空）
+      const kTgt = { x: IK_ARM.handX, z: IK_ARM.keyZ, top: IK_ARM.keyTop, up: IK_ARM.wristUp };
+      sitArmIK(ch, -1, o, kTgt);
+      sitArmIK(ch, +1, o, kTgt);
+      o.hx = 0.34; o.hz = S(t * 0.9) * 0.05; o.hy = S(t * 0.37) * 0.10;
+      o.tFL = 1.00; o.tFR = 1.00;   // 指腹起落幅度（1.25→1.00：原来指尖会压到键面下 2cm）
       break;
     }
-    case "mouse": {   /* 右手握鼠标，左手托腮看屏幕 */
-      const kk = t * 9.0;
+    case "pantryChat": {   /* ⑥ 茶水间高脚凳上坐着聊天：躯干随话头轻摆，一手比划，头转向邻座 */
+      const cc = t * 1.55;
       o.lLx = -1.50; o.lRx = -1.50; o.kL = 1.50; o.kR = 1.50;
-      o.aLx = -1.42; o.aLz = -0.34; o.eL = -1.30;
-      o.aRx = -0.92 + S(kk, 0.02); o.aRz = 0.30; o.eR = -0.70;
-      o.tx = 0.12; o.hx = 0.18; o.hz = S(t * 0.6) * 0.04;
+      o.ty = S(cc) * 0.012; o.tx = 0.04; o.oz = 0.02;
+      o.aLx = -0.62 + S(cc, 0.16); o.aLz = 0.30; o.eL = -1.12 + S(cc * 1.3, 0.20);
+      o.aRx = -0.30 + S(cc * 0.8, 0.07); o.aRz = 0.16; o.eR = -0.98;
+      o.hx = 0.08; o.hy = S(cc * 0.42) * 0.30; o.hz = S(cc * 0.7) * 0.05;
+      o.wL = 0.22 + S(cc * 1.1, 0.12); o.wR = 0.35;
+      break;
+    }
+    case "mouse": {   /* 鼠标工位：左手搭键盘轻敲，右手压鼠标，头扫屏幕 */
+      o.lLx = -1.50; o.lRx = -1.50; o.kL = 1.50; o.kR = 1.50;
+      o.tx = 0.10;               // 坐直微含胸（同上：够桌面由 sitArmIK 负责，不靠前倾；过大=大腿被带下垂、离座悬空）
+      o.hx = 0.18; o.hz = S(t * 0.6) * 0.04;
+      sitArmIK(ch, -1, o, { x: IK_ARM.handX,  z: IK_ARM.keyZ,   top: IK_ARM.keyTop,   up: IK_ARM.wristUp });
+      sitArmIK(ch, +1, o, { x: IK_ARM.mouseX, z: IK_ARM.mouseZ, top: IK_ARM.mouseTop, up: IK_ARM.mouseUp });
+      o.tFL = 0.45; o.tFR = 0.0;
       break;
     }
     case "think": {
@@ -5203,11 +5715,24 @@ function poseTargets(ch, mode, t){
       break;
     }
     case "stand": {
-      o.lLx = 0.06; o.lRx = -0.06;
-      o.aLx = 0.02 + S(t * 1.1) * 0.04; o.aRx = S(t * 1.1 + 0.8) * 0.04;
-      o.aLz = -0.16; o.aRz = 0.16; o.eL = -0.22; o.eR = -0.22;
-      o.ty = S(t * 1.5) * 0.012; o.tz = S(t * 0.7) * 0.022;
-      o.hx = S(t * 0.9) * 0.03; o.hz = S(t * 0.6) * 0.05;
+      /* ⑩ 去人台化：重心站姿（contrapposto）。真人静立从来不是轴对称的——
+         重心压在一侧胯（躯干反向微倾）、对侧膝松、肩线反倾、双臂不对称、头微偏。
+         缓慢换重心（~18s 一换），配合呼吸与视线微动，"活人"取代"服装店假人" */
+      const w  = Math.sin(t * 0.35);               // 慢重心漂移
+      const wK = Math.max(0, w), wK2 = Math.max(0, -w);
+      o.tz = -0.055 * w;                           // 躯干向承重侧反倾（脊柱 S 曲线）
+      o.tw = 0.045 * w + S(t * 0.5) * 0.02;        // 肩线随重心微扭
+      o.ty = S(t * 1.5) * 0.010;
+      o.lLx = 0.05 + 0.05 * wK2;  o.lRx = -0.04 - 0.05 * wK;   // 游离腿略前送
+      o.kL  = 0.045 + wK2 * 0.10; o.kR  = 0.045 + wK * 0.10;   // 游离侧膝更软
+      o.anL = 0.02 * wK2;        o.anR = 0.02 * wK;            // 游离脚踝微放
+      o.aLx = 0.02 + 0.06 * wK2 + S(t * 1.1) * 0.03;
+      o.aRx = -0.03 - 0.06 * wK + S(t * 1.1 + 0.8) * 0.03;     // 双臂不对称摆幅
+      o.aLz = -0.15 - 0.05 * w;  o.aRz = 0.15 - 0.05 * w;      // 承重侧臂稍收
+      o.eL  = -0.24 - 0.14 * wK2; o.eR  = -0.22 - 0.14 * wK;   // 肘弯不对称（一侧更放松）
+      o.hx  = 0.02 + S(t * 0.9) * 0.025;
+      o.hz  = S(t * 0.6) * 0.05 + 0.05 * w;                    // 头与肩线反向（脊柱 S 曲线收尾）
+      o.hy  = 0.05 * w + S(t * 0.45) * 0.03;                   // 头缓慢闲扫
       break;
     }
     case "watch": {
@@ -5237,9 +5762,10 @@ function poseTargets(ch, mode, t){
       o.prop = "cup";
       break;
     }
-    case "read": {    /* 双手托平板 */
-      o.aLx = -1.16; o.aRx = -1.16; o.aLz = -0.34; o.aRz = 0.34;
-      o.eL = -1.52; o.eR = -1.52;
+    case "read": {    /* 双手托平板：抬到胸前看，不再把平板抱在腹前（原 aLx=-1.16/eL=-1.52
+                         会把前臂折回腹前、平板插进躯干，看起来像"抱着东西"） */
+      o.aLx = -0.62; o.aRx = -0.62; o.aLz = -0.30; o.aRz = 0.30;
+      o.eL = -1.62; o.eR = -1.62;
       o.tx = 0.06; o.hx = 0.34 + S(t * 1.2) * 0.03;
       o.ty = S(t * 1.5) * 0.010;
       o.lLx = 0.04; o.lRx = -0.04;
@@ -5288,15 +5814,17 @@ function poseTargets(ch, mode, t){
       o.lLx = 0.05; o.lRx = -0.05;
       break;
     }
-    case "squat": {   /* 空闲健身：深蹲 */
-      const p = t * 2.4;
+    case "squat": {   /* 空闲健身：深蹲。双臂前平举（平衡深蹲的标志性动作）——
+                         旧版手臂垂放搭膝、大腿水平，最低点被看成"坐在空气椅上" */
+      const p = t * 2.8;
       const d = (S(p) * 0.5 + 0.5);
-      o.lLx = -1.15 * d + 0.05; o.lRx = -1.15 * d - 0.05;
-      o.kL = 1.85 * d; o.kR = 1.85 * d;
-      o.aLx = -1.15 * d - 0.10; o.aRx = -1.15 * d - 0.10;
-      o.aLz = -0.34; o.aRz = 0.34; o.eL = -0.30; o.eR = -0.30;
-      o.tx = 0.24 * d; o.ty = -0.30 * d;
-      o.hx = -0.10;
+      o.lLx = -0.95 * d + 0.05; o.lRx = -0.95 * d - 0.05;   // 大腿前摆约 54°，不再水平
+      o.kL = 1.55 * d; o.kR = 1.55 * d;                     // 膝弯随深度收浅
+      o.anL = -0.34 * d; o.anR = -0.34 * d;                 // 踝背屈，脚掌贴地
+      o.aLx = -1.50 * d - 0.05; o.aRx = -1.50 * d - 0.05;   // 双臂前平举到肩高
+      o.aLz = -0.06; o.aRz = 0.06; o.eL = -0.08; o.eR = -0.08;  // 肘近伸直
+      o.tx = 0.30 * d; o.ty = -0.20 * d;                    // 躯干前倾、少下沉
+      o.hx = -0.08;
       break;
     }
     case "cheer": {   /* 收工庆祝：三种自然小动作轮换（不再双手齐举） */
@@ -5390,8 +5918,8 @@ function poseTargets(ch, mode, t){
       o.aLx = -1.05 + sr * 0.62; o.aRx = -1.05 + sl * 0.62;
       o.aLz = -0.26; o.aRz = 0.26; o.eL = -1.52; o.eR = -1.52;
       o.gL = 0.72; o.gR = 0.72;
-      o.lLx = sl * 0.82 - 0.05; o.lRx = sr * 0.82 - 0.05;
-      o.kL = 0.35 + Math.max(0, sl) * 0.95; o.kR = 0.35 + Math.max(0, sr) * 0.95;
+      o.lLx = sl * 0.50 - 0.05; o.lRx = sr * 0.50 - 0.05;      // 摆腿幅度收小：支撑腿始终接近铅垂（原来 0.82 时双腿同时离地约 0.2m）
+      o.kL = 0.32 + Math.max(0, sl) * 0.62; o.kR = 0.32 + Math.max(0, sr) * 0.62;
       o.anL = Math.max(0, -sl) * 0.30 - Math.max(0, sl) * 0.14;
       o.anR = Math.max(0, -sr) * 0.30 - Math.max(0, sr) * 0.14;
       o.tx = 0.09; o.ty = Math.abs(S(p)) * 0.030;
@@ -5405,8 +5933,8 @@ function poseTargets(ch, mode, t){
       o.aLx = -1.18 + sr * 0.78; o.aRx = -1.18 + sl * 0.78;
       o.aLz = -0.22; o.aRz = 0.22; o.eL = -1.74; o.eR = -1.74;
       o.gL = 0.78; o.gR = 0.78;
-      o.lLx = sl * 0.95 - 0.10; o.lRx = sr * 0.95 - 0.10;
-      o.kL = 0.45 + Math.max(0, sl) * 1.15; o.kR = 0.45 + Math.max(0, sr) * 1.15;
+      o.lLx = sl * 0.58 - 0.08; o.lRx = sr * 0.58 - 0.08;      // 同上收小摆腿（原 0.95 → 后摆 49°、双脚离地 0.21m，像悬空跳跃）
+      o.kL = 0.40 + Math.max(0, sl) * 0.78; o.kR = 0.40 + Math.max(0, sr) * 0.78;
       o.anL = Math.max(0, -sl) * 0.34 - Math.max(0, sl) * 0.16;
       o.anR = Math.max(0, -sr) * 0.34 - Math.max(0, sr) * 0.16;
       o.tx = 0.20; o.ty = Math.abs(S(p)) * 0.042;
@@ -5422,14 +5950,16 @@ function poseTargets(ch, mode, t){
       o.gL = 0.95; o.gR = 0.95;
       o.tx = 0.04 + 0.06 * (1 - pr); o.ty = S(t * 1.3) * 0.008;   // 落肘时微微后仰稳住核心
       o.hx = 0.10 - 0.16 * pr;
-      o.lLx = 0.12; o.lRx = -0.12; o.kL = 0.12; o.kR = 0.12;
+      o.lLx = 0.10; o.lRx = -0.10; o.kL = 0.26; o.kR = 0.26;   // 站姿举铁：膝微屈缓冲，不锁死
+      o.anL = -0.10; o.anR = -0.10;
       o.prop = "dumbbell"; o.propL = "dumbbellL";
       break;
     }
     case "row": {     /* 训练凳前：一手扶凳、俯身做单臂划船 */
       const pr = S(t * 1.45) * 0.5 + 0.5;              // 0=放到底 1=拉到腰侧
       o.tx = 0.82; o.ty = -0.03 + S(t * 1.2) * 0.008;
-      o.lLx = -0.66; o.lRx = -0.74; o.kL = 0.40; o.kR = 0.44;
+      o.lLx = -0.34; o.lRx = -0.40; o.kL = 0.62; o.kR = 0.66;   // 俯身划船：髋铰链+屈膝，踝背屈
+      o.anL = -0.26; o.anR = -0.28;
       o.aLx = -0.78; o.aLz = -0.16; o.eL = -0.52 + 0.16 * pr; o.gL = 0.42;  // 扶凳手撑住
       o.aRx = -0.80 + 0.44 * pr; o.aRz = 0.26;
       o.eR = -0.34 - 0.98 * pr; o.gR = 0.95;
@@ -5441,8 +5971,9 @@ function poseTargets(ch, mode, t){
       const p = t * 2.1;
       const sw = S(p) * 0.5 + 0.5;                     // 0=沉底 1=甩到胸高
       o.tx = 0.56 - 0.30 * sw; o.ty = -0.06 + 0.06 * sw;
-      o.lLx = -0.44 + 0.22 * sw; o.lRx = -0.50 + 0.22 * sw;
-      o.kL = 0.34 - 0.10 * sw; o.kR = 0.36 - 0.10 * sw;
+      o.lLx = -0.30 + 0.16 * sw; o.lRx = -0.34 + 0.16 * sw;   // 髋铰链：大腿保持近竖直
+      o.kL = 0.52 - 0.18 * sw; o.kR = 0.54 - 0.18 * sw;
+      o.anL = -0.22; o.anR = -0.24;
       o.aRx = -0.30 - 1.30 * sw; o.aRz = 0.22; o.eR = -0.34 + 0.06 * sw; o.gR = 0.95;
       o.aLx = -0.10 - 0.70 * sw; o.aLz = -0.30; o.eL = -0.60 + 0.20 * sw; o.gL = 0.30;
       o.hx = -0.10 - 0.10 * sw; o.hz = S(p * 0.5) * 0.03;
@@ -5499,6 +6030,87 @@ function poseTargets(ch, mode, t){
         o.lLx = 0.06; o.lRx = -0.06;
         o.prop = "cup";
       }
+      break;
+    }
+    case "pourOver": { /* 手冲：鹅颈壶画圈注水 → 放壶等待滴滤 → 端起分享壶闻香 */
+      const c = t % 14;
+      if (c < 7.0){                                    // 右手提鹅颈壶沿滤杯画圈注水
+        const a = c * 4.2;
+        o.aRx = -1.22 + S(a) * 0.06; o.aRz = 0.34; o.eR = -1.70; o.gR = 0.95;
+        o.aLx = -0.30; o.aLz = -0.28; o.eL = -0.90; o.gL = 0.45;
+        o.tx = 0.12; o.hx = -0.10 + Math.cos(a) * 0.04; o.hz = S(a) * 0.05;
+        o.lLx = 0.05; o.lRx = -0.05;
+        o.prop = "gooseneck";
+      } else if (c < 10.6){                            // 放下壶，双手扶台等滴滤
+        const w = S(c * 2.2) * 0.03;
+        o.aLx = -0.88 + w; o.aRx = -0.86 - w; o.aLz = -0.34; o.aRz = 0.34;
+        o.eL = -1.30; o.eR = -1.30; o.gL = 0.40; o.gR = 0.40;
+        o.tx = 0.10; o.hx = -0.06; o.hz = S(c * 0.9) * 0.04;
+        o.lLx = 0.05; o.lRx = -0.05;
+      } else {                                         // 端起分享壶到鼻下闻香
+        o.aRx = -1.26 + S(t * 1.2) * 0.05; o.aRz = 0.38; o.eR = -1.80; o.gR = 0.95;
+        o.aLx = -0.50; o.aLz = -0.30; o.eL = -1.40; o.gL = 0.80;
+        o.tx = -0.04; o.hx = -0.26; o.hz = S(t * 0.8) * 0.05;
+        o.lLx = 0.05; o.lRx = -0.05;
+        o.prop = "cup";
+      }
+      break;
+    }
+    case "brewTea": {  /* 冲茶：提壶高冲 → 放壶闷香 → 分茶入杯 → 端杯闻香 */
+      const c = t % 15;
+      if (c < 5.4){                                    // 右手提茶壶高冲，左手按茶盘边
+        o.aRx = -1.30 + S(c * 3.0) * 0.05; o.aRz = 0.40; o.eR = -1.86; o.gR = 0.95;
+        o.aLx = -0.78; o.aLz = -0.36; o.eL = -1.10; o.gL = 0.35;
+        o.tx = 0.14; o.hx = -0.14; o.hz = S(c * 2.0) * 0.03;
+        o.lLx = 0.05; o.lRx = -0.05;
+        o.prop = "teapot";
+      } else if (c < 9.0){                             // 放壶，双手环在茶盘两侧等出汤
+        o.aLx = -0.92; o.aRx = -0.92; o.aLz = -0.38; o.aRz = 0.38;
+        o.eL = -1.36; o.eR = -1.36; o.gL = 0.45; o.gR = 0.45;
+        o.tx = 0.12; o.hx = -0.08; o.hz = S(c * 1.4) * 0.04;
+        o.lLx = 0.05; o.lRx = -0.05;
+      } else if (c < 12.0){                            // 右手执公道杯分茶入两只品茗杯
+        const pour = S(c * 5.0) * 0.10;
+        o.aRx = -1.16 + pour; o.aRz = 0.32; o.eR = -1.58; o.gR = 0.90;
+        o.aLx = -0.56; o.aLz = -0.26; o.eL = -1.06; o.gL = 0.35;
+        o.tx = 0.14; o.hx = -0.16; o.hz = S(c * 3.2) * 0.04;
+        o.lLx = 0.05; o.lRx = -0.05;
+        o.prop = "teapot";
+      } else {                                         // 端品茗杯到鼻下闻香
+        o.aRx = -1.34 + S(t * 1.3) * 0.05; o.aRz = 0.44; o.eR = -1.88; o.gR = 0.95;
+        o.aLx = -0.14; o.aLz = -0.20; o.eL = -0.36; o.gL = 0.30;
+        o.tx = -0.06; o.hx = -0.30; o.hz = S(t * 0.7) * 0.05;
+        o.lLx = 0.05; o.lRx = -0.05;
+        o.prop = "cup";
+      }
+      break;
+    }
+    case "sipChat": {  /* 高脚凳上端着杯子边喝边聊：一手持杯间歇抿一口，另一手比划，头转向邻座 */
+      const cc = t * 1.45;
+      const sipP = Math.max(0, Math.sin(cc * 0.72));  // 慢节拍：0.72*1.45≈每 6s 一个抿口周期
+      o.lLx = -1.50; o.lRx = -1.50; o.kL = 1.50; o.kR = 1.50;
+      o.ty = S(cc) * 0.012; o.tx = 0.03; o.oz = 0.02;
+      o.aRx = -1.10 - sipP * 0.30; o.aRz = 0.44; o.eR = -1.58 - sipP * 0.16; o.gR = 0.92;
+      o.aLx = -0.34 + S(cc * 0.85, 0.26); o.aLz = 0.28; o.eL = -1.02 + S(cc * 1.25, 0.20);
+      o.hx = 0.06 - sipP * 0.16; o.hz = S(cc * 0.5) * 0.10 + 0.04;
+      o.wL = 0.20 + S(cc * 1.1, 0.12); o.wR = 0.35;
+      o.prop = "cup";
+      break;
+    }
+    case "carryCup": { /* 端着杯子走回工位：杯在胸前稳住，步子比空手小一点 */
+      const p = t * 6.4;
+      const sl = S(p), sr = S(p + Math.PI);
+      o.lLx = sl * 0.46; o.lRx = sr * 0.46;
+      o.kL = Math.max(0, -sl) * 0.72; o.kR = Math.max(0, -sr) * 0.72;
+      o.anL = Math.max(0, sl) * 0.34 - Math.max(0, -sl) * 0.11;
+      o.anR = Math.max(0, sr) * 0.34 - Math.max(0, -sr) * 0.11;
+      o.aLx = sr * 0.30 - 0.72; o.aRx = sl * 0.30 - 0.78;
+      o.aLz = -0.30; o.aRz = 0.34;
+      o.eL = -1.46; o.eR = -1.52;
+      o.gL = 0.85; o.gR = 0.92;
+      o.tx = 0.02; o.ty = Math.abs(S(p)) * 0.016; o.tz = S(p) * 0.02;
+      o.hx = 0.06; o.hz = S(p * 0.5) * 0.03;
+      o.prop = "cup";
       break;
     }
     case "caliper": { /* 几何分析：卡尺卡着打印件量尺寸，边量边转件找基准面 */
@@ -5569,6 +6181,69 @@ function poseTargets(ch, mode, t){
       o.prop = "dumbbell";
       break;
     }
+    case "sitCurl": {  /* 坐姿哑铃弯举：坐在凳上躯干微前倾，左右交替弯举 */
+      const p = t * 2.5;
+      const u = Math.max(0, S(p)), v = Math.max(0, -S(p));
+      o.aRx = -0.50 - u * 0.92; o.aRz = 0.38; o.eR = -1.18 - u * 0.62;
+      o.aLx = -0.50 - v * 0.92; o.aLz = -0.38; o.eL = -1.18 - v * 0.62;
+      o.tx = -0.04; o.ty = Math.abs(S(p)) * 0.008;
+      o.hx = -0.05 + S(p * 0.5) * 0.03;
+      o.gL = 0.95; o.gR = 0.95;
+      o.prop = "dumbbell"; o.propL = "dumbbellL";
+      break;
+    }
+    case "benchPress": { /* 仰卧凳上举铁：躯干躺平、膝弯脚踩地，双手共握杠铃从胸口推向天花板 */
+      const pr = S(t * 1.25) * 0.5 + 0.5;           // 0=落胸 1=推直
+      o.tx = -1.48; o.oz = -0.04;                    // 仰卧 + 髋沿凳面微沉
+      o.lLx = 0.04; o.lRx = 0.04;                    // 大腿水平前伸（躺姿下沿凳面向脚端）
+      o.kL = 1.52; o.kR = 1.52;                      // 膝弯 ~87°，小腿垂向地面
+      o.anL = -0.18; o.anR = -0.18;                  // 踝背屈：脚掌放平贴地
+      o.aLx = -0.95 - 1.15 * pr; o.aRx = -0.95 - 1.15 * pr;
+      o.aLz = -0.16; o.aRz = 0.16;                   // 双手握距略窄于肩（杠铃杆）
+      o.eL = -1.85 + 1.55 * pr; o.eR = -1.85 + 1.55 * pr;
+      o.gL = 0.95; o.gR = 0.95;
+      o.hx = -0.12; o.ty = S(t * 1.2) * 0.006;
+      o.prop = "barbell";
+      break;
+    }
+    case "phoneCall": { /* 接打电话：手机贴耳、头微侧，另一只手自然比划，重心小漂移 */
+      const w = t * 1.7;
+      o.aRx = -1.42; o.aRz = 0.58; o.eR = -2.05;     // 大臂抬平、肘深弯，手机贴耳
+      o.aLx = -0.18 + S(w) * 0.10; o.aLz = -0.22;
+      o.eL = -0.48 + S(w * 0.7) * 0.12;
+      o.tx = 0.01; o.hx = -0.04; o.hz = 0.14;        // 头微偏向手机一侧
+      o.ty = S(t * 1.3) * 0.010; o.tz = S(t * 0.5) * 0.025;
+      o.lLx = 0.05; o.lRx = -0.05; o.kL = 0.08; o.kR = 0.06;
+      o.prop = "phone";
+      break;
+    }
+    case "sipStool": { /* 坐在高脚凳上喝一口（腿由坐姿基线接管） */
+      const k = t * 1.4;
+      o.aRx = -1.12 + S(k) * 0.10; o.aRz = 0.46; o.eR = -1.66;
+      o.aLx = 0.04 + S(k + 1) * 0.05; o.aLz = -0.22; o.eL = -0.38;
+      o.tx = 0.03; o.hx = -0.08 + S(k) * 0.05;
+      o.ty = S(t * 1.5) * 0.008;
+      o.prop = "cup";
+      break;
+    }
+    case "phoneStool": { /* 坐在高脚凳上刷手机 */
+      o.aRx = -1.28; o.aRz = 0.28; o.eR = -1.72;
+      o.aLx = -0.30; o.aLz = -0.26; o.eL = -0.80;
+      o.tx = 0.08; o.hx = 0.36; o.tz = S(t * 0.9) * 0.02;
+      o.ty = S(t * 1.4) * 0.008;
+      o.prop = "phone";
+      break;
+    }
+    case "admire": {   /* 端详成品：一手托下巴、目光慢慢扫视、偶尔点头 */
+      const g = t * 0.85;
+      o.aRx = -0.95 + S(g * 0.6) * 0.04; o.aRz = 0.32; o.eR = -1.58;
+      o.aLx = 0.06; o.aLz = -0.10; o.eL = -0.28;
+      o.tx = 0.03; o.hx = 0.08 + Math.max(0, S(g)) * 0.05;
+      o.hy = S(g * 0.55) * 0.26; o.hz = S(g * 0.4) * 0.05;
+      o.ty = S(t * 1.1) * 0.009; o.tz = S(t * 0.45) * 0.015;
+      o.lLx = 0.05; o.lRx = -0.05; o.kL = 0.07; o.kR = 0.055;
+      break;
+    }
     case "yoga": {    /* 垫上前屈伸展：双手顺着垫面往前伸，始终不高于肩 */
       const q = (S(t * 0.7) * 0.5 + 0.5);
       o.tx = 0.35 + q * 0.85; o.ty = -0.14 * q;
@@ -5596,6 +6271,38 @@ function poseTargets(ch, mode, t){
       o.prop = "tool";
       break;
     }
+    case "wave": {    /* 抬手打招呼：大臂抬平、肘弯 90°，手掌左右摆三下 */
+      const p = t * 4.4;
+      o.aRx = -1.34; o.aRz = 0.60; o.eR = -1.02 + S(p) * 0.10; o.gR = 0.12;
+      o.wR = 0.20;
+      o.aLx = -0.12; o.aLz = -0.16; o.eL = -0.34; o.gL = 0.30;
+      o.tx = 0.02; o.hx = 0.03; o.hy = S(p * 0.5) * 0.12; o.hz = S(p) * 0.06;
+      o.ty = S(t * 2.6) * 0.010;
+      o.lLx = 0.05; o.lRx = -0.05; o.kL = 0.10; o.kR = 0.14;
+      break;
+    }
+    case "yawn": {    /* 打哈欠 + 伸懒腰：双臂上举过头、躯干后仰（嘴部由 talk 通道开合） */
+      const up = S(t * 0.85) * 0.5 + 0.5;
+      o.aLx = -1.10 - 0.86 * up; o.aRx = -1.10 - 0.86 * up;
+      o.aLz = -0.30; o.aRz = 0.30;
+      o.eL = -0.78 + 0.30 * up; o.eR = -0.78 + 0.30 * up;
+      o.tx = -0.10 - 0.12 * up; o.ty = S(t * 1.2) * 0.010;
+      o.hx = -0.24 - 0.10 * up; o.hz = S(t * 0.7) * 0.08;
+      o.lLx = 0.06; o.lRx = -0.06; o.kL = 0.12; o.kR = 0.12;
+      o.anL = -0.08; o.anR = -0.08;
+      break;
+    }
+    case "crouch": {  /* 蹲下捡东西：髋膝同步深弯、上身保持直立前倾小，脚掌不离地 */
+      const p = Math.min(1, Math.max(0, S(t * 1.1) + 0.35));
+      o.lLx = -1.32 * p + 0.05; o.lRx = -1.32 * p - 0.05;
+      o.kL = 2.10 * p; o.kR = 2.10 * p;
+      o.anL = -0.72 * p; o.anR = -0.72 * p;          // 勾脚踝：蹲到底鞋底仍贴地
+      o.tx = 0.30 * p; o.ty = -0.36 * p;
+      o.aLx = -0.05 - 0.55 * p; o.aRx = -0.05 - 0.55 * p;
+      o.eL = -0.28; o.eR = -0.28; o.gL = 0.70; o.gR = 0.70;
+      o.hx = 0.18 * p;
+      break;
+    }
     default: {
       o.lLx = 0.02; o.lRx = -0.02;
       o.aLz = -0.14; o.aRz = 0.14; o.eL = -0.16; o.eR = -0.16;
@@ -5608,14 +6315,23 @@ function poseTargets(ch, mode, t){
   /* 坐姿适配：叠加按座面高度反解出的小腿前伸角 —— 膝角略小于 90°、小腿前伸、
      脚掌放平贴地；解不出前伸角（座面相对腿长偏高）时自动退化为垂直小腿，
      再交给落地校正兜底，保证"不管坐在哪里都像坐着"。 */
-  if (ch && ch.seatLean > 0.01 && SIT_LEG_MODES.indexOf(mode) >= 0){
-    const th = ch.seatLean;
+  if (ch && ch.seated && SIT_LEG_MODES.indexOf(mode) >= 0){
+    /* th=0 表示座面相对腿长偏高、反解退化（前伸角取 0）；此时"大腿抬平+膝弯 90°"
+       这条基线仍然必须施加 —— 否则该角色会沿用站立腿角、直腿坐在椅上，整条腿
+       插穿地板（实测 failure 的 diagnose：鞋底埋到 -0.41m）。 */
+    const th = Math.max(0, ch.seatLean || 0);
     /* 坐姿腿基线：大腿至少抬到水平、膝盖至少弯 90°（-1.50 / 1.50）。
        work / mouse 本来就自带这组角，钳制后原值不变；think / read / caliper /
        slice / diagnose / tune 这些动作只定义了站立腿（≈0/0），此前坐下后会整条腿
        插进地板（实测鞋底埋到 -0.36m），这里补齐。 */
-    o.lLx = Math.min(o.lLx, -1.50);
-    o.lRx = Math.min(o.lRx, -1.50);
+    /* 大腿角要减去躯干前倾角 tx：腿是躯干的子节点，躯干前倾会把大腿"带着"转下来，
+       导致世界系里大腿由水平塌成下垂（实测 geo work：躯干 0.42rad 时大腿只剩 63.5°），
+       整条腿比座面解算的假设短，脚于是插进地板。这里把 tx 从大腿局部角里补回去，
+       小腿角（膝）是相对角与父级无关、保持不变 —— 于是髋-膝-踝在世界系里严格
+       落在 seatLean 的几何解上：脚底贴地、臀贴座面，且与躯干前倾多少无关。 */
+    const txc = o.tx || 0;
+    o.lLx = Math.min(o.lLx, -(1.50 + txc));
+    o.lRx = Math.min(o.lRx, -(1.50 + txc));
     o.kL = Math.max(o.kL, 1.50);
     o.kR = Math.max(o.kR, 1.50);
     o.kL = Math.max(0, o.kL - th);
@@ -5664,8 +6380,9 @@ function poseLimbs(ch, mode, t, dt, look){
   ch.head.rotation.z = A.hz;
   ch.head.rotation.y = A.hy + (look ? look.yaw || 0 : 0);
 
-  arms.L.rotation.x = A.aLx; arms.L.rotation.z = A.aLz;
-  arms.R.rotation.x = A.aRx; arms.R.rotation.z = A.aRz;
+  /* 肩部三轴（坐姿打字由 sitArmIK 反解，其余模式 y 恒为 0，与旧行为一致） */
+  arms.L.rotation.set(A.aLx, A.aLy || 0, A.aLz);
+  arms.R.rotation.set(A.aRx, A.aRy || 0, A.aRz);
   arms.L.userData.elbow.rotation.x = A.eL;
   arms.R.userData.elbow.rotation.x = A.eR;
 
@@ -5677,14 +6394,22 @@ function poseLimbs(ch, mode, t, dt, look){
   /* 手指握持（左右手独立，道具跟着握紧/松开） */
   applyGrip(ch.hands && ch.hands.L, A.gL);
   applyGrip(ch.hands && ch.hands.R, A.gR);
+  /* 打字手型：在握持基线上按权重混入"四指独立起落"，并施加手腕下压角 */
+  if (ch.hands){
+    if (A.tFL > 0.01) applyType(ch.hands.L, t, 0.00, A.tFL);
+    if (A.tFR > 0.01) applyType(ch.hands.R, t, 0.73, A.tFR);
+    if (ch.hands.L) ch.hands.L.rotation.set(A.wL, A.wLy || 0, A.wLz || 0);
+    if (ch.hands.R) ch.hands.R.rotation.set(A.wR, A.wRy || 0, A.wRz || 0);
+  }
 
   /* 手持道具 */
   if (ch.props){
     Object.keys(ch.props).forEach(n => { ch.props[n].visible = (n === T.prop || n === T.propL); });
   }
-  /* 说话 / 欢呼时嘴部开合 */
-  const talking = (mode === "talk" || mode === "point" || mode === "cheer");
-  const mv = talking ? Math.max(0, Math.sin(t * 11.0) * 0.5 + 0.5) : 0;
+  /* 说话 / 欢呼 / 凳上聊天时嘴部开合（ch.offset 错开相位，双人对坐不同频） */
+  const talking = (mode === "talk" || mode === "point" || mode === "cheer"
+                || mode === "pantryChat" || mode === "sipChat");
+  const mv = talking ? Math.max(0, Math.sin(t * 11.0 + (ch.offset || 0)) * 0.5 + 0.5) : 0;
   if (ch.head.userData.mouthIn){
     ch.head.userData.mouthIn.scale.y = 0.02 + mv * 0.85;
     ch.head.userData.mouth.scale.y = 1 + mv * 0.35;
@@ -5724,8 +6449,10 @@ const near = (p, q, r) => Math.hypot(p[0] - q[0], p[1] - q[1]) < (r || 0.30);
 /* 工位 ↔ 外界必须借道自己的"站立点"，避免从桌面里穿过去 */
 function planWalk(ch, dest){
   const cur = [ch.root.position.x, ch.root.position.z];
-  /* 目标点先推到家具外，避免航点落在家具里导致角色到不了、原地打转 */
-  const safe = freeSpot(dest[0], dest[1]);
+  /* 目标点先推到家具外，避免航点落在家具里导致角色到不了、原地打转。
+     坐具目标例外：人就是要坐到凳面中心，freeSpot 会把落点推到凳旁 0.4m 外。 */
+  const seatGoal = !!(ch.roam && ch.roam.seatTop != null);
+  const safe = seatGoal ? [dest[0], dest[1]] : freeSpot(dest[0], dest[1]);
   const atSeat = near(cur, ch.seat);
   const toSeat = near(dest, ch.seat, 0.05);
   if (toSeat && !atSeat){
@@ -5856,8 +6583,11 @@ function takePart(k, part){
   obj.scale.multiplyScalar(s);
   obj.traverse(o => { if (o.isMesh) o.castShadow = true; });
   attachTip(obj, partTip(k, key, "held"));  // P0-3：手里抱着的件也能悬停看字段
-  ch.root.add(obj);
-  obj.position.set(0, 1.02, 0.30);         // 胸前抱着
+  /* 挂 torso 而不是 root：躯干呼吸/走路微扭时箱子跟身体走，不会相对手臂滑动。
+     torso 枢轴在 root 的 y=1.00，胸前 → 局部 (0, 0.02, 0.30) ≈ 原来的世界位 */
+  const torso = ch.torso || ch.root;
+  torso.add(obj);
+  obj.position.set(0, torso === ch.root ? 1.02 : 0.02, 0.30);  // 胸前抱着
   op.held = obj;
   op.heldKey = key;
   ch.actLabel = "取下了 " + (part || "打印件");
@@ -6110,12 +6840,17 @@ function updateBeacon(dt){
   if (trayPapers) trayPapers.visible = true;
 }
 
-/* 高优先级态走位：error → 故障指示灯 / report → 文件托盘 / waiting → 原地转向镜头 */
+/* 高优先级态走位：error → 故障指示灯 / report → 文件托盘 / waiting → 看镜头（近座回座、离座原地站定） */
 function stateWant(ch, k, dt){
   const m = stateMeta[k];
   const idx = Math.max(0, AGENT_ORDER.indexOf(k));
   if (m.st === "waiting"){
-    return { dest: [ch.root.position.x, ch.root.position.z], mode: "think",
+    /* 离自己工位近 → 回座坐下看镜头（工位待确认的既有观感）；
+       离座漫游中（茶水间/健身房/机床前）→ 原地站定看镜头，绝不在无椅处悬坐 */
+    const near = ch.seat &&
+      Math.hypot(ch.root.position.x - ch.seat[0], ch.root.position.z - ch.seat[1]) < 0.6;
+    return { dest: near ? ch.seat : [ch.root.position.x, ch.root.position.z],
+             mode: "think",
              lookAt: { x: camera.position.x, z: camera.position.z } };
   }
   const spot = (m.st === "error" ? FAULT_STAND : TRAY_STAND)[idx] || ch.seat;
@@ -6315,20 +7050,38 @@ function updateHuddle(dt){
   }
 }
 
-/* 坐姿动作集合：执行到这些动作时整体下沉（工位/会议桌前） */
-const SIT_MODES = ["work", "mouse", "think", "read", "caliper", "slice", "diagnose", "tune"];
-/* 需要坐姿腿适配的动作集合（P1-calling）：phone / talk 只定义了站立腿，
+/* 坐姿动作集合：执行到这些动作时整体下沉（工位/会议桌前/高脚凳/训练凳） */
+const SIT_MODES = ["pantryChat", "work", "mouse", "think", "read", "caliper", "slice", "diagnose", "tune",
+                   "sitCurl", "benchPress", "sipStool", "phoneStool", "sipChat"];
+/* 需要坐姿腿适配的动作集合（P1-calling）：phone / talk / phoneCall 只定义了站立腿，
    坐姿基座（seatLean>0）下必须走同一套坐姿腿基线，否则坐着接电话会整条腿插进地板。
    注意：与 6250 行的 seated 判定无关，那里用的是走位意图 want.mode。 */
-const SIT_LEG_MODES = SIT_MODES.concat(["phone", "talk"]);
+const SIT_LEG_MODES = SIT_MODES.concat(["phone", "talk", "phoneCall"]);
+
+/* 入座白名单：目的地必须落在真实座位上（自己的工位椅 / 茶水间两把高脚凳 / 训练凳）。
+   全息台 read、机床前会诊 caliper/diagnose/tune、导览 qa think、漫游中收到 waiting
+   这类无椅场景若直接按 SIT_MODES 入座，会凭空悬坐 —— 统一在此判掉，落座一律站姿。 */
+function seatAtDest(ch, dest){
+  if (!dest) return false;
+  const spots = [ch.seat, DEST.stoolA, DEST.stoolB, DEST.benchSeat];
+  for (let i = 0; i < spots.length; i++){
+    const s = spots[i];
+    if (s && Math.hypot(dest[0] - s[0], dest[1] - s[1]) < 0.45) return true;
+  }
+  return false;
+}
 
 /* ===================== 空闲自由活动（各干各的） ===================== */
 const ROAM_POOL_WORKER = [
   { key: "coffee",   act: "sip",     dur: 10, label: "去茶水间接了杯咖啡" },
+  { key: "pour",     act: "pourOver",dur: 14, label: "在手冲区冲了壶咖啡",     face: -Math.PI / 2 },
+  { key: "tea",      act: "brewTea", dur: 15, label: "在茶水间泡了壶茶",       face: -Math.PI / 2 },
   { key: "water",    act: "sip",     dur: 8,  label: "到饮水机倒水" },
   { key: "pantry",   act: "tidy",    dur: 9,  label: "在茶水间收拾杯具" },
+  { key: "pantry",   act: "crouch",  dur: 8,  label: "蹲身整理下层柜里的杯具" },
   { key: "board",    act: "write",   dur: 14, label: "在白板上推演方案" },
   { key: "window",   act: "lookOut", dur: 12, label: "站在窗边放空" },
+  { key: "window",   act: "yawn",    dur: 9,  label: "站在窗边打了个哈欠伸懒腰" },
   { key: "treadmill",act: "jog",     dur: 14, label: "上跑步机跑了几分钟" },
   { key: "dumbbell", act: "lift",    dur: 12, label: "在哑铃架前做弯举" },
   { key: "mat",      act: "yoga",    dur: 12, label: "在瑜伽垫上拉伸" },
@@ -6337,25 +7090,52 @@ const ROAM_POOL_WORKER = [
   { key: "seat",     act: "squat",   dur: 9,  label: "在工位旁做几组深蹲" },
   { key: "seat",     act: "tidy",    dur: 10, label: "顺手把工位上的样品归整一下" },
   { key: "seat",     act: "hip",     dur: 8,  label: "叉腰对着屏幕出神" },
-  { key: "seat",     act: "stretch", dur: 7,  label: "坐久了站起来伸个懒腰" }
+  { key: "seat",     act: "stretch", dur: 7,  label: "坐久了站起来伸个懒腰" },
+  { key: "seat",     act: "turn",    dur: 8,  label: "原地转了圈活动颈椎" },
+  { key: "mat",      act: "crouch",  dur: 7,  label: "蹲下系了个鞋带" },
+  /* ⑥ 茶水间坐着聊天：就近挑一张高脚凳坐下，聊一会儿再回工位 */
+  { key: "stoolA",   act: "pantryChat", dur: 24, label: "在茶水间高脚凳上坐着聊天" },
+  { key: "stoolB",   act: "pantryChat", dur: 24, label: "在茶水间高脚凳上坐着聊天" },
+  /* ⑦ 坐高脚凳喝咖啡 / 边喝边聊 / 刷手机 */
+  { key: "stoolA",   act: "sipStool",   dur: 16, label: "坐在高脚凳上喝咖啡" },
+  { key: "stoolA",   act: "sipChat",    dur: 20, label: "坐在高脚凳上端着杯子聊天" },
+  { key: "stoolB",   act: "sipChat",    dur: 20, label: "坐在高脚凳上端着杯子聊天" },
+  { key: "stoolB",   act: "phoneStool", dur: 14, label: "坐在高脚凳上刷手机" },
+  /* ⑧ 训练凳：坐姿哑铃弯举 / 仰卧举铁（seatTop=0.52 凳面高） */
+  { key: "benchSeat", act: "sitCurl",    dur: 14, label: "坐在训练凳上做哑铃弯举", seatTop: 0.52, face: Math.PI / 2 },
+  { key: "benchSeat", act: "benchPress", dur: 15, label: "在训练凳上卧推杠铃",     seatTop: 0.52, face: 0 },
+  /* ⑨ 窗边接电话 / 端详成品 / 给打印件拍照 */
+  { key: "window",    act: "phoneCall", dur: 12, label: "在窗边接了个电话" },
+  { key: "printerBig", act: "admire",   dur: 10, label: "站在大型机前端详刚下线的打印件" },
+  { key: "printerBig", act: "camera",   dur: 9,  label: "给下线的打印件拍了张照" },
+  { key: "seat",      act: "admire",    dur: 9,  label: "端详工位上刚打好的样品" },
+  { key: "podium",    act: "admire",    dur: 11, label: "欣赏全息台上的模型" }
 ];
 const ROAM_POOL_HOST = [
   { key: "podium",   act: "point",   dur: 14, label: "在共识台前串讲进度" },
+  { key: "podium",   act: "clap",    dur: 8,  label: "为刚才的串讲鼓了鼓掌" },
   { key: "board",    act: "write",   dur: 16, label: "更新白板上的排期" },
   { key: "coffee",   act: "brew",    dur: 13, label: "在水吧给自己冲了杯咖啡" },
+  { key: "pour",     act: "pourOver",dur: 14, label: "在手冲区慢慢冲了杯咖啡", face: -Math.PI / 2 },
+  { key: "tea",      act: "brewTea", dur: 15, label: "在茶水间泡了壶茶",       face: -Math.PI / 2 },
   { key: "water",    act: "drink",   dur: 9,  label: "到饮水机接了杯水喝" },
   { key: "pantry",   act: "tidy",    dur: 9,  label: "把茶水间台面擦了一遍" },
   { key: "window",   act: "lookOut", dur: 12, label: "在窗边看看天气" },
+  { key: "window",   act: "yawn",    dur: 9,  label: "在窗边打了个哈欠" },
   { key: "mat",      act: "yoga",    dur: 12, label: "在瑜伽垫上拉伸放松" },
   { key: "treadmill",act: "run",     dur: 12, label: "上跑步机跑了一会儿" },
   { key: "seat",     act: "nod",     dur: 8,  label: "低头对着清单逐项确认" },
   { key: "seat",     act: "phone",   dur: 10, label: "低头回消息" },
+  { key: "window",   act: "phoneCall", dur: 12, label: "在窗边接了个电话" },
+  { key: "podium",   act: "admire",  dur: 11, label: "绕着全息模型看了一圈" },
   { key: "seat",     act: "stretch", dur: 6,  label: "站着活动了下肩颈" }
 ];
 
 /* 通用休闲活动：任何角色都可能去（与职责无关的那部分） */
 const ROAM_LEISURE = [
   { key: "coffee",   act: "brew",    dur: 13, label: "去水吧冲了杯咖啡" },
+  { key: "pour",     act: "pourOver",dur: 14, label: "去手冲区冲了杯咖啡",     face: -Math.PI / 2 },
+  { key: "tea",      act: "brewTea", dur: 15, label: "去茶水间泡了壶茶",       face: -Math.PI / 2 },
   { key: "water",    act: "drink",   dur: 9,  label: "到饮水机接了杯水喝" },
   { key: "window",   act: "lookOut", dur: 11, label: "站在窗边放空" },
   { key: "pantry",   act: "tidy",    dur: 8,  label: "在茶水间收拾杯具" },
@@ -6363,7 +7143,23 @@ const ROAM_LEISURE = [
   { key: "mat",      act: "yoga",    dur: 12, label: "在瑜伽垫上拉伸" },
   { key: "gym",      act: "side",    dur: 10, label: "在健身区做体侧拉伸" },
   { key: "seat",     act: "squat",   dur: 9,  label: "在工位旁做几组深蹲" },
-  { key: "seat",     act: "stretch", dur: 7,  label: "坐久了伸个懒腰" }
+  { key: "seat",     act: "stretch", dur: 7,  label: "坐久了伸个懒腰" },
+  { key: "seat",     act: "turn",    dur: 8,  label: "原地转了圈活动颈椎" },
+  { key: "mat",      act: "crouch",  dur: 7,  label: "蹲下系了个鞋带" },
+  { key: "window",   act: "yawn",    dur: 9,  label: "站在窗边打了个哈欠" },
+  { key: "window",   act: "phoneCall", dur: 12, label: "在窗边接了个电话" },
+  { key: "printerBig", act: "admire", dur: 10, label: "端详大型机刚下线的打印件" },
+  { key: "printerBig", act: "camera", dur: 9,  label: "给打印件拍了张存档照" },
+  { key: "podium",   act: "admire",  dur: 11, label: "欣赏全息台上的模型" },
+  /* 高脚凳对坐聊天（LEISURE：四名 Agent 的池是 role.concat(LEISURE)，pantryChat 必须在这里才抽得到） */
+  { key: "stoolA",   act: "pantryChat", dur: 24, label: "在茶水间高脚凳上坐着聊天" },
+  { key: "stoolB",   act: "pantryChat", dur: 24, label: "在茶水间高脚凳上坐着聊天" },
+  { key: "stoolA",   act: "sipStool",   dur: 16, label: "坐在高脚凳上喝咖啡" },
+  { key: "stoolA",   act: "sipChat",    dur: 20, label: "坐在高脚凳上端着杯子聊天" },
+  { key: "stoolB",   act: "sipChat",    dur: 20, label: "坐在高脚凳上端着杯子聊天" },
+  { key: "stoolB",   act: "phoneStool", dur: 14, label: "坐在高脚凳上刷手机" },
+  { key: "benchSeat", act: "sitCurl",    dur: 14, label: "坐在训练凳上做哑铃弯举", seatTop: 0.52, face: Math.PI / 2 },
+  { key: "benchSeat", act: "benchPress", dur: 15, label: "在训练凳上卧推杠铃",     seatTop: 0.52, face: 0 }
 ];
 
 /* 职责化自由活动：空闲时做的事要能看出"四道工序"的分工
@@ -6403,19 +7199,52 @@ const ROAM_ROLE = {
   ]
 };
 
-function pickRoam(ch){
+function pickRoam(ch, force){
   const pool = (ROAM_ROLE[ch.key] && !ch.isHost)
     ? ROAM_ROLE[ch.key].concat(ROAM_LEISURE)
     : (ch.isHost ? ROAM_POOL_HOST : ROAM_POOL_WORKER);
-  const p = pool[Math.floor(Math.random() * pool.length)];
-  const spots = DEST[p.key] || ch.home;
+  const p = force || pool[Math.floor(Math.random() * pool.length)];
+  /* 工位条目：坐姿动作直达自己的椅子（DEST 没有 "seat" 键，旧兜底 ch.home 是椅后 1m 的
+     站立点 —— 坐姿动作会在那儿悬坐/站着隔椅比划）；站姿动作仍去站立点，不与椅子穿模 */
+  const sitSeat = p.key === "seat" && SIT_MODES.indexOf(p.act) >= 0;
+  const spots = sitSeat ? ch.seat : (DEST[p.key] || ch.home);
+  /* 座面高度：条目自带 seatTop（训练凳 0.52）优先；高脚凳按 key 兜底 0.6625 */
+  const seatTop = (p.seatTop != null) ? p.seatTop
+    : ((p.key === "stoolA" || p.key === "stoolB") ? 0.6625 : null);
   ch.roam = {
-    phase: "go", left: 0, act: p.act, label: p.label,
+    phase: "go", left: 0, act: p.act, label: p.label, seatTop: seatTop,
     face: (p.face != null ? p.face : null),
-    spot: [spots[0] + (Math.random() - 0.5) * 0.5, spots[1] + (Math.random() - 0.5) * 0.5],
+    spot: (seatTop != null || sitSeat)
+      ? [spots[0], spots[1]]                                   // 坐具/工位椅不抖动，坐正
+      : [spots[0] + (Math.random() - 0.5) * 0.5, spots[1] + (Math.random() - 0.5) * 0.5],
     dur: p.dur
   };
+  if (ch.roam.face == null){
+    const cf = stoolChatFace(ch, p.act, ch.roam.spot);
+    if (cf != null) ch.roam.face = cf;
+  }
   ch.actLabel = p.label;
+}
+
+/* 高脚凳聊天朝向：配对凳上（或正在落座的）有人则面向对方，独坐则面向茶水台。
+   出 pickRoam 与 act 阶段共用 —— 后到的人会把先到的人"转"过来面对自己。 */
+function stoolChatFace(ch, act, spot){
+  if (act !== "pantryChat" && act !== "sipChat") return null;
+  const key = (Math.hypot(spot[0] - DEST.stoolA[0], spot[1] - DEST.stoolA[1]) < 0.5)
+    ? "stoolB" : "stoolA";
+  const pairSpot = DEST[key];
+  let partnerPos = null;
+  Object.keys(characters).forEach(ck => {
+    if (ck === ch.key) return;
+    const c = characters[ck];
+    if (!c) return;
+    const a = c.roam && c.roam.act;
+    if (a !== "pantryChat" && a !== "sipChat") return;
+    const ps = (c.roam && c.roam.spot) || c.current;
+    if (ps && Math.hypot(ps[0] - pairSpot[0], ps[1] - pairSpot[1]) < 0.45) partnerPos = ps;
+  });
+  const toward = partnerPos || DEST.coffee;
+  return Math.atan2(toward[0] - spot[0], toward[1] - spot[1]);
 }
 
 function roamWant(ch, dt){
@@ -6434,6 +7263,12 @@ function roamWant(ch, dt){
     const arrived = walkTo(ch, r.spot, dt);
     if (arrived){
       r.phase = "act"; r.left = r.dur;
+      ch.seatTop = (r.seatTop != null ? r.seatTop : null);   // ⑥ 坐吧台凳/工位椅各自的座高
+      if (ch.seatTop != null){
+        /* 到位吸附：路径规划/碰撞消解可能留下厘米~分米级残差，坐具必须精确落座 */
+        ch.current[0] = r.spot[0]; ch.current[1] = r.spot[1];
+        ch.seatHome = r.spot;
+      } else ch.seatHome = null;
       return { dest: r.spot, mode: "stand", face: (r.face != null ? r.face : ch.facing) };
     }
     return { dest: r.spot, mode: "walk" };
@@ -6441,19 +7276,27 @@ function roamWant(ch, dt){
   if (r.phase === "act"){
     r.left -= dt;
     if (r.left <= 0){
+      /* 端喝类动作结束后把杯子带回工位（举着走回去，到座位再放下） */
+      r.carryBack = ["sip", "drink", "brew", "pourOver", "brewTea", "sipStool", "sipChat"].indexOf(r.act) >= 0;
       r.phase = "back";
-      return { dest: r.spot, mode: "stand", face: ch.facing };
+      ch.seatTop = null;                                     // 起身离凳复位，回工位用默认椅高
+      ch.seatHome = null;
+      return { dest: r.spot, mode: (r.carryBack ? "carryCup" : "stand"), face: ch.facing };
     }
-    return { dest: r.spot, mode: r.act, face: (r.face != null ? r.face : ch.facing) };
+    /* 凳上聊天：每帧重解析朝向 —— 对方后到/先走都会即时转头，不用等下一轮 pickRoam */
+    let actFace = (r.face != null ? r.face : ch.facing);
+    const cf = stoolChatFace(ch, r.act, r.spot);
+    if (cf != null){ actFace = cf; r.face = cf; }
+    return { dest: r.spot, mode: r.act, face: actFace };
   }
-  /* back */
+  /* back：冲了咖啡/茶就端着杯子走回工位 */
   const arrived = walkTo(ch, ch.seat, dt);
   if (arrived){
     ch.roam = { phase: "work", left: 10 + Math.random() * 14, mode: idleModeOf(ch) };
     ch.actLabel = "";
     return { dest: ch.seat, mode: ch.roam.mode, face: ch.facing };
   }
-  return { dest: ch.seat, mode: "walk" };
+  return { dest: ch.seat, mode: (r.carryBack ? "carryCup" : "walk") };
 }
 
 /* 待在自己位置上时的姿态：协调员站着讲解/看资料，四位 Agent 坐工位干活 */
@@ -6555,6 +7398,32 @@ const CAD_WIRE = (function(){
 })();
 
 const IDLE_SCREENS = ["code", "cad", "chat", "game", "video", "chart", "social"];
+/* ③ 岗位专属屏：几何看模型、可打印性看切片/层预览、失效看日志与清单、优化看曲线与建议 */
+const ROLE_SCREENS = {
+  geometry:     ["cad", "cad", "code", "chart", "chat"],
+  printability: ["layers", "cad", "chart", "code", "chat"],
+  failure:      ["log", "table", "code", "chart", "chat"],
+  optimization: ["suggest", "chart", "social", "code", "chat"],
+  coordinator:  ["dash", "chart", "chat", "video", "social"]
+};
+/* ⑪ 逐岗位代码屏：不同工位跑不同脚本，不再是全员 pipe.py */
+const ROLE_CODE = {
+  geometry:     { file: "watertight.py",  fn: "check_watertight", cls: "Geometry", err: "MeshError",     chk: "g.watertight",  cmd: "python watertight.py --mesh part.stl",    ok: "水密校验通过 · " },
+  printability: { file: "layer_check.py", fn: "scan_layers",      cls: "Slice",    err: "ThinWallError", chk: "g.thin_wall",   cmd: "python layer_check.py --gcode out.gcode", ok: "层间粘接 OK · " },
+  failure:      { file: "crack_probe.py", fn: "probe_cracks",     cls: "FMEA",     err: "Delamination",  chk: "g.crack_risk",  cmd: "python crack_probe.py --part fail.stl",  ok: "裂纹扫描 0 命中 · " },
+  optimization: { file: "topo_density.py", fn: "relax_density",   cls: "Topology", err: "Overstress",    chk: "g.converged",   cmd: "python topo_density.py --load caseA",    ok: "密度场收敛 · " },
+  coordinator:  { file: "pipe.py",        fn: "run_pipeline",     cls: "Geometry", err: "MeshError",     chk: "g.watertight",  cmd: "python pipe.py --mesh part.stl",         ok: "校验通过 · " }
+};
+/* ⑪ 逐工位 CAD 文件名 + 屏幕数值散列：同屏不再全员一份 mesh_view.stl / 同一组面数 */
+const ROLE_CAD_FILE = {
+  geometry: "bracket_v3.stl", printability: "duct_v7.3mf", failure: "hinge_fail.stl",
+  optimization: "lightweight_v2.stl", coordinator: "mesh_view.stl"
+};
+function scrSeed(str){
+  let h = 0;
+  for (let i = 0; i < String(str).length; i++) h = (h * 31 + String(str).charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
 
 function scrHead(ctx, W, H, accent, title, right){
   ctx.fillStyle = "#070c13"; ctx.fillRect(0, 0, W, H);
@@ -6588,7 +7457,9 @@ function drawScreen(ch, dt, t){
   } else {
     S.timer -= dt;
     if (S.timer <= 0){
-      S.mode = IDLE_SCREENS[Math.floor(Math.random() * IDLE_SCREENS.length)];
+      const rp = ROLE_SCREENS[S.role];
+      S.mode = rp ? rp[Math.floor(Math.random() * rp.length)]
+                  : IDLE_SCREENS[Math.floor(Math.random() * IDLE_SCREENS.length)];
       S.timer = 9 + Math.random() * 9;
     }
   }
@@ -6601,7 +7472,8 @@ function drawScreen(ch, dt, t){
   ctx.globalAlpha = 1;
 
   if (m === "cad"){
-    scrHead(ctx, W, H, A, "mesh_view.stl", "BambuVision 3D");
+    scrHead(ctx, W, H, A, ROLE_CAD_FILE[S.role] || "mesh_view.stl",
+            S.role === "printability" ? "层检" : "BambuVision 3D");
     ctx.strokeStyle = "rgba(120,200,255,0.16)";
     ctx.lineWidth = 1;
     for (let gx = 0; gx < W; gx += 24){ ctx.beginPath(); ctx.moveTo(gx, 28); ctx.lineTo(gx, H - 22); ctx.stroke(); }
@@ -6631,9 +7503,38 @@ function drawScreen(ch, dt, t){
     ctx.beginPath(); ctx.moveTo(20, H - 26); ctx.lineTo(120, H - 26); ctx.stroke();
     ctx.fillStyle = "rgba(190,220,240,0.9)";
     ctx.font = "11px monospace";
-    ctx.fillText("86.40 mm", 22, H - 32);
+    ctx.fillText((82 + scrSeed(S.key || "mm") % 90 / 10).toFixed(2) + " mm", 22, H - 32);
     ctx.fillStyle = A;
-    ctx.fillText("V 12,486  F 24,972  T 0.42", 10, H - 10);
+    {
+      const sd = scrSeed(S.key || S.role || "cad");
+      ctx.fillText("V " + (11200 + (sd % 2900)).toLocaleString() +
+                   "  F " + (22800 + (sd % 4100)).toLocaleString() +
+                   "  T " + (0.38 + (sd % 9) * 0.01).toFixed(2), 10, H - 10);
+    }
+  } else if (m === "layers"){
+    scrHead(ctx, W, H, A, "G-code 层预览", "0.2mm");
+    /* ⑪ 逐层剖面：26 根层柱随时间上滚，红层=悬垂预警，扫掠线标当前层 */
+    {
+      const sd = scrSeed(S.key || "ly");
+      const base = Math.floor(t * 2.2) % 14;
+      for (let i = 0; i < 26; i++){
+        const li = base + i;
+        const h = 8 + Math.abs(Math.sin(li * 0.9 + sd * 0.01)) * 78 + (li % 7 === 0 ? 14 : 0);
+        const warn = li % 11 === 3;
+        ctx.globalAlpha = warn ? 0.95 : 0.35 + 0.5 * Math.abs(Math.sin(li * 1.3 + sd * 0.013));
+        ctx.fillStyle = warn ? "#f87171" : A;
+        ctx.fillRect(14 + i * 13.4, H - 36 - h, 10, h);
+      }
+      ctx.globalAlpha = 1;
+      const scanX = 14 + ((t * 55) % (W - 32));
+      ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(scanX, 30); ctx.lineTo(scanX, H - 30); ctx.stroke();
+      ctx.fillStyle = "rgba(180,210,235,0.85)";
+      ctx.font = "10px monospace";
+      ctx.fillText("L" + (base * 12 + 40 + Math.floor(t * 2) % 90) + "  z=" +
+                   ((base * 12 + 40) * 0.2).toFixed(1) + "mm   悬垂角 " +
+                   (42 + (sd % 160) / 10).toFixed(1) + "°", 12, H - 14);
+    }
   } else if (m === "print"){
     scrHead(ctx, W, H, A, "打印监控", "LIVE");
     const job = printJobs.big;
@@ -6665,6 +7566,40 @@ function drawScreen(ch, dt, t){
     ctx.beginPath(); ctx.arc(W - 44, 132, 22, 0, Math.PI * 2 * 0.72); ctx.stroke();
     ctx.font = "10px monospace";
     ctx.fillText(FILAMENT.material + " " + FILAMENT.remainPct + "%", W - 74, 164);
+  } else if (m === "log"){
+    scrHead(ctx, W, H, A, "失效日志", "stream");
+    /* ⑪ 滚动日志屏：时间戳 + 级别 + 消息，底部闪烁光标——失效工位的"tail -f" */
+    {
+      const L = [
+        ["12:04", "INFO ", "#34d399", "scan.start layer=842"],
+        ["12:04", "WARN ", "#fbbf24", "overhang 57.3° @ (42,18)"],
+        ["12:04", "INFO ", "#34d399", "FMEA: 层间剥离 S=8 中"],
+        ["12:05", "ERROR", "#f87171", "E_WARP edge +0.42mm"],
+        ["12:05", "INFO ", "#34d399", "suggest: brim 5mm / bed -4°C"],
+        ["12:05", "WARN ", "#fbbf24", "nozzle ΔT 2.1°C drift"],
+        ["12:06", "INFO ", "#34d399", "recheck pass  ✓"]
+      ];
+      const off = Math.floor(t * 0.7);
+      for (let i = 0; i < 7; i++){
+        const row = L[(off + i) % L.length];
+        const y = 36 + i * 22;
+        ctx.fillStyle = "rgba(255,255,255,0.03)";
+        ctx.fillRect(6, y - 12, W - 12, 20);
+        ctx.font = "10px monospace";
+        ctx.fillStyle = "rgba(150,180,210,0.8)";
+        ctx.fillText(row[0] + ":" + String(10 + ((off + i) * 7) % 50).padStart(2, "0"), 10, y);
+        ctx.fillStyle = row[2];
+        ctx.fillText(row[1], 58, y);
+        ctx.fillStyle = "rgba(205,220,237,0.92)";
+        ctx.font = "11px monospace";
+        ctx.fillText(row[3], 104, y);
+      }
+      if (Math.floor(t * 2) % 2){
+        ctx.fillStyle = A;
+        ctx.fillRect(10, H - 24, 8, 12);
+        ctx.fillRect(12, H - 20, 18, 2);
+      }
+    }
   } else if (m === "table"){
     scrHead(ctx, W, H, A, "FMEA 失效模式清单", "RPN");
     const rows = [["层间剥离", "8", "中"], ["喷嘴堵塞", "6", "低"],
@@ -6709,15 +7644,25 @@ function drawScreen(ch, dt, t){
     });
     scrBar(ctx, 14, H - 30, W - 28, 10, 0.35 + 0.45 * Math.abs(Math.sin(t * 0.6)), A);
   } else if (m === "chat"){
-    scrHead(ctx, W, H, A, "Marvis", "在线");
-    const msgs = [["M", "帮我出一版可打印的最优结构", A],
-                  ["A", "已收到，正在生成优化建议…", "#2b3646"],
-                  ["M", "顺便把支撑降到最少", A],
-                  ["A", "好的，正在重算悬垂与支撑", "#2b3646"]];
+    scrHead(ctx, W, H, A, "Agent 协作", "在线");
+    /* ⑪ 岗位话术池：本角色与协作方的真实工序对话（替代旧版 Marvis 残留） */
+    const CHAT_POOL = {
+      geometry:     [["几", "网格体检完成，水密 ✓", A], ["优", "收到，马上做拓扑优化", "#2b3646"],
+                     ["几", "V/F 面数已归档", A], ["优", "减重方案明早同步", "#2b3646"]],
+      printability: [["打", "悬垂 >55° 标了 3 处", A], ["失", "收到，评估翘边风险中", "#2b3646"],
+                     ["打", "壁厚 1.2mm 复检通过 ✓", A], ["失", "RPN 最高项：层间剥离", "#2b3646"]],
+      failure:      [["失", "FMEA 清单更新至 v3", A], ["打", "打印参数已按建议收紧", "#2b3646"],
+                     ["失", "热漂移风险降为低", A], ["打", "新料卷上机，余量 87%", "#2b3646"]],
+      optimization: [["优", "减重 12% 方案已出", A], ["几", "包围盒复核无冲突 ✓", "#2b3646"],
+                     ["优", "圆角 R2 建议已采纳", A], ["几", "新一轮网格已就绪", "#2b3646"]],
+      coordinator:  [["协", "四道工序看板已刷新", A], ["几", "几何体检完成", "#2b3646"],
+                     ["优", "优化建议待评审", "#2b3646"], ["打", "打印机就位，随时可打", "#2b3646"]]
+    };
+    const msgs = CHAT_POOL[S.role] || CHAT_POOL.coordinator;
     const n = Math.min(msgs.length, 1 + Math.floor((t % 8) / 1.6));
     msgs.slice(0, n).forEach((mm, i) => {
       const y = 38 + i * 40;
-      const right = mm[0] === "M";
+      const right = i % 2 === 0;
       const bw = 150 + (i % 2) * 40;
       ctx.fillStyle = mm[2];
       roundRectPath(ctx, right ? W - bw - 12 : 12, y, bw, 30, 10); ctx.fill();
@@ -6729,7 +7674,7 @@ function drawScreen(ch, dt, t){
       ctx.fillStyle = A; ctx.fillRect(14, H - 22, 26, 9);
     }
   } else if (m === "game"){
-    scrHead(ctx, W, H, A, "BREAKOUT", "SCORE 1280");
+    scrHead(ctx, W, H, A, "BREAKOUT", "SCORE " + (900 + scrSeed(S.key || "g") % 1600));
     const bx = W / 2 + Math.sin(t * 1.3) * 120, by = H / 2 + Math.cos(t * 0.9) * 60;
     for (let r = 0; r < 3; r++)
       for (let c = 0; c < 7; c++){
@@ -6768,9 +7713,13 @@ function drawScreen(ch, dt, t){
     for (let i = 1; i < 4; i++){
       ctx.beginPath(); ctx.moveTo(14, H - 34 - i * 30); ctx.lineTo(W - 12, H - 34 - i * 30); ctx.stroke();
     }
-    ctx.fillStyle = "rgba(180,210,235,0.85)";
-    ctx.font = "11px monospace";
-    ctx.fillText("打印 128 件   成功率 96.1%", 14, H - 12);
+    {
+      const sd = scrSeed(S.key || "ch");
+      ctx.fillStyle = "rgba(180,210,235,0.85)";
+      ctx.font = "11px monospace";
+      ctx.fillText("打印 " + (96 + sd % 80) + " 件   成功率 " +
+                   (94 + (sd % 45) / 10).toFixed(1) + "%", 14, H - 12);
+    }
   } else if (m === "social"){
     scrHead(ctx, W, H, A, "动态", "12 条新");
     for (let i = 0; i < 4; i++){
@@ -6781,7 +7730,7 @@ function drawScreen(ch, dt, t){
       ctx.beginPath(); ctx.arc(28, y + 17, 11, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#d6e3f0";
       ctx.font = "11px -apple-system,'PingFang SC',sans-serif";
-      ctx.fillText(["优化师", "打工人", "打印哥", "小助理"][i] + "：搞定一版新结构 ✓", 46, y + 17);
+      ctx.fillText(["几何", "打印", "分析", "优化"][i] + "：搞定一版新结构 ✓", 46, y + 17);
       ctx.fillStyle = "#f87171";
       ctx.fillText("♥", W - 34, y + 17);
     }
@@ -6805,13 +7754,14 @@ function drawScreen(ch, dt, t){
     ctx.font = "12px monospace";
     ctx.fillText("E_TIMEOUT @ step " + (3 + Math.floor(t) % 4), 20, H / 2 + 20);
   } else {
-    /* code：代码编辑器 */
-    scrHead(ctx, W, H, A, "pipe.py", "Python");
+    /* code：代码编辑器（⑪ 按岗位换脚本 / 函数 / 报错类型 / 终端命令） */
+    const C = ROLE_CODE[S.role] || ROLE_CODE.coordinator;
+    scrHead(ctx, W, H, A, C.file, "Python");
     const lines = [
-      [["def ", "#c084fc"], ["run_pipeline", "#7dd3fc"], ["(mesh):", "#e2e8f0"]],
-      [["    ", "#e2e8f0"], ["g = ", "#e2e8f0"], ["Geometry", "#7dd3fc"], ["(mesh)", "#e2e8f0"]],
-      [["    ", "#e2e8f0"], ["if ", "#c084fc"], ["g.watertight", "#93c5fd"], [" is ", "#c084fc"], ["False", "#fca5a5"], [":", "#e2e8f0"]],
-      [["        ", "#e2e8f0"], ["raise ", "#c084fc"], ["MeshError", "#fca5a5"], ["()", "#e2e8f0"]],
+      [["def ", "#c084fc"], [C.fn, "#7dd3fc"], ["(mesh):", "#e2e8f0"]],
+      [["    ", "#e2e8f0"], ["g = ", "#e2e8f0"], [C.cls, "#7dd3fc"], ["(mesh)", "#e2e8f0"]],
+      [["    ", "#e2e8f0"], ["if ", "#c084fc"], [C.chk, "#93c5fd"], [" is ", "#c084fc"], ["False", "#fca5a5"], [":", "#e2e8f0"]],
+      [["        ", "#e2e8f0"], ["raise ", "#c084fc"], [C.err, "#fca5a5"], ["()", "#e2e8f0"]],
       [["    ", "#e2e8f0"], ["return ", "#c084fc"], ["solver", "#7dd3fc"], [".", "#e2e8f0"], ["optimize", "#7dd3fc"], [".", "#e2e8f0"], ["go", "#7dd3fc"], ["()", "#e2e8f0"]]
     ];
     const scroll = Math.floor((t * 2) % 2);
@@ -6832,9 +7782,9 @@ function drawScreen(ch, dt, t){
     ctx.fillRect(0, H - 40, W, 40);
     ctx.fillStyle = "rgba(52,211,153,0.9)";
     ctx.font = "11px monospace";
-    ctx.fillText("$ python pipe.py --mesh part.stl", 10, H - 26);
+    ctx.fillText("$ " + C.cmd, 10, H - 26);
     ctx.fillStyle = "rgba(200,220,240,0.75)";
-    ctx.fillText("✓ 校验通过 · " + (42 + Math.floor(t) % 9) + " ms", 10, H - 10);
+    ctx.fillText("✓ " + C.ok + (42 + scrSeed(S.key || S.role) % 9 + Math.floor(t) % 4) + " ms", 10, H - 10);
   }
   S.tex.needsUpdate = true;
 }
@@ -6852,9 +7802,21 @@ function microMotion(ch, dt, t){
     ch.blinkHold -= dt;
     if (ch.blinkHold <= 0) eyes.forEach(e => { e.scale.y = 1; });
   }
-  /* 呼吸：胸腔轻微起伏 */
-  const br = 1 + Math.sin(t * 1.7 + (ch.offset || 0)) * 0.012;
-  ch.torso.scale.set(br, 1, br);
+  /* 呼吸：胸腔起伏——纵向明显、横向微弱（像肺活物，不像气球整体膨胀） */
+  const phB = Math.sin(t * 1.7 + (ch.offset || 0));
+  ch.torso.scale.set(1 + phB * 0.006, 1, 1 + phB * 0.018);
+  /* ⑩ 视线微动：真人静止时眼神从不"锁死"——慢漂移 + 偶发小扫视（快速扫过去、慢慢停） */
+  if (ch.gazeT == null){ ch.gazeT = 0.6 + Math.random() * 2.2; ch.gx = 0; ch.gy = 0; ch.gxT = 0; ch.gyT = 0; }
+  ch.gazeT -= dt;
+  if (ch.gazeT <= 0){
+    ch.gazeT = 1.0 + Math.random() * 2.8;
+    ch.gxT = (Math.random() - 0.5) * 0.13;
+    ch.gyT = (Math.random() - 0.5) * 0.05;
+  }
+  const gk = Math.min(1, dt * 9);
+  ch.gx += (ch.gxT - ch.gx) * gk;
+  ch.gy += (ch.gyT - ch.gy) * gk;
+  eyes.forEach(e => { e.rotation.y = ch.gx; e.rotation.x = ch.gy; });
 }
 
 /* ===================== 主循环 tick ===================== */
@@ -6944,15 +7906,42 @@ function tick(dt, t){
        旧实现用固定 seatDrop=0.50，对 1.8m 角色会多沉约 4cm —— 臀部陷进椅垫、脚跟插进地板。 */
     const sc = ch.cfg.height / 1.86;
     const C = CONFIG.character;
-    const seated = arrived && !ch.isHost && SIT_MODES.indexOf(want.mode) >= 0;
+    /* 入座 = 意图是坐 + 目的地真有座位（seatAtDest 白名单）+ 当前落点真在座位上。
+       第三条不可省：walkTo 卡死看门狗（stuck×3）会谎报 arrived——只查目的地会在
+       半路"就地坐下"悬空（导览拥堵时 failure 在桌对面镜像点悬坐过）。 */
+    const seated = arrived && !ch.isHost && SIT_MODES.indexOf(want.mode) >= 0
+                 && seatAtDest(ch, want.dest) && seatAtDest(ch, ch.current);
+    ch.seated = seated;   // 供 poseLimbs 判断"坐姿腿基线"是否生效：与 seatLean 反解成败解耦
+    /* 工位椅反应：入座时跟转角色、起身沿背向桌方向让开 ~0.14m；只作用于自己的工位椅
+       （seatTop 非空 = 高脚凳/训练凳，那边没有这把椅子）。纯视觉，不碰 seatAtDest/标定。 */
+    if (ch.chair && ch.chair.userData.home){
+      const H = ch.chair.userData.home;
+      const atDesk = seated && ch.seatTop == null;
+      const yawT = atDesk ? ch.root.rotation.y : H.yaw;
+      let dYaw = yawT - ch.chair.rotation.y;
+      while (dYaw > Math.PI) dYaw -= Math.PI * 2;
+      while (dYaw < -Math.PI) dYaw += Math.PI * 2;
+      ch.chair.rotation.y += dYaw * Math.min(1, dt * 5);
+      const back = atDesk ? 0 : 0.14;
+      const cx = H.x - H.fx * back, cz = H.z - H.fz * back;
+      ch.chair.position.x += (cx - ch.chair.position.x) * Math.min(1, dt * 4);
+      ch.chair.position.z += (cz - ch.chair.position.z) * Math.min(1, dt * 4);
+    }
     let wantY = -C.standGap * sc;    // 站立/走动基准：把鞋底压到地面（模型鞋底离髋略短）
     ch.seatLean = 0;
     if (seated){
       const top = ch.seatTop != null ? ch.seatTop : C.seatTop;
-      const hipW = top + 0.005;                                   // 目标髋高：略高于座面
-      wantY = Math.max(-C.seatDrop * sc, hipW - C.hipLocal * sc);
-      const cosT = Math.max(0, Math.min(1, (hipW / sc - C.thighDrop) / C.shinLen));
-      ch.seatLean = Math.acos(cosT);                              // 小腿相对竖直的前伸角
+      if (want.mode === "benchPress"){
+        /* 仰卧卧推：髋沉到凳面下一点让脚掌贴地；腿几何完全由姿势自己给，
+           不做坐姿小腿前伸反解（那是为"坐在椅子上"设计的，仰卧时会算错） */
+        wantY = Math.max(-C.seatDrop * sc, (top - 0.055) - C.hipLocal * sc);
+        ch.seatLean = 0;
+      } else {
+        const hipW = top + 0.005;                                   // 目标髋高：略高于座面
+        wantY = Math.max(-C.seatDrop * sc, hipW - C.hipLocal * sc);
+        const cosT = Math.max(0, Math.min(1, (hipW / sc - C.thighDrop) / C.shinLen));
+        ch.seatLean = Math.acos(cosT);                              // 小腿相对竖直的前伸角
+      }
     }
     if (ch.groundFixCur == null) ch.groundFixCur = 0;   // 标定出的落地残差（慢速生效，见下方标定块）
     ch.root.position.y += (wantY + ch.groundFixCur - ch.root.position.y) * Math.min(1, dt * 6);
@@ -6966,8 +7955,10 @@ function tick(dt, t){
       while (d < -Math.PI) d += Math.PI * 2;
       look = { yaw: Math.max(-0.70, Math.min(0.70, d * 0.55)) };
     }
-    /* calling v0：通话中覆盖动作（phone / talk），只影响已到位角色，不改走位链 */
-    ch.dbgMode = arrived ? (ch.callAct || want.mode) : "walk";
+    /* calling v0：通话中覆盖动作（phone / talk），只影响已到位角色，不改走位链。
+       carryCup：端着杯子回工位时即使还在路上也走"端杯步态"（带杯摆臂），不退回空手 walk */
+    ch.dbgMode = arrived ? (ch.callAct || want.mode)
+               : (want.mode === "carryCup" ? "carryCup" : "walk");
     poseLimbs(ch, ch.dbgMode, t + (ch.offset || 0), dt, look);
     microMotion(ch, dt, t);
     drawScreen(ch, dt, t);
@@ -6978,12 +7969,15 @@ function tick(dt, t){
        加上姿势过渡期鞋底高度每帧都在变 —— 就是"坐着/站着一直颤抖"。
        现在 position.y 只由一条平滑曲线驱动，采样结束目标即冻结，稳态零高频抖动。 */
     const gfKey = seated
-      ? "sit" + (ch.seatTop != null ? ch.seatTop.toFixed(2) : "")
+      ? "sit" + (ch.seatTop != null ? ch.seatTop.toFixed(2) : "") + (want.mode === "benchPress" ? "p" : "")
       : "stand";
     if (!arrived){
       ch.gfKey = null; ch.gfN = 0;          // 走动中不标定，下次到位重来
+      ch.groundFix = 0;                     // 走动时清零：否则上一处坐姿学到的修正会跟着人走，
+                                            //   走路时被凭空抬高/压低（实测 t76 出现 -0.038 顽固残留）
     } else if (ch.gfKey !== gfKey){
       ch.gfKey = gfKey; ch.gfN = 0;         // 坐/站（或换椅子）切换后重标
+      ch.groundFix = 0;                     // 换场景先归零重学，避免旧场景的修正被套用到新场景
     }
     if (ch.groundFix == null) ch.groundFix = 0;
     if (arrived && ch.gfN < 36){
@@ -6993,8 +7987,14 @@ function tick(dt, t){
         const fy = footMinY(ch);
         /* 只学习"脚本来就该踩地"的厘米级残差；残差大于 15cm 说明这个姿势的腿脚本
            就没打算落地（抬腿/伸腿），学进去会把角色整体抬起或压到 clamp 上限。 */
-        if (isFinite(fy) && Math.abs(fy) < 0.15)
-          ch.groundFix = Math.max(-0.09, Math.min(0.09, ch.groundFixCur - fy));
+        if (isFinite(fy) && Math.abs(fy) < 0.15){
+          let tgt = ch.groundFixCur - fy;
+          /* 坐姿只修"抬"、不修"压"：坐着的脚本来就可能合理地离地（高脚凳悬腿），
+             一压就会把臀部压进座面（实测茶水间高脚凳被压 -0.09 后臀沉入凳面）。 */
+          tgt = seated ? Math.max(0, Math.min(0.09, tgt))
+                       : Math.max(-0.09, Math.min(0.09, tgt));
+          ch.groundFix = tgt;
+        }
       }
     }
     ch.groundFixCur += (ch.groundFix - ch.groundFixCur) * Math.min(1, dt * 4.0);
@@ -7498,8 +8498,7 @@ function callEnsureDom(){
     e.stopPropagation();
     if (e.key === "Enter"){ e.preventDefault(); send(); }
   });
-  /* calling v1：语音已开启时才往面板里补语音控件（未开启 = v0 面板原样） */
-  if (CALLV.on) callVoiceMount();
+  /* ① 面板固定为 v0 简洁形态：语音控件（按住说话 / 语音开关 / 提示条）一律不注入 */
   return el;
 }
 function callRenderHead(){
@@ -7534,8 +8533,14 @@ function call(id, opts){
   callEnsureDom();
   CALL.el.style.display = "block";
   CALL.el.querySelector(".office-call-time").textContent = "00:00";
+  callHintEnsure();            /* 提示条先就位：后续任何一级失败都能直接亮到面板 */
+  callVoiceHint("", false);    /* 清掉上一通遗留的失败红字，避免旧状态误导 */
   callPush("sys", t("call.start").replace("{name}", ch.name || id));
-  ch.callAct = "phone"; ch.callTalkT = 0;
+  ch.callAct = "phoneCall"; ch.callTalkT = 0;
+  /* ① 点了通话 = 明确要听：静默打开语音输出（只播报，不建任何面板控件）。
+     麦克风不再启动（面板已无"按住说话"），实时语音插件若接管，会在下面的
+     start 钩子里再把它关掉，优先级不变。 */
+  if (!CALLV.on) callVoice(true);
   callFire(id, "start", null);
   /* 开场问候：钩子方没接管（仍无对方消息）就用内置文案 */
   CALL.pending = 1;
@@ -7602,7 +8607,7 @@ function callTick(){
   if (!CALL.active) return;
   const ch = characters[CALL.peer];
   if (!ch){ callEnd(); return; }
-  ch.callAct = (ch.callTalkT && performance.now() - ch.callTalkT < CALL_TALK_MS) ? "talk" : "phone";
+  ch.callAct = (ch.callTalkT && performance.now() - ch.callTalkT < CALL_TALK_MS) ? "talk" : "phoneCall";
   if (CALL.el){
     const s = Math.floor((performance.now() - CALL.t0) / 1000);
     CALL.el.querySelector(".office-call-time").textContent =
@@ -7665,13 +8670,48 @@ function callVoiceProbe(force){
   return _callvProbe;
 }
 /* 面板提示（用于明示降级原因，不弹窗、不打断输入） */
+/* 提示条懒挂载：把 .office-call-hint 真正插进当前通话面板。
+   只插提示条，不注入任何按钮（mic / 语音开关仍保持不注入，v0 简洁形态不变）。
+   此前 callVoiceMount() 全文件无调用点，CALLV.hintEl 恒为 null，导致所有失败提示
+   只写内存、界面永不显示（GLM 1113 欠费 / ASR 503 等故障因此静默）；
+   面板每次重开会重建节点，这里用 isConnected + parentNode 判定失效后重挂。 */
+function callHintEnsure(){
+  if (!CALL.el) return null;
+  if (CALLV.hintEl && CALLV.hintEl.isConnected && CALLV.hintEl.parentNode === CALL.el) return CALLV.hintEl;
+  const hint = document.createElement("div");
+  hint.className = "office-call-hint";
+  hint.dataset.role = "voice-hint";
+  hint.style.display = "none";
+  const foot = CALL.el.querySelector(".office-call-foot");
+  if (foot && foot.parentNode === CALL.el) CALL.el.insertBefore(hint, foot.nextSibling);
+  else CALL.el.appendChild(hint);
+  CALLV.hintEl = hint;
+  return hint;
+}
 function callVoiceHint(text, warn){
   CALLV.hint = text || ""; CALLV.hintWarn = !!warn;
+  if (!CALLV.hintEl || !CALLV.hintEl.isConnected) callHintEnsure();
   if (CALLV.hintEl){
     CALLV.hintEl.textContent = CALLV.hint;
-    CALLV.hintEl.style.display = CALLV.hint ? "" : "none";
+    /* 必须写 block：基础类 .office-call-hint 自带 display:none，
+       空串等于移除内联覆盖 → 回落到 none，提示文字写进去也永远看不见 */
+    CALLV.hintEl.style.display = CALLV.hint ? "block" : "none";
     CALLV.hintEl.classList.toggle("is-warn", CALLV.hintWarn);
   }
+}
+/* 语音链路故障 → 通话面板常驻提示位（不会被对话气泡覆盖）。
+   面板不存在时回落角色气泡 + 控制台，保证任何一级失败都不静默。 */
+function voiceFail(text){
+  const s = text == null ? "" : String(text);
+  if (s){
+    if (CALL.el) callHintEnsure();
+    callVoiceHint(s, true);
+    if (!CALLV.hintEl && CALL.peer) say(CALL.peer, s);
+    console.warn("[voice] fail:", s);
+  } else {
+    callVoiceHint("", false);
+  }
+  return { shown: !!CALLV.hintEl, text: s };
 }
 /* 刷语音控件外观（文案 / 可用态 / 聆听态）；未建控件时立即返回 */
 function callVoiceRender(){
@@ -7878,7 +8918,8 @@ function callVoice(on){
   CALLV.on = on === undefined ? !CALLV.on : !!on;
   CALLV.sr = callVoiceSupported();
   if (CALLV.on){
-    callVoiceMount();
+    /* ① 静默模式：只启播报链路（TTs / speechSynthesis 兜底），绝不创建面板控件，
+       因此 CALLV.vbtn / micBtn / hintEl 恒为 null，渲染路径对 DOM 零影响 */
     callVoiceProbe().then(ok => {
       if (!ok) callVoiceHint(t("call.ttsFail"), true);
       else if (!CALLV.sr) callVoiceHint(t("call.srUnavailable"), true);
@@ -8218,7 +9259,9 @@ function tourWant(ch, k){
   if (T.phase === "summoning" || T.phase === "greeting" || T.phase === "farewell"){
     const tgt = isGuide ? T.entrySpot : tourRing(T.entrySpot, vi, count, T.entryFace);
     if (tourDist(ch, tgt) > TOUR_ARRIVE) return { dest: tgt, mode: "walk" };
-    return { dest: tgt, mode: isGuide ? "talk" : (T.phase === "farewell" ? "listen" : "stand"),
+    /* 导游：召集时招手喊人，迎送时挥手致意；访客迎客时站定，告别时听讲 */
+    const gMode = (T.phase === "summoning") ? "talk" : "wave";
+    return { dest: tgt, mode: isGuide ? gMode : (T.phase === "farewell" ? "listen" : "stand"),
              face: T.entryFace };
   }
   const stop = T.stops[Math.min(T.i, T.stops.length - 1)];
@@ -8534,11 +9577,19 @@ function loop(){
   /* 共识台全息呼吸 */
   const halo = podium.userData.halo;
   const holo = podium.userData.holo;
+  const holoModel = podium.userData.holoModel;
+  const holoMat = podium.userData.holoMat;
+  const holoEdgeMat = podium.userData.holoEdgeMat;
   const active = state.consensus === "running";
   const pulse = 0.5 + 0.5 * Math.sin(tGlobal * (active ? 3.4 : 1.1));
-  halo.material.opacity = active ? 0.30 + pulse * 0.45 : 0.10 + pulse * 0.06;
-  holo.material.opacity = active ? 0.16 + pulse * 0.22 : 0.08 + pulse * 0.05;
+  halo.material.opacity = active ? 0.40 + pulse * 0.40 : 0.22 + pulse * 0.10;
+  holo.material.opacity = active ? 0.14 + pulse * 0.16 : 0.07 + pulse * 0.04;
   holo.material.color.setHex(active ? 0x22d3ee : 0x2f6f88);
+  if (holoModel){
+    holoModel.rotation.y += dt * (active ? 1.5 : 0.45);
+    if (holoMat) holoMat.opacity = active ? 0.34 + pulse * 0.16 : 0.24 + pulse * 0.08;
+    if (holoEdgeMat) holoEdgeMat.opacity = active ? 0.80 + pulse * 0.20 : 0.55 + pulse * 0.15;
+  }
 
   updateFocus(dt);          // P1-5 / P1-9 改造一：双击特写（只做相机缓动，无发光特效）
   updateFlows(dt);          // P1-6：数据流线（产出 / 异常流向的流光粒子推进与回收）
@@ -9392,6 +10443,22 @@ window.__office = {
   /* 深空闲氛围开关：setLeisure(false) 等价 URL 参数 ?leisure=0 */
   setLeisure(on){ return setLeisure(on); },
   leisure(){ return leisure; },
+  /* 探针：强制某角色立刻去执行指定闲逛动作（按 act 名 + 可选 dest key 匹配池条目）。
+     只改 roam 状态机入口，不绕过走位/朝向/坐具逻辑；找不到条目返回 false。 */
+  forceRoam(k, act, key){
+    const ch = characters[k];
+    if (!ch) return false;
+    const pool = (ROAM_ROLE[ch.key] && !ch.isHost)
+      ? ROAM_ROLE[ch.key].concat(ROAM_LEISURE)
+      : (ch.isHost ? ROAM_POOL_HOST : ROAM_POOL_WORKER);
+    const p = pool.find(e => e.act === act && (key == null || e.key === key));
+    if (!p) return false;
+    clearAgent(k);                       // 高优先级状态会压过 roam，先释放
+    ch.callAct = null;
+    ch.stage.code = ""; ch.stage.hold = 0;
+    pickRoam(ch, p);
+    return ch.roam.act + "@" + p.key;
+  },
   /* 状态机快照（调试 / 自动化核对） */
   agentStates(){
     return AGENT_ORDER.map(k => ({ key: k, state: stateOf(k),
@@ -9537,6 +10604,15 @@ window.__office = {
         screen: (ch.desk && ch.desk.userData.screen && ch.desk.userData.screen.mode) || ""
       };
     });
+  },
+  /* 调试探针：钉住某工位屏幕到指定模式（layers/log/chat/code/…），
+     防止随机轮换在截图前把画面换走；无工位的角色（协调员）返回 false */
+  scrSet(k, mode){
+    const ch = characters[k];
+    const S = ch && ch.desk && ch.desk.userData.screen;
+    if (!S) return false;
+    S.mode = mode; S.hold = 1e9; S.timer = 1e9; S.phase = 0;
+    return true;
   },
   /* 落地抖动探针（只读，P1 验收用）：逐帧采样各角色 root.position.y，返回
        span    峰峰值（整段最大-最小，米）
@@ -9725,6 +10801,9 @@ window.__office = {
      callVoiceProbe() 手动重探后端 TTS；callSpeak(text) 手动播报一句；callListen(true/false) 起停聆听。
      说明：麦克风被拒或浏览器不支持识别时不抛错，仅降级为 v0 文字输入并在面板明示。 */
   callVoice(on){ return callVoice(on); },
+  /* 语音链路故障提示位：写进通话面板常驻红字（不被对话气泡覆盖），传空串清除。
+     面板不存在时回落角色气泡 + 控制台。插件上报后端 error / 断线 / 接通失败用 */
+  voiceFail(text){ return voiceFail(text); },
   callVoiceState(){ return callVoiceState(); },
   callVoiceProbe(force){ return callVoiceProbe(force); },
   callSpeak(text){ return callSpeak(text); },

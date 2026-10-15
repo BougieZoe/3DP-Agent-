@@ -69,6 +69,62 @@ function ensureNormals(geo: THREE.BufferGeometry) {
   geo.computeVertexNormals()
 }
 
+/**
+ * Inside-out guard: STL winding decides normal direction, and a model whose
+ * faces mostly point inward (negative signed volume + inward majority) would
+ * be repaired INWARD — walls collapse instead of thicken. Flip winding first.
+ * Conservative by design: open shells with ambiguous orientation are left alone.
+ */
+export function ensureOutwardWinding(geo: THREE.BufferGeometry): boolean {
+  const pos = geo.attributes.position
+  const idx = geo.index
+  if (!pos || !idx || idx.count < 3) return false
+  const ax = pos.array as ArrayLike<number>
+  const ix = idx.array as ArrayLike<number>
+  const triCount = Math.floor(ix.length / 3)
+  if (triCount === 0) return false
+  // Pass 1: mesh centroid + signed volume (÷6).
+  let cx = 0, cy = 0, cz = 0
+  let vol6 = 0
+  for (let f = 0; f < triCount; f++) {
+    const i0 = ix[f * 3] * 3, i1 = ix[f * 3 + 1] * 3, i2 = ix[f * 3 + 2] * 3
+    const ax0 = ax[i0], ay0 = ax[i0 + 1], az0 = ax[i0 + 2]
+    cx += ax0 + ax[i1] + ax[i2]
+    cy += ay0 + ax[i1 + 1] + ax[i2 + 1]
+    cz += az0 + ax[i1 + 2] + ax[i2 + 2]
+    const bx = ax[i1] - ax0, by = ax[i1 + 1] - ay0, bz = ax[i1 + 2] - az0
+    const dx = ax[i2] - ax0, dy = ax[i2 + 1] - ay0, dz = ax[i2 + 2] - az0
+    const nx = by * dz - bz * dy, ny = bz * dx - bx * dz, nz = bx * dy - by * dx
+    vol6 += ax0 * nx + ay0 * ny + az0 * nz
+  }
+  const n = triCount * 3
+  const mx = cx / n, my = cy / n, mz = cz / n
+  // Pass 2: face normal · (faceCenter − centroid) < 0 means facing inward.
+  let inward = 0
+  for (let f = 0; f < triCount; f++) {
+    const i0 = ix[f * 3] * 3, i1 = ix[f * 3 + 1] * 3, i2 = ix[f * 3 + 2] * 3
+    const ax0 = ax[i0], ay0 = ax[i0 + 1], az0 = ax[i0 + 2]
+    const bx = ax[i1] - ax0, by = ax[i1 + 1] - ay0, bz = ax[i1 + 2] - az0
+    const dx = ax[i2] - ax0, dy = ax[i2 + 1] - ay0, dz = ax[i2 + 2] - az0
+    const nx = by * dz - bz * dy, ny = bz * dx - bx * dz, nz = bx * dy - by * dx
+    const fx = (ax0 + ax[i1] + ax[i2]) / 3 - mx
+    const fy = (ay0 + ax[i1 + 1] + ax[i2 + 1]) / 3 - my
+    const fz = (az0 + ax[i1 + 2] + ax[i2 + 2]) / 3 - mz
+    if (nx * fx + ny * fy + nz * fz < 0) inward++
+  }
+  if (vol6 >= 0 || inward <= triCount / 2) return false
+  // Flip winding: swap index 1 and 2 of every triangle.
+  const arr = idx.array as unknown as number[]
+  for (let f = 0; f < triCount; f++) {
+    const t = arr[f * 3 + 1]
+    arr[f * 3 + 1] = arr[f * 3 + 2]
+    arr[f * 3 + 2] = t
+  }
+  idx.needsUpdate = true
+  geo.computeVertexNormals()
+  return true
+}
+
 export async function applyRepairAsync(
   geometry: THREE.BufferGeometry,
   suggestion: GeometrySuggestion,
@@ -98,6 +154,7 @@ function applyRepairFallback(
   suggestion: GeometrySuggestion,
 ): THREE.BufferGeometry {
   const geo = geometry.clone()
+  ensureOutwardWinding(geo)
   ensureNormals(geo)
   const pos = geo.attributes.position
   const normal = geo.attributes.normal

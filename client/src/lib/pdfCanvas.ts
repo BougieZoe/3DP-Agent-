@@ -16,10 +16,14 @@ const PAGE_W = 210; // A4 mm
 const PAGE_H = 297;
 // 72 dpi * 4x = 288 dpi — print quality. At 2x (144 dpi) the rasterized page
 // looked soft/blurry when zoomed, and small CJK glyphs were muddy. 4x keeps
-// the embedded bitmap crisp without a meaningfully larger file (the pages are
-// mostly flat backgrounds, so PNG compresses well).
+// the embedded bitmap crisp. Pages are stored as JPEG (not PNG): the layout is
+// flat vector-style graphics with rasterized glyphs, so JPEG q0.92 is visually
+// identical at a fraction of the size (PNG ran ~12 MB/page).
 const SCALE = 4;
 const PX_PER_MM = (72 / 25.4) * SCALE;
+const PAGE_IMAGE_MIME = 'image/jpeg';
+const PAGE_IMAGE_QUALITY = 0.92;
+const PAGE_IMAGE_FORMAT = 'JPEG';
 
 const FONT_STACK =
   '"Noto Sans JP", "Noto Sans SC", "PingFang SC", "Hiragino Sans", "Microsoft YaHei", "Malgun Gothic", sans-serif';
@@ -196,8 +200,8 @@ export function createPdfCanvasSurface() {
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       for (let i = 0; i < pages.length; i++) {
         if (i > 0) doc.addPage();
-        const url = pages[i].canvas.toDataURL('image/png');
-        doc.addImage(url, 'PNG', 0, 0, PAGE_W, PAGE_H);
+        const url = pages[i].canvas.toDataURL(PAGE_IMAGE_MIME, PAGE_IMAGE_QUALITY);
+        doc.addImage(url, PAGE_IMAGE_FORMAT, 0, 0, PAGE_W, PAGE_H);
       }
       doc.save(filename);
     },

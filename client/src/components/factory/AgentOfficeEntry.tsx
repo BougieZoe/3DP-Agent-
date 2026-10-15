@@ -16,6 +16,10 @@ type T = (key: TKey) => string;
  * page via postMessage. No external server required.
  */
 const OFFICE_URL = '/office.html';
+// Agent-tab preview only: hud=0 drops the in-scene view/light controls and
+// shortcut hints, perf=0 drops the fps badge. office3d.js supports both flags
+// natively. The fullscreen overlay keeps the full HUD.
+const OFFICE_PREVIEW_URL = '/office.html?hud=0&perf=0';
 
 /**
  * Bridge the local TelemetryHub into the embedded office page.
@@ -25,9 +29,10 @@ const OFFICE_URL = '/office.html';
  * its scene is up; only then do we push, and we re-push a full snapshot so
  * an office page that mounted late still catches up.
  */
-function useOfficeBridge(iframeRef: RefObject<HTMLIFrameElement | null>) {
+function useOfficeBridge(iframeRef: RefObject<HTMLIFrameElement | null>, quality?: 'high') {
   const readyRef = useRef(false);
   const lastRef = useRef<Record<string, string>>({});
+  const pendingScoreRef = useRef<number | null>(null);
 
   const push = useCallback(
     (agentId: string, status: string) => {
@@ -39,6 +44,38 @@ function useOfficeBridge(iframeRef: RefObject<HTMLIFrameElement | null>) {
     [iframeRef],
   );
 
+  const pushConsensus = useCallback(
+    (score: number) => {
+      const w = iframeRef.current?.contentWindow;
+      if (!w) return;
+      if (!readyRef.current) {
+        pendingScoreRef.current = score;
+        return;
+      }
+      w.postMessage({ type: 'office-consensus', score }, window.location.origin);
+    },
+    [iframeRef],
+  );
+
+/**
+ * office3d.js auto-tiering drops to `low` (pixelRatio 1, shadows + flows off)
+ * whenever fps dips under 42, which looks soft on Retina. `setQuality` pins the
+ * tier and turns auto off. The API may not exist at `office-ready` time, so
+ * retry briefly instead of giving up on the first frame.
+ */
+function pinQuality(win: Window | null, quality: 'high', timeoutMs = 8000) {
+  const started = Date.now();
+  const attempt = () => {
+    const api = (win as (Window & { __office?: { setQuality?: (m: string) => unknown } }) | null)?.__office;
+    if (api?.setQuality) {
+      try { api.setQuality(quality); } catch { /* the office page owns its own errors */ }
+      return;
+    }
+    if (Date.now() - started < timeoutMs) window.setTimeout(attempt, 250);
+  };
+  attempt();
+}
+
   // Handshake: once the office page reports ready, flush a full snapshot.
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
@@ -47,11 +84,27 @@ function useOfficeBridge(iframeRef: RefObject<HTMLIFrameElement | null>) {
       if (e.source !== iframeRef.current?.contentWindow) return;
       if ((e.data as { type?: string })?.type !== 'office-ready') return;
       readyRef.current = true;
+      if (quality) pinQuality(iframeRef.current?.contentWindow ?? null, quality);
       for (const a of getTelemetryHub().getAll()) push(a.agentId, a.status);
+      if (pendingScoreRef.current != null) {
+        pushConsensus(pendingScoreRef.current);
+        pendingScoreRef.current = null;
+      }
     };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
-  }, [push]);
+  }, [push, pushConsensus, quality]);
+
+  // Consensus score from the orchestrator (CustomEvent 'agent-consensus').
+  useEffect(() => {
+    const onConsensus = (e: Event) => {
+      const score = (e as CustomEvent<{ score?: unknown }>).detail?.score;
+      if (typeof score !== 'number' || !Number.isFinite(score)) return;
+      pushConsensus(score);
+    };
+    window.addEventListener('agent-consensus', onConsensus);
+    return () => window.removeEventListener('agent-consensus', onConsensus);
+  }, [pushConsensus]);
 
   // Subscribe to telemetry; only status *changes* cross the frame boundary.
   useEffect(() => {
@@ -72,7 +125,9 @@ function useOfficeBridge(iframeRef: RefObject<HTMLIFrameElement | null>) {
  */
 function OfficeOverlay({ t, onClose }: { t: T; onClose: () => void }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  useOfficeBridge(iframeRef);
+  // Fullscreen owns the whole viewport, so pin the quality tier: auto-tiering
+  // would soften it on Retina the moment fps dips.
+  useOfficeBridge(iframeRef, 'high');
 
   const exitNow = useCallback(() => onClose(), [onClose]);
 
@@ -178,7 +233,7 @@ function OfficeLivePreview({ t, onOpen }: { t: T; onOpen: () => void }) {
       <div className="relative aspect-video w-full bg-background lg:aspect-auto lg:h-[calc(100dvh_-_24.3rem)] min-h-[240px]">
         <iframe
           ref={iframeRef}
-          src={OFFICE_URL}
+          src={OFFICE_PREVIEW_URL}
           title={t('featuresOfficeTitle')}
           tabIndex={-1}
           className="pointer-events-none absolute inset-0 h-full w-full border-0"
@@ -188,13 +243,8 @@ function OfficeLivePreview({ t, onOpen }: { t: T; onOpen: () => void }) {
           type="button"
           onClick={onOpen}
           aria-label={t('officeFullscreen')}
-          className="absolute inset-0 z-10 flex cursor-zoom-in items-end justify-end p-2"
-        >
-          <span className="flex items-center gap-1.5 rounded-sm border border-primary/40 bg-background/80 px-2 py-0.5 font-mono text-[9px] text-primary opacity-70 backdrop-blur-sm transition-opacity group-hover:opacity-100">
-            <Maximize2 className="h-2.5 w-2.5" />
-            {t('officeFullscreen')}
-          </span>
-        </button>
+          className="absolute inset-0 z-10 cursor-zoom-in"
+        />
       </div>
     </div>
   );

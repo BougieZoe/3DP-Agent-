@@ -192,4 +192,25 @@ describe('AgentOrchestrator', () => {
       localStorage.clear();
     }
   });
+
+  it('broadcasts agent-consensus with the final score when a window exists', async () => {
+    const seen: Array<{ score?: unknown }> = [];
+    const stubWin = {
+      dispatchEvent: (ev: Event) => {
+        seen.push((ev as CustomEvent).detail as { score?: unknown });
+        return true;
+      },
+    };
+    vi.stubGlobal('window', stubWin);
+    try {
+      const geo = mockGeometry();
+      const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
+      const orch = new AgentOrchestrator();
+      const result = await orch.runFullAnalysis(geo, ua, 'consensus.stl');
+      expect(seen.length).toBe(1);
+      expect(seen[0].score).toBe(result.consensus.overallScore);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

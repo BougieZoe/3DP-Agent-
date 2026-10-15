@@ -41,10 +41,11 @@
   }
   await import("/lib/office3d.js");
   /* GLM-Realtime 全双工语音：注册为 office3d.js 的 onCallEvent 插件，通话时自动接管语音。
-     2026-10-03 起临时停用：GLM 1113 欠费、Fireworks 音频域无权限，云端两条路都不通；
-     停用后通话回落 v0 免费链（speechSynthesis 播报 + webkitSpeechRecognition 聆听，需 Chrome）。
-     任一云通路恢复后，把下面这行的注释解开即回实时语音。 */
-  // await import("/lib/voice-glm-realtime.js");
+     2026-10-03 曾因 GLM 1113 欠费、Fireworks 音频域无权限临时停用，通话回落 v0 免费链
+     （speechSynthesis 播报 + webkitSpeechRecognition 聆听，需 Chrome）。
+     2026-10-06 重新启用：桥 7871 已切回 glm/realtime，待 GLM 账户充值后联调验证。
+     若云通路再次不可用（欠费 / 权限 / 桥不在），把下面这行重新注释掉即回到 v0 链。 */
+  await import("/lib/voice-glm-realtime.js");
 </script>
 <script type="module">
 /* postMessage bridge — receives agent status from parent (AgentOfficeEntry.tsx). */

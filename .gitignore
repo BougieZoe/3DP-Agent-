@@ -30,20 +30,32 @@ server/config/llm-keys.yaml
 # === Logs ===
 *.log
 server.pid
-
 # === Internal docs (not for public repo) ===
 FEATURE_PLAN.md
 IMPLEMENTATION_PLAN.md
 MIGRATION_PLAN.md
 docs/*.png
+docs/**/*.png
+# Real numbers stay local: client names, rates, CASE evidence, vendor quotes.
+# Templates (docs/handoff/*, docs/cases/TEMPLATE.md) are safe to publish.
+docs/private/
+docs/cases/CASE-*/
+docs/cases/photos/
 
 # === AI assistant config ===
 .claude/
 
 # === Temp / scratch ===
 research/
+temp/
 .local-notes/
 XPRIZE/
 
 # === Runtime data ===
 deploy/amd/*.jsonl
+
+# Arena chat log stays local — unedited record, never published
+arena/data/
+
+# office3d 手动备份（本地安全网，不入库）
+client/public/lib/office3d.before_*.js

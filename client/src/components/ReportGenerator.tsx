@@ -3,9 +3,13 @@ import { CONTENT, translate, type ContentLang } from "@shared/i18n/content";
 import type { UnifiedAnalysis, NormalOrientation } from "../analysis/types";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
 import { getTrafficLight } from "./reportUtils";
+import { weightRangeGrams, timeRangeMinutes } from "./reportUtils";
 import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
 import { createShareLink, copyShareLink } from "@/lib/shareReport";
-import { formatVolume } from "@/lib/volumeDisplay";
+import { buildQuoteText } from "@/lib/handoffPack";
+import { downloadHandoffJson } from "@/lib/handoffJson";
+import { cheapestStep } from "@/lib/cheapestStep";
+import { formatVolume, isVolumeReportable } from "@/lib/volumeDisplay";
 import type { ExpertReview } from "@/agents/expertReview";
 import type { ProductionSuitability } from "@/analysis/production";
 
@@ -30,6 +34,9 @@ interface ReportGeneratorProps {
   expertReview?: ExpertReview | null;
   /** Production-suitability estimate (computed by the caller) — embedded into the PDF. */
   production?: ProductionSuitability | null;
+  /** Selected material / process for handoff exports (falls back to FDM/—. */
+  materialName?: string;
+  processId?: string;
 }
 
 // ─── Language Detection ─────────────────────────────────────────────────────────
@@ -75,15 +82,17 @@ function detectTone(messages: ChatMessage[]): ToneMode {
 
 // ─── Weight / Time ranges ──────────────────────────────────────────────────────
 
-function computeWeightRange(grams: number, lang: Language): string {
-  const lo = (grams * 0.05 * 1.2).toFixed(0);
-  const hi = (grams * 1.0 * 1.2).toFixed(0);
+// Canonical estimate formatters — math lives in reportUtils (single writer);
+// these only add the translated note. Also used by handoffPack.
+export function computeWeightRange(grams: number, lang: Language): string {
+  if (!Number.isFinite(grams) || grams <= 0) return "—";
+  const [lo, hi] = weightRangeGrams(grams);
   return `${lo}–${hi}g (${translate(CONTENT, 'pdf.labelWeightNote', lang)})`;
 }
 
-function computeTimeRange(minutes: number, lang: Language): string {
-  const lo = Math.round(minutes * 0.7);
-  const hi = Math.round(minutes * 1.3);
+export function computeTimeRange(minutes: number, lang: Language): string {
+  if (!Number.isFinite(minutes) || minutes <= 0) return "—";
+  const [lo, hi] = timeRangeMinutes(minutes);
   const f = (m: number) => `${Math.floor(m / 60)}h ${Math.round(m % 60)}m`;
   return `${f(lo)} – ${f(hi)} (${translate(CONTENT, 'pdf.labelTimeNote', lang)})`;
 }
@@ -676,19 +685,29 @@ async function generateClientPDF(
   }
   y = drawDataRow(doc,
     translate(CONTENT, 'pdf.label.weight', lang),
-    pt?.materialWeightGrams != null ? computeWeightRange(pt.materialWeightGrams, lang) : "—",
+    pt?.materialWeightGrams != null && pt.materialWeightGrams > 0 ? computeWeightRange(pt.materialWeightGrams, lang) : "—",
     y
   );
   y = drawDataRow(doc,
     translate(CONTENT, 'pdf.label.time', lang),
-    pt?.estimatedPrintTimeMinutes != null ? computeTimeRange(pt.estimatedPrintTimeMinutes, lang) : "—",
+    pt?.estimatedPrintTimeMinutes != null && pt.estimatedPrintTimeMinutes > 0 ? computeTimeRange(pt.estimatedPrintTimeMinutes, lang) : "—",
     y
   );
-  if (pt?.materialCostUsd != null) {
+  if (pt?.materialCostUsd != null && pt.materialCostUsd > 0) {
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.cost', lang), `$${pt.materialCostUsd.toFixed(2)}`, y);
+  } else {
+    y = drawDataRow(doc, translate(CONTENT, 'pdf.label.cost', lang), "—", y);
   }
   if (metrics) {
     y = drawDataRow(doc, translate(CONTENT, 'pdf.label.volume', lang), formatVolume(metrics, (v) => `${(v / 1000).toFixed(2)} cm³`), y);
+  }
+  if (!isVolumeReportable(metrics)) {
+    y = drawDataRow(doc,
+      translate(CONTENT, 'pdf.label.status', lang),
+      translate(CONTENT, 'pdf.estimate.unavailable', lang),
+      y,
+      true
+    );
   }
 
   if (v) {
@@ -728,6 +747,18 @@ async function generateClientPDF(
       PAGE_M, y
     );
     y += 7;
+  }
+
+  // ── Cheapest next step (only when not clean; single writer: lib/cheapestStep) ──
+  if (light !== "green") {
+    const step = cheapestStep(analysis);
+    const cheapest = step === 'repair'
+      ? translate(CONTENT, 'pdf.cheapest.repair', lang)
+      : step === 'scale'
+        ? translate(CONTENT, 'pdf.cheapest.scale', lang)
+        : translate(CONTENT, 'pdf.cheapest.support', lang);
+    y = drawDataRow(doc, translate(CONTENT, 'pdf.nextStep.cheapest', lang), cheapest, y);
+    y += 2;
   }
 
   // ── AI expert review (if run) ──
@@ -839,12 +870,12 @@ async function generateDesignerPDF(
   );
   y = drawDataRow(doc,
     lang === "ja" ? "推定重量" : "Est. weight",
-    pt?.materialWeightGrams != null ? computeWeightRange(pt.materialWeightGrams, lang) : "—",
+    pt?.materialWeightGrams != null && pt.materialWeightGrams > 0 ? computeWeightRange(pt.materialWeightGrams, lang) : "—",
     y
   );
   y = drawDataRow(doc,
     lang === "ja" ? "推定印刷時間" : "Est. print time",
-    pt?.estimatedPrintTimeMinutes != null ? computeTimeRange(pt.estimatedPrintTimeMinutes, lang) : "—",
+    pt?.estimatedPrintTimeMinutes != null && pt.estimatedPrintTimeMinutes > 0 ? computeTimeRange(pt.estimatedPrintTimeMinutes, lang) : "—",
     y
   );
 
@@ -1228,6 +1259,8 @@ export function ReportGenerator({
   language = "en",
   expertReview,
   production,
+  materialName = "—",
+  processId = "FDM",
 }: ReportGeneratorProps) {
   const tone = detectTone(chatHistory);
   const lang = language ?? detectLanguage(chatHistory);
@@ -1258,6 +1291,7 @@ export function ReportGenerator({
   const [tier, setTier] = useState<PdfTier>("client");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
+  const [quoteCopied, setQuoteCopied] = useState(false);
 
   const handleShare = useCallback(async () => {
     setShareLoading(true);
@@ -1271,6 +1305,24 @@ export function ReportGenerator({
       setShareLoading(false);
     }
   }, [analysis, fileName, expertReview]);
+
+  const handleCopyQuote = useCallback(async () => {
+    try {
+      const ok = await copyShareLink(buildQuoteText(analysis, fileName, lang));
+      setQuoteCopied(ok);
+      if (ok) setTimeout(() => setQuoteCopied(false), 2500);
+    } catch (err) {
+      console.error('Quote copy failed:', err);
+    }
+  }, [analysis, fileName, lang]);
+
+  const handleJsonExport = useCallback(() => {
+    try {
+      downloadHandoffJson(analysis, fileName, { process: processId, material: materialName });
+    } catch (err) {
+      console.error('JSON export failed:', err);
+    }
+  }, [analysis, fileName, processId, materialName]);
 
   return (
     <div className="space-y-2">
@@ -1314,7 +1366,7 @@ export function ReportGenerator({
         </select>
       </div>
 
-      {/* Share button */}
+      {/* Share + quote buttons */}
       <div className="flex items-center gap-2">
         <button
           onClick={handleShare}
@@ -1322,6 +1374,20 @@ export function ReportGenerator({
           className="flex-1 py-2 text-[11px] font-mono border border-border/50 text-muted-foreground hover:text-foreground hover:border-border rounded-sm transition-all disabled:opacity-50"
         >
           {shareLoading ? '...' : shareUrl ? '✓ Link Copied' : 'Share Report'}
+        </button>
+        <button
+          onClick={handleCopyQuote}
+          title={translate(CONTENT, 'handoff.quoteFooter', language)}
+          className="flex-1 py-2 text-[11px] font-mono border border-border/50 text-muted-foreground hover:text-foreground hover:border-border rounded-sm transition-all"
+        >
+          {quoteCopied ? translate(CONTENT, 'handoff.copied', language) : translate(CONTENT, 'handoff.copyQuote', language)}
+        </button>
+        <button
+          onClick={handleJsonExport}
+          title={translate(CONTENT, 'handoff.jsonHint', language)}
+          className="flex-1 py-2 text-[11px] font-mono border border-border/50 text-muted-foreground hover:text-foreground hover:border-border rounded-sm transition-all"
+        >
+          {translate(CONTENT, 'handoff.jsonExport', language)}
         </button>
       </div>
       {shareUrl && (
