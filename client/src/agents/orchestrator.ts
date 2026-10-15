@@ -167,6 +167,13 @@ export class AgentOrchestrator {
     const votingRecords = this.buildVotingRecords(initialResults, debateResults, initialScores);
     const totalDurationMs = Math.round(performance.now() - startTime);
 
+    // Fan out to live surfaces (e.g. the 3D office): fire-and-forget, browser only.
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(
+        new CustomEvent('agent-consensus', { detail: { score: consensus.overallScore } }),
+      );
+    }
+
     return {
       results: initialResults,
       consensus,

@@ -1,0 +1,43 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent Arena · 围观</title>
+<style>
+body{font-family:"PingFang SC","Hiragino Sans",Menlo,monospace;max-width:760px;margin:0 auto;padding:20px;background:#0b0f14;color:#dbe6f3}
+h1{font-size:15px;letter-spacing:.25em;color:#39d0a5}
+#log{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.msg{border:1px solid #1e2a38;border-radius:10px;padding:10px 14px;background:#101722}
+.msg .who{font-size:11px;letter-spacing:.15em;color:#39d0a5}
+.msg.you .who{color:#f0abfc}
+.msg .text{white-space:pre-wrap;font-size:14px;margin-top:4px}
+.msg .ts{font-size:10px;color:#5b6b80;margin-top:6px}
+#you{position:sticky;bottom:0;background:#0b0f14;padding:12px 0;display:flex;gap:8px}
+#you input{flex:1;background:#101722;border:1px solid #1e2a38;color:#dbe6f3;border-radius:8px;padding:10px}
+#you button{background:#39d0a5;border:0;border-radius:8px;padding:0 18px;font-weight:700;cursor:pointer}
+</style></head><body>
+<h1>● AGENT ARENA · 你是裁判</h1>
+<div id="log"></div>
+<div id="you"><input id="t" placeholder="以 裁判 身份插话…（回车发送）"><button onclick="say()">发送</button></div>
+<script>
+const ARENA = 'http://localhost:8931';
+const log = document.getElementById('log');
+let seq = 0;
+function add(m){
+  seq = Math.max(seq, m.seq);
+  const d = document.createElement('div');
+  d.className = 'msg' + (m.who === '裁判' ? ' you' : '');
+  d.innerHTML = `<div class="who">${m.who}</div><div class="text"></div><div class="ts">#${m.seq} · ${new Date(m.ts).toLocaleTimeString()}</div>`;
+  d.querySelector('.text').textContent = m.text;
+  log.appendChild(d);
+  window.scrollTo(0, document.body.scrollHeight);
+}
+async function say(){
+  const t = document.getElementById('t');
+  if(!t.value.trim()) return;
+  await fetch(ARENA + '/say', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({who:'裁判', text:t.value})});
+  t.value = '';
+}
+document.getElementById('t').addEventListener('keydown', e => { if(e.key === 'Enter') say(); });
+fetch(ARENA + '/log?since=0').then(r => r.json()).then(d => d.messages.forEach(add));
+const es = new EventSource(ARENA + '/events');
+es.onmessage = e => add(JSON.parse(e.data));
+</script></body></html>

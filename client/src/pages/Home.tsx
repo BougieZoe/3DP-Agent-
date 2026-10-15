@@ -31,8 +31,7 @@ import { fromThreeBufferGeometry, runAnalysisInWorker, assessContext, liquidCool
 import { normalizeModelGeometry, fitCameraToGeometry } from '@/lib/modelNormalization';
 import { autoOrientGeometry } from '@/lib/autoOrient';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
-import { parseSTL } from '@/lib/stlParser';
-import { processMesh } from '@/lib/meshProcessClient';
+import { runTieredRepair } from '@/lib/repairFlow';
 import { geometryToStl } from '@/lib/meshOps';
 import { geometryToThreeMf } from '@/lib/threeMf';
 import { LENGTH_UNIT_TO_MM, type LengthUnit } from '@shared/domain/geometry';
@@ -43,10 +42,7 @@ import { Language, getTranslation } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
 import type { AgentId } from '@shared/domain/agent';
 import { deriveSupportStatus } from '@/analysis/metrics';
-import { ViewfinderCorners } from '@/components/decorative/ViewfinderCorners';
 import { ScanlineSweep } from '@/components/decorative/ScanlineSweep';
-import { BedStatusTicker } from '@/components/decorative/BedStatusTicker';
-import { LayerHeightLabel } from '@/components/decorative/LayerHeightLabel';
 import { FeaturesSection } from '@/pages/home/FeaturesSection';
 import { AgentOfficeEntry } from '@/components/factory/AgentOfficeEntry';
 import type { FeatureDestination } from '@/pages/home/featuresNavigation';
@@ -687,43 +683,40 @@ export default function Home() {
   // (diagnostics, best-effort watertight repair, place on plate), then re-run
   // the analysis so the report reflects the processed model.
   const [repairing, setRepairing] = useState(false);
+  // Mirrors counterfactualSuggestions (declared below) for the repair fallback.
+  // A ref avoids the use-before-declaration trap: the handler only reads it at event time.
+  const wasmSuggestionsRef = useRef<any[]>([]);
   const handleRepairProcess = useCallback(async () => {
     if (!uploadedModel) return;
     setRepairing(true);
     try {
-      const result = await processMesh(geometryToStl(uploadedModel.geometry), {});
-      const processed = parseSTL(result.stlBytes);
-      processed.computeVertexNormals();
-      processed.computeBoundingBox();
-      const newUnified = await runAnalysisInWorker(fromThreeBufferGeometry(processed), {
-        fileName: uploadedModel.fileName,
+      const beforeMin = uploadedModel.unifiedAnalysis?.metrics?.result?.minWallThicknessMm ?? null;
+      const outcome = await runTieredRepair(
+        uploadedModel.geometry,
+        uploadedModel.fileName,
         material,
-      });
+        wasmSuggestionsRef.current,
+        beforeMin,
+      );
       commitModel({
         ...uploadedModel,
-        geometry: processed,
-        mesh: createMeshFromGeometry(processed),
-        unifiedAnalysis: newUnified,
-        rawGeometry: processed.clone(),
+        geometry: outcome.geometry,
+        mesh: createMeshFromGeometry(outcome.geometry),
+        unifiedAnalysis: outcome.analysis,
+        rawGeometry: outcome.geometry.clone(),
       });
-deepAnalysisSeq.current += 1;
-    setDeepAgentRun(null);
-    setDeepSteps([]);
-    setDeepError(null);
-      const d = result.diagnostics;
-      toast.success(
-        d.repaired
-          ? `repaired to watertight · ${d.bodyCount ?? 1} bodies`
-          : d.watertight
-            ? `mesh OK · ${d.bodyCount ?? 1} bodies`
-            : 'processed · repair unavailable',
-      );
+      deepAnalysisSeq.current += 1;
+      setDeepAgentRun(null);
+      setDeepSteps([]);
+      setDeepError(null);
+      toast.success(outcome.note);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setRepairing(false);
     }
   }, [uploadedModel, material]);
+
 
   const handleDownloadStl = () => {
     if (!uploadedModel) return;
@@ -827,6 +820,9 @@ deepAnalysisSeq.current += 1;
     const sug = counterfactualSuggestions.find(s => s.id === selectedSuggestionId);
     return sug ? sug.affectedPositions : [];
   }, [selectedSuggestionId, counterfactualSuggestions]);
+  useEffect(() => {
+    wasmSuggestionsRef.current = counterfactualSuggestions;
+  }, [counterfactualSuggestions]);
 
   const selectedPatternPositions = useMemo(() => {
     if (!selectedPatternId) return [];
@@ -1210,10 +1206,7 @@ deepAnalysisSeq.current += 1;
                   material={material}
                 />
                 {/* Decorative presentation-only touches — remove any one freely */}
-                <ViewfinderCorners />
                 <ScanlineSweep />
-                <BedStatusTicker />
-                <LayerHeightLabel />
               </div>
             </div>
 
@@ -1610,6 +1603,8 @@ deepAnalysisSeq.current += 1;
     language={language}
     expertReview={expertReview}
     production={productionFromUnified(unifiedAnalysis, material)}
+    materialName={materialName}
+    processId={materialFamily}
   />
 )}
 {unifiedAnalysis && (

@@ -1,0 +1,21 @@
+{
+  "id": "large-format-fgf-generic",
+  "vendor": "Large-format FGF supplier (anonymized)",
+  "source": "public industry specification ranges; verify before quoting",
+  "process": "FGF",
+  "feedstock": "pellet (incl. molding-grade pellets)",
+  "nozzleDiameterMm": { "min": 0.4, "max": 1.2 },
+  "nozzleTempC": { "max": 500 },
+  "chamberTempC": { "max": 250 },
+  "demoPart": {
+    "widthMm": 600,
+    "material": "ABS",
+    "note": "ribs, bosses and thin-wall features reproduced; surface near FFF quality"
+  },
+  "engineeringPlastics": ["PEEK"],
+  "warpingNote": "heated chamber reduces warping on large parts",
+  "priceBand": "mid",
+  "fit": ["prototype", "small-batch"],
+  "status": "generic profile — recalibrate per machine before production use",
+  "todo": "wire into server/slicerRouter.ts bed profiles + thermal material table once build volume is confirmed"
+}
