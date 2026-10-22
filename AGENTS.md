@@ -232,3 +232,20 @@ When something looks like it might be intentional (a gating condition, a
 naming choice, a data source) rather than a plain bug, investigate and
 report back on why it exists before changing it. Don't assume a limitation
 is accidental just because it's inconvenient.
+
+## Decision-logic rules
+
+Applies to code that makes consequential decisions from rules (matching,
+validation, eligibility, pricing, permissions, scoring):
+- Express rules as data/config with a typed schema and validator, not scattered literals.
+- Where facts can be unreliable, return three states: pass / fail / unknown.
+  Never coerce unknown into pass or fail.
+- Every verdict carries a machine-readable reason (rule id, measured value, threshold).
+- Each rule that can change an outcome gets at least one test that triggers only
+  that rule, and that test must be shown to fail when the rule is removed or broken
+  (red, then green).
+- When the result set can be empty, return a structured explanation (which rules
+  excluded which candidates) instead of a bare empty list or generic error, and
+  cover the empty case with a test.
+- Keep one source of truth per fact; if two sources disagree, flag it in the
+  summary instead of silently choosing one.
