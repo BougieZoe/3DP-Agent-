@@ -355,7 +355,7 @@ export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATE
           </div>
         </div>
       </div>
-      <div className="px-3 pb-1 text-[10px] font-mono text-muted-foreground/20 text-center">📷 直接点相机传失败照片，不用跳大卡</div>
+      <div className="px-3 pb-1 text-[10px] font-mono text-muted-foreground/20 text-center">📷 照片分析 coming soon（暂为模拟占位）</div>
     </div>
   );
 }
