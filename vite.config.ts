@@ -38,7 +38,7 @@ const pwaPlugin = VitePWA({
   workbox: {
     globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
     navigateFallback: "/index.html",
-    navigateFallbackDenylist: [/^\/api\//],
+    navigateFallbackDenylist: [/^\/api\//, /^\/office\.html/],
     // New SW activates immediately and takes over → auto-update without workbox-window.
     skipWaiting: true,
     clientsClaim: true,
