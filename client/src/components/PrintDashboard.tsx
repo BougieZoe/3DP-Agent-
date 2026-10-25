@@ -165,7 +165,7 @@ export function PrintDashboard({
             <div className="text-2xl font-mono font-bold text-cyan-400">
               {progress?.percentage.toFixed(1) || '0'}%
             </div>
-            <div className="text-xs text-muted-foreground">Progress</div>
+            <div className="text-xs text-muted-foreground">Progress · SIMULATED</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-mono font-bold text-amber-400">
