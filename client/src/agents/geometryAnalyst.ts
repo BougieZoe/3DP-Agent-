@@ -174,24 +174,28 @@ export class GeometryAnalyst extends BaseAgent {
   }
 
   private collectWallThicknessMarkers(ctx: AgentContext): RiskMarker[] {
-    const markers: RiskMarker[] = [];
-    const positions = ctx.vertexPositions;
-    const step = 9;
-    const p5Thickness = ctx.unifiedAnalysis.metrics.result?.p5WallThicknessMm;
-    const minThickness = p5Thickness ?? ctx.unifiedAnalysis.metrics.result?.minWallThicknessMm ?? 1;
-    const twr = ctx.unifiedAnalysis.metrics.result?.thinWallRatio ?? 0;
-    const markerWtStatus = deriveWtStatus(twr, p5Thickness);
+    const metrics = ctx.unifiedAnalysis.metrics?.result;
+    const twr = metrics?.thinWallRatio ?? 0;
+    const samples = metrics?.wallThicknessSamples ?? [];
+    // Measured-only: no fake markers from vertex sampling. Markers are placed
+    // on real wall-thickness sample positions only when a measurable thin-wall
+    // signal (thinWallRatio > 0) exists.
+    if (twr <= 0 || samples.length === 0) return [];
 
-    for (let i = 0; i < Math.min(positions.length, 300); i += step) {
-      if (i + 2 < positions.length) {
-        markers.push({
-          position: { x: positions[i], y: positions[i + 1], z: positions[i + 2] },
-          type: 'thin_wall',
-          severity: markerWtStatus === 'critical' ? 0.9 : 0.5,
-          description: translate(CONTENT, 'geometryAnalyst.markerThinWall', ctx.language, { t: minThickness.toFixed(2) }),
-        });
-        if (markers.length >= 15) break;
-      }
+    const THIN_WALL_MM = 0.8;
+    const markerWtStatus = deriveWtStatus(twr, metrics?.p5WallThicknessMm);
+    const thinSamples = samples.filter((s) => s.thickness < THIN_WALL_MM);
+    const pool = thinSamples.length > 0 ? thinSamples : samples;
+    const count = Math.min(15, pool.length);
+    const markers: RiskMarker[] = [];
+    for (let i = 0; i < count; i++) {
+      const s = pool[Math.floor((i * pool.length) / count)];
+      markers.push({
+        position: s.position,
+        type: 'thin_wall',
+        severity: markerWtStatus === 'critical' ? 0.9 : 0.5,
+        description: translate(CONTENT, 'geometryAnalyst.markerThinWall', ctx.language, { t: s.thickness.toFixed(2) }),
+      });
     }
     return markers;
   }
