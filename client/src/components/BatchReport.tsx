@@ -56,7 +56,7 @@ export function BatchReport({ models, activeFileName, onSelect, language }: {
           <tr className="text-muted-foreground/40 text-[10px] tracking-widest">
             <th className="text-left font-normal px-4 py-1.5">{t('batchPart')}</th>
             <th className="text-left font-normal px-2 py-1.5">{t('batchVerdict')}</th>
-            <th className="text-right font-normal px-2 py-1.5">{t('batchScore')}</th>
+            <th className="text-right font-normal px-2 py-1.5">{t('batchScore')} · HEURISTIC</th>
             <th className="text-left font-normal px-4 py-1.5 hidden sm:table-cell">{t('batchConcern')}</th>
           </tr>
         </thead>
