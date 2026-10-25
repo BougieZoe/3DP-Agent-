@@ -326,23 +326,28 @@ export class FailurePredictor extends BaseAgent {
 
   private generateWallMarkers(ctx: AgentContext, severity: string): RiskMarker[] {
     if (severity === 'low') return [];
-    const markers: RiskMarker[] = [];
-    const positions = ctx.vertexPositions;
-    const count = Math.min(10, Math.floor(positions.length / 30));
-    const p5Thickness = ctx.unifiedAnalysis.metrics.result?.p5WallThicknessMm;
-    const avgThickness = ctx.unifiedAnalysis.metrics.result?.avgWallThicknessMm;
-    const displayThickness = p5Thickness ?? avgThickness ?? ctx.unifiedAnalysis.metrics.result?.minWallThicknessMm ?? 1;
+    const metrics = ctx.unifiedAnalysis.metrics?.result;
+    const twr = metrics?.thinWallRatio ?? 0;
+    const samples = metrics?.wallThicknessSamples ?? [];
+    // Measured-only: never emit fake thin-wall markers from arbitrary vertex
+    // sampling. Markers appear only when real wall-thickness samples exist and
+    // a measurable thin-wall signal (thinWallRatio > 0) is present, and are
+    // placed on the actual sample positions.
+    if (twr <= 0 || samples.length === 0) return [];
 
+    const THIN_WALL_MM = 0.8;
+    const thinSamples = samples.filter((s) => s.thickness < THIN_WALL_MM);
+    const pool = thinSamples.length > 0 ? thinSamples : samples;
+    const count = Math.min(10, pool.length);
+    const markers: RiskMarker[] = [];
     for (let i = 0; i < count; i++) {
-      const idx = i * 30;
-      if (idx + 2 < positions.length) {
-        markers.push({
-          position: { x: positions[idx], y: positions[idx + 1], z: positions[idx + 2] },
-          type: 'thin_wall',
-          severity: severity === 'critical' ? 0.9 : 0.6,
-          description: translate(CONTENT, 'failurePredictor.markerThinWall', ctx.language, { t: displayThickness.toFixed(2) }),
-        });
-      }
+      const s = pool[Math.floor((i * pool.length) / count)];
+      markers.push({
+        position: s.position,
+        type: 'thin_wall',
+        severity: severity === 'critical' ? 0.9 : 0.6,
+        description: translate(CONTENT, 'failurePredictor.markerThinWall', ctx.language, { t: s.thickness.toFixed(2) }),
+      });
     }
     return markers;
   }
