@@ -138,6 +138,7 @@ export function ManufacturingRecommendationPanel({
                     <span className={`${PANEL.chip} border ${styles.badge}`}>
                       {t(FIT_KEY[rec.fit] as keyof typeof import('@/lib/i18n').translations.en)}
                     </span>
+                    <span className="text-[8px] font-mono uppercase tracking-wider text-muted-foreground/30">HEURISTIC</span>
                   </div>
 
                   {/* Confidence bar */}

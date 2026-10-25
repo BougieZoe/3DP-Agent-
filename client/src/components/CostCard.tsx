@@ -49,6 +49,7 @@ export function CostCard({ unifiedAnalysis, material, language }: Props) {
     <div className="border border-border/50 rounded-lg bg-card/30 p-3 space-y-2">
       <div className="flex items-baseline justify-between">
         <span className="text-[9px] font-mono text-muted-foreground/50 uppercase tracking-wider">{t.title}</span>
+        <span className="text-[8px] font-mono uppercase tracking-wider text-muted-foreground/30">HEURISTIC</span>
         <span className="text-lg font-mono font-bold text-primary">${data.total.toFixed(2)}</span>
       </div>
 
