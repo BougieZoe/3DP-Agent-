@@ -11,7 +11,8 @@ const VERIF: Record<string, { en: string; ja: string; zh: string }> = {
   'verif.materialTime': { en: 'material + time', ja: '材料 + 時間', zh: '材料 + 工时' },
   'verif.avoided': { en: 'failed reprints avoided', ja: '失敗再造形の回避', zh: '失败重打避免' },
   'verif.eventsConfusion': { en: '8-Event Confusion · Predicted vs Photo', ja: '8イベント混同行列 · 予測 vs 実写', zh: '8 事件混淆 · 预测 vs 实拍' },
-  'verif.photoPending': { en: 'PHOTO\npending', ja: '写真\n未登録', zh: '照片\n待接入' },
+  'verif.photoPending': { en: 'PHOTO analysis\ncoming soon', ja: '写真分析\n近日対応', zh: '照片分析\n即将上线' },
+  'verif.simulatedBanner': { en: 'SIMULATED DEMO DATA — NOT MEASURED', ja: '模擬デモデータ — 実測ではありません', zh: '模拟演示数据 — 非实测' },
   'verif.predicted': { en: 'Predicted:', ja: '予測:', zh: '预测：' },
   'verif.photo': { en: 'Photo:', ja: '実写:', zh: '实拍：' },
   'verif.noRisk': { en: 'no risk', ja: 'リスクなし', zh: '无风险' },
@@ -99,8 +100,11 @@ export function PhysicalVerificationBoard({ language = 'en' as ContentLang }: { 
 
   return (
     <div className="space-y-4">
+      <div className="border border-amber-500/60 bg-amber-500/10 text-amber-400 rounded-sm px-3 py-2 text-xs font-mono tracking-wide">
+        {t('verif.simulatedBanner', language)}
+      </div>
       {/* 顶部 KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <div className={`${PANEL.border} ${PANEL.rounded} ${PANEL.padding} bg-background/60`}>
           <div className={`${PANEL.fontTiny} text-muted-foreground/60`}>{t('verif.precisionRecall', language)}</div>
           <div className="text-lg font-mono">{(metrics.precision*100).toFixed(1)}% / {(metrics.recall*100).toFixed(1)}%</div>
@@ -110,16 +114,6 @@ export function PhysicalVerificationBoard({ language = 'en' as ContentLang }: { 
           <div className={`${PANEL.fontTiny} text-muted-foreground/60`}>{t('verif.verified', language)}</div>
           <div className="text-lg font-mono">{rows.length} / {(metrics.precision*100).toFixed(0)}%</div>
           <div className="text-[10px] font-mono text-muted-foreground/40">{t('verif.events8', language)}</div>
-        </div>
-        <div className={`${PANEL.border} ${PANEL.rounded} ${PANEL.padding} bg-background/60`}>
-          <div className={`${PANEL.fontTiny} text-muted-foreground/60`}>{t('verif.saved', language)}</div>
-          <div className="text-lg font-mono text-emerald-400">¥{totalSaved.toFixed(1)} / ¥{avgSaved.toFixed(1)}</div>
-          <div className="text-[10px] font-mono text-muted-foreground/40">{t('verif.materialTime', language)}</div>
-        </div>
-        <div className={`${PANEL.border} ${PANEL.rounded} ${PANEL.padding} bg-background/60`}>
-          <div className={`${PANEL.fontTiny} text-muted-foreground/60`}>{t('verif.timeSaved', language)}</div>
-          <div className="text-lg font-mono">{Math.floor(totalTime/60)}h {totalTime%60}m</div>
-          <div className="text-[10px] font-mono text-muted-foreground/40">{t('verif.avoided', language)}</div>
         </div>
       </div>
 
@@ -167,7 +161,6 @@ export function PhysicalVerificationBoard({ language = 'en' as ContentLang }: { 
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono truncate">{r.fileName}</span>
                   <span className="text-[9px] font-mono px-1 border rounded-sm border-border/40 text-muted-foreground/60">{r.material}</span>
-                  <span className="text-[10px] font-mono ml-auto text-emerald-400">+¥{r.costSaved} +{r.timeSaved}m</span>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-1">
                   {r.predicted.length===0 ? <span className="text-[10px] font-mono text-muted-foreground/30">{t('verif.predicted', language)}{t('verif.noRisk', language)}</span> : r.predicted.map(p=><span key={p} className={`text-[9px] font-mono px-1 border rounded-sm ${EVENT_COLORS_CSS[p]}`}>{p}</span>)}
