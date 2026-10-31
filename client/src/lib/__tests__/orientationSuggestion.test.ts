@@ -32,18 +32,19 @@ function indicesOf(g: THREE.BufferGeometry): Uint32Array {
 }
 
 describe('suggestOrientation', () => {
-  it('rejects zero-contact poses on test_model: overhang-free edge perches cannot win', () => {
+  it('rejects edge-perch poses on test_model but keeps its real flat seat', () => {
     const geo = autoOrientGeometry(loadGeo('test_model'));
     const s = suggestOrientation(geo, 50);
     // The four zero-overhang poses all rest on a sliver — the floor rejects them.
     const edgePoses = s.candidates.filter(c => c.overhangRatio < 0.01 && c.axis !== null);
     expect(edgePoses.length).toBeGreaterThan(0);
     for (const c of edgePoses) expect(c.baseContactOk).toBe(false);
-    // Nothing stable exists anywhere: best footprint contact is 5.3%,
-    // under the 10% stability guard -> distinct 'no good orientation' result.
+    // The current pose's underside is ~60 mm² of down-facing area (nearly its
+    // whole 60 mm² footprint): a real seat, so the verdict is 'kept'.
+    expect(s.candidates[0].baseContactAreaMm2).toBeGreaterThan(50);
+    expect(s.candidates[0].baseContactFraction).toBeGreaterThan(0.5);
     expect(s.rotated).toBe(false);
-    expect(s.verdict).toBe('no_good_orientation');
-    expect(s.reason).toContain('stable seat');
+    expect(s.verdict).toBe('kept');
     expect(s.chosen.axis).toBeNull();
     expect(s.rotatedGeometry).toBeNull();
   });
@@ -77,6 +78,26 @@ describe('suggestOrientation', () => {
     expect(s.verdict).toBe('kept');
     expect(s.chosen.axis).toBeNull();
     expect(s.rotatedGeometry).toBeNull();
+  });
+
+  it('measures a known flat underside: full area on a flat plate, band-tolerance on a stepped base', () => {
+    // Flat plate 20×10×1 lying flat: underside = exactly 200 mm².
+    const flat = new THREE.BoxGeometry(20, 10, 1);
+    flat.translate(0, 0, 0.5);
+    const sFlat = suggestOrientation(flat, 50);
+    expect(sFlat.candidates[0].baseContactAreaMm2).toBeCloseTo(200, 0);
+
+    // Stepped base: 20×10×0.2 slab floating 0.3 mm up on a 2×2×0.3 foot.
+    // The support polygon is just the foot (4 mm²) — correctly tiny: a
+    // wide slab on a pin is tippy, and the floating slab's 200 mm² of
+    // down-facing surface bears nothing.
+    const slab = new THREE.BoxGeometry(20, 10, 0.2);
+    slab.translate(0, 0, 0.4);
+    const foot = new THREE.BoxGeometry(2, 2, 0.3);
+    foot.translate(0, 0, 0.15);
+    const stepped = mergeGeometries([slab, foot])!;
+    const sStep = suggestOrientation(stepped, 50);
+    expect(sStep.candidates[0].baseContactAreaMm2).toBeCloseTo(4, 0);
   });
 
   it('reports build height, base contact and floor status for every candidate', () => {

@@ -12,7 +12,7 @@
  */
 
 import * as THREE from 'three';
-import { analyzeOverhang, isOnBuildPlate } from '../analysis/metrics';
+import { analyzeOverhang } from '../analysis/metrics';
 
 /**
  * Auto-orient a geometry so its largest coplanar face sits on the build
@@ -327,30 +327,64 @@ function sequentialIndices(vertexCount: number): Uint32Array {
   return idx;
 }
 
-/** Sum the area of triangles resting on the build plate (same criterion as
- *  the pipeline's overhang exclusion: isOnBuildPlate). */
-function baseContactAreaMm2(
-  positions: Float32Array,
-  indices: Uint32Array,
-  minZ: number,
-  modelHeight: number,
-): number {
-  let area = 0;
-  const ax = new THREE.Vector3();
-  const ab = new THREE.Vector3();
-  const ac = new THREE.Vector3();
-  for (let i = 0; i + 2 < indices.length; i += 3) {
-    const i0 = indices[i] * 3;
-    const i1 = indices[i + 1] * 3;
-    const i2 = indices[i + 2] * 3;
-    const cz = (positions[i0 + 2] + positions[i1 + 2] + positions[i2 + 2]) / 3;
-    if (!isOnBuildPlate(cz, minZ, modelHeight)) continue;
-    ax.set(positions[i0], positions[i0 + 1], positions[i0 + 2]);
-    ab.set(positions[i1], positions[i1 + 1], positions[i1 + 2]).sub(ax);
-    ac.set(positions[i2], positions[i2 + 1], positions[i2 + 2]).sub(ax);
-    area += ab.cross(ac).length() * 0.5;
+/** Vertices within this distance of the plate count as touching it —
+ *  approximates first-layer squish plus minor underside warp. Absolute,
+ *  not relative to model height: the old relative band (modelHeight ×
+ *  1e-3, i.e. 0.002 mm on a 2 mm part) saw only faces coplanar with the
+ *  lowest vertex and undercounted non-flat undersides (test_model:
+ *  3.2 mm² measured vs ~60 mm² of bearing underside). Must stay small:
+ *  at 0.5 mm a 10 mm-diameter cylinder lying down already produces a
+ *  ~380 mm² phantom contact strip (sagitta), so 0.25 mm is the band that
+ *  still credits test_model's ~0.4 mm underside relief while excluding
+ *  curved surfaces that never truly bear. */
+const CONTACT_EPS_MM = 0.25;
+
+/** Support polygon: the XY convex hull of the vertices touching the plate.
+ *  This is the region where the part's weight can bear — a flat underside
+ *  yields its full area (a 20×10 plate gives exactly 200 mm²), four feet
+ *  give the feet polygon, a cylinder lying down gives ~0 (line contact),
+ *  and an edge perch gives the sliver it stands on. Summing in-band face
+ *  area instead credits curved undersides that never touch (a lying
+ *  cylinder measured 383 mm² of "contact" that way).
+ *  Monotone-chain hull, O(n log n). */
+function supportPolygonAreaMm2(positions: Float32Array, minZ: number): number {
+  const zMax = minZ + CONTACT_EPS_MM;
+  const pts: number[] = [];
+  for (let i = 0; i + 2 < positions.length; i += 3) {
+    if (positions[i + 2] <= zMax) pts.push(positions[i], positions[i + 1]);
   }
-  return area;
+  const n = pts.length / 2;
+  if (n < 3) return 0;
+
+  const order = Array.from({ length: n }, (_, i) => i);
+  order.sort((a, b) => pts[2 * a] - pts[2 * b] || pts[2 * a + 1] - pts[2 * b + 1]);
+
+  const cross = (o: number, a: number, b: number) =>
+    (pts[2 * a] - pts[2 * o]) * (pts[2 * b + 1] - pts[2 * o + 1]) -
+    (pts[2 * a + 1] - pts[2 * o + 1]) * (pts[2 * b] - pts[2 * o]);
+
+  const lower: number[] = [];
+  for (const i of order) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], i) <= 1e-12) {
+      lower.pop();
+    }
+    lower.push(i);
+  }
+  const upper: number[] = [];
+  for (const i of [...order].reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], i) <= 1e-12) {
+      upper.pop();
+    }
+    upper.push(i);
+  }
+  const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
+
+  let twiceArea = 0;
+  for (let i = 0; i < hull.length; i++) {
+    const a = hull[i], b = hull[(i + 1) % hull.length];
+    twiceArea += pts[2 * a] * pts[2 * b + 1] - pts[2 * b] * pts[2 * a + 1];
+  }
+  return Math.abs(twiceArea) / 2;
 }
 
 /**
@@ -391,7 +425,7 @@ export function suggestOrientation(
     box.getSize(size);
     const buildHeightMm = size.z;
     const footprintMm2 = size.x * size.y;
-    const contact = baseContactAreaMm2(positions, indices, box.min.z, size.z);
+    const contact = supportPolygonAreaMm2(positions, box.min.z);
 
     candidates.push({
       axis: rot.axis,
