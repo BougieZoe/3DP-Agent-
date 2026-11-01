@@ -100,6 +100,34 @@ describe('suggestOrientation', () => {
     expect(sStep.candidates[0].baseContactAreaMm2).toBeCloseTo(4, 0);
   });
 
+  it('measures true contact as the sum of disjoint strips while the hull spans the gap', () => {
+    // Two 10×1×2 rails at z∈[0,2], one at y∈[0,1] and one at y∈[3,4]:
+    // literally 20 mm² touches, but the support polygon spans the gap
+    // (10 × 4 = 40 mm²) — and spanning it is what makes the seat stable.
+    const r1 = new THREE.BoxGeometry(10, 1, 2);
+    r1.translate(0, 0.5, 1);
+    const r2 = new THREE.BoxGeometry(10, 1, 2);
+    r2.translate(0, 3.5, 1);
+    const geo = mergeGeometries([r1, r2])!;
+    const s = suggestOrientation(geo, 50);
+    expect(s.candidates[0].trueContactAreaMm2).toBeCloseTo(20, 0);
+    expect(s.candidates[0].baseContactAreaMm2).toBeCloseTo(40, 0);
+    expect(s.candidates[0].baseContactAreaMm2).toBeGreaterThan(
+      s.candidates[0].trueContactAreaMm2 * 1.5,
+    );
+  });
+
+  it('warns on a tall slender pose but not on a short wide one', () => {
+    // 2×2×40 column: height 40 > 8 × √4 (=16) → wobble risk.
+    const tall = new THREE.BoxGeometry(2, 2, 40);
+    tall.translate(0, 0, 20);
+    expect(suggestOrientation(tall, 50).tallSlender).toBe(true);
+    // 20×20×5 slab: height 5 < 8 × √400 (=160) → solid seat.
+    const wide = new THREE.BoxGeometry(20, 20, 5);
+    wide.translate(0, 0, 2.5);
+    expect(suggestOrientation(wide, 50).tallSlender).toBe(false);
+  });
+
   it('reports build height, base contact and floor status for every candidate', () => {
     const geo = autoOrientGeometry(loadGeo('test_model'));
     const s = suggestOrientation(geo, 50);
