@@ -92,9 +92,20 @@ export function OrientationPreviewPanel({
         </button>
       )}
 
-      {suggestion && suggestion.verdict === 'kept' && (
-        <div className="text-xs font-mono text-emerald-400/80">
-          {t('orientationKept')}
+      {suggestion && suggestion.verdict === 'kept' && current && (
+        <div className="space-y-1">
+          <div className="text-xs font-mono text-emerald-400/80">
+            {t('orientationKept')}
+          </div>
+          <div className="text-xs font-mono text-muted-foreground/70">
+            {`${t('orientationHeight')} ${current.buildHeightMm.toFixed(1)} mm · ${t('orientationBase')} ${current.baseContactAreaMm2.toFixed(1)} mm² · ${t('orientationTrueContact')} ${current.trueContactAreaMm2.toFixed(1)} mm²`}
+          </div>
+        </div>
+      )}
+
+      {suggestion && suggestion.tallSlender && (
+        <div className="text-xs font-mono text-yellow-400/90">
+          {t('orientationTallSlender')}
         </div>
       )}
 
@@ -153,6 +164,11 @@ export function OrientationPreviewPanel({
                     <td className="py-0.5">{t('orientationBase')}</td>
                     <td className="text-right">{current.baseContactAreaMm2.toFixed(1)} mm²</td>
                     <td className="text-right">{chosen.baseContactAreaMm2.toFixed(1)} mm²</td>
+                  </tr>
+                  <tr>
+                    <td className="py-0.5">{t('orientationTrueContact')}</td>
+                    <td className="text-right">{current.trueContactAreaMm2.toFixed(1)} mm²</td>
+                    <td className="text-right">{chosen.trueContactAreaMm2.toFixed(1)} mm²</td>
                   </tr>
                 </tbody>
               </table>

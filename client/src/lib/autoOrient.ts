@@ -245,7 +245,14 @@ export interface OrientationCandidate {
   overhangRatio: number;
   overhangFaces: number;
   buildHeightMm: number;
+  /** Convex-hull (support polygon) area of plate-contacting vertices, mm² —
+   *  the stability metric used by the floor and footprint guards. */
   baseContactAreaMm2: number;
+  /** Literal plate contact: summed area of triangles fully within
+   *  CONTACT_EPS_MM of the plate, mm² — the adhesion metric. On a wavy
+   *  rail or pad underside this is far smaller than the support polygon
+   *  (macbook: 305 vs 21 285), because it counts what truly touches. */
+  trueContactAreaMm2: number;
   /** False when the pose fails the base-contact floor and cannot win. */
   baseContactOk: boolean;
   /** XY-projected bounding-box area of this pose (mm²). */
@@ -272,6 +279,9 @@ export interface OrientationSuggestion {
    */
   verdict: OrientationVerdict;
   reason: string | null;
+  /** True when the chosen pose is tall relative to its true contact area —
+   *  a wobble risk worth warning about, never a rejection. */
+  tallSlender: boolean;
 }
 
 /**
@@ -311,6 +321,17 @@ const MIN_BASE_CONTACT_FRACTION = 0.25;
  * instead of proposing a rotation we know is fragile.
  */
 const MIN_STABLE_FOOTPRINT_FRACTION = 0.10;
+
+/**
+ * Tall-slender warning: the chosen pose warns (never rejects) when its
+ * build height exceeds this multiple of the contact pad's equivalent
+ * side (sqrt of true contact area). 6 separates solid seats from wobble
+ * risks across the sweep: t_big300 sits at 1.0, ps5 at 0.7, shoe_bank
+ * at 4.0, while the macbook on-edge pose hits 6.1 (304 mm on a
+ * ~50 mm-equivalent pad), a standing 100 mm cylinder 11.4, and a sphere
+ * ~8. Parts with ~0 true contact always warn.
+ */
+const TALL_SLENDER_HEIGHT_RATIO = 6;
 
 const CANDIDATE_ROTATIONS: ReadonlyArray<{ axis: 'x' | 'y' | null; degrees: number; label: string }> = [
   { axis: null, degrees: 0, label: 'current' },
@@ -387,6 +408,25 @@ function supportPolygonAreaMm2(positions: Float32Array, minZ: number): number {
   return Math.abs(twiceArea) / 2;
 }
 
+/** Literal plate contact: summed area of the triangles whose three
+ *  vertices all lie within CONTACT_EPS_MM of the plate. Requires all
+ *  three so a partly-in-band sliver doesn't credit a tall wall's base. */
+function trueContactAreaMm2(positions: Float32Array, indices: Uint32Array, minZ: number): number {
+  const zMax = minZ + CONTACT_EPS_MM;
+  let area2 = 0;
+  for (let t = 0; t + 2 < indices.length; t += 3) {
+    const a = indices[t] * 3, b = indices[t + 1] * 3, c = indices[t + 2] * 3;
+    if (positions[a + 2] > zMax || positions[b + 2] > zMax || positions[c + 2] > zMax) continue;
+    const abx = positions[b] - positions[a], aby = positions[b + 1] - positions[a + 1], abz = positions[b + 2] - positions[a + 2];
+    const acx = positions[c] - positions[a], acy = positions[c + 1] - positions[a + 1], acz = positions[c + 2] - positions[a + 2];
+    const cx = aby * acz - abz * acy;
+    const cy = abz * acx - abx * acz;
+    const cz = abx * acy - aby * acx;
+    area2 += Math.sqrt(cx * cx + cy * cy + cz * cz);
+  }
+  return area2 / 2;
+}
+
 /**
  * Score the 6 cardinal orientations of `geometry` with the pipeline's own
  * overhang computation (analyzeOverhang), then pick the best pose:
@@ -426,6 +466,7 @@ export function suggestOrientation(
     const buildHeightMm = size.z;
     const footprintMm2 = size.x * size.y;
     const contact = supportPolygonAreaMm2(positions, box.min.z);
+    const trueContact = trueContactAreaMm2(positions, indices, box.min.z);
 
     candidates.push({
       axis: rot.axis,
@@ -435,6 +476,7 @@ export function suggestOrientation(
       overhangFaces: overhang.faceCount,
       buildHeightMm,
       baseContactAreaMm2: contact,
+      trueContactAreaMm2: trueContact,
       baseContactOk: true,
       footprintMm2,
       baseContactFraction: footprintMm2 > 1e-9 ? contact / footprintMm2 : 0,
@@ -477,12 +519,17 @@ export function suggestOrientation(
     verdict = 'kept';
   }
 
+  const chosen = rotated ? best : current;
+  const contactSide = Math.sqrt(chosen.trueContactAreaMm2);
+  const tallSlender = chosen.buildHeightMm > TALL_SLENDER_HEIGHT_RATIO * contactSide;
+
   return {
     candidates,
-    chosen: rotated ? best : current,
+    chosen,
     rotatedGeometry: rotated ? rotatedClones[bestIndex] : null,
     rotated,
     verdict,
     reason,
+    tallSlender,
   };
 }
