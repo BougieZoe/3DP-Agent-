@@ -115,6 +115,7 @@ export interface OrientationAcceptDeps {
   commitModel: (model: UploadedModel) => void;
   setQuickReport: (report: string) => void;
   runAgentAnalysis: (model: UploadedModel) => Promise<unknown>;
+  recomputeMaterialRecs: (geometry: THREE.BufferGeometry) => void;
   material: Material;
   language: Language;
 }
@@ -128,6 +129,7 @@ export function handleOrientationAccept(updated: UploadedModel, deps: Orientatio
   const md = unifiedToModelData(updated.unifiedAnalysis, updated.fileName, deps.material.overhangThreshold);
   deps.setQuickReport(generateQuickReport(md, deps.language, deps.material));
   void deps.runAgentAnalysis(updated);
+  deps.recomputeMaterialRecs(updated.geometry);
 }
 
 function downloadBlob(filename: string, blob: Blob) {
@@ -456,20 +458,7 @@ export default function Home() {
     setQuickReport(generateQuickReport(md, language, material));
     commitModel(model);
 
-    // Generate material recommendations
-    setMaterialRecLoading(true);
-    try {
-      const recResult = recommendMaterials({
-        technology: material.technology as Material['technology'],
-        model: fromThreeBufferGeometry(model.geometry),
-        topN: 3,
-      });
-      setMaterialRecResult(recResult);
-    } catch (err) {
-      console.error('Material recommendation failed:', err);
-    } finally {
-      setMaterialRecLoading(false);
-    }
+    refreshMaterialRecs(model.geometry);
   };
 
   /** Keep models[] and uploadedModel in sync (used after re-analysis too). */
@@ -481,6 +470,23 @@ export default function Home() {
         : [...prev, updated],
     );
   };
+
+  // recommendMaterials is pure/deterministic (no LLM, no network) — safe to
+  // re-run whenever the committed geometry changes (accept, units, repair).
+  const refreshMaterialRecs = useCallback((geometry: THREE.BufferGeometry) => {
+    setMaterialRecLoading(true);
+    try {
+      setMaterialRecResult(recommendMaterials({
+        technology: material.technology as Material['technology'],
+        model: fromThreeBufferGeometry(geometry),
+        topN: 3,
+      }));
+    } catch (err) {
+      console.error('Material recommendation failed:', err);
+    } finally {
+      setMaterialRecLoading(false);
+    }
+  }, [material]);
 
   const handleModelsLoaded = (loaded: UploadedModel[], received: number) => {
     setModels(loaded);
@@ -678,6 +684,7 @@ export default function Home() {
     const mesh = createMeshFromGeometry(geometry);
     const updatedModel: UploadedModel = { ...uploadedModel, geometry, mesh, unifiedAnalysis: newUnified, units: newUnits };
     commitModel(updatedModel);
+    refreshMaterialRecs(geometry);
 
     if (currentSeq !== unitRequestSeq.current || !orchestratorRef.current) return;
     try {
@@ -693,7 +700,7 @@ export default function Home() {
     if (currentSeq !== unitRequestSeq.current) return;
     const md = unifiedToModelData(newUnified, updatedModel.fileName, material.overhangThreshold);
     setQuickReport(generateQuickReport(md, language, material));
-  }, [uploadedModel, material, language]);
+  }, [uploadedModel, material, language, refreshMaterialRecs]);
 
   const getModelData = (): ModelData | null => {
     if (!uploadedModel) return null;
@@ -726,6 +733,7 @@ export default function Home() {
         unifiedAnalysis: outcome.analysis,
         rawGeometry: outcome.geometry.clone(),
       });
+      refreshMaterialRecs(outcome.geometry);
       deepAnalysisSeq.current += 1;
       setDeepAgentRun(null);
       setDeepSteps([]);
@@ -736,7 +744,7 @@ export default function Home() {
     } finally {
       setRepairing(false);
     }
-  }, [uploadedModel, material]);
+  }, [uploadedModel, material, refreshMaterialRecs]);
 
 
   const handleDownloadStl = () => {
@@ -1895,6 +1903,7 @@ export default function Home() {
                               commitModel,
                               setQuickReport,
                               runAgentAnalysis: (m) => runAgentAnalysis(m, material, { llm: false }),
+                              recomputeMaterialRecs: refreshMaterialRecs,
                               material,
                               language,
                             });
