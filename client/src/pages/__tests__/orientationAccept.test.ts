@@ -45,9 +45,10 @@ describe('orientation ACCEPT', () => {
     jev.runJevConsensus.mockClear();
   });
 
-  it('refreshes the agent run on the accepted model', () => {
+  it('refreshes the agent run and material recs on the accepted model', () => {
     const updated = acceptedModel();
     const runAgentAnalysis = vi.fn(async () => ({}));
+    const recomputeMaterialRecs = vi.fn();
     const commitModel = vi.fn();
     const setQuickReport = vi.fn();
 
@@ -55,6 +56,7 @@ describe('orientation ACCEPT', () => {
       commitModel,
       setQuickReport,
       runAgentAnalysis,
+      recomputeMaterialRecs,
       material: MATERIALS.PLA,
       language: 'en',
     });
@@ -64,6 +66,11 @@ describe('orientation ACCEPT', () => {
     // on the accepted pose. Without the re-run call this assertion fails.
     expect(runAgentAnalysis).toHaveBeenCalledTimes(1);
     expect(runAgentAnalysis).toHaveBeenCalledWith(updated);
+    // Material Recommendations must score the ROTATED geometry — otherwise the
+    // panel keeps judging the pre-accept pose ("Overhangs may need support"
+    // even when the new pose has no overhang faces).
+    expect(recomputeMaterialRecs).toHaveBeenCalledTimes(1);
+    expect(recomputeMaterialRecs).toHaveBeenCalledWith(updated.geometry);
     expect(setQuickReport).toHaveBeenCalled();
   });
 
