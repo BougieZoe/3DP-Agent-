@@ -80,8 +80,13 @@ export class AgentOrchestrator {
     visionCanvas?: HTMLCanvasElement | null,
     language?: ContentLang,
     material: Material = DEFAULT_MATERIAL,
+    options?: { llm?: boolean },
   ): Promise<AgentRunSummary> {
     const startTime = performance.now();
+    // llm === false: deterministic-only run — skips every paid call (vision LLM,
+    // Jev early triage and Jev consensus). Used when the pipeline itself re-runs
+    // the agents (e.g. orientation ACCEPT), never for a user-requested AI pass.
+    const llm = options?.llm !== false;
     const stateManager = getAgentStateManager();
     stateManager.reset();
 
@@ -103,7 +108,7 @@ export class AgentOrchestrator {
       visionProvider.setRenderCanvas(visionCanvas);
     }
 
-    if (visionCanvas) {
+    if (visionCanvas && llm) {
       const vision = await this.captureVisionAnalysis(vertexData, unifiedAnalysis.metrics.result, fileName, language);
       if (vision) {
         ctx.visionAnalysis = vision.raw;
@@ -116,7 +121,9 @@ export class AgentOrchestrator {
 
     // Run agents and Jev Early Triage in parallel
     const dims = unifiedAnalysis.metrics.result.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
-    const earlyTriagePromise = this.runJevEarlyTriage(unifiedAnalysis, material);
+    const earlyTriagePromise = llm
+      ? this.runJevEarlyTriage(unifiedAnalysis, material)
+      : Promise.resolve(undefined);
 
     const initialResults = await this.runAgentsParallel(ctx, enabledAgents);
 
@@ -146,7 +153,9 @@ export class AgentOrchestrator {
 
     const debateResults = await this.runDebatePhase(ctx, enabledAgents, initialResults);
 
-    const jevDecision = await this.runJevDecision(initialResults, unifiedAnalysis, debateResults, material) ?? undefined;
+    const jevDecision = llm
+      ? await this.runJevDecision(initialResults, unifiedAnalysis, debateResults, material) ?? undefined
+      : undefined;
 
     // Phase 2: Anomaly Detection — flag agents whose scores Jev finds untrustworthy
     let anomalies: AnomalyReport[] = [];
