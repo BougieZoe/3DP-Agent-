@@ -34,6 +34,12 @@ export function OrientationPreviewPanel({
   const check = async () => {
     setBusy(true);
     setAfterAnalysis(null);
+    // Yield two frames so the busy state paints before suggestOrientation's
+    // synchronous ~500 ms candidate loop — the click's INP feedback lands
+    // on the spinner instead of on a frozen frame.
+    await new Promise(resolve =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
     try {
       const s = suggestOrientation(model.geometry, material.overhangThreshold);
       setSuggestion(s);
@@ -149,6 +155,11 @@ export function OrientationPreviewPanel({
                     <td className="py-0.5">{t('orientationSupportVol')}</td>
                     <td className="text-right">{before.support ? `${before.support.result.totalSupportVolumeMm3.toFixed(0)} mm³` : '—'}</td>
                     <td className="text-right text-cyan-400">{afterAnalysis.support ? `${afterAnalysis.support.result.totalSupportVolumeMm3.toFixed(0)} mm³` : '—'}</td>
+                  </tr>
+                  <tr>
+                    <td colSpan={3} className="text-muted-foreground/50 pb-1">
+                      {t('orientationSupportVolNote')}
+                    </td>
                   </tr>
                   <tr>
                     <td className="py-0.5">{t('orientationSupportDiff')}</td>
