@@ -111,6 +111,25 @@ const CausalityPanel = lazy(() => import('@/components/causality/CausalityPanel'
 const PatternMemoryPanel = lazy(() => import('@/components/causality/PatternMemoryPanel').then(m => ({ default: m.PatternMemoryPanel })));
 const GeometrySuggestionPanel = lazy(() => import('@/components/causality/GeometrySuggestionPanel').then(m => ({ default: m.GeometrySuggestionPanel })));
 
+export interface OrientationAcceptDeps {
+  commitModel: (model: UploadedModel) => void;
+  setQuickReport: (report: string) => void;
+  runAgentAnalysis: (model: UploadedModel) => Promise<unknown>;
+  material: Material;
+  language: Language;
+}
+
+// ACCEPT step of the orientation preview loop: commit the rotated model,
+// regenerate the quick report and re-run the rule agents so the AGENTS tab
+// matches the new pose. The caller passes a deterministic-only runner
+// (`llm: false`) — ACCEPT is a pipeline step, not a user-requested AI pass.
+export function handleOrientationAccept(updated: UploadedModel, deps: OrientationAcceptDeps): void {
+  deps.commitModel(updated);
+  const md = unifiedToModelData(updated.unifiedAnalysis, updated.fileName, deps.material.overhangThreshold);
+  deps.setQuickReport(generateQuickReport(md, deps.language, deps.material));
+  void deps.runAgentAnalysis(updated);
+}
+
 function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -485,7 +504,7 @@ export default function Home() {
     if (target) activateModel(target);
   };
 
-  const runAgentAnalysis = async (model: UploadedModel, mat: Material = material) => {
+  const runAgentAnalysis = async (model: UploadedModel, mat: Material = material, opts?: { llm?: boolean }) => {
     if (!orchestratorRef.current) {
       console.warn('[3DP] orchestrator not loaded yet, retrying in 1s...');
       await new Promise(r => setTimeout(r, 1000));
@@ -504,6 +523,7 @@ export default function Home() {
         canvasRef.current,
         language,
         mat,
+        opts,
       );
       console.log('[3DP] agent analysis complete:', ruleSummary);
       setAgentRun(ruleSummary);
@@ -1871,9 +1891,13 @@ export default function Home() {
                           material={material}
                           language={language}
                           onAccept={(updated: UploadedModel) => {
-                            commitModel(updated);
-                            const md = unifiedToModelData(updated.unifiedAnalysis, updated.fileName, material.overhangThreshold);
-                            setQuickReport(generateQuickReport(md, language, material));
+                            handleOrientationAccept(updated, {
+                              commitModel,
+                              setQuickReport,
+                              runAgentAnalysis: (m) => runAgentAnalysis(m, material, { llm: false }),
+                              material,
+                              language,
+                            });
                           }}
                         />
                         )}
