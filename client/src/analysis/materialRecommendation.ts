@@ -290,11 +290,22 @@ export function recommendMaterials(
     geometry = analyzeGeometry(model, providedGraph);
   }
   
+  // analyzeOverhang is a full pass over the mesh — run it once per distinct
+  // material threshold (most candidates share 45) instead of once per material.
+  const overhangByThreshold = new Map<number, OverhangMetrics>();
+  const overhangFor = (thresholdDeg: number): OverhangMetrics | null => {
+    if (!geometry || !model) return null;
+    let oh = overhangByThreshold.get(thresholdDeg);
+    if (!oh) {
+      oh = analyzeOverhang(model.positions, model.indices, thresholdDeg);
+      overhangByThreshold.set(thresholdDeg, oh);
+    }
+    return oh;
+  };
+
   // Score each candidate
   const scored = candidates.map(material => {
-    const overhang = geometry && model
-      ? analyzeOverhang(model.positions, model.indices, material.overhangThreshold ?? 45)
-      : null;
+    const overhang = overhangFor(material.overhangThreshold ?? 45);
     const geometryFit = geometry ? scoreGeometryFit(material, geometry, overhang) : 0.5;
     const applicationMatch = scoreApplicationMatch(material, application);
     const costEfficiency = scoreCostEfficiency(material, maxBudgetPerKg);
