@@ -14,6 +14,8 @@ import type { Material, MaterialTechnology } from "@shared/domain/material";
 import { MATERIALS } from "@shared/domain/material";
 import type { GeometryModel } from "./geometryModel";
 import { buildGeometryGraph, type GeometryGraph } from "./geometryGraph";
+import { analyzeOverhang } from "./metrics";
+import type { OverhangMetrics } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -62,13 +64,12 @@ interface GeometryMetrics {
   maxDim: number;
   volumeMm3: number;
   surfaceAreaMm2: number;
-  maxOverhangAngle: number;
   thinWallCount: number;
   flatBaseArea: number;
 }
 
 function analyzeGeometry(model: GeometryModel, graph?: GeometryGraph | null): GeometryMetrics {
-  const { positions, indices } = model;
+  const { positions } = model;
   
   // Bounding box
   let minX = Infinity, maxX = -Infinity;
@@ -96,36 +97,6 @@ function analyzeGeometry(model: GeometryModel, graph?: GeometryGraph | null): Ge
   // Surface area estimate
   const surfaceAreaMm2 = 2 * (sizeX * sizeY + sizeY * sizeZ + sizeX * sizeZ);
   
-  // Max overhang angle (simplified)
-  let maxOverhangAngle = 0;
-  const faceCount = indices.length / 3;
-  
-  for (let i = 0; i < indices.length; i += 3) {
-    const i0 = indices[i] * 3;
-    const i1 = indices[i + 1] * 3;
-    const i2 = indices[i + 2] * 3;
-    
-    // Compute face normal
-    const ux = positions[i1] - positions[i0];
-    const uy = positions[i1 + 1] - positions[i0 + 1];
-    const uz = positions[i1 + 2] - positions[i0 + 2];
-    const vx = positions[i2] - positions[i0];
-    const vy = positions[i2 + 1] - positions[i0 + 1];
-    const vz = positions[i2 + 2] - positions[i0 + 2];
-    
-    const nx = uy * vz - uz * vy;
-    const ny = uz * vx - ux * vz;
-    const nz = ux * vy - uy * vx;
-    const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-    
-    if (len > 0) {
-      // Angle from vertical (Z-axis)
-      const cosAngle = Math.abs(nz / len);
-      const angle = Math.acos(Math.min(1, cosAngle)) * (180 / Math.PI);
-      maxOverhangAngle = Math.max(maxOverhangAngle, angle);
-    }
-  }
-  
   // Thin wall detection (simplified)
   const thinWallThreshold = 2.0; // mm
   let thinWallCount = 0;
@@ -140,7 +111,7 @@ function analyzeGeometry(model: GeometryModel, graph?: GeometryGraph | null): Ge
   return {
     sizeX, sizeY, sizeZ, maxDim,
     volumeMm3, surfaceAreaMm2,
-    maxOverhangAngle, thinWallCount, flatBaseArea,
+    thinWallCount, flatBaseArea,
   };
 }
 
@@ -151,7 +122,7 @@ function analyzeGeometry(model: GeometryModel, graph?: GeometryGraph | null): Ge
 /**
  * Score geometry fit (0-1)
  */
-function scoreGeometryFit(material: Material, geometry: GeometryMetrics): number {
+function scoreGeometryFit(material: Material, geometry: GeometryMetrics, overhang: OverhangMetrics | null): number {
   let score = 0.5; // Base score
   
   // Check shrinkage vs part size
@@ -163,9 +134,9 @@ function scoreGeometryFit(material: Material, geometry: GeometryMetrics): number
     score -= 0.2;
   }
   
-  // Check overhang support
-  const overhangThreshold = material.overhangThreshold ?? 45;
-  if (geometry.maxOverhangAngle > overhangThreshold) {
+  // Check overhang support — pipeline's analyzeOverhang already counted the
+  // downward-facing faces past this material's threshold.
+  if (overhang !== null && overhang.faceCount > 0) {
     // Material can't handle the overhangs
     score -= 0.15;
   }
@@ -319,9 +290,23 @@ export function recommendMaterials(
     geometry = analyzeGeometry(model, providedGraph);
   }
   
+  // analyzeOverhang is a full pass over the mesh — run it once per distinct
+  // material threshold (most candidates share 45) instead of once per material.
+  const overhangByThreshold = new Map<number, OverhangMetrics>();
+  const overhangFor = (thresholdDeg: number): OverhangMetrics | null => {
+    if (!geometry || !model) return null;
+    let oh = overhangByThreshold.get(thresholdDeg);
+    if (!oh) {
+      oh = analyzeOverhang(model.positions, model.indices, thresholdDeg);
+      overhangByThreshold.set(thresholdDeg, oh);
+    }
+    return oh;
+  };
+
   // Score each candidate
   const scored = candidates.map(material => {
-    const geometryFit = geometry ? scoreGeometryFit(material, geometry) : 0.5;
+    const overhang = overhangFor(material.overhangThreshold ?? 45);
+    const geometryFit = geometry ? scoreGeometryFit(material, geometry, overhang) : 0.5;
     const applicationMatch = scoreApplicationMatch(material, application);
     const costEfficiency = scoreCostEfficiency(material, maxBudgetPerKg);
     const printSuccessRate = geometry ? scorePrintSuccessRate(material, geometry) : 0.7;
@@ -345,7 +330,7 @@ export function recommendMaterials(
     if (material.environment?.enclosure) warnings.push("Requires enclosure");
     if ((material.shrinkagePercent ?? 0) > 0.5) warnings.push("High shrinkage risk");
     if ((material.moistureRisk ?? 0) > 0.5) warnings.push("Hygroscopic - dry before printing");
-    if (geometry && geometry.maxOverhangAngle > (material.overhangThreshold ?? 45)) {
+    if (overhang !== null && overhang.faceCount > 0) {
       warnings.push("Overhangs may need support");
     }
     
