@@ -63,6 +63,7 @@ const SupportGhosts = lazy(() => import('@/components/3D/SupportGhosts').then(m 
 const RiskAnimation = lazy(() => import('@/components/3D/RiskAnimation').then(m => ({ default: m.RiskAnimation })));
 const VisualizationToolbar = lazy(() => import('@/components/3D/VisualizationToolbar').then(m => ({ default: m.VisualizationToolbar })));
 const OptimizeButton = lazy(() => import('@/components/3D/OptimizeButton').then(m => ({ default: m.OptimizeButton })));
+const OrientationPreviewPanel = lazy(() => import('@/components/OrientationPreviewPanel').then(m => ({ default: m.OrientationPreviewPanel })));
 const PrintPathPreview = lazy(() => import('@/components/3D/PrintPathPreview').then(m => ({ default: m.PrintPathPreview })));
 const LayerReveal = lazy(() => import('@/components/3D/LayerReveal').then(m => ({ default: m.LayerReveal })));
 const FailureEmergence = lazy(() => import('@/components/3D/FailureEmergence').then(m => ({ default: m.FailureEmergence })));
@@ -1862,6 +1863,20 @@ export default function Home() {
                             ))}
                           </div>
                         </details>
+
+                        {/* Orientation preview loop: suggest → compare → accept/revert */}
+                        {uploadedModel && (
+                        <OrientationPreviewPanel
+                          model={uploadedModel}
+                          material={material}
+                          language={language}
+                          onAccept={(updated: UploadedModel) => {
+                            commitModel(updated);
+                            const md = unifiedToModelData(updated.unifiedAnalysis, updated.fileName, material.overhangThreshold);
+                            setQuickReport(generateQuickReport(md, language, material));
+                          }}
+                        />
+                        )}
 
                         {/* Optimize Button */}
                         {uploadedModel && agentRun.results.some((r: { agentId: string }) => r.agentId === 'optimization_advisor') && (
