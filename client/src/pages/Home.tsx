@@ -52,6 +52,7 @@ import { WallThicknessHistogram } from '@/components/WallThicknessHistogram';
 import { ManufacturingRecommendationPanel } from '@/components/ManufacturingRecommendationPanel';
 import { ManufacturerExport } from '@/components/ManufacturerExport';
 import { GlassCard } from '@/components/GlassCard';
+import { AnalysisVerdictBar, deriveVerdict, VERDICT_THRESHOLDS, type VerdictMetric } from '@/components/AnalysisVerdictBar';
 import { recommendManufacturing, type ManufacturingGoal, type ProcessRecommendation } from '@/lib/manufacturingRecommendation';
 import { MaterialRecommendationPanel } from '@/components/MaterialRecommendationPanel';
 import { recommendMaterials, type RecommendationResult } from '@/analysis/materialRecommendation';
@@ -531,7 +532,6 @@ export default function Home() {
         mat,
         opts,
       );
-      console.log('[3DP] agent analysis complete:', ruleSummary);
       setAgentRun(ruleSummary);
 
     } catch (err) {
@@ -811,6 +811,96 @@ export default function Home() {
   const supportDecision = unifiedAnalysis?.support?.result
     ? deriveSupportStatus(unifiedAnalysis.support.result)
     : null;
+
+  // ── Above-the-fold verdict ────────────────────────────────────────────────
+  // A presentation rollup: every value is read from the analysis the pipeline
+  // already produced, and the thresholds are the analyzer's own constants.
+  // No new score is invented here (see AGENTS.md "one source of truth").
+  const verdictLevel = deriveVerdict({
+    available: !!analysis,
+    isWatertight: valid ? valid.isWatertight : null,
+    isManifold: topo ? topo.isManifold : null,
+    wallStatus: analysis?.wallThickness.status ?? null,
+    overhangStatus: analysis?.overhang.status ?? null,
+  });
+
+  const verdictLabel = t(
+    verdictLevel === 'ready' ? 'verdictReady'
+      : verdictLevel === 'minor' ? 'verdictMinor'
+      : verdictLevel === 'fix' ? 'verdictFix'
+      : verdictLevel === 'blocked' ? 'verdictBlocked'
+      : 'verdictUnknown',
+  );
+
+  const verdictMetrics: VerdictMetric[] = analysis ? [
+    {
+      key: 'wall',
+      label: t('verdictMinWall'),
+      value: analysis.wallThickness.minThickness != null ? toUnit(analysis.wallThickness.minThickness).toFixed(3) : '—',
+      unit: unitSuffix,
+      against: t('verdictAgainstWall').replace('{v}', String(VERDICT_THRESHOLDS.thinWallMm)),
+      status: analysis.wallThickness.status,
+    },
+    {
+      key: 'overhang',
+      label: t('verdictOverhang'),
+      value: analysis.overhang.areas > 0 ? analysis.overhang.areas.toLocaleString('en-US') : '0',
+      unit: 'faces',
+      against: t('verdictAgainstOverhang').replace('{v}', String(material.overhangThreshold)),
+      status: analysis.overhang.status,
+    },
+    {
+      key: 'mesh',
+      label: t('verdictMesh'),
+      value: valid ? (valid.isWatertight ? t('verdictSealed') : t('verdictOpen')) : t('verdictUnknownValue'),
+      against: topo && topo.nonManifoldEdgeCount > 0
+        ? `${topo.nonManifoldEdgeCount.toLocaleString('en-US')} ${t('cadNonManifoldEdges')}`
+        : t('verdictAgainstMesh').replace('{n}', String(topo?.boundaryEdgeCount ?? 0)),
+      status: valid ? (valid.isWatertight ? 'good' : 'critical') : 'unknown',
+    },
+    {
+      key: 'volume',
+      label: t('verdictVolume'),
+      value: analysis.volumeReliable ? toUnit3(analysis.volume).toFixed(1) : '—',
+      unit: analysis.volumeReliable ? volumeUnit : undefined,
+      against: t('verdictAgainstVolume'),
+      status: analysis.volumeReliable ? 'good' : 'unknown',
+    },
+  ] : [];
+
+  const verdictActions: string[] = (() => {
+    if (!analysis || !unifiedAnalysis) return [];
+    const out: string[] = [];
+    const pct = Math.round((analysis.wallThickness.thinWallPercentage ?? 0) * 100);
+    const minMm = analysis.wallThickness.minThickness;
+    if (valid && !valid.isWatertight) {
+      // "0 boundary edges" is not a useful sentence: a mesh can fail the
+      // watertight check through non-manifold edges alone. Say which one.
+      if ((topo?.boundaryEdgeCount ?? 0) > 0) {
+        out.push(t('verdictActionRepair').replace('{n}', String(topo!.boundaryEdgeCount)));
+      } else if ((topo?.nonManifoldEdgeCount ?? 0) > 0) {
+        out.push(t('verdictActionNonManifold').replace('{n}', String(topo!.nonManifoldEdgeCount)));
+      } else {
+        out.push(t('verdictActionRepairGeneric'));
+      }
+    } else if (topo && topo.nonManifoldEdgeCount > 0) {
+      out.push(t('verdictActionNonManifold').replace('{n}', String(topo.nonManifoldEdgeCount)));
+    }
+    if (analysis.wallThickness.status !== 'good') {
+      out.push(t('verdictActionThinWall')
+        .replace('{p}', String(pct))
+        .replace('{v}', String(VERDICT_THRESHOLDS.thinWallMm))
+        .replace('{min}', minMm != null ? toUnit(minMm).toFixed(3) : '—'));
+    }
+    if (analysis.overhang.status !== 'good') {
+      out.push(t('verdictActionOverhang')
+        .replace('{n}', analysis.overhang.areas.toLocaleString('en-US'))
+        .replace('{v}', String(material.overhangThreshold)));
+    }
+    if (!analysis.volumeReliable) out.push(t('verdictActionNoVolume'));
+    if (out.length === 0) out.push(t('verdictActionReady'));
+    return out;
+  })();
 
   // Lazy-load causality engines
   const [causalityEngines, setCausalityEngines] = useState<{
@@ -1199,6 +1289,7 @@ export default function Home() {
                 onClick={() => setShowPrintDashboard(true)}
                 className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/30 transition-colors"
                 title="Print Monitor"
+                aria-label="Print monitor"
               >
                 <svg className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -1207,7 +1298,8 @@ export default function Home() {
               <button
                 onClick={() => setShowAgentGraph(true)}
                 className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center hover:bg-amber-500/30 transition-colors"
-                title="Agent Graph"
+                title="Agent graph"
+                aria-label="Agent execution graph"
               >
                 <svg className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
@@ -1221,23 +1313,59 @@ export default function Home() {
         <div className="lg:w-1/2 lg:h-full lg:min-h-0 lg:overflow-y-auto">
           <div className="pt-3 sm:pt-4 px-4 sm:px-5 pb-5 space-y-6 sm:space-y-8">
 
-            {/* Upload */}
-            <div>
-              <div className="text-xs text-muted-foreground/50 mb-2 font-mono tracking-widest">// {t('input')}</div>
-              <div className="relative">
-                <STLUploadHandler
-                  onModelsLoaded={handleModelsLoaded}
-                  onError={e => toast.error(e)}
-                  language={language}
-                  units={units}
-                  onUnitsChange={handleUnitsChange}
-                  materialFamily={materialFamily}
-                  material={material}
-                />
-                {/* Decorative presentation-only touches — remove any one freely */}
-                <ScanlineSweep />
+            {/* Upload — full dropzone before a model exists; once one is
+                loaded the same component collapses into a "Replace" control
+                inside the verdict bar, so results start at the top of the
+                panel instead of ~300px down. */}
+            {!uploadedModel && (
+              <div>
+                <div className="text-xs text-muted-foreground/50 mb-2 font-mono tracking-widest">// {t('input')}</div>
+                <div className="relative">
+                  <STLUploadHandler
+                    onModelsLoaded={handleModelsLoaded}
+                    onError={e => toast.error(e)}
+                    language={language}
+                    units={units}
+                    onUnitsChange={handleUnitsChange}
+                    materialFamily={materialFamily}
+                    material={material}
+                  />
+                  {/* Decorative presentation-only touches — remove any one freely */}
+                  <ScanlineSweep />
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Verdict — answers "can I print this?" and "what do I fix?"
+                before the user has to scroll or open a tab. */}
+            {uploadedModel && analysis && (
+              <AnalysisVerdictBar
+                fileName={uploadedModel.fileName}
+                unitsLabel={unitSuffix}
+                dims={modelData ? { x: toUnit(modelData.dims.x), y: toUnit(modelData.dims.y), z: toUnit(modelData.dims.z) } : null}
+                triangleCount={topo?.triangleCount ?? 0}
+                confidence={unifiedAnalysis && unifiedAnalysis.overallConfidence > 0 ? unifiedAnalysis.overallConfidence : null}
+                metrics={verdictMetrics}
+                actions={verdictActions}
+                level={verdictLevel}
+                verdictLabel={verdictLabel}
+                confidenceLabel={t('verdictConfidence')}
+                replaceSlot={
+                  <STLUploadHandler
+                    compact
+                    onModelsLoaded={handleModelsLoaded}
+                    onError={e => toast.error(e)}
+                    language={language}
+                    units={units}
+                    onUnitsChange={handleUnitsChange}
+                    materialFamily={materialFamily}
+                    material={material}
+                  />
+                }
+                onOpenReport={() => setTab('report')}
+                reportLabel={`${t('report')} →`}
+              />
+            )}
 
             {/* Loaded-model switcher — only appears when more than one file is in */}
             {models.length > 1 && (
@@ -1328,42 +1456,8 @@ export default function Home() {
                         <div className="text-xs font-mono text-primary animate-pulse">&#x258b; {t('recalculating')}</div>
                       </div>
                     )}
-                    <div className="grid grid-cols-2 gap-3">
-                      <GlassCard className="p-3">
-                        <div className="text-xs text-muted-foreground mb-2 font-mono">{t('wallThicknessLabel')}</div>
-                        <StatusChip status={analysis.wallThickness.status} label={t(analysis.wallThickness.status)} />
-                      </GlassCard>
-                      <GlassCard className="p-3">
-                        <div className="text-xs text-muted-foreground mb-2 font-mono">{t('overhangLabel')}</div>
-                        <StatusChip status={analysis.overhang.status} label={t(analysis.overhang.status)} />
-                      </GlassCard>
-                      <GlassCard className="p-3">
-                        <div className="text-xs text-muted-foreground mb-2 font-mono">{t('cadManifold')}</div>
-                        <StatusChip status={topo?.isManifold ? 'good' : 'critical'} label={topo ? (topo.isManifold ? '✓' : '✗') : '—'} />
-                      </GlassCard>
-                      <GlassCard className="p-3">
-                        <div className="text-xs text-muted-foreground mb-2 font-mono">{t('cadWatertight')}</div>
-                        <StatusChip status={valid?.isWatertight ? 'good' : 'critical'} label={valid ? (valid.isWatertight ? '✓' : '✗') : '—'} />
-                      </GlassCard>
-                    </div>
-                    {/* Watertight / mesh integrity warning — prominent when mesh has issues */}
-                    {valid && !valid.isWatertight && (
-                      <GlassCard className="p-3" accent="#cc6666">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                          <span className="text-[11px] font-mono text-red-400 tracking-wider">{t('watertightWarning')}</span>
-                        </div>
-                        <div className="text-[11px] font-mono text-muted-foreground/60 leading-relaxed">{t('watertightWarningDesc')}</div>
-                        <div className="flex gap-4 mt-2">
-                          {topo && topo.boundaryEdgeCount > 0 && (
-                            <MetricRow label={t('cadBoundaryEdges')} value={topo.boundaryEdgeCount} />
-                          )}
-                          {topo && topo.nonManifoldEdgeCount > 0 && (
-                            <MetricRow label={t('cadNonManifoldEdges')} value={topo.nonManifoldEdgeCount} />
-                          )}
-                        </div>
-                      </GlassCard>
-                    )}
+                    {/* Status cards + mesh-integrity banner moved into the verdict
+                        bar above the tabs: same facts, one place, with numbers. */}
                     {/* Object context — what this part is FOR changes what matters.
                         Kept near the top (right under the verdict cards) so users
                         actually find it; buried at the bottom it went unnoticed. */}
@@ -1420,34 +1514,6 @@ export default function Home() {
                         </div>
                       ) : null;
                     })()}
-                    <GlassCard className="p-4">
-                      <div className="text-xs text-muted-foreground mb-3 font-mono tracking-widest">
-                        {t('geometryDataLabel')} <span className="text-primary/60">[ {unitSuffix} ]</span>
-                      </div>
-                      <MetricRow label={t('minThickness')} value={analysis.wallThickness.minThickness != null ? toUnit(analysis.wallThickness.minThickness).toFixed(3) : '—'} unit={unitSuffix} highlight />
-                      {unifiedAnalysis?.metrics.result?.minWallThicknessMm != null && (
-                        <MetricRow label={t('minAbs')} value={toUnit(unifiedAnalysis.metrics.result.minWallThicknessMm).toFixed(3)} unit={unitSuffix} />
-                      )}
-                      <MetricRow label={t('volume')} value={analysis.volumeReliable ? toUnit3(analysis.volume).toFixed(1) : '—'} unit={volumeUnit} />
-                      <MetricRow label={t('surfaceArea')} value={toUnit2(analysis.surfaceArea).toFixed(1)} unit={areaUnit} />
-                      <MetricRow label={t('dimX')} value={toUnit(modelData.dims.x).toFixed(2)} unit={unitSuffix} />
-                      <MetricRow label={t('dimY')} value={toUnit(modelData.dims.y).toFixed(2)} unit={unitSuffix} />
-                      <MetricRow label={t('dimZ')} value={toUnit(modelData.dims.z).toFixed(2)} unit={unitSuffix} />
-                      <MetricRow label={t('overhangFaces')} value={analysis.overhang.areas} />
-                      {/* Slicer provenance indicator — shows whether print metrics come from real G-code or estimates */}
-                      {uploadedModel?.sliceProvenance && (
-                        <div className="flex items-center gap-2 text-[11px] font-mono text-emerald-400/70 mt-2">
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                          SLICED: {uploadedModel.sliceProvenance.slicerId} · {uploadedModel.sliceMetadata?.printTimeMinutes.toFixed(1)}min · {uploadedModel.sliceMetadata?.filamentGrams.toFixed(1)}g
-                        </div>
-                      )}
-                      {!uploadedModel?.sliceMetadata && uploadedModel && (
-                        <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground/50 mt-2">
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />
-                          ESTIMATED (volume-based)
-                        </div>
-                      )}
-                    </GlassCard>
                     {/* Wall thickness distribution histogram — always rendered; component handles empty/sparse internally */}
                     <WallThicknessHistogram
                       samples={unifiedAnalysis?.metrics.result?.wallThicknessSamples ?? []}
@@ -1460,12 +1526,32 @@ export default function Home() {
                         range: t('wallHistRange'),
                       }}
                     />
-                    {/* Expert mesh diagnostics — collapsed by default so the core metrics stay prominent */}
+                    {/* Measurements + mesh diagnostics — the evidence behind the
+                        verdict, collapsed so the four headline numbers are the
+                        only thing competing for attention. Rows the verdict bar
+                        already shows (min wall, volume, dims, overhang faces) are
+                        deliberately NOT repeated here. */}
                     <details className="mt-2">
                       <summary className="cursor-pointer text-[11px] font-mono text-muted-foreground/60 hover:text-foreground select-none">
-                        {t('meshDiagnostics')}
+                        {t('geometryDataLabel')} · {t('meshDiagnostics')} <span className="text-muted-foreground/30">[ {unitSuffix} ]</span>
                       </summary>
                       <div className="mt-1.5">
+                        {unifiedAnalysis?.metrics.result?.minWallThicknessMm != null && (
+                          <MetricRow label={t('minAbs')} value={toUnit(unifiedAnalysis.metrics.result.minWallThicknessMm).toFixed(3)} unit={unitSuffix} />
+                        )}
+                        <MetricRow label={t('surfaceArea')} value={toUnit2(analysis.surfaceArea).toFixed(1)} unit={areaUnit} />
+                        {/* Slicer provenance — real G-code vs volume-based estimate */}
+                        {uploadedModel?.sliceProvenance ? (
+                          <div className="flex items-center gap-2 text-[11px] font-mono text-emerald-400/70 mt-2">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            SLICED: {uploadedModel.sliceProvenance.slicerId} · {uploadedModel.sliceMetadata?.printTimeMinutes.toFixed(1)}min · {uploadedModel.sliceMetadata?.filamentGrams.toFixed(1)}g
+                          </div>
+                        ) : uploadedModel ? (
+                          <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground/50 mt-2">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />
+                            ESTIMATED (volume-based)
+                          </div>
+                        ) : null}
                         {topo && (
                           <>
                             <MetricRow label={t('cadTri')} value={topo.triangleCount} />
@@ -2087,7 +2173,7 @@ export default function Home() {
                       <OrderListView
                         orders={orders.orders}
                         language={language}
-                        onSelectOrder={(id) => console.log('Selected order:', id)}
+                        onSelectOrder={(id) => toast.info(id)}
                         onUpdateStatus={orders.updateStatus}
                         onDeleteOrder={orders.deleteOrder}
                         onDeleteOrders={orders.deleteOrders}
@@ -2110,8 +2196,10 @@ export default function Home() {
                 feature list (it is the only live, non-AI-key feature). */}
             {!uploadedModel && (
               <div className="mt-6 space-y-3">
-                <AgentOfficeEntry t={t} variant="hero" />
+                {/* What you get comes first; the Live Floor promo is a
+                    destination, not the primary action — it sits last. */}
                 <FeaturesSection t={t} onNavigate={handleFeatureNavigate} />
+                <AgentOfficeEntry t={t} variant="hero" />
               </div>
             )}
 

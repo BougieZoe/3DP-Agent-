@@ -73,28 +73,28 @@ export function CausalityTimeline({
     <div className="space-y-3">
       {/* 摘要条 — Apple 健康式 */}
       <div className={`${PANEL.border} ${PANEL.rounded} ${PANEL.padding} bg-background/60 flex items-center gap-3`}>
-        <span className="text-[11px] font-mono text-foreground">{rootCount} 根因</span>
+        <span className="text-[11px] font-mono text-foreground">{translate(CONTENT, 'causality.roots', language, { count: rootCount })}</span>
         <span className="text-muted-foreground/20">·</span>
-        <span className="text-[11px] font-mono text-muted-foreground">{aggregated.length} 模式</span>
+        <span className="text-[11px] font-mono text-muted-foreground">{translate(CONTENT, 'causality.patternCount', language, { count: aggregated.length })}</span>
         <span className="text-muted-foreground/20">·</span>
         {best ? (
-          <span className="text-[11px] font-mono text-cyan-400">最优修复 -{best.riskReduction}%</span>
+          <span className="text-[11px] font-mono text-cyan-400">{translate(CONTENT, 'causality.bestFix', language, { pct: best.riskReduction })}</span>
         ) : (
-          <span className="text-[11px] font-mono text-muted-foreground/40">暂无建议</span>
+          <span className="text-[11px] font-mono text-muted-foreground/40">{translate(CONTENT, 'causality.noSuggestion', language)}</span>
         )}
-        <span className="ml-auto text-[10px] font-mono text-muted-foreground/30">{graph.events.length} 事件</span>
+        <span className="ml-auto text-[10px] font-mono text-muted-foreground/30">{translate(CONTENT, 'causality.eventCount', language, { count: graph.events.length })}</span>
       </div>
 
       {/* 聚合模式 — 鼠标沿着落下来逐个高亮 */}
       {aggregated.length > 0 && (
         <div className={`${PANEL.border} ${PANEL.rounded} ${PANEL.padding} bg-background/40`}>
-          <div className={`${PANEL.fontLabel} mb-1.5`}>Patterns · 悬停高亮</div>
+          <div className={`${PANEL.fontLabel} mb-1.5`}>{translate(CONTENT, 'causality.patternsHover', language)}</div>
           <div className="flex flex-wrap gap-1.5">
-            {aggregated.map(a => {
+            {aggregated.map((a, ai) => {
               const isHovered = hovered === a.name
               return (
                 <span
-                  key={a.name}
+                  key={`${a.name}-${ai}`}
                   onMouseEnter={() => setHovered(a.name)}
                   onMouseLeave={() => setHovered(null)}
                   className={`${PANEL.chip} text-[10px] px-1.5 py-0.5 border rounded-sm cursor-pointer transition-all duration-200 ease-out transform-gpu ${
@@ -108,7 +108,7 @@ export function CausalityTimeline({
               )
             })}
           </div>
-          <div className="text-[10px] font-mono text-muted-foreground/30 mt-1">鼠标沿着标签滑过逐个高亮 · 对应 3D 同步</div>
+          <div className="text-[10px] font-mono text-muted-foreground/30 mt-1">{translate(CONTENT, 'causality.hoverHint', language)}</div>
         </div>
       )}
 

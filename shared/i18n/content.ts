@@ -1039,6 +1039,17 @@ const vision = {
 // ─── Causality chain (events, edges, patterns, counterfactuals, panels) ─────────
 const causality = {
   'causality.chainHeader': { en: 'CAUSAL CHAIN', ja: '因果連鎖', zh: '因果链' },
+  'causality.roots': { en: '{count} roots', ja: '{count} 根因', zh: '{count} 根因' },
+  'causality.patternCount': { en: '{count} patterns', ja: '{count} パターン', zh: '{count} 个模式' },
+  'causality.bestFix': { en: 'best fix −{pct}%', ja: '最良の修正 −{pct}%', zh: '最佳修复 −{pct}%' },
+  'causality.noSuggestion': { en: 'no suggestion yet', ja: '提案なし', zh: '暂无建议' },
+  'causality.eventCount': { en: '{count} events', ja: '{count} イベント', zh: '{count} 个事件' },
+  'causality.patternsHover': { en: 'Patterns · hover to highlight', ja: 'パターン · ホバーで強調', zh: '模式 · 悬停高亮' },
+  'causality.hoverHint': {
+    en: 'Hover a tag to isolate it — the 3D view follows',
+    ja: 'タグにホバーで単独表示 — 3Dビューが追従',
+    zh: '悬停标签即可单独高亮 — 3D 视图同步',
+  },
   'causality.patternsHeader': { en: 'RECOGNIZED PATTERNS', ja: '認識済みパターン', zh: '识别模式' },
   'causality.suggestionsHeader': { en: 'COUNTERFACTUAL SUGGESTIONS', ja: '反実仮想の提案', zh: '反事实建议' },
   'causality.noData': { en: 'No causal data available.', ja: '因果データがありません。', zh: '暂无因果数据。' },
