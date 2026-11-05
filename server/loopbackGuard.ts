@@ -16,12 +16,16 @@ import type { Request } from "express";
  *
  *   Instead, decide from the request-source chain:
  *    - the Vite proxy is configured with `xfwd: true` for the bridge prefixes
- *      (/api/cad, /api/slice, /api/mesh), so it stamps the REAL client address
- *      into `x-forwarded-for` (first hop);
+ *      (/api/cad, /api/slice, /api/mesh), so it APPENDS the REAL client address
+ *      to `x-forwarded-for` (last hop);
  *    - we trust that header ONLY when the direct socket peer is itself loopback
  *      (i.e. the local proxy/curl process). A remote attacker cannot spoof it:
  *      from the network the socket peer is non-loopback, so the header is
  *      ignored and their real (non-loopback) socket address decides.
+ *    - we read the LAST hop, never the first: with `xfwd: true` the proxy
+ *      appends the peer it saw, so `127.0.0.1, 192.168.1.50` means "a LAN peer
+ *      claimed to be loopback". Taking the first hop would let any LAN client
+ *      send `X-Forwarded-For: 127.0.0.1` and skip the bridge token.
  *
  * Safe-by-default: production always authenticates; a dev server accidentally
  * published on 0.0.0.0 still leaves every bridge token-gated, because the
@@ -34,16 +38,22 @@ export function isLoopback(ip: string): boolean {
 
 /**
  * Resolve the effective client IP.
- * Trust `x-forwarded-for` (leftmost hop) only when the direct socket peer is
- * itself loopback; otherwise fall back to the socket address verbatim.
+ *
+ * Trust `x-forwarded-for` only when the direct socket peer is itself loopback
+ * (the local proxy), and read the LAST hop — the address the proxy appended.
+ * Earlier hops are client-supplied and therefore attacker-controlled.
  */
 export function effectiveClientIp(
   socketIp: string,
   forwardedHeader: string | undefined,
 ): string {
   if (isLoopback(socketIp) && forwardedHeader) {
-    const first = forwardedHeader.split(",")[0]?.trim();
-    if (first) return first;
+    const hops = forwardedHeader
+      .split(",")
+      .map((h) => h.trim())
+      .filter(Boolean);
+    const proxyAppended = hops[hops.length - 1];
+    if (proxyAppended) return proxyAppended;
   }
   return socketIp;
 }

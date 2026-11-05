@@ -8,7 +8,7 @@ import express, { Router, type Request, type Response } from 'express';
 import type { GeneratedArtifact, GeneratedModel } from '../shared/domain/generatedModel';
 import { repairCadSource, type RepairType } from './cadRepair';
 import {
-  SANDBOX_ENV,
+  createSandboxEnv,
   SANDBOX_MEM_KB,
   SANDBOX_CPU_S,
   SANDBOX_FILE_KB,
@@ -475,7 +475,8 @@ function runStepCli(
       `exec "$0" "$@"`;
     const child = spawn('/bin/sh', ['-c', ulimitCmd, python, '-I', ...args], {
       cwd,
-      env: SANDBOX_ENV,
+      // HOME/TMPDIR point at the per-run scratch dir, not the host home.
+      env: createSandboxEnv(cwd),
     });
     let stdout = '';
     let stderr = '';

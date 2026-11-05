@@ -56,15 +56,32 @@ export function scanSourceSafety(source: string): SourceSafety {
   return { safe: true };
 }
 
-/** Minimal env for running untrusted code — strips host secrets & config. */
-export const SANDBOX_ENV: NodeJS.ProcessEnv = {
-  PATH: process.env.PATH ?? '/usr/bin:/bin:/usr/sbin:/sbin',
-  HOME: process.env.HOME ?? '/tmp',
-  LANG: process.env.LANG ?? 'C.UTF-8',
-  TMPDIR: process.env.TMPDIR ?? '/tmp',
-  PYTHONUNBUFFERED: '1',
-  PYTHONDONTWRITEBYTECODE: '1',
-};
+/**
+ * Minimal env for running untrusted code — strips host secrets & config.
+ *
+ * `homeDir` becomes HOME and TMPDIR. Callers pass the per-run scratch
+ * directory, so even if the source reaches a file API it lands inside the run
+ * sandbox: `~/.ssh`, `~/.aws`, `.env` and `.cad-bridge/config/llm-keys.yaml`
+ * are no longer addressable as `~/...`, and a library that writes dotfiles
+ * cannot scribble in the real home.
+ */
+export function createSandboxEnv(homeDir: string): NodeJS.ProcessEnv {
+  return {
+    PATH: process.env.PATH ?? '/usr/bin:/bin:/usr/sbin:/sbin',
+    HOME: homeDir,
+    TMPDIR: homeDir,
+    LANG: process.env.LANG ?? 'C.UTF-8',
+    PYTHONUNBUFFERED: '1',
+    PYTHONDONTWRITEBYTECODE: '1',
+  };
+}
+
+/**
+ * Legacy env with a neutral HOME. Prefer createSandboxEnv(runDir) so the
+ * sandbox gets its own directory; this constant is kept for callers that have
+ * no run directory yet.
+ */
+export const SANDBOX_ENV: NodeJS.ProcessEnv = createSandboxEnv('/tmp');
 
 /** Best-effort resource ceilings (ignored silently where unsupported). */
 export const SANDBOX_MEM_KB = 2_000_000; // ~2 GB virtual
