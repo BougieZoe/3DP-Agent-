@@ -1331,7 +1331,10 @@ export function ReportGenerator({
           <span className={`w-2 h-2 rounded-full ${dotStyles[light]}`} />
           {score}/100
         </div>
-        <span className="text-[10px] font-mono text-muted-foreground/50 tracking-wider">{translate(CONTENT, 'pdf.labelQuickCheck', language)}</span>
+        <span className="text-[10px] font-mono text-muted-foreground/50 tracking-wider">
+          {translate(CONTENT, 'pdf.labelQuickCheck', language)}
+          <span className="ml-1.5 text-foreground/25">· {translate(CONTENT, 'pdf.gateTag', language)}</span>
+        </span>
       </div>
       <div className="text-[10px] font-mono text-muted-foreground/30 leading-relaxed">
         {translate(CONTENT, 'pdf.labelPenalty', language)}
