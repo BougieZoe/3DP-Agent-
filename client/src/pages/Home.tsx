@@ -23,6 +23,7 @@ import { PrivacyModal } from '@/components/PrivacyModal';
 import { InstallButton } from '@/components/InstallButton';
 import { APIKeyModal } from '@/components/APIKeyModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { readPref, writePref } from '@/lib/prefs';
 import { useIsMobile } from '@/hooks/useMobile';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
@@ -50,7 +51,7 @@ import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/Pr
 import { ManufacturingRecommendationPanel } from '@/components/ManufacturingRecommendationPanel';
 import { ManufacturerExport } from '@/components/ManufacturerExport';
 import { GlassCard } from '@/components/GlassCard';
-import { AnalysisVerdictBar, deriveVerdict, VERDICT_THRESHOLDS, type VerdictMetric } from '@/components/AnalysisVerdictBar';
+import { AnalysisVerdictBar, deriveVerdict, VERDICT_THRESHOLDS, type VerdictMetric, type VerdictAction } from '@/components/AnalysisVerdictBar';
 import { recommendManufacturing, type ManufacturingGoal, type ProcessRecommendation } from '@/lib/manufacturingRecommendation';
 import { MaterialRecommendationPanel } from '@/components/MaterialRecommendationPanel';
 import { recommendMaterials, type RecommendationResult } from '@/analysis/materialRecommendation';
@@ -339,7 +340,7 @@ export default function Home() {
   const [materialRecLoading, setMaterialRecLoading] = useState(false);
   const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
   const [showModeMenu, setShowModeMenu] = useState(false);
-  const [language, setLanguage] = useState<Language>('en');
+  const [language, setLanguage] = useState<Language>(() => readPref('lang', SUPPORTED_LANGUAGES, 'en'));
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
   const [tab, setTab] = useState<'geometry' | 'report' | 'loop' | 'chat' | 'agents' | 'causality' | 'orders'>('geometry');
   const [showAPIModal, setShowAPIModal] = useState(false);
@@ -387,7 +388,7 @@ export default function Home() {
   });
   const [materialLoading, setMaterialLoading] = useState(false);
   const materialRequestSeq = useRef(0);
-  const [units, setUnits] = useState<LengthUnit>('mm');
+  const [units, setUnits] = useState<LengthUnit>(() => readPref('units', ['mm', 'cm', 'inch'] as const, 'mm'));
   const unitRequestSeq = useRef(0);
   // Shared ref into the drei OrbitControls instance (has .target/.update()).
   const controlsRef = useRef<any>(null);
@@ -406,6 +407,11 @@ export default function Home() {
     getAgentLabel: (id: any, lang?: any) => string;
     getAgentDescription: (id: any, lang?: any) => string;
   } | null>(null);
+
+  // Language and source units are analysis setup, not session state: persist
+  // them so a reload does not silently re-run the model under other assumptions.
+  useEffect(() => { writePref('lang', language); }, [language]);
+  useEffect(() => { writePref('units', units); }, [units]);
 
   // Lazy-load orchestrator and agent utilities on first use
   useEffect(() => {
@@ -880,37 +886,48 @@ export default function Home() {
     },
   ] : [];
 
-  const verdictActions: string[] = (() => {
+  const verdictActions: VerdictAction[] = (() => {
     if (!analysis || !unifiedAnalysis) return [];
-    const out: string[] = [];
+    const out: VerdictAction[] = [];
     const pct = Math.round((analysis.wallThickness.thinWallPercentage ?? 0) * 100);
     const minMm = analysis.wallThickness.minThickness;
     if (valid && !valid.isWatertight) {
       // "0 boundary edges" is not a useful sentence: a mesh can fail the
       // watertight check through non-manifold edges alone. Say which one.
       if ((topo?.boundaryEdgeCount ?? 0) > 0) {
-        out.push(t('verdictActionRepair').replace('{n}', String(topo!.boundaryEdgeCount)));
+        out.push({ text: t('verdictActionRepair').replace('{n}', String(topo!.boundaryEdgeCount)) });
       } else if ((topo?.nonManifoldEdgeCount ?? 0) > 0) {
-        out.push(t('verdictActionNonManifold').replace('{n}', String(topo!.nonManifoldEdgeCount)));
+        out.push({ text: t('verdictActionNonManifold').replace('{n}', String(topo!.nonManifoldEdgeCount)) });
       } else {
-        out.push(t('verdictActionRepairGeneric'));
+        out.push({ text: t('verdictActionRepairGeneric') });
       }
     } else if (topo && topo.nonManifoldEdgeCount > 0) {
-      out.push(t('verdictActionNonManifold').replace('{n}', String(topo.nonManifoldEdgeCount)));
+      out.push({ text: t('verdictActionNonManifold').replace('{n}', String(topo.nonManifoldEdgeCount)) });
     }
     if (analysis.wallThickness.status !== 'good') {
-      out.push(t('verdictActionThinWall')
-        .replace('{p}', String(pct))
-        .replace('{v}', String(VERDICT_THRESHOLDS.thinWallMm))
-        .replace('{min}', minMm != null ? toUnit(minMm).toFixed(3) : '—'));
+      out.push({
+        text: t('verdictActionThinWall')
+          .replace('{p}', String(pct))
+          .replace('{v}', String(VERDICT_THRESHOLDS.thinWallMm))
+          .replace('{min}', minMm != null ? toUnit(minMm).toFixed(3) : '—'),
+        active: showWallThickness,
+        onActivate: () => { setTab('geometry'); setShowWallThickness(v => !v); },
+      });
     }
     if (analysis.overhang.status !== 'good') {
-      out.push(t('verdictActionOverhang')
-        .replace('{n}', analysis.overhang.areas.toLocaleString('en-US'))
-        .replace('{v}', String(material.overhangThreshold)));
+      out.push({
+        text: t('verdictActionOverhang')
+          .replace('{n}', analysis.overhang.areas.toLocaleString('en-US'))
+          .replace('{v}', String(material.overhangThreshold)),
+        active: showHeatmap,
+        onActivate: () => { setTab('geometry'); setShowHeatmap(v => !v); },
+      });
     }
-    if (!analysis.volumeReliable) out.push(t('verdictActionNoVolume'));
-    if (out.length === 0) out.push(t('verdictActionReady'));
+    // No volume / ready / mesh-integrity rows carry no destination: there is no
+    // overlay that shows "an open shell", so they stay plain prose rather than
+    // pretending to be clickable.
+    if (!analysis.volumeReliable) out.push({ text: t('verdictActionNoVolume') });
+    if (out.length === 0) out.push({ text: t('verdictActionReady') });
     return out;
   })();
 

@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState } from 'react';
-import { Material, MATERIALS, DEFAULT_MATERIAL } from '@shared/domain/material';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { Material, MATERIALS } from '@shared/domain/material';
+import { readPref, writePref } from '@/lib/prefs';
 
 export type MaterialName = keyof typeof MATERIALS;
 
@@ -11,9 +12,23 @@ interface MaterialContextType {
 
 const MaterialContext = createContext<MaterialContextType | undefined>(undefined);
 
+/** Material is part of the analysis setup — it survives a reload. */
+const MATERIAL_KEYS = Object.keys(MATERIALS) as MaterialName[];
+
 export function MaterialProvider({ children }: { children: React.ReactNode }) {
-  const [materialName, setMaterialName] = useState<MaterialName>('PLA');
+  const [materialName, setMaterialNameState] = useState<MaterialName>(() =>
+    readPref('material', MATERIAL_KEYS, 'PLA'),
+  );
   const material = MATERIALS[materialName];
+
+  useEffect(() => {
+    writePref('material', materialName);
+  }, [materialName]);
+
+  const setMaterialName = useCallback((name: MaterialName) => {
+    setMaterialNameState(name);
+  }, []);
+
   return (
     <MaterialContext.Provider value={{ material, materialName, setMaterialName }}>
       {children}
