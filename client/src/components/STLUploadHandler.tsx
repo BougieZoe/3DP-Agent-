@@ -57,6 +57,13 @@ interface STLUploadHandlerProps {
    * after a later material change. Falls back to DEFAULT_MATERIAL.
    */
   material?: Material;
+  /**
+   * Slim "replace model" affordance for the loaded state. The full dropzone is
+   * only correct before a model exists — leaving it in place afterwards pushed
+   * every result panel ~300px down the page for no benefit. Drop and click
+   * still work; parsing, units and error handling stay in this one component.
+   */
+  compact?: boolean;
 }
 
 const labels = {
@@ -78,6 +85,8 @@ const labels = {
     dropModel1: 'Drop a model.',
     dropModel2: "Let's look inside.",
     browseFiles: 'or browse files',
+    localOnly: 'Analysed in this browser — the mesh is never uploaded.',
+    replaceModel: 'Replace',
     units: 'UNITS',
   },
   ja: {
@@ -98,6 +107,8 @@ const labels = {
     dropModel1: 'モデルを、ここに。',
     dropModel2: '中を、見ていく。',
     browseFiles: 'またはファイルを選ぶ',
+    localOnly: 'このブラウザ内で解析 — メッシュは送信されません。',
+    replaceModel: '差し替え',
     units: '単位',
   },
   zh: {
@@ -118,11 +129,13 @@ const labels = {
     dropModel1: '模型，放这儿。',
     dropModel2: '我们看看里面。',
     browseFiles: '或点击选择文件',
+    localOnly: '全程在浏览器本地解析 — 模型不会上传。',
+    replaceModel: '替换模型',
     units: '单位',
   },
 };
 
-export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', units, onUnitsChange, materialFamily = 'fdm', material }: STLUploadHandlerProps) {
+export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', units, onUnitsChange, materialFamily = 'fdm', material, compact = false }: STLUploadHandlerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -384,6 +397,45 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
     );
   }
 
+  if (compact) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={(e) => {
+          if (e.target === fileInputRef.current) return;
+          openFilePicker();
+        }}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFilePicker(); }
+        }}
+        className={`inline-flex shrink-0 items-center gap-1.5 h-7 px-2.5 border border-dashed rounded-sm text-[11px] font-mono cursor-pointer transition-colors ${
+          isDragging
+            ? 'border-primary/85 text-primary bg-primary/5'
+            : 'border-border/70 text-muted-foreground/60 hover:text-primary hover:border-primary/45'
+        }`}
+        title={t.replaceModel}
+      >
+        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0-12l-4 4m4-4l4 4" />
+        </svg>
+        <span>{t.replaceModel}</span>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".stl,.obj,.3mf"
+          multiple
+          className="sr-only"
+          aria-label={t.replaceModel}
+          onChange={(e) => { if (e.target.files) handleFiles(e.target.files); }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       tabIndex={0}
@@ -479,6 +531,8 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
             </button>
           ))}
         </div>
+
+        <div className="font-mono text-[11px] text-foreground/35 pt-1">{t.localOnly}</div>
       </div>
     </div>
   );

@@ -148,33 +148,33 @@ export function VisualizationToolbar({
       {expandedOverlay === 'heatmap' && showHeatmap && (
         <div className="ml-4 space-y-2 py-2">
           <SliderParam
-            label="Overhang Threshold"
+            label={t('tbOverhangThreshold')}
             value={overlayParams.heatmap.overhangThreshold}
             min={20} max={70} step={5}
             unit="°"
             onChange={v => handleParamChange('heatmap', 'overhangThreshold', v)}
           />
           <SliderParam
-            label="Curvature Weight"
+            label={t('tbCurvatureWeight')}
             value={overlayParams.heatmap.curvatureWeight}
             min={0} max={1} step={0.1}
             onChange={v => handleParamChange('heatmap', 'curvatureWeight', v)}
           />
           <SliderParam
-            label="Thickness Weight"
+            label={t('tbThicknessWeight')}
             value={overlayParams.heatmap.thicknessWeight}
             min={0} max={1} step={0.1}
             onChange={v => handleParamChange('heatmap', 'thicknessWeight', v)}
           />
           <ToggleParam
-            label="Bridge Detection"
+            label={t('tbBridgeDetection')}
             value={overlayParams.heatmap.detectBridges}
             onChange={v => handleParamChange('heatmap', 'detectBridges', v)}
           />
-          <LegendHint items={[
-            { color: 'bg-red-500', label: '高风险区域 — 需要优化' },
-            { color: 'bg-orange-500', label: '中风险 — 建议检查' },
-            { color: 'bg-green-500', label: '安全区域 — 没问题' },
+          <LegendHint title={t('legendTitle')} items={[
+            { color: 'bg-red-500', label: t('legendHeatHigh') },
+            { color: 'bg-orange-500', label: t('legendHeatMid') },
+            { color: 'bg-green-500', label: t('legendHeatSafe') },
           ]} />
         </div>
       )}
@@ -190,21 +190,21 @@ export function VisualizationToolbar({
       {expandedOverlay === 'supports' && showGhosts && (
         <div className="ml-4 space-y-2 py-2">
           <SliderParam
-            label="Max Angle"
+            label={t('tbMaxAngle')}
             value={overlayParams.supports.maxAngle}
             min={30} max={60} step={5}
             unit="°"
             onChange={v => handleParamChange('supports', 'maxAngle', v)}
           />
           <SliderParam
-            label="Density"
+            label={t('tbDensity')}
             value={overlayParams.supports.density}
             min={0.1} max={1} step={0.1}
             onChange={v => handleParamChange('supports', 'density', v)}
           />
-          <LegendHint items={[
-            { color: 'bg-blue-500', label: '悬垂面 — 需要支撑' },
-            { color: 'bg-orange-500', label: '桥接 — 顶部需要支撑' },
+          <LegendHint title={t('legendTitle')} items={[
+            { color: 'bg-blue-500', label: t('legendOverhangFace') },
+            { color: 'bg-orange-500', label: t('legendBridge') },
           ]} />
         </div>
       )}
@@ -220,21 +220,21 @@ export function VisualizationToolbar({
       {expandedOverlay === 'risks' && showRisks && (
         <div className="ml-4 space-y-2 py-2">
           <SliderParam
-            label="Sensitivity"
+            label={t('tbSensitivity')}
             value={overlayParams.risks.sensitivity}
             min={0.1} max={2} step={0.1}
             onChange={v => handleParamChange('risks', 'sensitivity', v)}
           />
           <SliderParam
-            label="Min Severity"
+            label={t('tbMinSeverity')}
             value={overlayParams.risks.minSeverity}
             min={0} max={1} step={0.1}
             onChange={v => handleParamChange('risks', 'minSeverity', v)}
           />
-          <LegendHint items={[
-            { color: 'bg-red-500', label: '高风险 — 可能打印失败' },
-            { color: 'bg-yellow-500', label: '中风险 — 需要注意' },
-            { color: 'bg-cyan-400', label: '低风险 — 轻微问题' },
+          <LegendHint title={t('legendTitle')} items={[
+            { color: 'bg-red-500', label: t('legendRiskHigh') },
+            { color: 'bg-yellow-500', label: t('legendRiskMid') },
+            { color: 'bg-cyan-400', label: t('legendRiskLow') },
           ]} />
         </div>
       )}
@@ -279,29 +279,29 @@ export function VisualizationToolbar({
       {expandedOverlay === 'wallThickness' && showWallThickness && (
         <div className="ml-4 space-y-2 py-2">
           <SliderParam
-            label="Min Thickness"
+            label={t('tbMinThickness')}
             value={overlayParams.wallThickness.minThickness}
             min={0.2} max={2} step={0.1}
             unit="mm"
             onChange={v => handleParamChange('wallThickness', 'minThickness', v)}
           />
           <SliderParam
-            label="Max Thickness"
+            label={t('tbMaxThickness')}
             value={overlayParams.wallThickness.maxThickness}
             min={2} max={10} step={0.5}
             unit="mm"
             onChange={v => handleParamChange('wallThickness', 'maxThickness', v)}
           />
           <ToggleParam
-            label="Show Thin Only"
+            label={t('tbShowThinOnly')}
             value={overlayParams.wallThickness.showThinOnly}
             onChange={v => handleParamChange('wallThickness', 'showThinOnly', v)}
           />
-          <LegendHint items={[
-            { color: 'bg-red-500', label: '太薄 — 容易破裂' },
-            { color: 'bg-yellow-500', label: '偏薄 — 需要注意' },
-            { color: 'bg-green-500', label: '适中 — 正常' },
-            { color: 'bg-cyan-400', label: '较厚 — 安全' },
+          <LegendHint title={t('legendTitle')} items={[
+            { color: 'bg-red-500', label: t('legendWallTooThin') },
+            { color: 'bg-yellow-500', label: t('legendWallThin') },
+            { color: 'bg-green-500', label: t('legendWallOk') },
+            { color: 'bg-cyan-400', label: t('legendWallThick') },
           ]} />
         </div>
       )}
@@ -534,10 +534,10 @@ function ToggleParam({
   );
 }
 
-function LegendHint({ items }: { items: Array<{ color: string; label: string }> }) {
+function LegendHint({ items, title }: { items: Array<{ color: string; label: string }>; title: string }) {
   return (
     <div className="mt-2 pt-2 border-t border-border/20">
-      <div className="text-[9px] font-mono text-foreground/30 mb-1.5">图例说明</div>
+      <div className="text-[9px] font-mono text-foreground/30 mb-1.5">{title}</div>
       <div className="space-y-1">
         {items.map((item, i) => (
           <div key={i} className="flex items-center gap-2 text-[10px] text-foreground/50">
