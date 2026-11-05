@@ -3,6 +3,7 @@ import { CONTENT, translate, type ContentLang } from "@shared/i18n/content";
 import type { UnifiedAnalysis, NormalOrientation } from "../analysis/types";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
 import { getTrafficLight, type GateDeduction } from "./reportUtils";
+import { diffSnapshots, type ModelVersion } from "@/lib/modelVersions";
 import { weightRangeGrams, timeRangeMinutes } from "./reportUtils";
 import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
 import { createShareLink, copyShareLink } from "@/lib/shareReport";
@@ -37,6 +38,8 @@ interface ReportGeneratorProps {
   /** Selected material / process for handoff exports (falls back to FDM/—. */
   materialName?: string;
   processId?: string;
+  /** Measurement history for the active model; enables the change report. */
+  versions?: ModelVersion[];
 }
 
 // ─── Gate reason text ──────────────────────────────────────────────────────────
@@ -643,6 +646,44 @@ function drawLimitsNote(doc: JsPDF, lang: Language, y: number): number {
   return y + lines.length * 4 + 2;
 }
 
+// ─── Version comparison ────────────────────────────────────────────────────────
+
+/**
+ * What changed between the first recorded state and the current one.
+ * Shown on screen and printed in the client PDF, so "we fixed it" is a
+ * measurement the recipient can check, not a claim.
+ */
+export function versionRows(versions: ModelVersion[], lang: Language): { label: string; value: string; warn: boolean }[] {
+  if (versions.length < 2) return [];
+  const first = versions[0].snapshot;
+  const last = versions[versions.length - 1].snapshot;
+  const d = diffSnapshots(first, last);
+  const rows: { label: string; value: string; warn: boolean }[] = [];
+
+  if (first.minWallMm != null && last.minWallMm != null) {
+    const delta = d.minWallMm ?? 0;
+    rows.push({
+      label: translate(CONTENT, 'pdf.changeWall', lang),
+      value: `${first.minWallMm.toFixed(2)} → ${last.minWallMm.toFixed(2)} mm (${delta >= 0 ? '+' : ''}${delta.toFixed(2)})`,
+      warn: delta < 0,
+    });
+  }
+  if (first.overhangFaces !== last.overhangFaces) {
+    const delta = d.overhangFaces;
+    rows.push({
+      label: translate(CONTENT, 'pdf.changeOverhang', lang),
+      value: `${first.overhangFaces.toLocaleString('en-US')} → ${last.overhangFaces.toLocaleString('en-US')} (${delta >= 0 ? '+' : ''}${delta.toLocaleString('en-US')})`,
+      warn: delta > 0,
+    });
+  }
+  rows.push({
+    label: translate(CONTENT, 'pdf.changeShell', lang),
+    value: `${first.isWatertight ? 'sealed' : 'open'} → ${last.isWatertight ? 'sealed' : 'open'}`,
+    warn: !last.isWatertight,
+  });
+  return rows;
+}
+
 // ─── CLIENT PDF ────────────────────────────────────────────────────────────────
 
 async function generateClientPDF(
@@ -650,7 +691,8 @@ async function generateClientPDF(
   lang: Language,
   fileName: string,
   review?: ExpertReview | null,
-  production?: ProductionSuitability | null
+  production?: ProductionSuitability | null,
+  versions: ModelVersion[] = []
 ): Promise<void> {
   const doc = createPdfCanvasSurface();
 
@@ -696,6 +738,14 @@ async function generateClientPDF(
   drawVerdictCard(doc, 68, 38, light, score, verdictLabel, verdictDesc);
 
   let y = 68 + 38 + 10;
+
+  // ── Section: CHANGES SINCE UPLOAD (only when a fix was actually applied) ──
+  const changes = versionRows(versions, lang);
+  if (changes.length > 0) {
+    y = drawSectionHeader(doc, translate(CONTENT, 'pdf.changesTitle', lang), y);
+    for (const row of changes) y = drawDataRow(doc, row.label, row.value, y, row.warn);
+    y += 3;
+  }
 
   // ── Section: DIMENSIONS & ESTIMATES ──
   y = drawSectionHeader(doc, translate(CONTENT, 'pdf.section.dimensions', lang), y);
@@ -1285,6 +1335,7 @@ export function ReportGenerator({
   production,
   materialName = "—",
   processId = "FDM",
+  versions = [],
 }: ReportGeneratorProps) {
   const tone = detectTone(chatHistory);
   const lang = language ?? detectLanguage(chatHistory);
@@ -1292,13 +1343,13 @@ export function ReportGenerator({
 
   const handleExport = useCallback(async (tier: PdfTier) => {
     if (tier === "client") {
-      await generateClientPDF(analysis, lang, fileName, expertReview, production);
+      await generateClientPDF(analysis, lang, fileName, expertReview, production, versions);
     } else if (tier === "designer") {
       await generateDesignerPDF(analysis, tone, lang, fileName, expertReview, production);
     } else {
       await generateFactoryPDF(analysis, lang, fileName, expertReview, production);
     }
-  }, [analysis, tone, lang, fileName, expertReview, production]);
+  }, [analysis, tone, lang, fileName, expertReview, production, versions]);
 
   const lightStyles: Record<TrafficLight, string> = {
     green: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -1408,6 +1459,20 @@ export function ReportGenerator({
       )}
 
       {/* Report boundary legend — what's measured vs AI opinion vs not analyzed */}
+      {versionRows(versions, language as Language).length > 0 && (
+        <div className="space-y-1 border-t border-border/30 pt-2">
+          <div className="text-[10px] font-mono tracking-widest text-muted-foreground/45">
+            {translate(CONTENT, 'pdf.changesTitle', language)}
+          </div>
+          {versionRows(versions, language as Language).map((row, i) => (
+            <div key={i} className="flex items-baseline gap-2 text-[10px] font-mono">
+              <span className="min-w-0 flex-1 text-muted-foreground/55">{row.label}</span>
+              <span className={`shrink-0 tabular-nums ${row.warn ? 'text-red-400/70' : 'text-emerald-400/70'}`}>{row.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <details className="text-[10px] font-mono border border-border/30 rounded-sm px-2 py-1.5">
         <summary className="cursor-pointer text-muted-foreground/40 tracking-widest select-none">
           {translate(CONTENT, 'pdf.limitsTitle', language)}

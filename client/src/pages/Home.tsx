@@ -1981,6 +1981,7 @@ export default function Home() {
     production={productionFromUnified(unifiedAnalysis, material)}
     materialName={materialName}
     processId={materialFamily}
+    versions={versions}
   />
 )}
 {unifiedAnalysis && (

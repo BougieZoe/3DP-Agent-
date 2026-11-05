@@ -19,6 +19,26 @@
  *  - Keep keys stable; they are referenced from tests and PDF output.
  */
 export const MESSAGES = {
+  "pdf.changesTitle": {
+    en: "CHANGES SINCE UPLOAD",
+    ja: "読込からの変更",
+    zh: "相对上传的改动",
+  },
+  "pdf.changeWall": {
+    en: "Min wall",
+    ja: "最小肉厚",
+    zh: "最小壁厚",
+  },
+  "pdf.changeOverhang": {
+    en: "Overhang faces",
+    ja: "オーバーハング面",
+    zh: "悬垂面",
+  },
+  "pdf.changeShell": {
+    en: "Shell",
+    ja: "シェル",
+    zh: "壳体",
+  },
   "thickenNoGain": {
     en: "No measured improvement (wall {from} → {to} mm) — the change was discarded.",
     ja: "測定上の改善なし（肉厚 {from} → {to} mm）— 変更は破棄しました。",
