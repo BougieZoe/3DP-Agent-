@@ -27,6 +27,14 @@ export interface VerdictMetric {
   /** Reference the value is judged against, e.g. "< 0.8 mm". */
   against?: string;
   status: 'good' | 'warning' | 'critical' | 'unknown';
+  /**
+   * Optional drill-down. When present the cell becomes a button that turns the
+   * matching 3D overlay on — the number and the evidence it came from are one
+   * click apart instead of two tabs apart.
+   */
+  onActivate?: () => void;
+  /** True when the matching overlay is already on, so the cell reads as pressed. */
+  active?: boolean;
 }
 
 export type VerdictLevel = 'ready' | 'minor' | 'fix' | 'blocked' | 'unknown';
@@ -49,6 +57,8 @@ export interface AnalysisVerdictBarProps {
   reportLabel?: string;
   /** Localized "confidence" caption; omitted hides the confidence figure. */
   confidenceLabel?: string;
+  /** "FDM · PLA · 50° · mm" — the assumptions this analysis ran under. */
+  contextLine?: string;
 }
 
 const LEVEL_STYLE: Record<VerdictLevel, { chip: string; dot: string }> = {
@@ -91,6 +101,7 @@ export const AnalysisVerdictBar = memo(function AnalysisVerdictBar({
   onOpenReport,
   reportLabel,
   confidenceLabel,
+  contextLine,
 }: AnalysisVerdictBarProps) {
   const levelStyle = LEVEL_STYLE[level];
   const shownActions = actions.slice(0, 3);
@@ -123,6 +134,12 @@ export const AnalysisVerdictBar = memo(function AnalysisVerdictBar({
         )}
         <span aria-hidden>·</span>
         <span className="tabular-nums">{formatCount(triangleCount)} tris</span>
+        {contextLine && (
+          <>
+            <span aria-hidden>·</span>
+            <span className="truncate">{contextLine}</span>
+          </>
+        )}
         {confidence != null && confidenceLabel && (
           <>
             <span aria-hidden>·</span>
@@ -135,25 +152,48 @@ export const AnalysisVerdictBar = memo(function AnalysisVerdictBar({
 
       {/* The four facts that decide the verdict */}
       <dl className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-border/40">
-        {metrics.map((m) => (
-          <div key={m.key} className="px-3 py-2.5 min-w-0">
-            <dt className="text-[10px] font-mono tracking-widest text-muted-foreground/50 truncate">
-              {m.label}
-            </dt>
-            <dd className="mt-1 flex items-baseline gap-1 min-w-0">
-              <span className={`text-[15px] font-mono tabular-nums ${VALUE_STYLE[m.status]}`}>
-                {m.value}
-              </span>
-              {m.unit && <span className="text-[10px] font-mono text-muted-foreground/40">{m.unit}</span>}
-              <span className={`ml-auto inline-block h-1.5 w-1.5 shrink-0 rounded-full ${DOT_STYLE[m.status]}`} />
-            </dd>
-            {m.against && (
-              <div className="mt-0.5 text-[10px] font-mono text-muted-foreground/35 truncate">
-                {m.against}
+        {metrics.map((m) => {
+          const body = (
+            <>
+              <dt className="text-[10px] font-mono tracking-widest text-muted-foreground/50 truncate">
+                {m.label}
+              </dt>
+              <dd className="mt-1 flex items-baseline gap-1 min-w-0">
+                <span className={`text-[15px] font-mono tabular-nums ${VALUE_STYLE[m.status]}`}>
+                  {m.value}
+                </span>
+                {m.unit && <span className="text-[10px] font-mono text-muted-foreground/40">{m.unit}</span>}
+                <span className={`ml-auto inline-block h-1.5 w-1.5 shrink-0 rounded-full ${DOT_STYLE[m.status]}`} />
+              </dd>
+              {m.against && (
+                <div className="mt-0.5 text-[10px] font-mono text-muted-foreground/35 truncate">
+                  {m.against}
+                </div>
+              )}
+            </>
+          );
+          if (!m.onActivate) {
+            return (
+              <div key={m.key} className="px-3 py-2.5 min-w-0">
+                {body}
               </div>
-            )}
-          </div>
-        ))}
+            );
+          }
+          return (
+            <button
+              key={m.key}
+              type="button"
+              onClick={m.onActivate}
+              aria-pressed={!!m.active}
+              title={m.label}
+              className={`px-3 py-2.5 min-w-0 text-left transition-colors hover:bg-foreground/[0.04] focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary/60 ${
+                m.active ? 'bg-primary/[0.06] shadow-[inset_0_-2px_0_0_var(--color-primary)]' : ''
+              }`}
+            >
+              {body}
+            </button>
+          );
+        })}
       </dl>
 
       {/* What to do about it */}
