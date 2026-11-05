@@ -37,6 +37,10 @@ const pwaPlugin = VitePWA({
   },
   workbox: {
     globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+    // The agent-office showcase is a marketing page (footer link), not part of
+    // the app shell. Precaching it would push ~600KB of three.js + VRM assets
+    // into every install for a page most users never open.
+    globIgnores: ["**/office.html", "**/lib/office3d.js", "**/lib/three.global.min.js", "**/lib/voice-glm-realtime.js"],
     navigateFallback: "/index.html",
     navigateFallbackDenylist: [/^\/api\//, /^\/office\.html/],
     // New SW activates immediately and takes over → auto-update without workbox-window.
