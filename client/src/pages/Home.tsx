@@ -45,6 +45,7 @@ import type { AgentId } from '@shared/domain/agent';
 import { deriveSupportStatus } from '@/analysis/metrics';
 import { ScanlineSweep } from '@/components/decorative/ScanlineSweep';
 import { FeaturesSection } from '@/pages/home/FeaturesSection';
+import { AgentOfficeEntry } from '@/components/factory/AgentOfficeEntry';
 import type { FeatureDestination } from '@/pages/home/featuresNavigation';
 import { toast } from 'sonner';
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
@@ -1840,6 +1841,11 @@ export default function Home() {
                 {/* AGENTS TAB */}
                 {tab === 'agents' && (
                   <div className="!-mt-6 space-y-3">
+                    {/* Live Floor — the agents' 3D office. This is the product's
+                        identity surface: it shows WHAT the four agents are, not
+                        just their numbers, so it leads the tab. */}
+                    <AgentOfficeEntry t={t} variant="live" />
+
                     {agentLoading && (
                       <div className="border border-primary/30 rounded-sm p-6 text-center">
                         <div className="text-xs font-mono text-primary animate-pulse mb-2">\u258b {t('multiAgentRunning')}</div>
@@ -2217,6 +2223,9 @@ export default function Home() {
                 feature list (it is the only live, non-AI-key feature). */}
             {!uploadedModel && (
               <div className="mt-6 space-y-3">
+                {/* Identity before capability list: the Live Floor says what
+                    this product IS; the feature list says what it does. */}
+                <AgentOfficeEntry t={t} variant="hero" />
                 <FeaturesSection t={t} onNavigate={handleFeatureNavigate} />
               </div>
             )}
@@ -2231,11 +2240,6 @@ export default function Home() {
           <button onClick={() => setShowPrivacy(true)} className="hover:text-muted-foreground transition-colors">
             {t('privacyTitle')}
           </button>
-          {/* The agent-office showcase is a marketing page, not a workflow
-              surface. It stays reachable, but out of the analysis path. */}
-          <a href="/office.html" target="_blank" rel="noreferrer" className="hover:text-muted-foreground transition-colors">
-            Live Floor ↗
-          </a>
         </div>
       </div>}
       </Suspense>
