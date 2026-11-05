@@ -30,7 +30,7 @@
 import {
   CONSENSUS_PASS_MIN_SCORE,
   CONSENSUS_WARNING_MIN_SCORE,
-} from '@shared/domain/agent';
+} from '@shared/domain/consensus';
 
 export interface AnalysisThresholds {
   /**
