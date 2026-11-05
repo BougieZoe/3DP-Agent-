@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
+import { severityLevel, severityLabelKey } from './causalityEngine';
 import { PatternMatch } from './topologyPatternEngine';
 import { PANEL, PATTERN_COLORS_CSS } from '@/lib/visualLanguage';
 import { GlassCard } from '@/components/GlassCard';
@@ -98,7 +99,7 @@ function OccurrenceRow({ match, colorClass, selected, onSelect, language }: {
     >
       <span className={colorClass}>{match.similarity}%</span>
       <span className="text-muted-foreground/40">
-        {(match.avgClusterSeverity * 100).toFixed(0)}% {translate(CONTENT, 'causality.severity', language)}
+        {translate(CONTENT, severityLabelKey(severityLevel(match.avgClusterSeverity)), language)} {translate(CONTENT, 'causality.severity', language)}
       </span>
       <span className="text-muted-foreground/40">
         {match.clusterPositions.length} {translate(CONTENT, 'causality.markers', language)}
@@ -116,9 +117,9 @@ function PatternGroupCard({ group, selectedPatternId, onSelectPattern, open, onT
   language: ContentLang;
 }) {
   const colorClass = PATTERN_COLORS_CSS[group.pattern.id] ?? 'text-muted-foreground';
-  const sevMin = (group.severityMin * 100).toFixed(0);
-  const sevMax = (group.severityMax * 100).toFixed(0);
-  const sevAvg = (group.avgSeverity * 100).toFixed(0);
+  // Bands, not percentages: the underlying number is a rule weight, and a
+  // "99%–100%" range on an unprinted part is precision theater.
+  const sevBand = translate(CONTENT, severityLabelKey(severityLevel(group.avgSeverity)), language);
 
   return (
     <div className={`${PANEL.paddingCard} ${PANEL.roundedInner} ${PANEL.borderSubtle}`}>
@@ -141,12 +142,12 @@ function PatternGroupCard({ group, selectedPatternId, onSelectPattern, open, onT
             {translate(CONTENT, 'causality.seen', language, { count: group.pattern.recurrenceCount })}
           </span>
         )}
-        <span className={`ml-auto ${PANEL.fontValue} ${colorClass}`}>{sevAvg}%</span>
+        <span className={`ml-auto ${PANEL.fontValue} ${colorClass}`}>{sevBand}</span>
       </button>
 
       {/* Summary line — the collapsed state shows severity range + average. */}
       <div className={`${PANEL.fontTiny} text-muted-foreground/40 mt-0.5 ml-4 leading-tight`}>
-        {translate(CONTENT, 'causality.severity', language)} {sevMin}–{sevMax}% · avg {sevAvg}% · {translate(CONTENT, 'causality.bestMatch', language)} {group.bestSimilarity}%
+        {translate(CONTENT, 'causality.severity', language)} {sevBand} · {translate(CONTENT, 'causality.bestMatch', language)} {group.bestSimilarity}%
       </div>
 
       {/* Expanded: description, per-occurrence rows, consequence chain. */}

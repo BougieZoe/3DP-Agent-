@@ -19,6 +19,41 @@
  *  - Keep keys stable; they are referenced from tests and PDF output.
  */
 export const MESSAGES = {
+  "orderCtaTitle": {
+    en: "NEED THIS PRINTED?",
+    ja: "これを印刷する",
+    zh: "需要打印吗？",
+  },
+  "orderCtaDesc": {
+    en: "Turn this analysis into an order — material, process and quantity carry over.",
+    ja: "この解析を注文に変換します。材料・工法・数量は引き継がれます。",
+    zh: "把这次分析转成订单——材料、工艺、数量会自动带入。",
+  },
+  "orderCtaButton": {
+    en: "Create order",
+    ja: "注文を作成",
+    zh: "创建订单",
+  },
+  "causality.levelHigh": {
+    en: "HIGH",
+    ja: "高",
+    zh: "高",
+  },
+  "causality.levelMedium": {
+    en: "MEDIUM",
+    ja: "中",
+    zh: "中",
+  },
+  "causality.levelLow": {
+    en: "LOW",
+    ja: "低",
+    zh: "低",
+  },
+  "causality.evidencePoints": {
+    en: "{n} markers",
+    ja: "{n} 点",
+    zh: "{n} 处",
+  },
   "gateBlocked": {
     en: "BLOCKED",
     ja: "ブロック",

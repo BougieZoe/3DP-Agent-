@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
-import { CausalityGraph, CausalityEvent, CausalEdge } from './causalityEngine';
+import { CausalityGraph, CausalityEvent, CausalEdge, severityLevel, severityLabelKey } from './causalityEngine';
 import { PANEL, EVENT_COLORS_CSS } from '@/lib/visualLanguage';
 import { GlassCard } from '@/components/GlassCard';
 
@@ -22,7 +22,7 @@ const TYPE_ICONS: Record<string, string> = {
   failure_spike: '⚠',
 };
 
-function EventNode({ event, selected, onSelect }: { event: CausalityEvent; selected: boolean; onSelect: () => void }) {
+function EventNode({ event, selected, onSelect, language }: { event: CausalityEvent; selected: boolean; onSelect: () => void; language: ContentLang }) {
   const colorClass = EVENT_COLORS_CSS[event.type]?.split(' ')[0] ?? 'text-muted-foreground';
   return (
     <button
@@ -38,8 +38,13 @@ function EventNode({ event, selected, onSelect }: { event: CausalityEvent; selec
         <span className={`${PANEL.fontSmall} ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>
           {event.label}
         </span>
-        <span className={`ml-auto ${PANEL.fontValue} ${colorClass}`}>
-          {(event.severity * 100).toFixed(0)}%
+        <span className={`ml-auto flex items-baseline gap-1.5`}>
+          <span className={`${PANEL.fontValue} ${colorClass}`}>
+            {translate(CONTENT, severityLabelKey(severityLevel(event.severity)), language)}
+          </span>
+          <span className="text-[9px] font-mono text-muted-foreground/40">
+            {translate(CONTENT, 'causality.evidencePoints', language, { n: event.positions.length })}
+          </span>
         </span>
       </div>
       <div className={`${PANEL.fontTiny} text-muted-foreground/50 ml-5 mt-0.5 leading-tight`}>
@@ -128,6 +133,7 @@ export function CausalityPanel({ graph, selectedId, onSelect, language = 'en' }:
                 event={event}
                 selected={event.id === selectedId}
                 onSelect={() => onSelect(event.id === selectedId ? null : event.id)}
+                language={language}
               />
             </Fragment>
           ))}

@@ -1,5 +1,5 @@
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content'
-import { CausalityGraph } from './causalityEngine'
+import { severityLevel, severityLabelKey, CausalityGraph } from './causalityEngine'
 import { PatternMatch } from './topologyPatternEngine'
 import { GeometrySuggestion } from './counterfactualEngine'
 import { PANEL, EVENT_COLORS_CSS } from '@/lib/visualLanguage'
@@ -61,7 +61,7 @@ export function CausalityMinimal({
               className={`text-[10px] font-mono px-2 py-1 rounded-full border transition-all ${EVENT_COLORS_CSS[ev.type]} hover:opacity-80`}
               title={ev.label}
             >
-              {(ev.severity*100).toFixed(0)}% {ev.type.split('_')[0]}
+              {translate(CONTENT, severityLabelKey(severityLevel(ev.severity)), language)} · {ev.type.split('_')[0]}
             </button>
           ))}
         </div>
