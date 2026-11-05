@@ -39,6 +39,18 @@ export interface VerdictMetric {
 
 export type VerdictLevel = 'ready' | 'minor' | 'fix' | 'blocked' | 'unknown';
 
+/**
+ * A ranked next step. When it carries an `onActivate` it becomes a button that
+ * jumps to the evidence (tab + matching 3D overlay); otherwise it stays static
+ * prose. Actions without a destination are deliberate: a fake affordance on an
+ * action that cannot be located is worse than plain text.
+ */
+export interface VerdictAction {
+  text: string;
+  onActivate?: () => void;
+  active?: boolean;
+}
+
 export interface AnalysisVerdictBarProps {
   fileName: string;
   unitsLabel: string;
@@ -48,7 +60,7 @@ export interface AnalysisVerdictBarProps {
   confidence: number | null;
   metrics: VerdictMetric[];
   /** Ranked, concrete next actions. Max 3 are rendered. */
-  actions: string[];
+  actions: VerdictAction[];
   level: VerdictLevel;
   verdictLabel: string;
   /** Slot for the "replace model" affordance so the page keeps one uploader. */
@@ -224,9 +236,31 @@ export const AnalysisVerdictBar = memo(function AnalysisVerdictBar({
         <div className="flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-border/60 px-3 py-2.5">
           <ul className="min-w-0 flex-1 space-y-1">
             {shownActions.map((action, i) => (
-              <li key={i} className="flex items-start gap-2 text-[11px] font-mono text-muted-foreground/75 leading-relaxed">
-                <span className="mt-[3px] shrink-0 text-muted-foreground/30 tabular-nums">{i + 1}.</span>
-                <span className="min-w-0">{action}</span>
+              <li key={i} className="min-w-0">
+                {action.onActivate ? (
+                  <button
+                    type="button"
+                    onClick={action.onActivate}
+                    aria-pressed={!!action.active}
+                    className={`group flex w-full items-start gap-2 rounded-sm text-left text-[11px] font-mono leading-relaxed transition-colors hover:bg-foreground/[0.04] focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary/60 ${
+                      action.active ? 'text-primary' : 'text-muted-foreground/75 hover:text-foreground'
+                    }`}
+                  >
+                    <span className="mt-[3px] shrink-0 text-muted-foreground/30 tabular-nums">{i + 1}.</span>
+                    <span className="min-w-0 flex-1">{action.text}</span>
+                    <span
+                      aria-hidden
+                      className="mt-[2px] shrink-0 text-[10px] text-muted-foreground/25 transition-colors group-hover:text-primary"
+                    >
+                      {action.active ? '●' : '◷'}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex items-start gap-2 text-[11px] font-mono leading-relaxed text-muted-foreground/75">
+                    <span className="mt-[3px] shrink-0 text-muted-foreground/30 tabular-nums">{i + 1}.</span>
+                    <span className="min-w-0">{action.text}</span>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

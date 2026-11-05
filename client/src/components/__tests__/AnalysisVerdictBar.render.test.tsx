@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /// <reference types="vitest/globals" />
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { AnalysisVerdictBar, type VerdictMetric } from '@/components/AnalysisVerdictBar';
 
 const metrics: VerdictMetric[] = [
@@ -42,6 +42,25 @@ describe('AnalysisVerdictBar — partial failure', () => {
     const { container } = render(<AnalysisVerdictBar {...base} />);
     expect(container.textContent).toContain('MIN WALL');
     expect(container.textContent).toContain('not measured');
+  });
+
+  it('fires the action handler when an action is locatable', () => {
+    const onClick = vi.fn();
+    render(
+      <AnalysisVerdictBar
+        {...base}
+        actions={[
+          { text: 'Thicken walls below 0.8 mm', onActivate: onClick, active: true },
+          { text: 'This one has no destination' },
+        ]}
+      />,
+    );
+    const btn = screen.getByRole('button', { name: /Thicken walls/ });
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(btn);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    // A plain action must not become a button.
+    expect(screen.queryByRole('button', { name: /no destination/ })).toBeNull();
   });
 
   it('hides the confidence figure when it is zero', () => {
