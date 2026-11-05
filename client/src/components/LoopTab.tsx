@@ -16,6 +16,7 @@ const L = {
     title: 'CIRCULARITY', firstTime: 'FIRST-TIME-RIGHT', waste: 'WASTE FATE', eol: 'END OF LIFE',
     ledger: 'LEDGER', matrix: 'PROCESS × MATERIAL', drivers: 'Top risks', fixInGeometry: 'Fix in GEOMETRY →',
     optimizeInAgents: 'Optimize in AGENTS →', noLoop: 'Run analysis with a material to see circularity.',
+    noLoopOpenShell: 'Circularity needs a closed shell — volume is not measurable on this mesh, so waste and end-of-life cannot be estimated. Repair the mesh first.',
     months: 'mo', unknown: 'unknown', marine: 'Marine-degradable', support: 'Support', part: 'Part',
     processLoss: 'Process loss', total: 'Total waste', expectedFailureCost: 'Expected failure cost',
     exportCsv: 'Export CSV', clear: 'Clear', prints: 'prints', virgin: 'Virgin', wasteLedger: 'Waste',
@@ -27,6 +28,7 @@ const L = {
     title: 'サーキュラリティ', firstTime: '一発成功率', waste: '廃棄物の行方', eol: '終局',
     ledger: '台帳', matrix: 'プロセス × 材料', drivers: '主なリスク', fixInGeometry: 'GEOMETRYで修正 →',
     optimizeInAgents: 'AGENTSで最適化 →', noLoop: '材料を指定して解析すると表示されます。',
+    noLoopOpenShell: '循環性の算出には閉じたシェルが必要です。このメッシュは体積を測れないため、廃棄量と終局を推定できません。先にメッシュを修復してください。',
     months: 'ヶ月', unknown: '不明', marine: '海洋生分解', support: 'サポート', part: '本体',
     processLoss: 'プロセスロス', total: '廃棄物合計', expectedFailureCost: '失敗期待コスト',
     exportCsv: 'CSV出力', clear: 'クリア', prints: '件', virgin: '新規材料', wasteLedger: '廃棄',
@@ -38,6 +40,7 @@ const L = {
     title: '循环', firstTime: '一次打成率', waste: '废件去向', eol: '终局',
     ledger: '台账', matrix: '工艺 × 材料', drivers: '主要风险', fixInGeometry: '去 GEOMETRY 修 →',
     optimizeInAgents: '去 AGENTS 优化 →', noLoop: '指定材料并分析后显示。',
+    noLoopOpenShell: '循环性需要闭合网格——当前网格体积无法测量，因此无法估算废料与终局。请先修复网格。',
     months: '个月', unknown: '未知', marine: '海洋可降解', support: '支撑', part: '本体',
     processLoss: '过程损耗', total: '废料合计', expectedFailureCost: '打废期望成本',
     exportCsv: '导出 CSV', clear: '清空', prints: '件', virgin: '新料', wasteLedger: '废料',
@@ -110,10 +113,26 @@ export function LoopTab({ unifiedAnalysis, material, language, onNavigate }: Pro
   }, [material.name]);
 
   if (!loop) {
+    // Two different reasons look identical to the user otherwise: "no material
+    // selected" vs "material is fine, but the shell is open so volume — and
+    // therefore waste/EOL — cannot be computed". The old copy blamed the
+    // material even when PLA was already selected.
+    const openShell = unifiedAnalysis.metrics?.result?.volumeReliable === false;
     return (
       <div className="pt-1">
         <Panel title={t.title}>
-          <div className="text-xs font-mono text-muted-foreground/60">{t.noLoop}</div>
+          <div className="text-xs font-mono text-muted-foreground/60 leading-relaxed">
+            {openShell ? t.noLoopOpenShell : t.noLoop}
+          </div>
+          {openShell && (
+            <button
+              type="button"
+              onClick={() => onNavigate('geometry')}
+              className="mt-3 text-[11px] font-mono text-primary border border-primary/40 rounded-sm px-2.5 py-1 hover:bg-primary hover:text-primary-foreground transition-colors"
+            >
+              {t.fixInGeometry}
+            </button>
+          )}
         </Panel>
       </div>
     );
