@@ -98,6 +98,7 @@ const DiagnosisPanel = lazy(() => import('@/components/DiagnosisPanel').then(m =
 const DiagnosisModal = lazy(() => import('@/components/DiagnosisModal').then(m => ({ default: m.DiagnosisModal })));
 const PrintDashboard = lazy(() => import('@/components/PrintDashboard').then(m => ({ default: m.PrintDashboard })));
 const AgentExecutionGraph = lazy(() => import('@/components/AgentExecutionGraph').then(m => ({ default: m.AgentExecutionGraph })));
+const VoiceControl = lazy(() => import('@/components/VoiceControl').then(m => ({ default: m.VoiceControl })));
 const ManufacturingTimeline = lazy(() => import('@/components/causality/ManufacturingTimeline').then(m => ({ default: m.ManufacturingTimeline })));
 
 // Lazy-loaded agents and causality engines
@@ -813,6 +814,26 @@ export default function Home() {
   const toUnit = (mm: number) => mm / mmPerUnit;
   const toUnit2 = (mm2: number) => mm2 / (mmPerUnit ** 2);
   const toUnit3 = (mm3: number) => mm3 / (mmPerUnit ** 3);
+  // Voice intents that ask about geometry ("how many triangles?") need the real
+  // buffers. Previously this was an empty Float32Array, so every geometry-aware
+  // intent answered "no model loaded" while a model was on screen.
+  const voiceModel = useMemo(() => {
+    const g = uploadedModel?.geometry;
+    if (!g) return null;
+    const pos = g.getAttribute('position');
+    if (!pos) return null;
+    const nor = g.getAttribute('normal');
+    const idx = g.getIndex();
+    return {
+      positions: pos.array as Float32Array,
+      normals: (nor?.array ?? new Float32Array(pos.array.length)) as Float32Array,
+      indices: (idx?.array ?? new Uint32Array(0)) as Uint32Array,
+      vertexCount: pos.count,
+      triangleCount: idx ? idx.count / 3 : pos.count / 3,
+      units: 'mm' as const,
+    };
+  }, [uploadedModel?.geometry]);
+
   const agentMarkers = agentRun?.results.flatMap((r: { markers?: Array<{ x: number; y: number; z: number; type: string }> }) => r.markers ?? []) ?? [];
   const supportDecision = unifiedAnalysis?.support?.result
     ? deriveSupportStatus(unifiedAnalysis.support.result)
@@ -1870,6 +1891,30 @@ export default function Home() {
                         just their numbers, so it leads the tab. */}
                     <AgentOfficeEntry t={t} variant="live" />
 
+                    {/* Orientation also lives here, next to the optimisation
+                        advice it competes with. Tabs unmount, so only one copy
+                        is ever mounted; keeping both entries means the action
+                        is never more than one click away. */}
+                    {uploadedModel && (
+                      <Suspense fallback={null}>
+                        <OrientationPreviewPanel
+                          model={uploadedModel}
+                          material={material}
+                          language={language}
+                          onAccept={(updated: UploadedModel) => {
+                            handleOrientationAccept(updated, {
+                              commitModel,
+                              setQuickReport,
+                              runAgentAnalysis: (m) => runAgentAnalysis(m, material, { llm: false }),
+                              recomputeMaterialRecs: refreshMaterialRecs,
+                              material,
+                              language,
+                            });
+                          }}
+                        />
+                      </Suspense>
+                    )}
+
                     {agentLoading && (
                       <div className="border border-primary/30 rounded-sm p-6 text-center">
                         <div className="text-xs font-mono text-primary animate-pulse mb-2">\u258b {t('multiAgentRunning')}</div>
@@ -2259,6 +2304,26 @@ export default function Home() {
         isVisible={showAgentGraph}
         onClose={() => setShowAgentGraph(false)}
       />
+      {uploadedModel && voiceModel && (
+        <Suspense fallback={null}>
+          <VoiceControl
+            language={language}
+            context={{
+              model: voiceModel,
+              analysis: unifiedAnalysis ?? null,
+              material: materialFamily,
+              language,
+            }}
+            onResult={(result) => {
+              if (result.action === 'analyze') {
+                toast.info('Starting analysis...');
+              } else if (result.action === 'settings') {
+                toast.success(result.message);
+              }
+            }}
+          />
+        </Suspense>
+      )}
     </div>
     </PrintPlaybackProvider>
   );
