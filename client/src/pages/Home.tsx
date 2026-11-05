@@ -813,8 +813,17 @@ export default function Home() {
   // A presentation rollup: every value is read from the analysis the pipeline
   // already produced, and the thresholds are the analyzer's own constants.
   // No new score is invented here (see AGENTS.md "one source of truth").
+  // A placeholder module returns zeros that look like clean measurements.
+  // Treat the derived verdict as unknown rather than printing "ready".
+  const moduleErrors = unifiedAnalysis?.errors ?? [];
+  const metricsUnavailable = moduleErrors.some(e => e.module === 'metrics' && e.placeholder);
+
+  // overallConfidence === 0 also means "nothing usable ran" (a degenerate or
+  // unparseable mesh returns zeros without throwing). Do not call that ready.
+  const analysisInconclusive = !!unifiedAnalysis && unifiedAnalysis.overallConfidence === 0;
+
   const verdictLevel = deriveVerdict({
-    available: !!analysis,
+    available: !!analysis && !metricsUnavailable && !analysisInconclusive,
     isWatertight: valid ? valid.isWatertight : null,
     isManifold: topo ? topo.isManifold : null,
     wallStatus: analysis?.wallThickness.status ?? null,
@@ -833,20 +842,20 @@ export default function Home() {
     {
       key: 'wall',
       label: t('verdictMinWall'),
-      value: analysis.wallThickness.minThickness != null ? toUnit(analysis.wallThickness.minThickness).toFixed(3) : '—',
-      unit: unitSuffix,
-      against: t('verdictAgainstWall').replace('{v}', String(VERDICT_THRESHOLDS.thinWallMm)),
-      status: analysis.wallThickness.status,
+      value: metricsUnavailable ? '—' : analysis.wallThickness.minThickness != null ? toUnit(analysis.wallThickness.minThickness).toFixed(3) : '—',
+      unit: metricsUnavailable ? undefined : unitSuffix,
+      against: metricsUnavailable ? t('verdictModuleUnavailable') : t('verdictAgainstWall').replace('{v}', String(VERDICT_THRESHOLDS.thinWallMm)),
+      status: metricsUnavailable ? 'unknown' : analysis.wallThickness.status,
       active: showWallThickness,
       onActivate: () => { setTab('geometry'); setShowWallThickness(v => !v); },
     },
     {
       key: 'overhang',
       label: t('verdictOverhang'),
-      value: analysis.overhang.areas > 0 ? analysis.overhang.areas.toLocaleString('en-US') : '0',
-      unit: 'faces',
-      against: t('verdictAgainstOverhang').replace('{v}', String(material.overhangThreshold)),
-      status: analysis.overhang.status,
+      value: metricsUnavailable ? '—' : analysis.overhang.areas > 0 ? analysis.overhang.areas.toLocaleString('en-US') : '0',
+      unit: metricsUnavailable ? undefined : 'faces',
+      against: metricsUnavailable ? t('verdictModuleUnavailable') : t('verdictAgainstOverhang').replace('{v}', String(material.overhangThreshold)),
+      status: metricsUnavailable ? 'unknown' : analysis.overhang.status,
       active: showHeatmap,
       onActivate: () => { setTab('geometry'); setShowHeatmap(v => !v); },
     },
@@ -862,8 +871,8 @@ export default function Home() {
     {
       key: 'volume',
       label: t('verdictVolume'),
-      value: analysis.volumeReliable ? toUnit3(analysis.volume).toFixed(1) : '—',
-      unit: analysis.volumeReliable ? volumeUnit : undefined,
+      value: !metricsUnavailable && analysis.volumeReliable ? toUnit3(analysis.volume).toFixed(1) : '—',
+      unit: !metricsUnavailable && analysis.volumeReliable ? volumeUnit : undefined,
       against: t('verdictAgainstVolume'),
       status: analysis.volumeReliable ? 'good' : 'unknown',
     },
@@ -1352,6 +1361,8 @@ export default function Home() {
                 verdictLabel={verdictLabel}
                 confidenceLabel={t('verdictConfidence')}
                 contextLine={`${material.technology.toUpperCase()} · ${material.name} · ${material.overhangThreshold}° · ${unitSuffix}`}
+                moduleErrors={moduleErrors.length > 0 ? moduleErrors.map(e => ({ module: e.module, placeholder: e.placeholder })) : undefined}
+                moduleErrorsLabel={t('verdictModuleErrors')}
                 replaceSlot={
                   <STLUploadHandler
                     compact

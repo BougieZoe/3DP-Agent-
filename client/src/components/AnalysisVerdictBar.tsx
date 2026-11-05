@@ -59,6 +59,12 @@ export interface AnalysisVerdictBarProps {
   confidenceLabel?: string;
   /** "FDM · PLA · 50° · mm" — the assumptions this analysis ran under. */
   contextLine?: string;
+  /**
+   * Modules that threw. Rendered as a warning strip so a placeholder zero is
+   * never read as a measurement.
+   */
+  moduleErrors?: Array<{ module: string; placeholder: boolean }>;
+  moduleErrorsLabel?: string;
 }
 
 const LEVEL_STYLE: Record<VerdictLevel, { chip: string; dot: string }> = {
@@ -102,6 +108,8 @@ export const AnalysisVerdictBar = memo(function AnalysisVerdictBar({
   reportLabel,
   confidenceLabel,
   contextLine,
+  moduleErrors,
+  moduleErrorsLabel,
 }: AnalysisVerdictBarProps) {
   const levelStyle = LEVEL_STYLE[level];
   const shownActions = actions.slice(0, 3);
@@ -195,6 +203,18 @@ export const AnalysisVerdictBar = memo(function AnalysisVerdictBar({
           );
         })}
       </dl>
+
+      {moduleErrors && moduleErrors.length > 0 && (
+        <div className="flex items-start gap-2 border-t border-amber-400/20 bg-amber-400/[0.04] px-3 py-2">
+          <span className="mt-[3px] shrink-0 text-[10px] text-amber-400">▲</span>
+          <p className="min-w-0 text-[11px] font-mono leading-relaxed text-amber-300/80">
+            {(moduleErrorsLabel ?? '{n} modules failed: {list}').replace(
+              '{list}',
+              moduleErrors.map((e) => e.module + (e.placeholder ? '*' : '')).join(', '),
+            ).replace('{n}', String(moduleErrors.length))}
+          </p>
+        </div>
+      )}
 
       {/* What to do about it */}
       {(shownActions.length > 0 || onOpenReport) && (
