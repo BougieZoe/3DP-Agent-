@@ -24,6 +24,8 @@ import { InstallButton } from '@/components/InstallButton';
 import { APIKeyModal } from '@/components/APIKeyModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { readPref, writePref } from '@/lib/prefs';
+import { appendVersion, clearVersions, diffSnapshots, loadVersions, snapshotFromAnalysis, type ModelVersion, type VersionAction } from '@/lib/modelVersions';
+import { VersionHistoryPanel } from '@/components/VersionHistoryPanel';
 import { useIsMobile } from '@/hooks/useMobile';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
@@ -381,6 +383,8 @@ export default function Home() {
   const [showModeMenu, setShowModeMenu] = useState(false);
   const [language, setLanguage] = useState<Language>(() => readPref('lang', SUPPORTED_LANGUAGES, 'en'));
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
+  // Measurement snapshots for the active model (metrics only, persisted).
+  const [versions, setVersions] = useState<ModelVersion[]>([]);
   const [tab, setTab] = useState<'geometry' | 'report' | 'loop' | 'chat' | 'agents' | 'causality' | 'orders'>('geometry');
   const [showAPIModal, setShowAPIModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -474,6 +478,42 @@ export default function Home() {
     return '';
   };
 
+  /**
+   * Record a measurement snapshot after a state-changing action.
+   * Keyed by file name so switching models shows that model's own history.
+   */
+  const recordVersion = (fileName: string, action: VersionAction, analysis: UploadedModel['unifiedAnalysis'], note?: string) => {
+    const previous = loadVersions(fileName).slice(-1)[0];
+    const snapshot = snapshotFromAnalysis(analysis);
+    setVersions(appendVersion(fileName, { at: Date.now(), action, snapshot, note }));
+
+    // Close the loop: say what the action actually changed, in the same units
+    // the verdict bar shows. Without this the user has to diff two rows.
+    if (!previous) return;
+    const d = diffSnapshots(previous.snapshot, snapshot);
+    const parts: string[] = [];
+    if (d.minWallMm != null && Math.abs(d.minWallMm) >= 0.005) {
+      parts.push(`${t('history.wall')} ${previous.snapshot.minWallMm!.toFixed(2)} → ${snapshot.minWallMm!.toFixed(2)} mm`);
+    }
+    if (d.overhangFaces !== 0) {
+      parts.push(`${t('history.overhang')} ${previous.snapshot.overhangFaces.toLocaleString('en-US')} → ${snapshot.overhangFaces.toLocaleString('en-US')}`);
+    }
+    if (parts.length > 0) toast.success(parts.join(' · '));
+  };
+
+  /** Orientation accept is used from two tabs — keep one implementation. */
+  const acceptOrientation = (updated: UploadedModel) => {
+    handleOrientationAccept(updated, {
+      commitModel,
+      setQuickReport,
+      runAgentAnalysis: (m) => runAgentAnalysis(m, material, { llm: false }),
+      recomputeMaterialRecs: refreshMaterialRecs,
+      material,
+      language,
+    });
+    recordVersion(updated.fileName, 'orientation', updated.unifiedAnalysis);
+  };
+
   /** Set the working model and regenerate everything that derives from it. */
   const activateModel = (model: UploadedModel) => {
     setUnits(model.units);
@@ -495,6 +535,7 @@ export default function Home() {
     setSelectedPatternId(null);
     setSelectedSuggestionId(null);
     setOverlayOpacity(0.7);
+    setVersions(loadVersions(model.fileName));
     toast.success(t('stlParsed') + model.fileName);
     runAgentAnalysis(model, material);
     // Auto-compose the report so the REPORT tab reads immediately — no
@@ -536,7 +577,10 @@ export default function Home() {
   const handleModelsLoaded = (loaded: UploadedModel[], received: number) => {
     setModels(loaded);
     const first = loaded[0];
-    if (first) activateModel(first);
+    if (first) {
+      activateModel(first);
+      recordVersion(first.fileName, 'upload', first.unifiedAnalysis);
+    }
     // Definitive diagnostics when multiple files were passed in:
     //  - no toast when dragging several → the DROP only delivered 1 file
     //  - "Loaded 3 models"        → drop + processing both fine (chips must show)
@@ -729,6 +773,7 @@ export default function Home() {
     const updatedModel: UploadedModel = { ...uploadedModel, geometry, mesh, unifiedAnalysis: newUnified, units: newUnits };
     commitModel(updatedModel);
     refreshMaterialRecs(geometry);
+    recordVersion(updatedModel.fileName, 'units', newUnified, newUnits);
 
     if (currentSeq !== unitRequestSeq.current || !orchestratorRef.current) return;
     try {
@@ -778,6 +823,7 @@ export default function Home() {
         rawGeometry: outcome.geometry.clone(),
       });
       refreshMaterialRecs(outcome.geometry);
+      recordVersion(uploadedModel.fileName, 'repair', outcome.analysis, outcome.note);
       deepAnalysisSeq.current += 1;
       setDeepAgentRun(null);
       setDeepSteps([]);
@@ -954,14 +1000,26 @@ export default function Home() {
       // "0 boundary edges" is not a useful sentence: a mesh can fail the
       // watertight check through non-manifold edges alone. Say which one.
       if ((topo?.boundaryEdgeCount ?? 0) > 0) {
-        out.push({ text: t('verdictActionRepair').replace('{n}', String(topo!.boundaryEdgeCount)) });
+        out.push({
+          text: `${t('verdictActionRepair').replace('{n}', String(topo!.boundaryEdgeCount))} · ${t('verdictRepairNow')}`,
+          active: repairing,
+          onActivate: () => { void handleRepairProcess(); },
+        });
       } else if ((topo?.nonManifoldEdgeCount ?? 0) > 0) {
-        out.push({ text: t('verdictActionNonManifold').replace('{n}', String(topo!.nonManifoldEdgeCount)) });
+        out.push({
+          text: `${t('verdictActionNonManifold').replace('{n}', String(topo!.nonManifoldEdgeCount))} · ${t('verdictRepairNow')}`,
+          active: repairing,
+          onActivate: () => { void handleRepairProcess(); },
+        });
       } else {
         out.push({ text: t('verdictActionRepairGeneric') });
       }
     } else if (topo && topo.nonManifoldEdgeCount > 0) {
-      out.push({ text: t('verdictActionNonManifold').replace('{n}', String(topo.nonManifoldEdgeCount)) });
+      out.push({
+        text: `${t('verdictActionNonManifold').replace('{n}', String(topo.nonManifoldEdgeCount))} · ${t('verdictRepairNow')}`,
+        active: repairing,
+        onActivate: () => { void handleRepairProcess(); },
+      });
     }
     if (analysis.wallThickness.status !== 'good') {
       out.push({
@@ -980,6 +1038,13 @@ export default function Home() {
           .replace('{v}', String(material.overhangThreshold)),
         active: showHeatmap,
         onActivate: () => { setTab('geometry'); setShowHeatmap(v => !v); },
+      });
+      out.push({
+        text: t('verdictCompareOrientations'),
+        onActivate: () => {
+          setTab('geometry');
+          document.getElementById('orientation-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        },
       });
     }
     // No volume / ready / mesh-integrity rows carry no destination: there is no
@@ -1600,23 +1665,29 @@ export default function Home() {
                         in AGENTS. Preview only; the model is unchanged until
                         accepted. */}
                     {uploadedModel && (
+                      <div id="orientation-panel">
                       <Suspense fallback={null}>
                         <OrientationPreviewPanel
                           model={uploadedModel}
                           material={material}
                           language={language}
-                          onAccept={(updated: UploadedModel) => {
-                            handleOrientationAccept(updated, {
-                              commitModel,
-                              setQuickReport,
-                              runAgentAnalysis: (m) => runAgentAnalysis(m, material, { llm: false }),
-                              recomputeMaterialRecs: refreshMaterialRecs,
-                              material,
-                              language,
-                            });
-                          }}
+                          onAccept={acceptOrientation}
                         />
                       </Suspense>
+                      </div>
+                    )}
+
+                    {/* Version history — what each corrective action actually
+                        changed, so "better" is a measurement, not a memory. */}
+                    {uploadedModel && versions.length > 0 && (
+                      <VersionHistoryPanel
+                        versions={versions}
+                        language={language}
+                        onClear={() => {
+                          clearVersions(uploadedModel.fileName);
+                          setVersions([]);
+                        }}
+                      />
                     )}
 
                     {/* Liquid-cooling application panel — right under the OBJECT
@@ -1974,16 +2045,7 @@ export default function Home() {
                           model={uploadedModel}
                           material={material}
                           language={language}
-                          onAccept={(updated: UploadedModel) => {
-                            handleOrientationAccept(updated, {
-                              commitModel,
-                              setQuickReport,
-                              runAgentAnalysis: (m) => runAgentAnalysis(m, material, { llm: false }),
-                              recomputeMaterialRecs: refreshMaterialRecs,
-                              material,
-                              language,
-                            });
-                          }}
+                          onAccept={acceptOrientation}
                         />
                       </Suspense>
                     )}
