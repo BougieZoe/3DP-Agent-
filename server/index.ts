@@ -198,7 +198,7 @@ export function createApp() {
     );
     app.post(
       "/api/agent-trace",
-      rateLimit,
+      ...amdProxy,
       express.json({ limit: "1mb" }),
       async (req: Request, res: Response) => {
         const trace = req.body ?? {};

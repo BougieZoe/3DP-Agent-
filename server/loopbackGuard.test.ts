@@ -29,6 +29,16 @@ describe('effectiveClientIp', () => {
     // Local caller with no header (direct curl to the Express port).
     expect(effectiveClientIp('127.0.0.1', undefined)).toBe('127.0.0.1');
   });
+
+  it('reads the proxy-appended last hop, not the client-supplied first one', () => {
+    // A LAN client spoofing loopback: vite appends the real peer.
+    expect(effectiveClientIp('127.0.0.1', '127.0.0.1, 192.168.1.50')).toBe('192.168.1.50');
+    expect(effectiveClientIp('127.0.0.1', '10.0.0.9, 203.0.113.7, 192.168.1.50')).toBe('192.168.1.50');
+    // A genuine local client behind no proxy still resolves to loopback.
+    expect(effectiveClientIp('127.0.0.1', '127.0.0.1')).toBe('127.0.0.1');
+    // Whitespace and empty hops must not shift the answer.
+    expect(effectiveClientIp('::1', ' 192.168.1.50 , ')).toBe('192.168.1.50');
+  });
 });
 
 describe('bridgeAuthDecision', () => {
@@ -50,6 +60,12 @@ describe('bridgeAuthDecision', () => {
 
   it('dev: forged loopback header from a remote socket does not bypass', () => {
     expect(bridgeAuthDecision(mockReq('192.168.1.50', '127.0.0.1'), false)).toBe(true);
+  });
+
+  it('dev: a LAN client cannot spoof loopback through the trusted proxy', () => {
+    // This is the exact bypass: proxy socket is loopback, header starts fake.
+    expect(bridgeAuthDecision(mockReq('127.0.0.1', '127.0.0.1, 192.168.1.50'), false)).toBe(true);
+    expect(effectiveClientIp('127.0.0.1', '127.0.0.1, 192.168.1.50')).not.toBe('127.0.0.1');
   });
 
   it('dev: a dev server published on 0.0.0.0 stays safe for remote callers', () => {

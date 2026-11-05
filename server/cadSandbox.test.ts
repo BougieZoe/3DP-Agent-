@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SANDBOX_ENV, scanSourceSafety } from './cadSandbox';
+import { SANDBOX_ENV, createSandboxEnv, scanSourceSafety } from './cadSandbox';
 
 describe('scanSourceSafety', () => {
   it('allows normal build123d source (import math + build123d)', () => {
@@ -43,6 +43,24 @@ describe('SANDBOX_ENV', () => {
     // Only whitelisted keys are present.
     const allowed = ['PATH', 'HOME', 'LANG', 'TMPDIR', 'PYTHONUNBUFFERED', 'PYTHONDONTWRITEBYTECODE'];
     for (const key of Object.keys(SANDBOX_ENV)) {
+      expect(allowed).toContain(key);
+    }
+  });
+});
+
+describe('createSandboxEnv', () => {
+  it('scopes HOME and TMPDIR to the per-run directory', () => {
+    const env = createSandboxEnv('/tmp/3dp-run-abc');
+    expect(env.HOME).toBe('/tmp/3dp-run-abc');
+    expect(env.TMPDIR).toBe('/tmp/3dp-run-abc');
+    // The host home must never reach the child: ~/.ssh and dotfiles stay out
+    // of reach even if the source escapes the static scanner.
+    expect(env.HOME).not.toBe(process.env.HOME);
+  });
+
+  it('keeps the same strict key allowlist as the legacy constant', () => {
+    const allowed = ['PATH', 'HOME', 'TMPDIR', 'LANG', 'PYTHONUNBUFFERED', 'PYTHONDONTWRITEBYTECODE'];
+    for (const key of Object.keys(createSandboxEnv('/tmp/x'))) {
       expect(allowed).toContain(key);
     }
   });
