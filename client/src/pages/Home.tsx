@@ -44,7 +44,6 @@ import type { AgentId } from '@shared/domain/agent';
 import { deriveSupportStatus } from '@/analysis/metrics';
 import { ScanlineSweep } from '@/components/decorative/ScanlineSweep';
 import { FeaturesSection } from '@/pages/home/FeaturesSection';
-import { AgentOfficeEntry } from '@/components/factory/AgentOfficeEntry';
 import type { FeatureDestination } from '@/pages/home/featuresNavigation';
 import { toast } from 'sonner';
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
@@ -75,7 +74,6 @@ const CognitiveScan = lazy(() => import('@/components/3D/CognitiveScan').then(m 
 const CausalityTimeline = lazy(() => import('@/components/causality/CausalityTimeline').then(m => ({ default: m.CausalityTimeline })));
 const CausalityMinimal = lazy(() => import('@/components/causality/CausalityMinimal').then(m => ({ default: m.CausalityMinimal })));
 const CausalityUnified = lazy(() => import('@/components/causality/CausalityUnified').then(m => ({ default: m.CausalityUnified })));
-const PhysicalVerificationBoard = lazy(() => import('@/components/verification/PhysicalVerificationBoard').then(m => ({ default: m.PhysicalVerificationBoard })));
 const AttentionPulse = lazy(() => import('@/components/3D/AttentionPulse').then(m => ({ default: m.AttentionPulse })));
 const WebGPUOverlay = lazy(() => import('@/components/3D/WebGPUOverlay').then(m => ({ default: m.WebGPUOverlay })));
 
@@ -95,7 +93,6 @@ const PriceListManager = lazy(() => import('@/components/PriceListManager').then
 const DiagnosisPanel = lazy(() => import('@/components/DiagnosisPanel').then(m => ({ default: m.DiagnosisPanel })));
 const DiagnosisModal = lazy(() => import('@/components/DiagnosisModal').then(m => ({ default: m.DiagnosisModal })));
 const PrintDashboard = lazy(() => import('@/components/PrintDashboard').then(m => ({ default: m.PrintDashboard })));
-const VoiceControl = lazy(() => import('@/components/VoiceControl').then(m => ({ default: m.VoiceControl })));
 const AgentExecutionGraph = lazy(() => import('@/components/AgentExecutionGraph').then(m => ({ default: m.AgentExecutionGraph })));
 const ManufacturingTimeline = lazy(() => import('@/components/causality/ManufacturingTimeline').then(m => ({ default: m.ManufacturingTimeline })));
 
@@ -342,7 +339,7 @@ export default function Home() {
   const [showModeMenu, setShowModeMenu] = useState(false);
   const [language, setLanguage] = useState<Language>('en');
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
-  const [tab, setTab] = useState<'geometry' | 'report' | 'loop' | 'chat' | 'agents' | 'causality' | 'orders' | 'verification'>('geometry');
+  const [tab, setTab] = useState<'geometry' | 'report' | 'loop' | 'chat' | 'agents' | 'causality' | 'orders'>('geometry');
   const [showAPIModal, setShowAPIModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -1390,9 +1387,9 @@ export default function Home() {
             {/* Tab bar — only when a model is loaded; the empty state uses the
                 feature cards (diagnosis opens as a modal) instead */}
             {modelData && (
-              <div className="flex overflow-x-auto scrollbar-hide border-b border-border -mx-5 px-5">
-                {(['geometry', 'report', 'loop', 'agents', 'chat', 'causality', 'orders', 'verification'] as const).map(tabKey => (
-                  <button key={tabKey} onClick={() => setTab(tabKey)}
+              <div role="tablist" aria-label={t('analysisTabs')} className="flex overflow-x-auto scrollbar-hide border-b border-border -mx-5 px-5">
+                {(['geometry', 'report', 'loop', 'agents', 'chat', 'causality', 'orders'] as const).map(tabKey => (
+                  <button key={tabKey} role="tab" aria-selected={tab === tabKey} onClick={() => setTab(tabKey)}
                     className={`text-xs font-mono px-3 sm:px-4 py-2.5 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
                       tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
                     }`}>
@@ -1402,7 +1399,6 @@ export default function Home() {
                       : tabKey === 'agents' ? t('agents').toUpperCase()
                       : tabKey === 'causality' ? t('causality').toUpperCase()
                       : tabKey === 'orders' ? 'ORDERS'
-                      : tabKey === 'verification' ? 'VERIFICATION'
                       : t('chatAI').toUpperCase()}
                     {tabKey === 'orders' && orders.orders.length > 0 && (
                       <span className="ml-1 px-1 py-0.5 text-[8px] rounded-full bg-cyan-400/20 text-cyan-400">
@@ -1806,13 +1802,6 @@ export default function Home() {
                 {/* AGENTS TAB */}
                 {tab === 'agents' && (
                   <div className="!-mt-6 space-y-3">
-                    {/* Live Floor — small-screen live view of the agents' 3D
-                        office. The full scene is too heavy for the tab strip,
-                        so the frame embeds the office page and hands off to the
-                        fullscreen overlay on click. Replaces the old 2x2
-                        FactoryScene grid and its consensus table. */}
-                    <AgentOfficeEntry t={t} variant="live" />
-
                     {agentLoading && (
                       <div className="border border-primary/30 rounded-sm p-6 text-center">
                         <div className="text-xs font-mono text-primary animate-pulse mb-2">\u258b {t('multiAgentRunning')}</div>
@@ -1849,6 +1838,9 @@ export default function Home() {
                                 : 'text-red-400'
                             }`}>
                               {agentRun.consensus.verdict === 'pass' ? t('verdictPass') : agentRun.consensus.verdict === 'warning' ? t('verdictWarning') : t('verdictFail')}
+                            </div>
+                            <div className="mt-2 text-[10px] font-mono text-muted-foreground/35">
+                              {t('consensusWeightedNote')}
                             </div>
                           </div>
 
@@ -2144,15 +2136,6 @@ export default function Home() {
                   </Suspense>
                 )}
 
-                {/* VERIFICATION TAB */}
-                {tab === 'verification' && (
-                  <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
-                    <div className="pt-1">
-                      <PhysicalVerificationBoard language={language as any} />
-                    </div>
-                  </Suspense>
-                )}
-
                 {/* ORDERS TAB */}
                 {tab === 'orders' && (
                   <div className="pt-1 space-y-4">
@@ -2196,10 +2179,7 @@ export default function Home() {
                 feature list (it is the only live, non-AI-key feature). */}
             {!uploadedModel && (
               <div className="mt-6 space-y-3">
-                {/* What you get comes first; the Live Floor promo is a
-                    destination, not the primary action — it sits last. */}
                 <FeaturesSection t={t} onNavigate={handleFeatureNavigate} />
-                <AgentOfficeEntry t={t} variant="hero" />
               </div>
             )}
 
@@ -2213,6 +2193,11 @@ export default function Home() {
           <button onClick={() => setShowPrivacy(true)} className="hover:text-muted-foreground transition-colors">
             {t('privacyTitle')}
           </button>
+          {/* The agent-office showcase is a marketing page, not a workflow
+              surface. It stays reachable, but out of the analysis path. */}
+          <a href="/office.html" target="_blank" rel="noreferrer" className="hover:text-muted-foreground transition-colors">
+            Live Floor ↗
+          </a>
         </div>
       </div>}
       </Suspense>
@@ -2226,31 +2211,6 @@ export default function Home() {
         isVisible={showAgentGraph}
         onClose={() => setShowAgentGraph(false)}
       />
-      {uploadedModel && (
-        <VoiceControl
-          language={language}
-          context={{
-            model: uploadedModel.geometry ? {
-              positions: new Float32Array(),
-              normals: new Float32Array(),
-              indices: new Uint32Array(),
-              vertexCount: 0,
-              triangleCount: 0,
-              units: 'mm',
-            } : null,
-          analysis: unifiedAnalysis ?? null,
-          material: materialFamily,
-          language,
-        }}
-        onResult={(result) => {
-          if (result.action === 'analyze') {
-            toast.info('Starting analysis...');
-          } else if (result.action === 'settings') {
-            toast.success(result.message);
-          }
-        }}
-        />
-      )}
     </div>
     </PrintPlaybackProvider>
   );

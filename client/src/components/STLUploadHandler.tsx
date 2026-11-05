@@ -140,6 +140,15 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [progress, setProgress] = useState<string[]>([]);
+  // Wall-clock feedback. The log lines jump between stages, so the bar alone
+  // looked frozen on a 20-40s model; an elapsed counter proves it is working.
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const startedAtRef = useRef(0);
+  const timerIdRef = useRef<number | null>(null);
+  const setTimerId = (id: number) => {
+    if (timerIdRef.current !== null) window.clearInterval(timerIdRef.current);
+    timerIdRef.current = id;
+  };
   const t = labels[language];
 
   const log = (msg: string) => setProgress(p => [...p, msg]);
@@ -154,6 +163,9 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
     if (supported.length === 0) return;
 
     setIsLoading(true);
+    startedAtRef.current = Date.now();
+    setElapsedMs(0);
+    setTimerId(window.setInterval(() => setElapsedMs(Date.now() - startedAtRef.current), 100));
     const results: UploadedModel[] = [];
     const startTime = Date.now();
     let lastError: string | null = null;
@@ -333,6 +345,8 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
       // to the upload box (the previous "no error message" crash UX).
       onError(lastError);
     }
+    if (timerIdRef.current !== null) { window.clearInterval(timerIdRef.current); timerIdRef.current = null; }
+    setElapsedMs(Date.now() - startedAtRef.current);
     setIsLoading(false);
   }, [onModelsLoaded, onError, t, units, materialFamily]);
 
@@ -384,7 +398,10 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
             style={{ width: `${Math.max(pct, 5)}%` }}
           />
         </div>
-        <div className="text-[10px] text-muted-foreground/50 text-right">{pct}%</div>
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground/50">
+          <span>{(elapsedMs / 1000).toFixed(1)}s</span>
+          <span className="text-right">{pct}%</span>
+        </div>
 
         {/* Log lines */}
         {progress.map((msg, i) => (

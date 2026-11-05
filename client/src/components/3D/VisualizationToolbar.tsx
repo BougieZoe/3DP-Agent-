@@ -98,6 +98,10 @@ export function VisualizationToolbar({
   const { themeKey, SEMANTIC, toggleTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [expandedOverlay, setExpandedOverlay] = useState<string | null>(null);
+  // Three analysis overlays are the common case. The print-process overlays
+  // (path/layer/failure/thermal/risks) live behind one disclosure so the
+  // panel opens at a readable length instead of eight stacked toggles.
+  const [showMoreOverlays, setShowMoreOverlays] = useState(false);
 
   const activeMap: Record<string, boolean> = {
     heatmap: showHeatmap,
@@ -180,95 +184,6 @@ export function VisualizationToolbar({
       )}
 
       <ToggleChip
-        label={t('toolbarSupports')}
-        active={showGhosts}
-        color={SEMANTIC.overlay.supports}
-        onClick={onToggleGhosts}
-        onExpand={() => setExpandedOverlay(expandedOverlay === 'supports' ? null : 'supports')}
-        expanded={expandedOverlay === 'supports'}
-      />
-      {expandedOverlay === 'supports' && showGhosts && (
-        <div className="ml-4 space-y-2 py-2">
-          <SliderParam
-            label={t('tbMaxAngle')}
-            value={overlayParams.supports.maxAngle}
-            min={30} max={60} step={5}
-            unit="°"
-            onChange={v => handleParamChange('supports', 'maxAngle', v)}
-          />
-          <SliderParam
-            label={t('tbDensity')}
-            value={overlayParams.supports.density}
-            min={0.1} max={1} step={0.1}
-            onChange={v => handleParamChange('supports', 'density', v)}
-          />
-          <LegendHint title={t('legendTitle')} items={[
-            { color: 'bg-blue-500', label: t('legendOverhangFace') },
-            { color: 'bg-orange-500', label: t('legendBridge') },
-          ]} />
-        </div>
-      )}
-
-      <ToggleChip
-        label={t('toolbarRisks')}
-        active={showRisks}
-        color={SEMANTIC.overlay.risks}
-        onClick={onToggleRisks}
-        onExpand={() => setExpandedOverlay(expandedOverlay === 'risks' ? null : 'risks')}
-        expanded={expandedOverlay === 'risks'}
-      />
-      {expandedOverlay === 'risks' && showRisks && (
-        <div className="ml-4 space-y-2 py-2">
-          <SliderParam
-            label={t('tbSensitivity')}
-            value={overlayParams.risks.sensitivity}
-            min={0.1} max={2} step={0.1}
-            onChange={v => handleParamChange('risks', 'sensitivity', v)}
-          />
-          <SliderParam
-            label={t('tbMinSeverity')}
-            value={overlayParams.risks.minSeverity}
-            min={0} max={1} step={0.1}
-            onChange={v => handleParamChange('risks', 'minSeverity', v)}
-          />
-          <LegendHint title={t('legendTitle')} items={[
-            { color: 'bg-red-500', label: t('legendRiskHigh') },
-            { color: 'bg-yellow-500', label: t('legendRiskMid') },
-            { color: 'bg-cyan-400', label: t('legendRiskLow') },
-          ]} />
-        </div>
-      )}
-
-      <div className={`${SEMANTIC.overlay.separator}`} />
-
-      <ToggleChip
-        label={t('toolbarPrintPath')}
-        active={showPrintPath}
-        color={SEMANTIC.overlay.printPath}
-        onClick={onTogglePrintPath}
-      />
-      <ToggleChip
-        label={t('toolbarLayerReveal')}
-        active={showLayerReveal}
-        color={SEMANTIC.overlay.layerReveal}
-        onClick={onToggleLayerReveal}
-      />
-
-      <div className={`${SEMANTIC.overlay.separator}`} />
-
-      <ToggleChip
-        label={t('toolbarFailure')}
-        active={showFailure}
-        color={SEMANTIC.overlay.failure}
-        onClick={onToggleFailure}
-      />
-      <ToggleChip
-        label={t('toolbarThermal')}
-        active={showThermal}
-        color={SEMANTIC.overlay.thermal}
-        onClick={onToggleThermal}
-      />
-      <ToggleChip
         label={t('toolbarWallThickness')}
         active={showWallThickness}
         color={SEMANTIC.overlay.wallThickness}
@@ -304,6 +219,112 @@ export function VisualizationToolbar({
             { color: 'bg-cyan-400', label: t('legendWallThick') },
           ]} />
         </div>
+      )}
+
+      <ToggleChip
+        label={t('toolbarSupports')}
+        active={showGhosts}
+        color={SEMANTIC.overlay.supports}
+        onClick={onToggleGhosts}
+        onExpand={() => setExpandedOverlay(expandedOverlay === 'supports' ? null : 'supports')}
+        expanded={expandedOverlay === 'supports'}
+      />
+      {expandedOverlay === 'supports' && showGhosts && (
+        <div className="ml-4 space-y-2 py-2">
+          <SliderParam
+            label={t('tbMaxAngle')}
+            value={overlayParams.supports.maxAngle}
+            min={30} max={60} step={5}
+            unit="°"
+            onChange={v => handleParamChange('supports', 'maxAngle', v)}
+          />
+          <SliderParam
+            label={t('tbDensity')}
+            value={overlayParams.supports.density}
+            min={0.1} max={1} step={0.1}
+            onChange={v => handleParamChange('supports', 'density', v)}
+          />
+          <LegendHint title={t('legendTitle')} items={[
+            { color: 'bg-blue-500', label: t('legendOverhangFace') },
+            { color: 'bg-orange-500', label: t('legendBridge') },
+          ]} />
+        </div>
+      )}
+
+      {/* Secondary overlays — collapsed by default. The badge keeps a hidden
+          active overlay discoverable instead of silently shaping the view. */}
+      <button
+        onClick={() => setShowMoreOverlays(v => !v)}
+        aria-expanded={showMoreOverlays}
+        className="mt-1 flex w-full items-center justify-between rounded-sm px-1 py-1 text-[10px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+      >
+        <span>
+          {t('overlaysMore')}
+          {(() => {
+            const n = [showRisks, showPrintPath, showLayerReveal, showFailure, showThermal].filter(Boolean).length;
+            return n > 0 ? ` · ${n}` : '';
+          })()}
+        </span>
+        <span className={`transition-transform ${showMoreOverlays ? 'rotate-180' : ''}`}>▾</span>
+      </button>
+
+      {showMoreOverlays && (
+        <>
+          <ToggleChip
+            label={t('toolbarRisks')}
+            active={showRisks}
+            color={SEMANTIC.overlay.risks}
+            onClick={onToggleRisks}
+            onExpand={() => setExpandedOverlay(expandedOverlay === 'risks' ? null : 'risks')}
+            expanded={expandedOverlay === 'risks'}
+          />
+          {expandedOverlay === 'risks' && showRisks && (
+            <div className="ml-4 space-y-2 py-2">
+              <SliderParam
+                label={t('tbSensitivity')}
+                value={overlayParams.risks.sensitivity}
+                min={0.1} max={2} step={0.1}
+                onChange={v => handleParamChange('risks', 'sensitivity', v)}
+              />
+              <SliderParam
+                label={t('tbMinSeverity')}
+                value={overlayParams.risks.minSeverity}
+                min={0} max={1} step={0.1}
+                onChange={v => handleParamChange('risks', 'minSeverity', v)}
+              />
+              <LegendHint title={t('legendTitle')} items={[
+                { color: 'bg-red-500', label: t('legendRiskHigh') },
+                { color: 'bg-yellow-500', label: t('legendRiskMid') },
+                { color: 'bg-cyan-400', label: t('legendRiskLow') },
+              ]} />
+            </div>
+          )}
+
+          <ToggleChip
+            label={t('toolbarPrintPath')}
+            active={showPrintPath}
+            color={SEMANTIC.overlay.printPath}
+            onClick={onTogglePrintPath}
+          />
+          <ToggleChip
+            label={t('toolbarLayerReveal')}
+            active={showLayerReveal}
+            color={SEMANTIC.overlay.layerReveal}
+            onClick={onToggleLayerReveal}
+          />
+          <ToggleChip
+            label={t('toolbarFailure')}
+            active={showFailure}
+            color={SEMANTIC.overlay.failure}
+            onClick={onToggleFailure}
+          />
+          <ToggleChip
+            label={t('toolbarThermal')}
+            active={showThermal}
+            color={SEMANTIC.overlay.thermal}
+            onClick={onToggleThermal}
+          />
+        </>
       )}
 
       <button
