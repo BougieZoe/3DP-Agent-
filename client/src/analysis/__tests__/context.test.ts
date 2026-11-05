@@ -17,7 +17,9 @@ describe('object-context assessment', () => {
   it('general context on a healthy part reports no major concerns and low risk', () => {
     const ctx = assessContext(fakeUnified(), 'general');
     expect(ctx.overallRisk).toBeLessThan(0.5);
-    expect(ctx.topConcerns.join(' ')).toContain('No major concerns');
+    // Must not claim printability: that is the gate's verdict, not context's.
+    expect(ctx.topConcerns.join(' ')).toContain('No application-specific concerns');
+    expect(ctx.topConcerns.join(' ')).not.toContain('printable');
   });
 
   it('structural context flags thin walls as a strength risk', () => {

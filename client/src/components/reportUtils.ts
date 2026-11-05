@@ -45,36 +45,74 @@ export function detectTone(messages: ChatMessage[]): ToneMode {
 
 // ─── Traffic Light Score ───────────────────────────────────────────────────────
 
+/**
+ * A single deduction from the go/no-go gate. `rule` is a stable id the UI
+ * translates; `penalty` is what it took off the score; `value` is the measured
+ * quantity behind it (boundary edges, area ratio, mm…) so the UI can say
+ * "why" instead of only "how much".
+ */
+export type GateDeduction = {
+  rule:
+    | 'shell'
+    | 'holes'
+    | 'normals'
+    | 'degenerate'
+    | 'thinWall'
+    | 'lowConfidence'
+    | 'overhang'
+    | 'support';
+  penalty: number;
+  value?: number;
+  severity?: 'critical' | 'warning';
+};
+
 export function getTrafficLight(analysis: UnifiedAnalysis): {
   light: TrafficLight;
   score: number;
+  /**
+   * Every deduction that produced the score, in evaluation order.
+   *
+   * The UI no longer shows the raw /100 as the headline: a gate is a verdict,
+   * not a quality rating, and "0/100" next to an otherwise printable part read
+   * as "worthless". Callers render the verdict word plus these reasons, and keep
+   * the number in the methodology detail.
+   */
+  deductions: GateDeduction[];
 } {
   let score = 100;
+  const deductions: GateDeduction[] = [];
   const v = analysis.validation?.result;
   const m = analysis.metrics?.result;
   const s = analysis.support?.result;
 
+  const deduct = (d: GateDeduction) => {
+    deductions.push(d);
+    score -= d.penalty;
+  };
+
   if (v) {
-    if (!v.isWatertight) score -= 30;
-    if (v.holeCount > 0) score -= v.holeCount * 8;
-    if (v.flippedNormalRatio > 0.1) score -= 15;
-    if (v.degenerateFaceCount > 10) score -= 10;
+    if (!v.isWatertight) deduct({ rule: 'shell', penalty: 30, value: v.boundaryEdgeCount });
+    if (v.holeCount > 0) deduct({ rule: 'holes', penalty: v.holeCount * 8, value: v.holeCount });
+    if (v.flippedNormalRatio > 0.1) deduct({ rule: 'normals', penalty: 15, value: v.flippedNormalRatio });
+    if (v.degenerateFaceCount > 10) deduct({ rule: 'degenerate', penalty: 10, value: v.degenerateFaceCount });
   }
 
   if (m) {
     const wtStatus = deriveWtStatus(m.thinWallRatio ?? 0, m.p5WallThicknessMm);
-    if (wtStatus === 'critical') score -= 30;
-    else if (wtStatus === 'warning') score -= 15;
-    if ((m.averageConfidence ?? 0) < 0.3 && (m.thinWallRatio ?? 0) < 0.02) score -= 3;
+    if (wtStatus === 'critical') deduct({ rule: 'thinWall', penalty: 30, severity: 'critical', value: m.p5WallThicknessMm ?? undefined });
+    else if (wtStatus === 'warning') deduct({ rule: 'thinWall', penalty: 15, severity: 'warning', value: m.p5WallThicknessMm ?? undefined });
+    if ((m.averageConfidence ?? 0) < 0.3 && (m.thinWallRatio ?? 0) < 0.02) {
+      deduct({ rule: 'lowConfidence', penalty: 3, value: m.averageConfidence });
+    }
     const ohStatus = deriveOhStatus(m.overhang.ratio);
-    if (ohStatus === 'critical') score -= 20;
-    else if (ohStatus === 'warning') score -= 10;
+    if (ohStatus === 'critical') deduct({ rule: 'overhang', penalty: 20, severity: 'critical', value: m.overhang.ratio });
+    else if (ohStatus === 'warning') deduct({ rule: 'overhang', penalty: 10, severity: 'warning', value: m.overhang.ratio });
   }
 
   if (s) {
     const supportStatus = deriveSupportStatus(s);
-    if (supportStatus.status === 'critical') score -= 20;
-    else if (supportStatus.status === 'warning') score -= 10;
+    if (supportStatus.status === 'critical') deduct({ rule: 'support', penalty: 20, severity: 'critical' });
+    else if (supportStatus.status === 'warning') deduct({ rule: 'support', penalty: 10, severity: 'warning' });
   }
 
   score = Math.max(0, Math.min(100, score));
@@ -82,7 +120,7 @@ export function getTrafficLight(analysis: UnifiedAnalysis): {
   const light: TrafficLight =
     score >= 75 ? "green" : score >= 45 ? "yellow" : "red";
 
-  return { light, score };
+  return { light, score, deductions };
 }
 
 // ─── Weight / Time ranges ──────────────────────────────────────────────────────

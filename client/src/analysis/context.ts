@@ -85,7 +85,9 @@ export function assessContext(unified: UnifiedAnalysis, context: ObjectContext):
 
   const overallRisk = count > 0 ? weighted / count : 0;
   if (concerns.length === 0) {
-    concerns.push('No major concerns for this object type — looks printable.');
+    // Never claim 'printable' here: this module only knows application context,
+    // and the gate verdict is the only thing allowed to say that.
+    concerns.push('No application-specific concerns flagged for this object type.');
   }
   return { overallRisk, contextWeightedRisk: overallRisk, topConcerns: concerns };
 }

@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { CONTENT, translate, type ContentLang } from "@shared/i18n/content";
 import type { UnifiedAnalysis, NormalOrientation } from "../analysis/types";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
-import { getTrafficLight } from "./reportUtils";
+import { getTrafficLight, type GateDeduction } from "./reportUtils";
 import { weightRangeGrams, timeRangeMinutes } from "./reportUtils";
 import { createPdfCanvasSurface } from "@/lib/pdfCanvas";
 import { createShareLink, copyShareLink } from "@/lib/shareReport";
@@ -37,6 +37,30 @@ interface ReportGeneratorProps {
   /** Selected material / process for handoff exports (falls back to FDM/—. */
   materialName?: string;
   processId?: string;
+}
+
+// ─── Gate reason text ──────────────────────────────────────────────────────────
+
+/** Turn a deduction into one sentence in the caller's language. */
+function gateReasonText(d: GateDeduction, lang: ContentLang): string {
+  switch (d.rule) {
+    case 'shell':
+      return translate(CONTENT, 'gateReasonShell', lang, { n: d.value ?? 0 });
+    case 'holes':
+      return translate(CONTENT, 'gateReasonHoles', lang, { n: d.value ?? 0 });
+    case 'normals':
+      return translate(CONTENT, 'gateReasonNormals', lang, { p: Math.round((d.value ?? 0) * 100) });
+    case 'degenerate':
+      return translate(CONTENT, 'gateReasonDegenerate', lang, { n: d.value ?? 0 });
+    case 'thinWall':
+      return translate(CONTENT, 'gateReasonThinWall', lang, { mm: (d.value ?? 0).toFixed(2) });
+    case 'lowConfidence':
+      return translate(CONTENT, 'gateReasonLowConfidence', lang);
+    case 'overhang':
+      return translate(CONTENT, 'gateReasonOverhang', lang, { p: Math.round((d.value ?? 0) * 100) });
+    case 'support':
+      return translate(CONTENT, 'gateReasonSupport', lang);
+  }
 }
 
 // ─── Language Detection ─────────────────────────────────────────────────────────
@@ -1264,7 +1288,7 @@ export function ReportGenerator({
 }: ReportGeneratorProps) {
   const tone = detectTone(chatHistory);
   const lang = language ?? detectLanguage(chatHistory);
-  const { light, score } = getTrafficLight(analysis);
+  const { light, score, deductions } = getTrafficLight(analysis);
 
   const handleExport = useCallback(async (tier: PdfTier) => {
     if (tier === "client") {
@@ -1329,13 +1353,39 @@ export function ReportGenerator({
       <div className="flex items-center gap-3">
         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium ${lightStyles[light]}`}>
           <span className={`w-2 h-2 rounded-full ${dotStyles[light]}`} />
-          {score}/100
+          {translate(CONTENT, light === 'red' ? 'gateBlocked' : light === 'yellow' ? 'gateReview' : 'gatePass', language)}
         </div>
         <span className="text-[10px] font-mono text-muted-foreground/50 tracking-wider">
           {translate(CONTENT, 'pdf.labelQuickCheck', language)}
           <span className="ml-1.5 text-foreground/25">· {translate(CONTENT, 'pdf.gateTag', language)}</span>
         </span>
       </div>
+
+      {/* The gate is a verdict, not a quality rating: show WHY, keep the
+          penalty arithmetic in the disclosure instead of headlining "0/100". */}
+      {deductions.length > 0 && (
+        <details className="border border-border/30 rounded-sm px-2 py-1.5">
+          <summary className="cursor-pointer text-[10px] font-mono tracking-widest text-muted-foreground/50 select-none">
+            {translate(CONTENT, 'gateReasonsTitle', language)} ({deductions.length})
+          </summary>
+          <ul className="mt-1.5 space-y-1">
+            {deductions.map((d, i) => (
+              <li key={`${d.rule}-${i}`} className="flex items-start gap-2 text-[10px] font-mono leading-relaxed">
+                <span className="min-w-0 flex-1 text-muted-foreground/70">
+                  {gateReasonText(d, language)}
+                </span>
+                <span className="shrink-0 tabular-nums text-red-400/70">
+                  {translate(CONTENT, 'gatePenaltyUnit', language, { n: d.penalty })}
+                </span>
+              </li>
+            ))}
+            <li className="flex items-start gap-2 border-t border-border/20 pt-1 text-[10px] font-mono">
+              <span className="min-w-0 flex-1 text-muted-foreground/40">gate score</span>
+              <span className="shrink-0 tabular-nums text-muted-foreground/50">{score}/100</span>
+            </li>
+          </ul>
+        </details>
+      )}
       <div className="text-[10px] font-mono text-muted-foreground/30 leading-relaxed">
         {translate(CONTENT, 'pdf.labelPenalty', language)}
       </div>

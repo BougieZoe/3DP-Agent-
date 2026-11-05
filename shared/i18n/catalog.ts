@@ -19,6 +19,71 @@
  *  - Keep keys stable; they are referenced from tests and PDF output.
  */
 export const MESSAGES = {
+  "gateBlocked": {
+    en: "BLOCKED",
+    ja: "ブロック",
+    zh: "阻断",
+  },
+  "gateReview": {
+    en: "REVIEW",
+    ja: "要確認",
+    zh: "需复核",
+  },
+  "gatePass": {
+    en: "PASS",
+    ja: "通過",
+    zh: "通过",
+  },
+  "gateReasonsTitle": {
+    en: "Why this result",
+    ja: "判定の内訳",
+    zh: "判定依据",
+  },
+  "gateReasonShell": {
+    en: "Mesh is not watertight ({n} boundary edges)",
+    ja: "メッシュが水密でない（境界エッジ {n}）",
+    zh: "网格不水密（边界边 {n} 条）",
+  },
+  "gateReasonHoles": {
+    en: "{n} hole(s) in the shell",
+    ja: "シェルに穴 {n} 箇所",
+    zh: "壳体上有 {n} 处破洞",
+  },
+  "gateReasonNormals": {
+    en: "Inconsistent normals on {p}% of faces",
+    ja: "法線の向きが不整合（{p}% の面）",
+    zh: "{p}% 的面法线方向不一致",
+  },
+  "gateReasonDegenerate": {
+    en: "{n} degenerate faces",
+    ja: "退化した面 {n}",
+    zh: "{n} 个退化面",
+  },
+  "gateReasonThinWall": {
+    en: "Thin walls — 5th percentile {mm} mm",
+    ja: "薄肉 — 5パーセンタイル {mm} mm",
+    zh: "薄壁 — 壁厚 5 分位 {mm} mm",
+  },
+  "gateReasonLowConfidence": {
+    en: "Low wall-thickness measurement confidence",
+    ja: "肉厚測定の信頼度が低い",
+    zh: "壁厚测量置信度偏低",
+  },
+  "gateReasonOverhang": {
+    en: "Overhang on {p}% of surface area",
+    ja: "表面積の {p}% がオーバーハング",
+    zh: "{p}% 的表面为悬垂面",
+  },
+  "gateReasonSupport": {
+    en: "Support removal is difficult",
+    ja: "サポート除去が困難",
+    zh: "支撑去除困难",
+  },
+  "gatePenaltyUnit": {
+    en: "−{n} pts",
+    ja: "−{n} 点",
+    zh: "−{n} 分",
+  },
   "title": {
     en: "3DP Agent",
     ja: "3DP Agent",

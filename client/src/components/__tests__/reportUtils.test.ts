@@ -167,6 +167,32 @@ describe('getTrafficLight', () => {
     const result = getTrafficLight(healthyAnalysis());
     expect(result.light).toBe('green');
     expect(result.score).toBeGreaterThanOrEqual(75);
+    expect(result.deductions).toEqual([]);
+  });
+
+  it('explains every point it removed, with the measured value', () => {
+    const failing = getTrafficLight(failingAnalysis());
+    expect(failing.deductions.length).toBeGreaterThan(0);
+    // The total penalty must reconstruct the score — no silent deductions.
+    const total = failing.deductions.reduce((sum, d) => sum + d.penalty, 0);
+    expect(Math.max(0, 100 - total)).toBe(failing.score);
+    const shell = failing.deductions.find((d) => d.rule === 'shell');
+    expect(shell?.penalty).toBe(30);
+    expect(typeof shell?.value).toBe('number');
+  });
+
+  it('attributes overhang and support separately', () => {
+    const h = healthyAnalysis();
+    const overhangOnly = {
+      ...h,
+      metrics: moduleResult('metrics', 0.6, 10, {
+        ...h.metrics.result,
+        overhang: { ...h.metrics.result.overhang, ratio: 0.4 },
+      }, ''),
+    };
+    const rules = getTrafficLight(overhangOnly).deductions.map((d) => d.rule);
+    expect(rules).toContain('overhang');
+    expect(rules).not.toContain('shell');
   });
 
   it('returns red for critical issues', () => {
