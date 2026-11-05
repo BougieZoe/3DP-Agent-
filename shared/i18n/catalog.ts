@@ -19,6 +19,36 @@
  *  - Keep keys stable; they are referenced from tests and PDF output.
  */
 export const MESSAGES = {
+  "thickenNoGain": {
+    en: "No measured improvement (wall {from} → {to} mm) — the change was discarded.",
+    ja: "測定上の改善なし（肉厚 {from} → {to} mm）— 変更は破棄しました。",
+    zh: "没有测到改善（壁厚 {from} → {to} mm）——已丢弃这次修改。",
+  },
+  "verdictThickenNow": {
+    en: "thicken now",
+    ja: "今すぐ加厚",
+    zh: "立即加厚",
+  },
+  "recentProjects": {
+    en: "RECENT PROJECTS",
+    ja: "最近のプロジェクト",
+    zh: "最近项目",
+  },
+  "recentResume": {
+    en: "Resume",
+    ja: "再開",
+    zh: "继续",
+  },
+  "recentRemove": {
+    en: "Remove",
+    ja: "削除",
+    zh: "移除",
+  },
+  "recentUnavailable": {
+    en: "That project could not be restored — the stored file is missing.",
+    ja: "プロジェクトを復元できませんでした（保存ファイルが見つかりません）。",
+    zh: "无法恢复该项目——本地存储的文件已丢失。",
+  },
   "verdictRepairNow": {
     en: "repair now",
     ja: "今すぐ修復",

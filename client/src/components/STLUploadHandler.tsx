@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
 import { loadModelFile } from '@/lib/modelLoader';
 import { Language } from '@/lib/i18n';
@@ -13,6 +13,8 @@ import { recordLoopPrint } from '@/lib/loopLedger';
 import { logLoopPrediction } from '@/lib/loopCalibration';
 import { scoreBand } from '@/analysis/loop';
 import { notifyAnalysisComplete } from '@/lib/notifications';
+import { saveProject } from '@/lib/projectStore';
+import { snapshotFromAnalysis } from '@/lib/modelVersions';
 import { DEFAULT_MATERIAL, type Material } from '@shared/domain/material';
 import type { LengthUnit } from '@shared/domain/geometry';
 import * as THREE from 'three';
@@ -64,6 +66,13 @@ interface STLUploadHandlerProps {
    * still work; parsing, units and error handling stay in this one component.
    */
   compact?: boolean;
+  /**
+   * A previously stored file to run through the normal pipeline once on mount
+   * (resume from IndexedDB). Consumed via onAutoLoadConsumed so a re-render
+   * never reprocesses it.
+   */
+  autoLoadFile?: File | null;
+  onAutoLoadConsumed?: () => void;
 }
 
 const labels = {
@@ -135,7 +144,7 @@ const labels = {
   },
 };
 
-export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', units, onUnitsChange, materialFamily = 'fdm', material, compact = false }: STLUploadHandlerProps) {
+export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', units, onUnitsChange, materialFamily = 'fdm', material, compact = false, autoLoadFile = null, onAutoLoadConsumed }: STLUploadHandlerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -328,6 +337,10 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
           sliceLayers,
         });
 
+        // Keep the original bytes so a reload can resume this model (bounded
+        // by projectStore's size + count budgets; never blocks the upload).
+        void saveProject(file, effectiveUnits, snapshotFromAnalysis(unifiedAnalysis));
+
         // Fire-and-forget notifications (webhook/email) — don't block the UI
         notifyAnalysisComplete(file.name, unifiedAnalysis, DEFAULT_MATERIAL, Date.now() - startTime)
           .catch(() => {});
@@ -349,6 +362,16 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
     setElapsedMs(Date.now() - startedAtRef.current);
     setIsLoading(false);
   }, [onModelsLoaded, onError, t, units, materialFamily]);
+
+  // Resume: run a stored file through the exact same pipeline as a drop.
+  useEffect(() => {
+    if (!autoLoadFile) return;
+    void handleFiles([autoLoadFile]);
+    onAutoLoadConsumed?.();
+    // Intentionally keyed on the file only: handleFiles identity changes with
+    // every render and re-running the analysis would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoLoadFile]);
 
   // The only picker backend. Guard so a dead or unrendered ref fails loudly
   // instead of silently doing nothing.
