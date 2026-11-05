@@ -1,4 +1,4 @@
-import { moduleResult, PRINTER_PROFILES, type UnifiedAnalysis, type AnalysisModuleResult, type Confidence, type TopologyResult, type ValidationResult, type MetricsResult, type BedFitResult, type SupportResult, type PrintTimeResult, type SlicerBackedMetrics } from './types';
+import { moduleResult, PRINTER_PROFILES, type UnifiedAnalysis, type AnalysisModuleResult, type Confidence, type TopologyResult, type ValidationResult, type MetricsResult, type BedFitResult, type SupportResult, type PrintTimeResult, type SlicerBackedMetrics, type ModuleError } from './types';
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import { analyzeTopology } from './topology';
 import { validateMesh } from './validation';
@@ -90,10 +90,16 @@ export function runAnalysisPipeline(
   const emptyValidation: ValidationResult = { isWatertight: false, holeCount: 0, boundaryEdgeCount: 0, flippedNormalFaceCount: 0, totalFaceCount: 0, flippedNormalRatio: 0, normalOrientation: 'unknown', degenerateFaceCount: 0 };
   const emptyMetrics: MetricsResult = { meshVolumeMm3: 0, volumeReliable: false, surfaceAreaMm2: 0, boundingBoxVolumeMm3: 0, boundingBoxDimensionsMm: { x: 0, y: 0, z: 0 }, minWallThicknessMm: null, avgWallThicknessMm: null, p1WallThicknessMm: null, p5WallThicknessMm: null, p10WallThicknessMm: null, medianWallThicknessMm: null, thinWallCount: 0, thinWallPercentage: 0, thinWallRatio: 0, averageConfidence: 0, wallThicknessSamples: [], overhang: { faceCount: 0, totalFaceCount: 0, ratio: 0, severity: 'none', breakdownByAngleDeg: [], overhangAreaMm2: 0, totalAreaMm2: 0 } };
 
+  // Modules that threw. Collected rather than only logged so the UI can say
+  // "this number is a placeholder" instead of rendering a confident zero.
+  const errors: ModuleError[] = [];
+  const errorMessage = (error: unknown) => error instanceof Error
+    ? error.message
+    : translate(CONTENT, 'analysis.unknownError', lang);
+
   const failResult = <T>(moduleName: string, error: unknown, defaultValue: T): AnalysisModuleResult<T> => {
-    const message = error instanceof Error
-      ? error.message
-      : translate(CONTENT, 'analysis.unknownError', lang);
+    const message = errorMessage(error);
+    errors.push({ module: moduleName, message, placeholder: true });
     return moduleResult(
       moduleName,
       0.0 as Confidence,
@@ -101,6 +107,12 @@ export function runAnalysisPipeline(
       defaultValue,
       translate(CONTENT, 'analysis.failed', lang, { message }),
     );
+  };
+
+  /** A module whose absence is tolerable (optional slots) — still recorded. */
+  const skippedByError = (moduleName: string, error: unknown) => {
+    errors.push({ module: moduleName, message: errorMessage(error), placeholder: false });
+    return null;
   };
 
   const topology = time('topology', () => {
@@ -127,28 +139,28 @@ export function runAnalysisPipeline(
       const dims = metrics.result.boundingBoxDimensionsMm;
       if (!(dims.x > 0 || dims.y > 0 || dims.z > 0)) return null;
       return analyzeScaleGuard(model, [dims.x, dims.y, dims.z]) as AnalysisModuleResult<ScaleGuardResult>;
-    } catch (e) { return null; }
+    } catch (e) { return skippedByError('scaleGuard', e); }
   });
 
   const bedFit = time('bedFit', () => {
     try {
       if (topology.result.triangleCount === 0) return null;
       return checkBedFit(model, options.printerId ?? 'bambu_x1c', graph, lang);
-    } catch (e) { return null; }
+    } catch (e) { return skippedByError('bedFit', e); }
   });
 
   const support = time('support', () => {
     try {
       if (metrics.result.meshVolumeMm3 <= 0) return null;
       return estimateSupportVolume(model, graph, mat?.overhangThreshold, mat ? mat.densityGPerCm3 / 1000 : undefined, lang, thresholds);
-    } catch (e) { return null; }
+    } catch (e) { return skippedByError('support', e); }
   });
 
   const printTime = time('printTime', () => {
     try {
       if (metrics.result.meshVolumeMm3 <= 0) return null;
       return estimatePrintTime(metrics.result, options.printerId ?? 'bambu_x1c', options.layerHeightMm ?? 0.2, mat?.densityGPerCm3, mat?.pricePerKgUsd, lang, thresholds, options.slicer);
-    } catch (e) { return null; }
+    } catch (e) { return skippedByError('printTime', e); }
   });
 
   // Resin-specific module — only computed when the caller selects the resin family.
@@ -485,6 +497,7 @@ export function runAnalysisPipeline(
     timestamp: now,
     modelFileName: fileName,
     overallConfidence,
+    ...(errors.length > 0 ? { errors } : {}),
     profiling,
   };
 }

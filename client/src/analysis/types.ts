@@ -311,6 +311,21 @@ export interface PrintTimeResult {
 // ─── Unified Analysis ─────────────────────────────────────────────────────────
 // Top-level result combining all modules.
 
+/**
+ * A pipeline module that did not produce a real result.
+ *
+ * `placeholder: true` means the module returned a zero-filled placeholder
+ * (confidence 0) that is renderable but meaningless; `false` means the module
+ * was skipped entirely and its slot is null. The distinction matters to the UI:
+ * "0.000 mm" and "not measured" must never look the same.
+ */
+export interface ModuleError {
+  module: string;
+  /** Localized, already user-facing (built with the pipeline's language). */
+  message: string;
+  placeholder: boolean;
+}
+
 export interface UnifiedAnalysis {
   topology: AnalysisModuleResult<TopologyResult>;
   validation: AnalysisModuleResult<ValidationResult>;
@@ -356,6 +371,11 @@ export interface UnifiedAnalysis {
   modelFileName: string;
   /** Minimum confidence across all modules that ran successfully */
   overallConfidence: Confidence;
+  /**
+   * Modules that threw. Absent when every module completed. Consumers must
+   * treat a placeholder module's numbers as unknown, not as zero.
+   */
+  errors?: ModuleError[];
   /**
    * Per-module (and wall-thickness sub-module) wall-clock durations, populated
    * only when the pipeline is run with `enableProfiling: true`.
