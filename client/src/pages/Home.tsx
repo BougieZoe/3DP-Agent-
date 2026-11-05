@@ -1531,6 +1531,30 @@ export default function Home() {
                         })()}
                       </GlassCard>
                     )}
+                    {/* Orientation A/B — the highest-value corrective action, so
+                        it lives on the diagnosis surface, not three screens deep
+                        in AGENTS. Preview only; the model is unchanged until
+                        accepted. */}
+                    {uploadedModel && (
+                      <Suspense fallback={null}>
+                        <OrientationPreviewPanel
+                          model={uploadedModel}
+                          material={material}
+                          language={language}
+                          onAccept={(updated: UploadedModel) => {
+                            handleOrientationAccept(updated, {
+                              commitModel,
+                              setQuickReport,
+                              runAgentAnalysis: (m) => runAgentAnalysis(m, material, { llm: false }),
+                              recomputeMaterialRecs: refreshMaterialRecs,
+                              material,
+                              language,
+                            });
+                          }}
+                        />
+                      </Suspense>
+                    )}
+
                     {/* Liquid-cooling application panel — right under the OBJECT
                         dropdown so picking "Liquid Cooling" shows its risks immediately */}
                     {objectContext === 'liquid-cooling' && unifiedAnalysis && (() => {
@@ -2014,24 +2038,6 @@ export default function Home() {
                           </div>
                         </details>
 
-                        {/* Orientation preview loop: suggest → compare → accept/revert */}
-                        {uploadedModel && (
-                        <OrientationPreviewPanel
-                          model={uploadedModel}
-                          material={material}
-                          language={language}
-                          onAccept={(updated: UploadedModel) => {
-                            handleOrientationAccept(updated, {
-                              commitModel,
-                              setQuickReport,
-                              runAgentAnalysis: (m) => runAgentAnalysis(m, material, { llm: false }),
-                              recomputeMaterialRecs: refreshMaterialRecs,
-                              material,
-                              language,
-                            });
-                          }}
-                        />
-                        )}
 
                         {/* Optimize Button */}
                         {uploadedModel && agentRun.results.some((r: { agentId: string }) => r.agentId === 'optimization_advisor') && (
