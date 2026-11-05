@@ -19,6 +19,66 @@
  *  - Keep keys stable; they are referenced from tests and PDF output.
  */
 export const MESSAGES = {
+  "verdictRepairNow": {
+    en: "repair now",
+    ja: "今すぐ修復",
+    zh: "立即修复",
+  },
+  "verdictCompareOrientations": {
+    en: "Compare orientations",
+    ja: "向きを比較",
+    zh: "比较摆放方向",
+  },
+  "history.title": {
+    en: "VERSION HISTORY",
+    ja: "バージョン履歴",
+    zh: "版本历史",
+  },
+  "history.clear": {
+    en: "Clear",
+    ja: "消去",
+    zh: "清空",
+  },
+  "history.action.upload": {
+    en: "upload",
+    ja: "読込",
+    zh: "上传",
+  },
+  "history.action.orientation": {
+    en: "re-orient",
+    ja: "向き変更",
+    zh: "换摆向",
+  },
+  "history.action.repair": {
+    en: "repair",
+    ja: "修復",
+    zh: "修复",
+  },
+  "history.action.units": {
+    en: "units",
+    ja: "単位変更",
+    zh: "单位",
+  },
+  "history.wall": {
+    en: "wall",
+    ja: "肉厚",
+    zh: "壁厚",
+  },
+  "history.overhang": {
+    en: "overhang",
+    ja: "オーバーハング",
+    zh: "悬垂",
+  },
+  "history.sealed": {
+    en: "sealed",
+    ja: "水密",
+    zh: "水密",
+  },
+  "history.open": {
+    en: "open",
+    ja: "非水密",
+    zh: "非水密",
+  },
   "orderCtaTitle": {
     en: "NEED THIS PRINTED?",
     ja: "これを印刷する",
@@ -2260,9 +2320,9 @@ export const MESSAGES = {
     zh: "{p}% 的采样壁厚低于 {v} mm（最薄 {min} mm）。请加厚或整体放大。",
   },
   "verdictActionOverhang": {
-    en: "{n} faces exceed {v}°. Compare orientations or add supports.",
-    ja: "{n} 面が {v}° を超えています。向きを比較するかサポートを追加してください。",
-    zh: "{n} 个面超过 {v}°。请比较不同摆放方向或添加支撑。",
+    en: "{n} faces exceed {v}°. Add supports, or reorient and re-check.",
+    ja: "{n} 面が {v}° を超えています。サポートを追加するか、向きを変えて再確認してください。",
+    zh: "{n} 个面超过 {v}°。添加支撑，或换方向后重新检查。",
   },
   "verdictActionReady": {
     en: "No blocking geometry issue found. Export and slice.",
