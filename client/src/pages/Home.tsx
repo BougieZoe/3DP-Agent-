@@ -238,7 +238,42 @@ function FloatingParticles() {
   return <points ref={ref} />;
 }
 
+/**
+ * Base model rendering.
+ *
+ * The previous material was emissive teal (#003333 + #00ffcc emissive) under
+ * three teal/blue lights, which flattened every surface into one glowing
+ * silhouette: on a 4,369-overhang part you could not see a single overhang.
+ * The analysis overlays were readable; the thing they describe was not.
+ *
+ * Now: neutral blue-grey clay, white key + cool fill, and a thin edge overlay
+ * so flats, fillets, holes and ribs read as geometry. Accent colour is left to
+ * the overlays (AGENTS.md: overlays are additive and never recolour the mesh).
+ */
+const EDGE_TRI_LIMIT = 120_000; // EdgesGeometry is O(triangles); skip on huge meshes
+
 function ModelDisplay({ model }: { model: UploadedModel | null }) {
+  const geometry = model?.geometry ?? null;
+
+  const material = useMemo(() => new THREE.MeshStandardMaterial({
+    color: 0x8d9ba6,
+    roughness: 0.62,
+    metalness: 0.12,
+    side: THREE.DoubleSide,
+  }), []);
+
+  const edges = useMemo(() => {
+    if (!geometry) return null;
+    const triCount = geometry.index
+      ? geometry.index.count / 3
+      : (geometry.getAttribute('position')?.count ?? 0) / 3;
+    if (triCount > EDGE_TRI_LIMIT) return null;
+    return new THREE.EdgesGeometry(geometry, 35);
+  }, [geometry]);
+
+  useEffect(() => () => { edges?.dispose(); }, [edges]);
+  useEffect(() => () => { material.dispose(); }, [material]);
+
   if (!model) {
     return (
       <group>
@@ -250,25 +285,27 @@ function ModelDisplay({ model }: { model: UploadedModel | null }) {
     );
   }
 
-  const mat = new THREE.MeshPhongMaterial({
-    color: 0x003333,
-    emissive: 0x00ffcc,
-    emissiveIntensity: 0.06,
-    side: THREE.DoubleSide,
-    shininess: 100,
-    specular: new THREE.Color(0x00ffcc),
-  });
-
-  return <mesh geometry={model.geometry} material={mat} />;
+  return (
+    <>
+      <mesh geometry={model.geometry} material={material} />
+      {edges && (
+        <lineSegments geometry={edges}>
+          <lineBasicMaterial color={0x8fd6ff} transparent opacity={0.16} depthWrite={false} />
+        </lineSegments>
+      )}
+    </>
+  );
 }
 
 function SceneContent({ model }: { model: UploadedModel | null }) {
   return (
     <>
-      <ambientLight intensity={0.25} color={0x001a2a} />
-      <directionalLight position={[10, 10, 5]} intensity={1.4} color={0x00ffcc} />
-      <directionalLight position={[-8, 6, -8]} intensity={0.5} color={0x0044ff} />
-      <pointLight position={[0, 8, 0]} intensity={0.6} color={0x00ffcc} distance={25} />
+      {/* Neutral key + cool fill so form reads; a low cyan rim keeps the brand
+          without tinting every surface green. */}
+      <ambientLight intensity={0.45} color={0xa8bccb} />
+      <directionalLight position={[9, 12, 7]} intensity={2.4} color={0xffffff} />
+      <directionalLight position={[-8, 6, -8]} intensity={0.8} color={0x9dc4ff} />
+      <directionalLight position={[0, 4, -12]} intensity={0.6} color={0x66ccff} />
       <ModelDisplay model={model} />
       <FloatingParticles />
       <Grid args={[40, 40]} cellSize={1} cellThickness={0.3} cellColor="#061a1a"
