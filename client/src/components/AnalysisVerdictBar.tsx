@@ -59,6 +59,8 @@ export interface AnalysisVerdictBarProps {
   confidenceLabel?: string;
   /** "FDM · PLA · 50° · mm" — the assumptions this analysis ran under. */
   contextLine?: string;
+  /** Localized unit words; English defaults keep the component usable alone. */
+  triangleUnitLabel?: string;
   /**
    * Modules that threw. Rendered as a warning strip so a placeholder zero is
    * never read as a measurement.
@@ -108,6 +110,7 @@ export const AnalysisVerdictBar = memo(function AnalysisVerdictBar({
   reportLabel,
   confidenceLabel,
   contextLine,
+  triangleUnitLabel = 'tris',
   moduleErrors,
   moduleErrorsLabel,
 }: AnalysisVerdictBarProps) {
@@ -141,7 +144,7 @@ export const AnalysisVerdictBar = memo(function AnalysisVerdictBar({
           </span>
         )}
         <span aria-hidden>·</span>
-        <span className="tabular-nums">{formatCount(triangleCount)} tris</span>
+        <span className="tabular-nums">{formatCount(triangleCount)} {triangleUnitLabel}</span>
         {contextLine && (
           <>
             <span aria-hidden>·</span>
@@ -254,8 +257,10 @@ export function deriveVerdict(input: {
   overhangStatus: 'good' | 'warning' | 'critical' | null;
   available: boolean;
 }): VerdictLevel {
-  if (!input.available) return 'unknown';
+  // A proven mesh-integrity failure outranks measurement confidence: an open
+  // shell is a fact even when the wall-thickness module could not be trusted.
   if (input.isWatertight === false || input.isManifold === false) return 'blocked';
+  if (!input.available) return 'unknown';
   if (input.wallStatus === 'critical' || input.overhangStatus === 'critical') return 'fix';
   if (input.wallStatus === 'warning' || input.overhangStatus === 'warning') return 'minor';
   if (input.wallStatus === null || input.overhangStatus === null) return 'unknown';

@@ -853,7 +853,7 @@ export default function Home() {
       key: 'overhang',
       label: t('verdictOverhang'),
       value: metricsUnavailable ? '—' : analysis.overhang.areas > 0 ? analysis.overhang.areas.toLocaleString('en-US') : '0',
-      unit: metricsUnavailable ? undefined : 'faces',
+      unit: metricsUnavailable ? undefined : t('verdictFaces'),
       against: metricsUnavailable ? t('verdictModuleUnavailable') : t('verdictAgainstOverhang').replace('{v}', String(material.overhangThreshold)),
       status: metricsUnavailable ? 'unknown' : analysis.overhang.status,
       active: showHeatmap,
@@ -1360,6 +1360,7 @@ export default function Home() {
                 level={verdictLevel}
                 verdictLabel={verdictLabel}
                 confidenceLabel={t('verdictConfidence')}
+                triangleUnitLabel={t('verdictTris')}
                 contextLine={`${material.technology.toUpperCase()} · ${material.name} · ${material.overhangThreshold}° · ${unitSuffix}`}
                 moduleErrors={moduleErrors.length > 0 ? moduleErrors.map(e => ({ module: e.module, placeholder: e.placeholder })) : undefined}
                 moduleErrorsLabel={t('verdictModuleErrors')}
@@ -1411,10 +1412,10 @@ export default function Home() {
                     }`}>
                     {tabKey === 'geometry' ? t('geometry').toUpperCase()
                       : tabKey === 'report' ? t('report').toUpperCase()
-                      : tabKey === 'loop' ? 'LOOP'
+                      : tabKey === 'loop' ? t('loopTab')
                       : tabKey === 'agents' ? t('agents').toUpperCase()
                       : tabKey === 'causality' ? t('causality').toUpperCase()
-                      : tabKey === 'orders' ? 'ORDERS'
+                      : tabKey === 'orders' ? t('ordersTab')
                       : t('chatAI').toUpperCase()}
                     {tabKey === 'orders' && orders.orders.length > 0 && (
                       <span className="ml-1 px-1 py-0.5 text-[8px] rounded-full bg-cyan-400/20 text-cyan-400">

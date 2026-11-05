@@ -28,6 +28,10 @@ describe('deriveVerdict', () => {
     expect(deriveVerdict({ ...base, isManifold: false })).toBe('blocked');
   });
 
+  it('still blocks when confidence is unusable but the mesh is provably open', () => {
+    expect(deriveVerdict({ ...base, available: false, isWatertight: false })).toBe('blocked');
+  });
+
   it('reports fix when either geometry status is critical', () => {
     expect(deriveVerdict({ ...base, wallStatus: 'critical' })).toBe('fix');
     expect(deriveVerdict({ ...base, overhangStatus: 'critical' })).toBe('fix');
