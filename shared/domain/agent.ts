@@ -100,8 +100,8 @@ export function calculateAgreementDelta(scores: number[]): number {
  * whole ruling rule set stays auditable in one place.
  * Changing either value changes rulings: treat it as a rule-set change.
  */
-export const CONSENSUS_PASS_MIN_SCORE = 70;
-export const CONSENSUS_WARNING_MIN_SCORE = 40;
+import { CONSENSUS_PASS_MIN_SCORE, CONSENSUS_WARNING_MIN_SCORE } from './consensus';
+export { CONSENSUS_PASS_MIN_SCORE, CONSENSUS_WARNING_MIN_SCORE };
 
 export function computeConsensusVerdict(overallScore: number): AgentVerdict {
   if (overallScore >= CONSENSUS_PASS_MIN_SCORE) return 'pass';

@@ -47,7 +47,6 @@ import { FeaturesSection } from '@/pages/home/FeaturesSection';
 import type { FeatureDestination } from '@/pages/home/featuresNavigation';
 import { toast } from 'sonner';
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
-import { WallThicknessHistogram } from '@/components/WallThicknessHistogram';
 import { ManufacturingRecommendationPanel } from '@/components/ManufacturingRecommendationPanel';
 import { ManufacturerExport } from '@/components/ManufacturerExport';
 import { GlassCard } from '@/components/GlassCard';
@@ -62,6 +61,9 @@ const OverhangHeatmapMobile = lazy(() => import('@/components/3D/OverhangHeatmap
 const SupportGhosts = lazy(() => import('@/components/3D/SupportGhosts').then(m => ({ default: m.SupportGhosts })));
 const RiskAnimation = lazy(() => import('@/components/3D/RiskAnimation').then(m => ({ default: m.RiskAnimation })));
 const VisualizationToolbar = lazy(() => import('@/components/3D/VisualizationToolbar').then(m => ({ default: m.VisualizationToolbar })));
+// Only renders once a model exists — keeping it static dragged recharts (~470KB)
+// and its d3/lodash tree into first paint.
+const WallThicknessHistogram = lazy(() => import('@/components/WallThicknessHistogram').then(m => ({ default: m.WallThicknessHistogram })));
 const OptimizeButton = lazy(() => import('@/components/3D/OptimizeButton').then(m => ({ default: m.OptimizeButton })));
 const OrientationPreviewPanel = lazy(() => import('@/components/OrientationPreviewPanel').then(m => ({ default: m.OrientationPreviewPanel })));
 const PrintPathPreview = lazy(() => import('@/components/3D/PrintPathPreview').then(m => ({ default: m.PrintPathPreview })));
@@ -1528,17 +1530,19 @@ export default function Home() {
                       ) : null;
                     })()}
                     {/* Wall thickness distribution histogram — always rendered; component handles empty/sparse internally */}
-                    <WallThicknessHistogram
-                      samples={unifiedAnalysis?.metrics.result?.wallThicknessSamples ?? []}
-                      thinWallThresholdMm={0.8}
-                      labels={{
-                        title: t('wallHistTitle'),
-                        noData: t('wallHistNoData'),
-                        sparse: t('wallHistSparse'),
-                        samples: t('wallHistSamples'),
-                        range: t('wallHistRange'),
-                      }}
-                    />
+                    <Suspense fallback={null}>
+                      <WallThicknessHistogram
+                        samples={unifiedAnalysis?.metrics.result?.wallThicknessSamples ?? []}
+                        thinWallThresholdMm={0.8}
+                        labels={{
+                          title: t('wallHistTitle'),
+                          noData: t('wallHistNoData'),
+                          sparse: t('wallHistSparse'),
+                          samples: t('wallHistSamples'),
+                          range: t('wallHistRange'),
+                        }}
+                      />
+                    </Suspense>
                     {/* Measurements + mesh diagnostics — the evidence behind the
                         verdict, collapsed so the four headline numbers are the
                         only thing competing for attention. Rows the verdict bar
