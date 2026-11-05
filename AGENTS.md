@@ -81,11 +81,20 @@ feature needs this. Revisit only if the roadmap adds real-time print control.
 - **Positioning (deliberate, not debt):** `REPAIR & PROCESS` (the browser button that calls `/api/mesh/process`) is an **internal / dev-only debugging feature**. It is NOT a production browser path: a browser SPA cannot safely hold `BRIDGE_TOKEN` (it would ship the secret to end users), so production keeps the bridges unmounted unless `BRIDGE_TOKEN` is explicitly set, and browser clients never send an Authorization header.
 - **Dev auth gate:** in dev, bridge routes (`/api/cad`, `/api/slice`, `/api/mesh`) skip `BRIDGE_TOKEN` ONLY for genuinely-loopback callers. The decision lives in `server/loopbackGuard.ts` and is made from the request-source chain (the real client IP in `x-forwarded-for`, trusted only when the direct socket peer is loopback) — **never from the Express bind host**, because the LAN-exposed Vite dev proxy (with `xfwd: true` on the bridge prefixes) forwards LAN peers with a loopback socket address. A dev server published on `0.0.0.0` keeps the bridges token-gated. Keep `vite.config.ts` `xfwd: true` and `server/loopbackGuard.ts` in sync if bridge proxies are added/removed.
 
+### Base model material (2026-11-05, approved)
+The old base material (`#003333` + `#00ffcc` emissive) under three teal/blue
+lights flattened every surface into one glowing silhouette — on a part with
+4,369 overhangs you could not see a single one. Replaced with a neutral
+blue-grey clay material, white key + cool fill lighting, and a thin edge
+overlay (skipped above 120k triangles). Accent colour is now the overlays'
+job, not the mesh's. Do not revert to the emissive teal without a replacement
+that keeps geometry readable.
+
 ## Important Conventions
 - **Project root is `/Users/bougiezoe/3DP-Agent-/`** — always confirm the full path before any file edit. Never assume or guess the project location; Desktop or other paths are NOT project roots.
 - `progressRef.current` ranges 0.0–1.0, ~8.7s full cycle at speed=1
 - `delta * speed * 0.12` increment per frame
-- No modifications to STL colors, lighting, fog, tints, layout, or base rendering
+- No modifications to STL colors, lighting, fog, tints, layout, or base rendering — except the approved base-material change documented above (neutral clay + edges). Overlays still never recolour the base mesh.
 - All 3D overlays use `THREE.AdditiveBlending`, `depthWrite: false`, geometry-preserving
 - All visual tokens in `visualLanguage.ts` — no hardcoded colors/opacities in components
 - Panel styles use `PANEL.*` tokens from visualLanguage for consistent glassmorphism
