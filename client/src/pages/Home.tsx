@@ -837,6 +837,8 @@ export default function Home() {
       unit: unitSuffix,
       against: t('verdictAgainstWall').replace('{v}', String(VERDICT_THRESHOLDS.thinWallMm)),
       status: analysis.wallThickness.status,
+      active: showWallThickness,
+      onActivate: () => { setTab('geometry'); setShowWallThickness(v => !v); },
     },
     {
       key: 'overhang',
@@ -845,6 +847,8 @@ export default function Home() {
       unit: 'faces',
       against: t('verdictAgainstOverhang').replace('{v}', String(material.overhangThreshold)),
       status: analysis.overhang.status,
+      active: showHeatmap,
+      onActivate: () => { setTab('geometry'); setShowHeatmap(v => !v); },
     },
     {
       key: 'mesh',
@@ -1347,6 +1351,7 @@ export default function Home() {
                 level={verdictLevel}
                 verdictLabel={verdictLabel}
                 confidenceLabel={t('verdictConfidence')}
+                contextLine={`${material.technology.toUpperCase()} · ${material.name} · ${material.overhangThreshold}° · ${unitSuffix}`}
                 replaceSlot={
                   <STLUploadHandler
                     compact
