@@ -26,6 +26,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { readPref, writePref } from '@/lib/prefs';
 import { appendVersion, clearVersions, diffSnapshots, loadVersions, snapshotFromAnalysis, type ModelVersion, type VersionAction } from '@/lib/modelVersions';
 import { VersionHistoryPanel } from '@/components/VersionHistoryPanel';
+import { listProjects, loadProject, deleteProject, type StoredProjectMeta } from '@/lib/projectStore';
+import { autoThicken, isThickenImprovement } from '@/lib/autoThicken';
 import { useIsMobile } from '@/hooks/useMobile';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
@@ -385,6 +387,9 @@ export default function Home() {
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
   // Measurement snapshots for the active model (metrics only, persisted).
   const [versions, setVersions] = useState<ModelVersion[]>([]);
+  // Files kept in IndexedDB so a reload can resume the last model.
+  const [recentProjects, setRecentProjects] = useState<StoredProjectMeta[]>([]);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [tab, setTab] = useState<'geometry' | 'report' | 'loop' | 'chat' | 'agents' | 'causality' | 'orders'>('geometry');
   const [showAPIModal, setShowAPIModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -574,6 +579,31 @@ export default function Home() {
     }
   }, [material]);
 
+  const refreshRecent = useCallback(async () => {
+    try {
+      setRecentProjects(await listProjects());
+    } catch {
+      /* IndexedDB unavailable — the resume card simply stays hidden */
+    }
+  }, []);
+
+  useEffect(() => { void refreshRecent(); }, [refreshRecent]);
+
+  /** Restore a stored file into the normal upload pipeline. */
+  const resumeProject = async (id: string) => {
+    const project = await loadProject(id);
+    if (!project) {
+      toast.error(t('recentUnavailable'));
+      return;
+    }
+    setResumeFile(new File([project.blob], project.fileName, { type: project.blob.type || 'model/stl' }));
+  };
+
+  const forgetProject = async (id: string) => {
+    await deleteProject(id);
+    void refreshRecent();
+  };
+
   const handleModelsLoaded = (loaded: UploadedModel[], received: number) => {
     setModels(loaded);
     const first = loaded[0];
@@ -585,6 +615,7 @@ export default function Home() {
     //  - no toast when dragging several → the DROP only delivered 1 file
     //  - "Loaded 3 models"        → drop + processing both fine (chips must show)
     //  - "Loaded 1 of 3"          → drop delivered 3 but processing dropped 2
+    void refreshRecent();
     if (received > 1) {
       if (loaded.length === received) {
         toast.success(t('modelsLoaded').replace('{n}', String(loaded.length)));
@@ -837,6 +868,48 @@ export default function Home() {
   }, [uploadedModel, material, refreshMaterialRecs]);
 
 
+  /**
+   * One-click thicken: real manifold offset, then re-analyse so the user sees
+   * the measured result rather than a promise. Open shells fail honestly and
+   * point at repair.
+   */
+  const handleAutoThicken = useCallback(async () => {
+    if (!uploadedModel) return;
+    const current = uploadedModel.unifiedAnalysis?.metrics?.result?.p5WallThicknessMm ?? null;
+    setRepairing(true);
+    try {
+      const samples = uploadedModel.unifiedAnalysis?.metrics?.result?.wallThicknessSamples ?? [];
+      const result = await autoThicken(uploadedModel.geometry, current, 0.8, samples);
+      const analysis = await runAnalysisInWorker(
+        fromThreeBufferGeometry(result.geometry),
+        { fileName: uploadedModel.fileName, material },
+      );
+      // Discard a change that did not measurably improve the wall — the same
+      // policy the tiered repair uses. Never commit a regression.
+      const afterMin = analysis.metrics?.result?.p5WallThicknessMm ?? null;
+      if (!isThickenImprovement(current, afterMin)) {
+        toast.error(t('thickenNoGain')
+          .replace('{from}', current != null ? current.toFixed(2) : '—')
+          .replace('{to}', afterMin != null ? afterMin.toFixed(2) : '—'));
+        return;
+      }
+      commitModel({
+        ...uploadedModel,
+        geometry: result.geometry,
+        mesh: createMeshFromGeometry(result.geometry),
+        unifiedAnalysis: analysis,
+        rawGeometry: result.geometry.clone(),
+      });
+      refreshMaterialRecs(result.geometry);
+      recordVersion(uploadedModel.fileName, 'repair', analysis, result.note);
+      toast.success(result.note);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRepairing(false);
+    }
+  }, [uploadedModel, material, refreshMaterialRecs]);
+
   const handleDownloadStl = () => {
     if (!uploadedModel) return;
     downloadBlob(
@@ -1023,12 +1096,12 @@ export default function Home() {
     }
     if (analysis.wallThickness.status !== 'good') {
       out.push({
-        text: t('verdictActionThinWall')
+        text: `${t('verdictActionThinWall')
           .replace('{p}', String(pct))
           .replace('{v}', String(VERDICT_THRESHOLDS.thinWallMm))
-          .replace('{min}', minMm != null ? toUnit(minMm).toFixed(3) : '—'),
-        active: showWallThickness,
-        onActivate: () => { setTab('geometry'); setShowWallThickness(v => !v); },
+          .replace('{min}', minMm != null ? toUnit(minMm).toFixed(3) : '—')} · ${t('verdictThickenNow')}`,
+        active: repairing,
+        onActivate: () => { setTab('geometry'); void handleAutoThicken(); },
       });
     }
     if (analysis.overhang.status !== 'good') {
@@ -1482,6 +1555,8 @@ export default function Home() {
                     onUnitsChange={handleUnitsChange}
                     materialFamily={materialFamily}
                     material={material}
+                    autoLoadFile={resumeFile}
+                    onAutoLoadConsumed={() => setResumeFile(null)}
                   />
                   {/* Decorative presentation-only touches — remove any one freely */}
                   <ScanlineSweep />
@@ -2409,6 +2484,41 @@ export default function Home() {
                 feature list (it is the only live, non-AI-key feature). */}
             {!uploadedModel && (
               <div className="mt-6 space-y-3">
+                {recentProjects.length > 0 && (
+                  <div className="border border-border rounded-sm bg-card p-3">
+                    <div className="mb-2 text-[10px] font-mono tracking-widest text-muted-foreground/45">
+                      {t('recentProjects')}
+                    </div>
+                    <ul className="space-y-1.5">
+                      {recentProjects.map((p) => (
+                        <li key={p.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono">
+                          <span className="min-w-0 flex-1 truncate text-foreground/75" title={p.fileName}>{p.fileName}</span>
+                          <span className="shrink-0 tabular-nums text-muted-foreground/40">
+                            {new Date(p.savedAt).toLocaleString(language === 'ja' ? 'ja-JP' : language === 'zh' ? 'zh-CN' : 'en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className={`shrink-0 ${p.snapshot.isWatertight ? 'text-emerald-400/60' : 'text-red-400/55'}`}>
+                            {p.snapshot.minWallMm != null ? `${p.snapshot.minWallMm.toFixed(2)}mm` : '—'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => { void resumeProject(p.id); }}
+                            className="shrink-0 h-6 px-2 border border-primary/40 text-primary rounded-sm text-[10px] hover:bg-primary hover:text-primary-foreground transition-colors"
+                          >
+                            {t('recentResume')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { void forgetProject(p.id); }}
+                            title={t('recentRemove')}
+                            className="shrink-0 h-6 w-6 border border-border/50 text-muted-foreground/40 rounded-sm hover:text-red-400/80 hover:border-red-400/40 transition-colors"
+                          >
+                            ×
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {/* Identity before capability list: the Live Floor says what
                     this product IS; the feature list says what it does. */}
                 <AgentOfficeEntry t={t} variant="hero" />

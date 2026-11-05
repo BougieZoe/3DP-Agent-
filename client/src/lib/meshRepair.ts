@@ -1,17 +1,8 @@
 import * as THREE from 'three'
 import { GeometrySuggestion, ModificationType } from '@/components/causality/counterfactualEngine'
 import { geometryToStl } from './meshOps'
-import Module from 'manifold-3d'
+import { getManifold } from './manifoldLoader'
 
-// manifold-3d WASM 单例
-let manifoldReady: Promise<any> | null = null
-async function getManifold() {
-  if (!manifoldReady) {
-    // @ts-ignore manifold-3d ESM
-    manifoldReady = (Module as any)()
-  }
-  return manifoldReady
-}
 
 function toManifoldMesh(geo: THREE.BufferGeometry, manifold: any) {
   const pos = geo.attributes.position

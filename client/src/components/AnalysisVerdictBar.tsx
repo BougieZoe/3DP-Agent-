@@ -59,7 +59,7 @@ export interface AnalysisVerdictBarProps {
   /** 0..1 — the pipeline's own overall confidence, shown verbatim. */
   confidence: number | null;
   metrics: VerdictMetric[];
-  /** Ranked, concrete next actions. Max 3 are rendered. */
+  /** Ranked, concrete next actions. Max 4 are rendered. */
   actions: VerdictAction[];
   level: VerdictLevel;
   verdictLabel: string;
@@ -127,7 +127,8 @@ export const AnalysisVerdictBar = memo(function AnalysisVerdictBar({
   moduleErrorsLabel,
 }: AnalysisVerdictBarProps) {
   const levelStyle = LEVEL_STYLE[level];
-  const shownActions = actions.slice(0, 3);
+  // Four is the practical ceiling: mesh, thin walls, overhang, orientation.
+  const shownActions = actions.slice(0, 4);
 
   return (
     <section
