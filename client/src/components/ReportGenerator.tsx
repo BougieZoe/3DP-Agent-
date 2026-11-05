@@ -1349,7 +1349,7 @@ export function ReportGenerator({
   }, [analysis, fileName, processId, materialName]);
 
   return (
-    <div className="space-y-2">
+    <div className="border border-border rounded-sm bg-card p-4 space-y-3">
       <div className="flex items-center gap-3">
         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium ${lightStyles[light]}`}>
           <span className={`w-2 h-2 rounded-full ${dotStyles[light]}`} />
@@ -1361,34 +1361,51 @@ export function ReportGenerator({
         </span>
       </div>
 
-      {/* The gate is a verdict, not a quality rating: show WHY, keep the
-          penalty arithmetic in the disclosure instead of headlining "0/100". */}
+      {/* The gate is a verdict, not a quality rating. The top three reasons are
+          always visible — a collapsed disclosure made the report's first screen
+          a wall of buttons with the "why" hidden. */}
       {deductions.length > 0 && (
-        <details className="border border-border/30 rounded-sm px-2 py-1.5">
-          <summary className="cursor-pointer text-[10px] font-mono tracking-widest text-muted-foreground/50 select-none">
-            {translate(CONTENT, 'gateReasonsTitle', language)} ({deductions.length})
-          </summary>
-          <ul className="mt-1.5 space-y-1">
-            {deductions.map((d, i) => (
-              <li key={`${d.rule}-${i}`} className="flex items-start gap-2 text-[10px] font-mono leading-relaxed">
-                <span className="min-w-0 flex-1 text-muted-foreground/70">
+        <div className="space-y-1">
+          <div className="text-[10px] font-mono tracking-widest text-muted-foreground/45">
+            {translate(CONTENT, 'gateReasonsTitle', language)}
+          </div>
+          <ul className="space-y-1">
+            {deductions.slice(0, 3).map((d, i) => (
+              <li key={`${d.rule}-${i}`} className="flex items-start gap-2 text-[11px] font-mono leading-relaxed">
+                <span className="mt-[3px] shrink-0 text-red-400/60">·</span>
+                <span className="min-w-0 flex-1 text-muted-foreground/75">
                   {gateReasonText(d, language)}
                 </span>
-                <span className="shrink-0 tabular-nums text-red-400/70">
+                <span className="shrink-0 tabular-nums text-red-400/60">
                   {translate(CONTENT, 'gatePenaltyUnit', language, { n: d.penalty })}
                 </span>
               </li>
             ))}
-            <li className="flex items-start gap-2 border-t border-border/20 pt-1 text-[10px] font-mono">
-              <span className="min-w-0 flex-1 text-muted-foreground/40">gate score</span>
-              <span className="shrink-0 tabular-nums text-muted-foreground/50">{score}/100</span>
-            </li>
           </ul>
-        </details>
+          {deductions.length > 3 && (
+            <details className="pl-4">
+              <summary className="cursor-pointer text-[10px] font-mono text-muted-foreground/40 select-none">
+                +{deductions.length - 3}
+              </summary>
+              <ul className="mt-1 space-y-1">
+                {deductions.slice(3).map((d, i) => (
+                  <li key={`${d.rule}-rest-${i}`} className="flex items-start gap-2 text-[11px] font-mono leading-relaxed">
+                    <span className="mt-[3px] shrink-0 text-red-400/60">·</span>
+                    <span className="min-w-0 flex-1 text-muted-foreground/75">{gateReasonText(d, language)}</span>
+                    <span className="shrink-0 tabular-nums text-red-400/60">
+                      {translate(CONTENT, 'gatePenaltyUnit', language, { n: d.penalty })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          <div className="flex items-center gap-2 border-t border-border/30 pt-1 text-[10px] font-mono text-muted-foreground/35">
+            <span className="min-w-0 flex-1">{translate(CONTENT, 'pdf.labelPenalty', language)}</span>
+            <span className="shrink-0 tabular-nums text-muted-foreground/45">{score}/100</span>
+          </div>
+        </div>
       )}
-      <div className="text-[10px] font-mono text-muted-foreground/30 leading-relaxed">
-        {translate(CONTENT, 'pdf.labelPenalty', language)}
-      </div>
 
       {/* Report boundary legend — what's measured vs AI opinion vs not analyzed */}
       <details className="text-[10px] font-mono border border-border/30 rounded-sm px-2 py-1.5">

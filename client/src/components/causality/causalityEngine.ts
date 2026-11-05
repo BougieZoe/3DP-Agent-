@@ -39,6 +39,26 @@ export interface MarkerInput {
   type: string;
 }
 
+/**
+ * Severity bands.
+ *
+ * These used to be rendered as percentages ("Thermal accumulation 100%").
+ * A rule-derived 0..1 weight is not a probability, and 100% on a part that has
+ * not been printed reads as fabricated precision. The UI shows a band plus the
+ * number of evidence markers instead; the raw number stays available in code.
+ */
+export type SeverityLevel = 'high' | 'medium' | 'low';
+
+export function severityLevel(severity: number): SeverityLevel {
+  if (severity >= 0.75) return 'high';
+  if (severity >= 0.5) return 'medium';
+  return 'low';
+}
+
+export function severityLabelKey(level: SeverityLevel): 'causality.levelHigh' | 'causality.levelMedium' | 'causality.levelLow' {
+  return level === 'high' ? 'causality.levelHigh' : level === 'medium' ? 'causality.levelMedium' : 'causality.levelLow';
+}
+
 function avgSeverity(markers: MarkerInput[]): number {
   return markers.reduce((s, m) => s + m.severity, 0) / markers.length;
 }

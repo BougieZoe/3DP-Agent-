@@ -1446,7 +1446,13 @@ export default function Home() {
                 feature cards (diagnosis opens as a modal) instead */}
             {modelData && (
               <div role="tablist" aria-label={t('analysisTabs')} className="flex overflow-x-auto scrollbar-hide border-b border-border -mx-5 px-5">
-                {(['geometry', 'report', 'loop', 'agents', 'chat', 'causality', 'orders'] as const).map(tabKey => (
+                {/* Orders only earn a tab once an order exists. An empty ORDERS
+                    tab reads as "unfinished product"; the first order is
+                    created from the REPORT tab's CTA. */}
+                {([
+                  'geometry', 'report', 'loop', 'agents', 'chat', 'causality',
+                  ...(orders.orders.length > 0 ? (['orders'] as const) : []),
+                ] as const).map(tabKey => (
                   <button key={tabKey} role="tab" aria-selected={tab === tabKey} onClick={() => setTab(tabKey)}
                     className={`text-xs font-mono px-3 sm:px-4 py-2.5 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
                       tab === tabKey ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -1777,20 +1783,12 @@ export default function Home() {
                         language={language}
                       />
                     )}
+                    {/* Report first screen: the gate verdict + why + what it
+                        costs, then the export actions. The generated prose
+                        report is still here, but as the last disclosure rather
+                        than the headline. */}
                     {quickReport && (
-                      <div className="border border-border rounded-sm bg-card p-4 fade-up">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-xs font-mono text-primary tracking-widest">{t('analysisReport')}</span>
-                          <span className="text-xs font-mono text-muted-foreground/40">{t('localEngine')}</span>
-                        </div>
-                        {unifiedAnalysis && !isWallConfidenceTrusted(unifiedAnalysis.metrics.confidence) && (
-                          <div className="mb-3 border border-amber-500/40 bg-amber-500/5 text-amber-400/90 rounded-sm px-3 py-2 text-xs font-mono">
-                            {t('lowConfidenceBanner')}
-                          </div>
-                        )}
-                        <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap leading-relaxed">
-                          {quickReport}
-                        </pre>
+                      <div className="space-y-4 fade-up">
 {unifiedAnalysis && (
   <ReportGenerator
     analysis={unifiedAnalysis}
@@ -1836,6 +1834,44 @@ export default function Home() {
     />
   </Suspense>
 )}
+
+                        {/* Handoff CTA — the order flow starts where the
+                            decision is made, not in an empty tab. */}
+                        {uploadedModel && (
+                          <div className="border border-primary/25 rounded-sm bg-primary/5 p-4 flex flex-wrap items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-xs font-mono text-primary tracking-widest">{t('orderCtaTitle')}</div>
+                              <div className="mt-1 text-[11px] font-mono text-muted-foreground/60 leading-relaxed">{t('orderCtaDesc')}</div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowOrderForm(true)}
+                              className="shrink-0 h-8 px-3 border border-primary/40 text-primary text-[11px] font-mono rounded-sm hover:bg-primary hover:text-primary-foreground transition-colors"
+                            >
+                              {t('orderCtaButton')}
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Raw generated report — kept for copy/paste and for
+                            parity with the PDF, but no longer the first thing
+                            a reader has to parse. */}
+                        <details className="border border-border rounded-sm bg-card">
+                          <summary className="cursor-pointer px-4 py-3 text-xs font-mono text-primary tracking-widest select-none flex items-center justify-between">
+                            <span>{t('analysisReport')}</span>
+                            <span className="text-[10px] text-muted-foreground/40">{t('localEngine')}</span>
+                          </summary>
+                          <div className="px-4 pb-4">
+                            {unifiedAnalysis && !isWallConfidenceTrusted(unifiedAnalysis.metrics.confidence) && (
+                              <div className="mb-3 border border-amber-500/40 bg-amber-500/5 text-amber-400/90 rounded-sm px-3 py-2 text-xs font-mono">
+                                {t('lowConfidenceBanner')}
+                              </div>
+                            )}
+                            <pre className="text-xs font-mono text-foreground/80 whitespace-pre-wrap leading-relaxed">
+                              {quickReport}
+                            </pre>
+                          </div>
+                        </details>
                       </div>
                     )}
                     {/* AI interpretation — part of the report, read-only here

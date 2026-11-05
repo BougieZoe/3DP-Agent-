@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CONTENT, translate, type ContentLang } from '@shared/i18n/content'
-import { CausalityGraph } from './causalityEngine'
+import { CausalityGraph, severityLevel, severityLabelKey } from './causalityEngine'
 import { PatternMatch } from './topologyPatternEngine'
 import { GeometrySuggestion } from './counterfactualEngine'
 import { PANEL, EVENT_COLORS_CSS } from '@/lib/visualLanguage'
@@ -147,7 +147,9 @@ export function CausalityTimeline({
                 >
                   <span className={`text-xs ${colorClass}`}>{TYPE_ICONS[ev.type] ?? '●'}</span>
                   <span className={`${PANEL.fontSmall} ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`}>{ev.label}</span>
-                  <span className={`ml-auto ${PANEL.fontValue} ${colorClass}`}>{(ev.severity*100).toFixed(0)}%</span>
+                  <span className={`ml-auto ${PANEL.fontValue} ${colorClass}`}>
+                    {translate(CONTENT, severityLabelKey(severityLevel(ev.severity)), language)}
+                  </span>
                   <span className="text-[10px] text-muted-foreground/30">{isExpanded ? '−' : '+'}</span>
                 </button>
                 {isExpanded && (
