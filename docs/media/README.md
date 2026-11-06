@@ -26,9 +26,11 @@ recording + ffmpeg compositing). Nothing is mocked or hand-animated.
 4. **Film** — ffmpeg, 28 s (AK tour):
 
    ```
-   [room]   2400x1500 still: dark desk, Mac, screen = the app's empty state
-            zoompan z: 1.00 → 1.86, smoothstep, 1.0 s hold then 3.6 s move
-            x/y pin the laptop screen centre (1200, 949.5); clamp ≥ 0
+   [room]   2400x1500 still: warm off-white studio, silver Mac, screen = the
+            running app. Opening is a scale + blur-to-focus: z 1.12 → 1.00 over
+            1.4 s while gblur sigma 18 cross-dissolves to sharp, then z 1.00 →
+            1.86 smoothstep into the screen. x/y pin the screen centre
+            (1200, 929.5); clamp ≥ 0. Light studio vs dark app is the point.
    [clip]    four trims concatenated (1.5x / 1.5x / 1.05x / 1.2x)
             the 1.05x segment holds the thicken click → READY TO PRINT un-rushed
    [end]     card, fade-in, xfade 0.8 s from the live block
