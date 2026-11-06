@@ -11,7 +11,7 @@ and the cheapest change that fixes it — before the first layer.
 
 <br />
 
-[**Live demo**](https://3dp-agent.vercel.app) &nbsp;·&nbsp; [**Watch the 21-second tour**](docs/media/ad.mp4) &nbsp;·&nbsp; [**Run locally**](#run-locally)
+[**Live demo**](https://3dp-agent.vercel.app) &nbsp;·&nbsp; [**Watch the 19-second tour**](docs/media/ad.mp4) &nbsp;·&nbsp; [**Run locally**](#run-locally)
 
 <br />
 
@@ -25,7 +25,7 @@ and the cheapest change that fixes it — before the first layer.
 
 <a href="docs/media/ad.mp4"><img src="docs/media/film.webp" width="880" alt="3DP Agent — the empty state, a sportbike dropping in, the verdict and its zoomed detail, then the agents' office" /></a>
 
-<sub><b>▶ excerpt</b> (animated WebP, plays inline) · <a href="docs/media/ad.mp4">watch the full 21-second tour</a></sub>
+<sub><b>▶ excerpt</b> (animated WebP, plays inline) · <a href="docs/media/ad.mp4">watch the full 19-second tour</a></sub>
 
 </div>
 
@@ -55,9 +55,9 @@ Most tools stop at *"something is wrong."* 3DP Agent closes the loop.
 <br />
 
 <div align="center">
-  <img src="docs/media/fix.gif" width="820" alt="One click: the wall is thickened and re-measured" />
+  <img src="docs/media/bike.gif" width="820" alt="Orbiting a sportbike with the overhang heatmap on" />
   <br />
-  <sub><b>The fix loop, live</b> — example part: split-level house. One click on <i>thicken now</i>: bridge-side solid offset, re-analysed, and kept only because the measurement improved.</sub>
+  <sub><b>Overhang, in colour.</b> Turn the layer on and the part keeps moving — 5,778 faces over 50° light up where the print would sag.</sub>
 </div>
 
 <br />
