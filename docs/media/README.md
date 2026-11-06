@@ -69,8 +69,16 @@ you:
 
 ```
 python3 scripts/usda-to-stl.py bike.usda docs/_stls/sand3d-sportbike.stl \
-        --scale 1000 --rotate-x -90
+        --scale 1000 --rotate-x -90 --rotate-y 45
 ```
+
+`--rotate-y` is what lands the camera in a 3/4 view: with only `-90` on X the
+app's default camera gives a dead-on front view, and any orbit drifts to a
+top-front pose. 45 trades that for a side-quarter read.
+
+On this part, colour comes from the **overhang** layer (5,777 faces), not the
+wall layer: 4.9mm walls are all above threshold, so the wall heatmap is a
+uniform green.
 
 61,152 triangles, watertight, 2.1m long — and 4.91mm walls, which is why its
 wall heatmap is mostly green. Colour in the viewport is a product decision
