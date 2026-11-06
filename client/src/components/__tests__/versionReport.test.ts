@@ -34,8 +34,9 @@ describe('versionRows', () => {
     expect(shell.warn).toBe(false);
   });
 
-  it('omits the overhang row when the count did not change', () => {
+  it('omits rows that did not change', () => {
     const rows = versionRows([v(1, snap()), v(2, snap(), 'repair')], 'en');
     expect(rows.some((r) => /overhang/i.test(r.label))).toBe(false);
+    expect(rows.some((r) => /shell/i.test(r.label))).toBe(false);
   });
 });

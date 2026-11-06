@@ -19,6 +19,31 @@
  *  - Keep keys stable; they are referenced from tests and PDF output.
  */
 export const MESSAGES = {
+  "pdf.changeReportTitle": {
+    en: "Change report",
+    ja: "変更レポート",
+    zh: "变更报告",
+  },
+  "pdf.changeReportSub": {
+    en: "{n} recorded states for this part — first versus current.",
+    ja: "この部品の記録 {n} 件 — 初回と現在の比較。",
+    zh: "该零件共记录 {n} 个状态——首版与当前版本对比。",
+  },
+  "pdf.changeTimeline": {
+    en: "TIMELINE",
+    ja: "履歴",
+    zh: "时间线",
+  },
+  "pdf.exportChanges": {
+    en: "Change PDF",
+    ja: "変更PDF",
+    zh: "变更PDF",
+  },
+  "history.discarded": {
+    en: "discarded",
+    ja: "破棄",
+    zh: "已丢弃",
+  },
   "pdf.changesTitle": {
     en: "CHANGES SINCE UPLOAD",
     ja: "読込からの変更",

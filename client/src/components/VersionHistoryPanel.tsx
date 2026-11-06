@@ -18,6 +18,7 @@ import { diffSnapshots } from '@/lib/modelVersions';
 interface Props {
   versions: ModelVersion[];
   onClear: () => void;
+  onExportPdf?: () => void;
   language: ContentLang;
 }
 
@@ -44,7 +45,7 @@ function Delta({ value, goodWhenPositive, unit = '' }: { value: number; goodWhen
   );
 }
 
-export function VersionHistoryPanel({ versions, onClear, language }: Props) {
+export function VersionHistoryPanel({ versions, onClear, onExportPdf, language }: Props) {
   if (versions.length === 0) return null;
 
   const timeFmt = new Intl.DateTimeFormat(language === 'ja' ? 'ja-JP' : language === 'zh' ? 'zh-CN' : 'en-GB', {
@@ -60,25 +61,46 @@ export function VersionHistoryPanel({ versions, onClear, language }: Props) {
         <span className={`${PANEL.fontLabel} text-muted-foreground/50`}>
           {translate(CONTENT, 'history.title', language)} · {versions.length}
         </span>
-        <button
-          type="button"
-          onClick={onClear}
-          className="text-[10px] font-mono text-muted-foreground/35 hover:text-red-400/80 transition-colors"
-        >
-          {translate(CONTENT, 'history.clear', language)}
-        </button>
+        <span className="flex items-center gap-2">
+          {onExportPdf && versions.length > 1 && (
+            <button
+              type="button"
+              onClick={onExportPdf}
+              className="text-[10px] font-mono text-primary/60 hover:text-primary transition-colors"
+            >
+              {translate(CONTENT, 'pdf.exportChanges', language)}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-[10px] font-mono text-muted-foreground/35 hover:text-red-400/80 transition-colors"
+          >
+            {translate(CONTENT, 'history.clear', language)}
+          </button>
+        </span>
       </div>
 
       <ol className="space-y-1.5">
         {rows.map(({ v, prev }, idx) => {
-          const d = prev ? diffSnapshots(prev.snapshot, v.snapshot) : null;
+          const discarded = v.outcome === 'discarded';
+          const d = prev && !discarded ? diffSnapshots(prev.snapshot, v.snapshot) : null;
           const n = versions.length - idx; // v1 = first, newest = highest
           return (
-            <li key={v.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[10px] font-mono leading-relaxed">
+            <li
+              key={v.id}
+              className={`flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[10px] font-mono leading-relaxed ${discarded ? 'opacity-45' : ''}`}
+              title={v.note}
+            >
               <span className="w-6 shrink-0 text-muted-foreground/30 tabular-nums">v{n}</span>
-              <span className="shrink-0 text-foreground/70">
+              <span className={`shrink-0 ${discarded ? 'text-muted-foreground/60 line-through' : 'text-foreground/70'}`}>
                 {translate(CONTENT, ACTION_KEY[v.action], language)}
               </span>
+              {discarded && (
+                <span className="shrink-0 rounded-sm border border-red-400/25 px-1 text-[9px] text-red-400/50">
+                  {translate(CONTENT, 'history.discarded', language)}
+                </span>
+              )}
               <span className="shrink-0 text-muted-foreground/30 tabular-nums">{timeFmt.format(v.at)}</span>
 
               <span className="min-w-0 text-muted-foreground/55">

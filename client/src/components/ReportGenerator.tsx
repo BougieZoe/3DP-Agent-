@@ -358,7 +358,8 @@ function drawHeader(
   lang: Language,
   fileName: string,
   dateStr: string,
-  versionLabel: string
+  versionLabel: string,
+  title?: string,
 ) {
   // Header background
   doc.setFillColor(...C.headerBg);
@@ -383,7 +384,7 @@ function drawHeader(
   doc.setFont(pdfFont, "normal");
   doc.setFontSize(20);
   doc.setTextColor(...C.ink);
-  doc.text(translate(CONTENT, 'pdf.title', lang), PAGE_M, 36);
+  doc.text(title ?? translate(CONTENT, 'pdf.title', lang), PAGE_M, 36);
 
   // File name + date
   doc.setFont(pdfFont, "normal");
@@ -411,11 +412,13 @@ function drawFooter(
     doc.text("3DP AGENT · 3dp-agent.vercel.app", PAGE_M, PAGE_H - 5);
     doc.setFont(pdfFont, "normal");
     doc.setTextColor(...C.faint);
-    if (extraRight) {
-      doc.text(`${extraRight} · ${score} / 100`, PAGE_W - PAGE_M, PAGE_H - 5, { align: "right" });
-    } else {
-      doc.text(`${score} / 100`, PAGE_W - PAGE_M, PAGE_H - 5, { align: "right" });
-    }
+    const scoreText = score >= 0 ? `${score} / 100` : "";
+    doc.text(
+      [extraRight, scoreText].filter(Boolean).join(" · "),
+      PAGE_W - PAGE_M,
+      PAGE_H - 5,
+      { align: "right" },
+    );
   }
 }
 
@@ -676,11 +679,13 @@ export function versionRows(versions: ModelVersion[], lang: Language): { label: 
       warn: delta > 0,
     });
   }
-  rows.push({
-    label: translate(CONTENT, 'pdf.changeShell', lang),
-    value: `${first.isWatertight ? 'sealed' : 'open'} → ${last.isWatertight ? 'sealed' : 'open'}`,
-    warn: !last.isWatertight,
-  });
+  if (first.isWatertight !== last.isWatertight) {
+    rows.push({
+      label: translate(CONTENT, 'pdf.changeShell', lang),
+      value: `${first.isWatertight ? 'sealed' : 'open'} → ${last.isWatertight ? 'sealed' : 'open'}`,
+      warn: !last.isWatertight,
+    });
+  }
   return rows;
 }
 
@@ -1322,6 +1327,72 @@ async function generateFactoryPDF(
 
   const baseName = fileName.replace(/\.stl$/i, "");
   await doc.save(`${baseName}_factory.pdf`);
+}
+
+// ─── VERSION DIFF PDF ──────────────────────────────────────────────────────────
+
+/**
+ * One-page change report: first recorded state versus current, plus the
+ * timeline of actions. Separate from the three analysis tiers because its
+ * audience is different — it answers "what did you change after I sent it?".
+ */
+export async function generateVersionDiffPDF(
+  versions: ModelVersion[],
+  analysis: UnifiedAnalysis,
+  fileName: string,
+  lang: Language,
+): Promise<void> {
+  const doc = createPdfCanvasSurface();
+  const { light, score } = getTrafficLight(analysis);
+  const accent: [number, number, number] = light === "red" ? C.red : light === "yellow" ? C.amber : C.green;
+  const dateStr = new Date().toLocaleDateString(
+    lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US",
+    { year: "numeric", month: "long", day: "numeric" },
+  );
+
+  doc.setFillColor(...C.pageBg);
+  doc.rect(0, 0, PAGE_W, PAGE_H, "F");
+  drawHeader(doc, lang, fileName, dateStr, "change report", translate(CONTENT, 'pdf.changeReportTitle', lang));
+  doc.setFillColor(...accent);
+  doc.rect(0, 60, PAGE_W, 3, "F");
+
+  let y = 78;
+  doc.setFont(pdfFont, "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(...C.ink);
+  doc.text(translate(CONTENT, 'pdf.changeReportTitle', lang), PAGE_M, y);
+  y += 9;
+
+  doc.setFont(pdfFont, "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...C.muted);
+  doc.text(translate(CONTENT, 'pdf.changeReportSub', lang, { n: versions.length }), PAGE_M, y);
+  y += 12;
+
+  const rows = versionRows(versions, lang);
+  if (rows.length > 0) {
+    y = drawSectionHeader(doc, translate(CONTENT, 'pdf.changesTitle', lang), y);
+    for (const row of rows) y = drawDataRow(doc, row.label, row.value, y, row.warn);
+    y += 6;
+  }
+  y = drawSectionHeader(doc, translate(CONTENT, 'pdf.changeTimeline', lang), y);
+  versions.forEach((v, i) => {
+    const time = new Date(v.at).toLocaleString(
+      lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-GB",
+      { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" },
+    );
+    const label = `v${i + 1} · ${v.action}`;
+    const value = v.outcome === "discarded"
+      ? `${time} · discarded`
+      : `${time} · ${v.snapshot.minWallMm != null ? `${v.snapshot.minWallMm.toFixed(2)} mm` : "—"}`;
+    y = drawDataRow(doc, label, value, y, v.outcome === "discarded");
+  });
+
+  // No score in the footer: a gate score is a hard-block check, not a rating,
+  // and this document is about what changed.
+  drawFooter(doc, -1, translate(CONTENT, 'pdf.changesTitle', lang).toLowerCase());
+  const baseName = fileName.replace(/\.[^.]+$/, "");
+  await doc.save(`${baseName}_changes.pdf`);
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
