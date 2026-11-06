@@ -115,6 +115,22 @@ export const SIZES = {
 // ============================================================
 // Shared Three.js material presets
 // ============================================================
+// The part itself. Neutral by contract: colour on the mesh would compete with
+// the overlays, which are the only thing allowed to mean something.
+export const MODEL_MATERIALS = {
+  clay: {
+    color: 0x8d9ba6,
+    roughness: 0.62,
+    metalness: 0.12,
+  },
+  // Opt-in "material preview" swatch — same geometry, no semantic colour.
+  preview: {
+    color: 0x2ec27e,
+    roughness: 0.42,
+    metalness: 0.04,
+  },
+} as const;
+
 export const MATERIALS = {
   additive: {
     transparent: true,

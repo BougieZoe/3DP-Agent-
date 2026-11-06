@@ -120,7 +120,8 @@ CHANGES SINCE UPLOAD
 <div align="center">
   <img src="docs/media/07-sportbike.jpg" width="880" alt="A Sand3D sportbike imported from .usda — 61k triangles, watertight, minor fixes" />
   <br />
-  <sub>Imported straight from a Sand3D <code>.usda</code> scene — 61,152 triangles, watertight, two minutes from file to verdict.</sub>
+  <sub>A Sand3D <code>.usda</code> scene, 61,152 triangles, watertight — two minutes from file to verdict.<br />
+  The body stays neutral on purpose; the cube button switches on a <b>material preview</b> swatch without touching any measurement.</sub>
 </div>
 
 <br />

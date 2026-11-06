@@ -107,6 +107,15 @@ overlay (skipped above 120k triangles). Accent colour is now the overlays'
 job, not the mesh's. Do not revert to the emissive teal without a replacement
 that keeps geometry readable.
 
+### Material preview (2026-11-06, approved)
+Users asked why an uploaded part is not green any more. The answer is that
+green was always an overlay (wall thickness) or the empty-state placeholder,
+never the mesh. Rather than tint the body by verdict — which would collide
+with the overlays' colour language — the viewport gained an **opt-in** swatch
+button (bottom-right, cube icon, persisted as `materialPreview`). Default stays
+clay; tokens live in `MODEL_MATERIALS` (`visualLanguage.ts`). The preview never
+touches measurement, overlays, lighting or the empty-state placeholder.
+
 ## Important Conventions
 - **Project root is `/Users/bougiezoe/3DP-Agent-/`** — always confirm the full path before any file edit. Never assume or guess the project location; Desktop or other paths are NOT project roots.
 - `progressRef.current` ranges 0.0–1.0, ~8.7s full cycle at speed=1
