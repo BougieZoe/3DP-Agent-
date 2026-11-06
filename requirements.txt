@@ -8,5 +8,8 @@ numpy>=2.0.0
 # Optional: For advanced mesh operations
 scipy>=1.10.0
 
+# True solid offset (wall thickening) on the mesh bridge — see docs/bridge-thicken.md
+manifold3d>=3.5.0
+
 # Note: OpenCASCADE is included with build123d
 # Note: cadpy is installed locally, not available on PyPI

@@ -28,7 +28,7 @@ import { appendVersion, clearVersions, diffSnapshots, loadVersions, snapshotFrom
 import { VersionHistoryPanel } from '@/components/VersionHistoryPanel';
 import { generateVersionDiffPDF } from '@/components/ReportGenerator';
 import { listProjects, loadProject, deleteProject, type StoredProjectMeta } from '@/lib/projectStore';
-import { autoThicken, isThickenImprovement } from '@/lib/autoThicken';
+import { autoThicken, thickenDeltaMm, isThickenImprovement } from '@/lib/autoThicken';
 import { useIsMobile } from '@/hooks/useMobile';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
@@ -39,6 +39,9 @@ import { autoOrientGeometry } from '@/lib/autoOrient';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
 import { runTieredRepair } from '@/lib/repairFlow';
 import { geometryToStl } from '@/lib/meshOps';
+import { parseSTL } from '@/lib/stlParser';
+import { weldGeometry } from '@/lib/weldGeometry';
+import { thickenMesh, ThickenRejected } from '@/lib/meshThickenClient';
 import { geometryToThreeMf } from '@/lib/threeMf';
 import { LENGTH_UNIT_TO_MM, type LengthUnit } from '@shared/domain/geometry';
 import { CONTENT, translate, SUPPORTED_LANGUAGES } from '@shared/i18n/content';
@@ -916,31 +919,61 @@ export default function Home() {
     setRepairing(true);
     try {
       const samples = uploadedModel.unifiedAnalysis?.metrics?.result?.wallThicknessSamples ?? [];
-      const result = await autoThicken(uploadedModel.geometry, current, 0.8, samples);
+
+      // Prefer the bridge's true solid offset (native Minkowski). It is the
+      // only implementation that guarantees the wall gain, so it goes first;
+      // the local measured offset is the fallback when the bridge is absent,
+      // refuses the mesh, or the part is over its triangle budget.
+      let geometry: THREE.BufferGeometry;
+      let note: string;
+      try {
+        const delta = thickenDeltaMm(current, 0.8);
+        const bridged = await thickenMesh(geometryToStl(uploadedModel.geometry), delta);
+        // Weld before analysis: the STL round-trip splits vertices that the
+        // kernel had merged, which reads as non-manifold to our analyzer.
+        geometry = weldGeometry(parseSTL(bridged.stlBytes), 4);
+        const d = bridged.diagnostics;
+        note = `bridge offset +${delta.toFixed(2)}mm · ${d.inputTriangles ?? '?'} → ${d.outputTriangles ?? '?'} tris`;
+      } catch (bridgeErr) {
+        const local = await autoThicken(uploadedModel.geometry, current, 0.8, samples);
+        geometry = local.geometry;
+        const why = bridgeErr instanceof ThickenRejected ? `bridge: ${bridgeErr.reason}` : 'bridge unavailable';
+        note = `${local.note} (${why})`;
+      }
+
       const analysis = await runAnalysisInWorker(
-        fromThreeBufferGeometry(result.geometry),
+        fromThreeBufferGeometry(geometry),
         { fileName: uploadedModel.fileName, material },
       );
       // Discard a change that did not measurably improve the wall — the same
       // policy the tiered repair uses. Never commit a regression.
       const afterMin = analysis.metrics?.result?.p5WallThicknessMm ?? null;
-      if (!isThickenImprovement(current, afterMin)) {
-        recordVersion(uploadedModel.fileName, 'repair', analysis, 'thicken discarded: no measured gain', 'discarded');
-        toast.error(t('thickenNoGain')
-          .replace('{from}', current != null ? current.toFixed(2) : '—')
-          .replace('{to}', afterMin != null ? afterMin.toFixed(2) : '—'));
+      // Two acceptance conditions, both measured: the wall must improve AND the
+      // result must still be watertight. A ball offset can weld/duplicate faces
+      // at concavities, and the STL round-trip can lose shared vertices — the
+      // first bridge run thickened 0.60→0.85mm but came back with 208
+      // non-manifold edges, which would have shipped as a broken mesh.
+      const afterWatertight = analysis.validation?.result?.isWatertight === true;
+      if (!afterWatertight || !isThickenImprovement(current, afterMin)) {
+        const reason = afterWatertight ? 'thicken discarded: no measured gain' : 'thicken discarded: result not watertight';
+        recordVersion(uploadedModel.fileName, 'repair', analysis, reason, 'discarded');
+        toast.error(afterWatertight
+          ? t('thickenNoGain')
+            .replace('{from}', current != null ? current.toFixed(2) : '—')
+            .replace('{to}', afterMin != null ? afterMin.toFixed(2) : '—')
+          : t('thickenNotWatertight'));
         return;
       }
       commitModel({
         ...uploadedModel,
-        geometry: result.geometry,
-        mesh: createMeshFromGeometry(result.geometry),
+        geometry,
+        mesh: createMeshFromGeometry(geometry),
         unifiedAnalysis: analysis,
-        rawGeometry: result.geometry.clone(),
+        rawGeometry: geometry.clone(),
       });
-      refreshMaterialRecs(result.geometry);
-      recordVersion(uploadedModel.fileName, 'repair', analysis, result.note);
-      toast.success(result.note);
+      refreshMaterialRecs(geometry);
+      recordVersion(uploadedModel.fileName, 'repair', analysis, note);
+      toast.success(note);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
