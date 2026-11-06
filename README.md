@@ -97,10 +97,11 @@ kept. A change is only committed when a second analysis proves it improved somet
 <br />
 
 <div align="center">
-  <img src="docs/media/skyline.jpg" width="880" alt="A 1.49M-triangle car scanned from a Skyline STL, measured and judged" />
+  <img src="docs/media/skyline-light.jpg" width="900" alt="Light theme, material preview on: a Skyline body measured at 0.012 mm walls" />
   <br />
-  <sub>1,486,064 triangles, watertight, 4.748&nbsp;mm walls — and 285,891 faces over 50°.<br />
-  Four numbers and a verdict, from a file this heavy, in the browser.</sub>
+  <sub>Light theme, material preview on — 133,278 triangles, <b>0.012&nbsp;mm</b> walls, 18,848 faces over 40°,
+  11,113 non-manifold edges, and the orientation panel already says the current pose is the best one.<br />
+  Theme and material preview are one click each in the viewport toolbar.</sub>
 </div>
 
 <br />
