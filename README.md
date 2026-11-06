@@ -23,7 +23,7 @@ and the cheapest change that fixes it — before the first layer.
 
 <br />
 
-<a href="docs/media/ad.mp4"><img src="docs/media/film.webp" width="880" alt="3DP Agent — a Mac in a dark room, then an AK-47 orbiting under a wall-thickness heatmap, then every analysis tab" /></a>
+<a href="docs/media/ad.mp4"><img src="docs/media/film.webp" width="880" alt="3DP Agent — a silver Mac on a warm studio desk, then an AK-47 orbiting under a wall-thickness heatmap, then every analysis tab" /></a>
 
 <sub><b>▶ excerpt</b> (animated WebP, plays inline) · <a href="docs/media/ad.mp4">watch the full 30-second tour</a></sub>
 
