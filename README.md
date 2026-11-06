@@ -11,7 +11,7 @@ and the cheapest change that fixes it — before the first layer.
 
 <br />
 
-[**Live demo**](https://3dp-agent.vercel.app) &nbsp;·&nbsp; [**Watch the 24-second film**](docs/media/ad.mp4) &nbsp;·&nbsp; [**Run locally**](#run-locally)
+[**Live demo**](https://3dp-agent.vercel.app) &nbsp;·&nbsp; [**Watch the 28-second tour**](docs/media/ad.mp4) &nbsp;·&nbsp; [**Run locally**](#run-locally)
 
 <br />
 
@@ -23,9 +23,9 @@ and the cheapest change that fixes it — before the first layer.
 
 <br />
 
-<a href="docs/media/ad.mp4"><img src="docs/media/film.webp" width="880" alt="3DP Agent — a Mac in a dark room, then the app: drop an STL, get a verdict, fix the wall" /></a>
+<a href="docs/media/ad.mp4"><img src="docs/media/film.webp" width="880" alt="3DP Agent — a Mac in a dark room, then the app: an AK-47 analysed tab by tab, ending on the blocked gate report" /></a>
 
-<sub><b>▶ 14-second excerpt</b> (animated WebP, plays inline) · <a href="docs/media/ad.mp4">watch the full 24-second film</a></sub>
+<sub><b>▶ excerpt</b> (animated WebP, plays inline) · <a href="docs/media/ad.mp4">watch the full 28-second tour</a></sub>
 
 </div>
 
@@ -47,17 +47,9 @@ Most tools stop at *"something is wrong."* 3DP Agent closes the loop.
 <br />
 
 <div align="center">
-  <img src="docs/media/hero.gif" width="820" alt="Drop an STL, get a verdict in seconds" />
-  <br />
-  <sub><b>Drop an STL.</b> The verdict, the reasons and the numbers arrive together.</sub>
-</div>
-
-<br />
-
-<div align="center">
   <img src="docs/media/fix.gif" width="820" alt="One click: the wall is thickened and re-measured" />
   <br />
-  <sub><b>The fix loop, live.</b> One click on <i>thicken now</i> — bridge-side solid offset, re-analysed, and kept only because the measurement improved.</sub>
+  <sub><b>The fix loop, live</b> — example part: split-level house. One click on <i>thicken now</i>: bridge-side solid offset, re-analysed, and kept only because the measurement improved.</sub>
 </div>
 
 <br />
@@ -71,7 +63,7 @@ Most tools stop at *"something is wrong."* 3DP Agent closes the loop.
 | **Volume** | withheld (open shell) | **689,323 mm³** |
 | **Verdict** | NOT PRINT-READY | **No blocking geometry issue found** |
 
-<sub>Same model, same camera, one click. Numbers are what the app measured, not a promise.</sub>
+<sub>Same part, same camera, one click. Numbers are what the app measured, not a promise.</sub>
 
 </div>
 
@@ -99,7 +91,7 @@ kept. A change is only committed when a second analysis proves it improved somet
 <div align="center">
   <img src="docs/media/03-heatmap.jpg" width="880" alt="Wall-thickness heatmap on a neutral clay model" />
   <br />
-  <sub>Wall thickness mapped directly onto the surface — neutral base material so the geometry reads, colour reserved for meaning.</sub>
+  <sub>Wall thickness on a 362k-triangle AK-47 — neutral base material so the geometry reads, colour reserved for meaning.</sub>
 </div>
 
 <br />

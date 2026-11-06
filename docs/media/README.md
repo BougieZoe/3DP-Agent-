@@ -6,17 +6,24 @@ recording + ffmpeg compositing). Nothing is mocked or hand-animated.
 ## Recipe
 
 1. **Stills** — Playwright, 1600×1000 viewport at `deviceScaleFactor: 2`, then
-   `sips -Z 2000` and JPEG-88. Captures: empty state, geometry, heatmap,
-   thickened, report, agents.
+   `sips -Z 2000` and JPEG-88. The current set is one part (`black_ak47_rifle`,
+   362k triangles): geometry, wall heatmap, blocked gate, agent floor. The fix
+   GIF uses a different, printable part on purpose — the AK is over the
+   thicken budget, and the caption says so.
 
-2. **Clip** — Playwright `recordVideo` at 1600×1000: load → drop STL → verdict →
-   wall overlay → `thicken now` → report. ~31 s raw.
+2. **Clip** — Playwright `recordVideo` at 1600×1000. For the AK tour: load, then
+   pre-warm the AGENTS office (its iframe takes ~5 s on first open, and that
+   wait is trimmed), then visit every tab in narrative order — GEOMETRY (verdict,
+   heatmap on/off, scroll) → AGENTS (office, consensus, scroll) → CAUSALITY
+   (chain, patterns) → REPORT (gate, deductions, CTA) → LOOP → CHAT → REPORT
+   (scrolled back to the gate, so the film ends on the receipt). The script logs
+   TOUR_START/TOUR_END so the trim is exact instead of guessed.
 
 3. **Cards** — an HTML page (`Know before you print.` / `The failure is visible
    before the first layer.`) rendered at 1600×1000, matching the app's palette
    (`#04070a` background, `#66ccff` accent, SF Mono overlines).
 
-4. **Film** — ffmpeg, 24 s:
+4. **Film** — ffmpeg, 28 s (AK tour):
 
    ```
    [room]   2400x1500 still: dark desk, Mac, screen = the app's empty state
@@ -31,10 +38,10 @@ recording + ffmpeg compositing). Nothing is mocked or hand-animated.
    The zoom lands full-bleed on the screen, so the cut to the live app is
    invisible — that is the whole trick of the opening.
 
-5. **Inline preview** — GitHub cannot play a relative `.mp4`, so the film's
-   14-second excerpt ships as an animated **WebP** (800px, 12fps, q78, 0.7MB),
-   which GitHub renders and loops like an image. Frames come from the film:
-   0.6–5.4s (dolly), 13.9–19.6s (thicken to READY), 21.6–24s (end card).
+5. **Inline preview** — GitHub cannot play a relative `.mp4`, so an excerpt
+   ships as an animated **WebP** (760px, 12fps, q74, 0.94MB), which GitHub
+   renders and loops like an image. Frames come from the film: 0.6–5.2s
+   (dolly), 6.0–12.6s (verdict + heatmap), 22.0–26.4s (report).
    ffmpeg here has no libwebp, so the frames are encoded with ImageMagick:
 
    ```
