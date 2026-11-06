@@ -57,6 +57,26 @@ recording + ffmpeg compositing). Nothing is mocked or hand-animated.
    time; `fix.gif` (1.1 MB) is the thicken range at 1× so the numbers stay
    readable. The top of the README uses a still (240 KB), never a GIF.
 
+## Importing a Sand3D / Objaverse `.usda`
+
+`scripts/usda-to-stl.py` converts ASCII USDA to a binary STL with no USD
+runtime (regex over `def Mesh` blocks). Two things the file itself will not tell
+you:
+
+- `metersPerUnit = 1` — pass `--scale 1000`, or the part arrives 1000x small.
+- The scenes are Z-up. Without `--rotate-x -90` the app's auto-orient stands a
+  bike on its nose; with it, the part lands in a natural 3/4 pose.
+
+```
+python3 scripts/usda-to-stl.py bike.usda docs/_stls/sand3d-sportbike.stl \
+        --scale 1000 --rotate-x -90
+```
+
+61,152 triangles, watertight, 2.1m long — and 4.91mm walls, which is why its
+wall heatmap is mostly green. Colour in the viewport is a product decision
+(neutral clay + overlays), not a limitation of the import: `color3f`/materials
+in the USDA are not rendered.
+
 ## Re-shooting
 
 The scripts are intentionally not committed: they hard-code local model paths
