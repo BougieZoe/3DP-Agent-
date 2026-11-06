@@ -11,7 +11,7 @@ and the cheapest change that fixes it — before the first layer.
 
 <br />
 
-[**Live demo**](https://3dp-agent.vercel.app) &nbsp;·&nbsp; [**Watch the 33-second film**](docs/media/ad.mp4) &nbsp;·&nbsp; [**Run locally**](#run-locally)
+[**Live demo**](https://3dp-agent.vercel.app) &nbsp;·&nbsp; [**Watch the 24-second film**](docs/media/ad.mp4) &nbsp;·&nbsp; [**Run locally**](#run-locally)
 
 <br />
 
@@ -23,9 +23,9 @@ and the cheapest change that fixes it — before the first layer.
 
 <br />
 
-<img src="docs/media/hero.gif" width="880" alt="3DP Agent: drop an STL, get a verdict" />
+<a href="docs/media/ad.mp4"><img src="docs/media/ad-poster.jpg" width="880" alt="3DP Agent — 24-second film (click to play)" /></a>
 
-<sub>Drop an STL → a verdict in seconds → the reason, the numbers, and the fix.</sub>
+<sub>▶ 24 seconds — from a Mac to the answer. <a href="docs/media/ad.mp4">Play the film</a></sub>
 
 </div>
 
@@ -47,7 +47,15 @@ Most tools stop at *"something is wrong."* 3DP Agent closes the loop.
 <br />
 
 <div align="center">
-  <img src="docs/media/fix.gif" width="860" alt="One click: the wall is thickened and re-measured" />
+  <img src="docs/media/hero.gif" width="820" alt="Drop an STL, get a verdict in seconds" />
+  <br />
+  <sub><b>Drop an STL.</b> The verdict, the reasons and the numbers arrive together.</sub>
+</div>
+
+<br />
+
+<div align="center">
+  <img src="docs/media/fix.gif" width="820" alt="One click: the wall is thickened and re-measured" />
   <br />
   <sub><b>The fix loop, live.</b> One click on <i>thicken now</i> — bridge-side solid offset, re-analysed, and kept only because the measurement improved.</sub>
 </div>
