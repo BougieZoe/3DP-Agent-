@@ -24,6 +24,7 @@ import { InstallButton } from '@/components/InstallButton';
 import { APIKeyModal } from '@/components/APIKeyModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { readPref, writePref } from '@/lib/prefs';
+import { MODEL_MATERIALS } from '@/lib/visualLanguage';
 import { appendVersion, clearVersions, diffSnapshots, loadVersions, snapshotFromAnalysis, type ModelVersion, type VersionAction } from '@/lib/modelVersions';
 import { VersionHistoryPanel } from '@/components/VersionHistoryPanel';
 import { generateVersionDiffPDF } from '@/components/ReportGenerator';
@@ -260,15 +261,27 @@ function FloatingParticles() {
  */
 const EDGE_TRI_LIMIT = 120_000; // EdgesGeometry is O(triangles); skip on huge meshes
 
-function ModelDisplay({ model }: { model: UploadedModel | null }) {
+function ModelDisplay({ model, materialPreview = false }: {
+  model: UploadedModel | null
+  materialPreview?: boolean
+}) {
   const geometry = model?.geometry ?? null;
 
   const material = useMemo(() => new THREE.MeshStandardMaterial({
-    color: 0x8d9ba6,
-    roughness: 0.62,
-    metalness: 0.12,
+    ...MODEL_MATERIALS.clay,
     side: THREE.DoubleSide,
   }), []);
+
+  // Material preview is an explicit mode, never an automatic tint: colour in
+  // this app means "an overlay is telling you something" (AGENTS.md). The
+  // swatch is opt-in, so a green body can never be mistaken for a measurement.
+  useEffect(() => {
+    const preset = materialPreview ? MODEL_MATERIALS.preview : MODEL_MATERIALS.clay;
+    material.color.setHex(preset.color);
+    material.roughness = preset.roughness;
+    material.metalness = preset.metalness;
+    material.needsUpdate = true;
+  }, [material, materialPreview]);
 
   const edges = useMemo(() => {
     if (!geometry) return null;
@@ -305,7 +318,10 @@ function ModelDisplay({ model }: { model: UploadedModel | null }) {
   );
 }
 
-function SceneContent({ model }: { model: UploadedModel | null }) {
+function SceneContent({ model, materialPreview }: {
+  model: UploadedModel | null
+  materialPreview: boolean
+}) {
   return (
     <>
       {/* Neutral key + cool fill so form reads; a low cyan rim keeps the brand
@@ -314,7 +330,7 @@ function SceneContent({ model }: { model: UploadedModel | null }) {
       <directionalLight position={[9, 12, 7]} intensity={2.4} color={0xffffff} />
       <directionalLight position={[-8, 6, -8]} intensity={0.8} color={0x9dc4ff} />
       <directionalLight position={[0, 4, -12]} intensity={0.6} color={0x66ccff} />
-      <ModelDisplay model={model} />
+      <ModelDisplay model={model} materialPreview={materialPreview} />
       <FloatingParticles />
       <Grid args={[40, 40]} cellSize={1} cellThickness={0.3} cellColor="#061a1a"
         sectionSize={5} sectionThickness={0.8} sectionColor="#0a2e2e"
@@ -387,6 +403,8 @@ export default function Home() {
   const [materialRecLoading, setMaterialRecLoading] = useState(false);
   const [mode, setMode] = useState<'analyze' | 'cad' | 'mesh'>('analyze');
   const [showModeMenu, setShowModeMenu] = useState(false);
+  const [materialPreview, setMaterialPreview] = useState(() => readPref('materialPreview', ['on', 'off'] as const, 'off') === 'on');
+  useEffect(() => { writePref('materialPreview', materialPreview ? 'on' : 'off') }, [materialPreview]);
   const [language, setLanguage] = useState<Language>(() => readPref('lang', SUPPORTED_LANGUAGES, 'en'));
   const [uploadedModel, setUploadedModel] = useState<UploadedModel | null>(null);
   // Measurement snapshots for the active model (metrics only, persisted).
@@ -1493,7 +1511,7 @@ export default function Home() {
             onCreated={(state) => { canvasRef.current = state.gl.domElement; }}
           >
             <PerspectiveCamera makeDefault position={[0, 3, 10]} fov={60} />
-            <SceneContent model={uploadedModel} />
+            <SceneContent model={uploadedModel} materialPreview={materialPreview} />
             <ViewportCameraFit geometry={uploadedModel?.geometry ?? null} controlsRef={controlsRef} />
             <PlaybackUpdater />
             {/* Local boundary for the lazy overlays. Without it a first-time
@@ -1591,6 +1609,22 @@ export default function Home() {
           {/* Feature buttons - bottom right, below voice control */}
           {uploadedModel && (
             <div className="absolute bottom-3 right-3 sm:bottom-36 sm:right-12 flex flex-row gap-1.5 sm:gap-2 z-20">
+              <button
+                onClick={() => setMaterialPreview(v => !v)}
+                aria-pressed={materialPreview}
+                className={`w-7 h-7 sm:w-10 sm:h-10 rounded-full border flex items-center justify-center transition-colors ${
+                  materialPreview
+                    ? 'bg-emerald-500/25 border-emerald-400/60 text-emerald-300'
+                    : 'bg-white/5 border-white/15 text-muted-foreground hover:bg-white/10'
+                }`}
+                title={materialPreview ? 'Material preview: on' : 'Material preview: off'}
+                aria-label="Toggle material preview"
+              >
+                <svg className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 3l7 4v10l-7 4-7-4V7l7-4z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 3v18M5 7l7 4 7-4" />
+                </svg>
+              </button>
               <button
                 onClick={() => setShowPrintDashboard(true)}
                 className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 flex items-center justify-center hover:bg-cyan-500/30 transition-colors"
