@@ -11,7 +11,7 @@ and the cheapest change that fixes it — before the first layer.
 
 <br />
 
-[**Live demo**](https://3dp-agent.vercel.app) &nbsp;·&nbsp; [**Watch the 31-second tour**](docs/media/ad.mp4) &nbsp;·&nbsp; [**Run locally**](#run-locally)
+[**Live demo**](https://3dp-agent.vercel.app) &nbsp;·&nbsp; [**Watch the 30-second tour**](docs/media/ad.mp4) &nbsp;·&nbsp; [**Run locally**](#run-locally)
 
 <br />
 
@@ -23,9 +23,9 @@ and the cheapest change that fixes it — before the first layer.
 
 <br />
 
-<a href="docs/media/ad.mp4"><img src="docs/media/film.webp" width="880" alt="3DP Agent — a silver Mac on a warm studio desk, then a sportbike orbiting under a wall-thickness heatmap, then every analysis tab" /></a>
+<a href="docs/media/ad.mp4"><img src="docs/media/film.webp" width="880" alt="3DP Agent — a silver Mac on a warm studio desk, then an AK-47 orbiting under a wall-thickness heatmap, then every analysis tab" /></a>
 
-<sub><b>▶ excerpt</b> (animated WebP, plays inline) · <a href="docs/media/ad.mp4">watch the full 31-second tour</a></sub>
+<sub><b>▶ excerpt</b> (animated WebP, plays inline) · <a href="docs/media/ad.mp4">watch the full 30-second tour</a></sub>
 
 </div>
 
@@ -114,6 +114,14 @@ CHANGES SINCE UPLOAD
 · Min wall      0.20 → 0.90 mm (+0.70)
 · Shell         open → sealed
 ```
+
+<br />
+
+<div align="center">
+  <img src="docs/media/07-sportbike.jpg" width="880" alt="A Sand3D sportbike imported from .usda — 61k triangles, watertight, minor fixes" />
+  <br />
+  <sub>Imported straight from a Sand3D <code>.usda</code> scene — 61,152 triangles, watertight, two minutes from file to verdict.</sub>
+</div>
 
 <br />
 
