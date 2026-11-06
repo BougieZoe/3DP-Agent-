@@ -1138,7 +1138,9 @@ export default function Home() {
   const verdictActions: VerdictAction[] = (() => {
     if (!analysis || !unifiedAnalysis) return [];
     const out: VerdictAction[] = [];
-    const pct = Math.round((analysis.wallThickness.thinWallPercentage ?? 0) * 100);
+    // thinWallPercentage is already 0..100 (wallThickness.ts: ratio * 100).
+    // Multiplying again printed "900% of sampled walls" for a 9% case.
+    const pct = Math.round(analysis.wallThickness.thinWallPercentage ?? 0);
     const minMm = analysis.wallThickness.minThickness;
     if (valid && !valid.isWatertight) {
       // "0 boundary edges" is not a useful sentence: a mesh can fail the
