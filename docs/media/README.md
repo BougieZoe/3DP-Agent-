@@ -31,7 +31,18 @@ recording + ffmpeg compositing). Nothing is mocked or hand-animated.
    The zoom lands full-bleed on the screen, so the cut to the live app is
    invisible — that is the whole trick of the opening.
 
-5. **GIFs** — deliberately small, because a heavy GIF is the most common way a
+5. **Inline preview** — GitHub cannot play a relative `.mp4`, so the film's
+   14-second excerpt ships as an animated **WebP** (800px, 12fps, q78, 0.7MB),
+   which GitHub renders and loops like an image. Frames come from the film:
+   0.6–5.4s (dolly), 13.9–19.6s (thicken to READY), 21.6–24s (end card).
+   ffmpeg here has no libwebp, so the frames are encoded with ImageMagick:
+
+   ```
+   magick -delay 8.33 -loop 0 frames/f-*.png -quality 78 \
+          -define webp:method=6 film.webp
+   ```
+
+6. **GIFs** — deliberately small, because a heavy GIF is the most common way a
    README "fails to load": 8-10 fps, 720–760 px, palettegen 48–64 colours,
    bayer dithering. `hero.gif` (1.9 MB) is the upload→verdict range at 0.75×
    time; `fix.gif` (1.1 MB) is the thicken range at 1× so the numbers stay
