@@ -71,6 +71,23 @@ fits), not "diagnose → plan → execute" (serial fits, which is CMU's actual p
 real-time print monitoring). Revisit only if a future feature genuinely needs
 step-dependent agent handoff (e.g. an agent's output must gate the next agent's input).
 
+### Rejected (2026-11-06): client-side true (solid) offset for thickening
+Measured with `scripts/verify-offset-feasibility.mjs` on a 5,094-triangle
+watertight 150mm model:
+- manifold 3.5.1 has no 3D offset (`offset()` exists on CrossSection only), so
+  the `man.offset(delta)` path that shipped in `meshRepair.ts` could never run.
+- Minkowski sum with a sphere IS a correct ball offset — every dimension grows
+  exactly 2r, verified — but costs 9.7s (8-segment sphere) to 22.7s (16) and
+  inflates the mesh 4.5–7×. At 20k–400k triangles that is minutes.
+- `Manifold.levelSet` needs a per-voxel SDF callback in JS: at 0.2mm on a 150mm
+  part that is >1e8 evaluations against the triangle set. Not viable.
+
+Decision: client-side thickening stays a **measured local vertex offset**
+(guarded by re-analysis, discarded on regression). A true solid offset belongs
+on the bridge/server (native Open3D/manifold), where tens of seconds are
+acceptable and the result can be validated before it is handed back.
+Reopen only if a native offset becomes callable from WASM in the browser.
+
 ### Deferred: Tool-call interface layer for printer control
 Evaluated 2026-08-29, inspired by CMU's LangChain tool wrappers (query_printer,
 change_parameters, resume_print).
