@@ -52,8 +52,16 @@ export function VersionHistoryPanel({ versions, onClear, onExportPdf, language }
     hour: '2-digit', minute: '2-digit',
   });
 
-  // Newest first, each compared with the state before it.
-  const rows = versions.map((v, i) => ({ v, prev: i > 0 ? versions[i - 1] : null })).reverse();
+  // Newest first. A discarded attempt is not a state the model was ever in,
+  // so deltas are measured against the last *applied* row before it.
+  let lastApplied: ModelVersion | null = null;
+  const rows = versions
+    .map((v) => {
+      const prev = lastApplied;
+      if (v.outcome !== 'discarded') lastApplied = v;
+      return { v, prev };
+    })
+    .reverse();
 
   return (
     <section className={`${PANEL.bg} ${PANEL.glass} ${PANEL.border} ${PANEL.rounded} p-3`}>

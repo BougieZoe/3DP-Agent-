@@ -40,3 +40,14 @@ describe('versionRows', () => {
     expect(rows.some((r) => /shell/i.test(r.label))).toBe(false);
   });
 });
+
+describe('versionRows with discarded attempts', () => {
+  it('ignores a discarded attempt when comparing states', () => {
+    const good = v(2, snap({ minWallMm: 0.9 }), 'repair');
+    const bad: ModelVersion = { ...v(3, snap({ minWallMm: 0.05 }), 'repair'), outcome: 'discarded' };
+    const rows = versionRows([v(1, snap({ minWallMm: 0.2 })), good, bad], 'en');
+    const wall = rows.find((r) => /wall/i.test(r.label))!;
+    expect(wall.value).toContain('0.20 → 0.90 mm (+0.70)');
+    expect(wall.warn).toBe(false);
+  });
+});

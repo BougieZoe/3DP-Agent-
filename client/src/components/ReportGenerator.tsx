@@ -658,8 +658,10 @@ function drawLimitsNote(doc: JsPDF, lang: Language, y: number): number {
  */
 export function versionRows(versions: ModelVersion[], lang: Language): { label: string; value: string; warn: boolean }[] {
   if (versions.length < 2) return [];
-  const first = versions[0].snapshot;
-  const last = versions[versions.length - 1].snapshot;
+  // Discarded attempts never became the model's state — compare applied states.
+  const applied = versions.filter((v) => v.outcome !== 'discarded');
+  const first = (applied[0] ?? versions[0]).snapshot;
+  const last = (applied[applied.length - 1] ?? versions[versions.length - 1]).snapshot;
   const d = diffSnapshots(first, last);
   const rows: { label: string; value: string; warn: boolean }[] = [];
 
