@@ -42,6 +42,8 @@ def main():
     ap.add_argument('--scale', type=float, default=1.0)
     ap.add_argument('--rotate-x', type=float, default=0.0,
                     help='degrees about X after scaling (Z-up scenes often need -90)')
+    ap.add_argument('--rotate-y', type=float, default=0.0,
+                    help='degrees about Y after scaling (use it to land a 3/4 view)')
     ap.add_argument('--report', action='store_true')
     args = ap.parse_args()
 
@@ -68,14 +70,22 @@ def main():
     if not faces:
         raise SystemExit('no triangles found')
 
-    if args.rotate_x:
+    if args.rotate_x or args.rotate_y:
         import math
-        a = math.radians(args.rotate_x)
-        ca, sa = math.cos(a), math.sin(a)
-        for i in range(0, len(verts), 3):
-            y, z = verts[i + 1], verts[i + 2]
-            verts[i + 1] = y * ca - z * sa
-            verts[i + 2] = y * sa + z * ca
+        if args.rotate_x:
+            a = math.radians(args.rotate_x)
+            ca, sa = math.cos(a), math.sin(a)
+            for i in range(0, len(verts), 3):
+                y, z = verts[i + 1], verts[i + 2]
+                verts[i + 1] = y * ca - z * sa
+                verts[i + 2] = y * sa + z * ca
+        if args.rotate_y:
+            a = math.radians(args.rotate_y)
+            ca, sa = math.cos(a), math.sin(a)
+            for i in range(0, len(verts), 3):
+                x, z = verts[i], verts[i + 2]
+                verts[i] = x * ca + z * sa
+                verts[i + 2] = -x * sa + z * ca
 
     with open(args.dst, 'wb') as fh:
         fh.write(b'sand3d usda->stl'.ljust(80, b' '))
