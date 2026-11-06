@@ -22,6 +22,8 @@ interface HealthStatus {
     memory: HealthCheck;
     slicer: HealthCheck;
     stepParser: HealthCheck;
+    /** True-offset thicken needs manifold3d inside the mesh venv. */
+    thicken: HealthCheck;
   };
 }
 
@@ -49,6 +51,7 @@ router.get('/health/detailed', async (_req, res) => {
     memory: checkMemory(),
     slicer: await checkSlicer(),
     stepParser: await checkStepParser(),
+    thicken: await checkThicken(),
   };
 
   const status = determineOverallStatus(checks);
@@ -132,6 +135,31 @@ async function checkStepParser(): Promise<HealthCheck> {
     return {
       status: 'fail',
       message: `STEP parser check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    };
+  }
+}
+
+async function checkThicken(): Promise<HealthCheck> {
+  // A missing manifold3d is not a service outage: local thickening still works,
+  // the bridge route just returns 500. Report it as a warn so /health/detailed
+  // tells the operator what to install instead of failing readiness.
+  try {
+    const { resolveMeshPython } = await import('./meshProcess');
+    const { spawn } = await import('node:child_process');
+    const python = resolveMeshPython();
+    const ok = await new Promise<boolean>((resolve) => {
+      const child = spawn(python, ['-I', '-c', 'import manifold3d'], { stdio: 'ignore' });
+      const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(false); }, 5000);
+      child.on('error', () => { clearTimeout(timer); resolve(false); });
+      child.on('close', (code) => { clearTimeout(timer); resolve(code === 0); });
+    });
+    return ok
+      ? { status: 'pass', message: 'manifold3d available — true offset enabled' }
+      : { status: 'warn', message: 'manifold3d missing — /api/mesh/thicken unavailable (pip install "manifold3d>=3.5")' };
+  } catch (error) {
+    return {
+      status: 'warn',
+      message: `Thicken check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
     };
   }
 }

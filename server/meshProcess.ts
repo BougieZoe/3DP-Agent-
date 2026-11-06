@@ -20,7 +20,7 @@ const MAX_TRIANGLES = 2_000_000;
  * dedicated .cad-bridge/mesh-venv (numpy 1.x) when present, so the two
  * dependency sets stay isolated.
  */
-function resolveMeshPython(): string {
+export function resolveMeshPython(): string {
   const candidates = [
     process.env.CAD_MESH_PYTHON,
     path.join(process.cwd(), '.cad-bridge', 'mesh-venv', 'bin', 'python'),

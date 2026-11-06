@@ -106,6 +106,13 @@ export default defineConfig({
         changeOrigin: true,
         xfwd: true,
       },
+      // Thicken runs on the Express bridge (node), not the Go backend.
+      // Must precede "/api/mesh": Vite matches proxy keys by prefix in order.
+      "/api/mesh/thicken": {
+        target: "http://127.0.0.1:3001",
+        changeOrigin: true,
+        xfwd: true,
+      },
       "/api/mesh": {
         target: "http://127.0.0.1:8888",
         changeOrigin: true,

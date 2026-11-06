@@ -5,6 +5,7 @@ import path from "path";
 import { currentDir as __dirname } from "./currentDir";
 import { createCadBridgeRouter } from "./cadBridge";
 import { createMeshProcessRouter } from "./meshProcess";
+import { createMeshThickenRouter } from "./meshThicken";
 import { createSlicerRouter } from "./slicerRouter";
 import { createStepRouter } from "./stepRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
@@ -172,6 +173,7 @@ export function createApp() {
 
     // Mesh post-processing bridge: STL → diagnostics / repair / decimate.
     app.use("/api/mesh/process", ...amdProxy, createMeshProcessRouter());
+    app.use("/api/mesh/thicken", ...amdProxy, createMeshThickenRouter());
 
     // Slicer bridge: STL → G-code via a local slicer CLI.
     app.use("/api/slice", ...amdProxy, createSlicerRouter());

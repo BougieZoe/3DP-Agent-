@@ -19,6 +19,11 @@
  *  - Keep keys stable; they are referenced from tests and PDF output.
  */
 export const MESSAGES = {
+  "thickenNotWatertight": {
+    en: "The offset result was not watertight — change discarded, original kept.",
+    ja: "オフセット結果が水密でないため破棄しました（元のモデルを保持）。",
+    zh: "偏移结果不水密——已丢弃，保留原模型。",
+  },
   "pdf.changeReportTitle": {
     en: "Change report",
     ja: "変更レポート",
