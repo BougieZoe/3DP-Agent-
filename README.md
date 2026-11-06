@@ -11,7 +11,7 @@ and the cheapest change that fixes it — before the first layer.
 
 <br />
 
-[**Live demo**](https://3dp-agent.vercel.app) &nbsp;·&nbsp; [**Watch the 24-second tour**](docs/media/ad.mp4) &nbsp;·&nbsp; [**Run locally**](#run-locally)
+[**Live demo**](https://3dp-agent.vercel.app) &nbsp;·&nbsp; [**Watch the 25-second tour**](docs/media/ad.mp4) &nbsp;·&nbsp; [**Run locally**](#run-locally)
 
 <br />
 
@@ -25,13 +25,21 @@ and the cheapest change that fixes it — before the first layer.
 
 <a href="docs/media/ad.mp4"><img src="docs/media/film.webp" width="880" alt="3DP Agent — the empty state, a sportbike dropping in, the verdict and its zoomed detail, then the agents' office" /></a>
 
-<sub><b>▶ excerpt</b> (animated WebP, plays inline) · <a href="docs/media/ad.mp4">watch the full 24-second tour</a></sub>
+<sub><b>▶ excerpt</b> (animated WebP, plays inline) · <a href="docs/media/ad.mp4">watch the full 25-second tour</a></sub>
 
 </div>
 
 <br />
 
 ---
+
+<div align="center">
+  <img src="docs/media/flow.webp" width="820" alt="The loop: drop, analyse, fix, prove" />
+  <br />
+  <sub>Drop → analyse → fix → prove. The loop closes only when a second measurement agrees.</sub>
+</div>
+
+<br />
 
 ## One model, four moves
 
@@ -89,17 +97,10 @@ kept. A change is only committed when a second analysis proves it improved somet
 <br />
 
 <div align="center">
-  <img src="docs/media/verdict.jpg" width="880" alt="One part, four numbers, one verdict" />
+  <img src="docs/media/skyline.jpg" width="880" alt="A 1.49M-triangle car scanned from a Skyline STL, measured and judged" />
   <br />
-  <sub>One part, four numbers, one verdict — 61,152 triangles, watertight, 4.788&nbsp;mm walls, 5,778 overhang faces.</sub>
-</div>
-
-<br />
-
-<div align="center">
-  <img src="docs/media/heatmap.gif" width="820" alt="Turning the overhang heatmap on and orbiting the part" />
-  <br />
-  <sub>The overhang layer, live: colour arrives where the part is risky, and the model keeps moving so you can read it in 3D.</sub>
+  <sub>1,486,064 triangles, watertight, 4.748&nbsp;mm walls — and 285,891 faces over 50°.<br />
+  Four numbers and a verdict, from a file this heavy, in the browser.</sub>
 </div>
 
 <br />
