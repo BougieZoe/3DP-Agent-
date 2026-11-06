@@ -13,6 +13,11 @@ import { getManifold } from './manifoldLoader';
  * operation, not a normal displacement — the result stays manifold, and the
  * caller re-analyses it so the before/after is measured, not assumed.
  *
+ * A true solid offset is not attempted here: manifold 3.5.1 has no 3D offset,
+ * and Minkowski-with-a-sphere — its mathematically correct equivalent — costs
+ * ~10-23s on a 5k-triangle model (see scripts/verify-offset-feasibility.mjs
+ * and the AGENTS.md record). That belongs on the bridge.
+ *
  * Honest limits, surfaced to the caller:
  *  - An open shell has no solid to offset; manifold will fail → we say so and
  *    point at repair instead of silently doing nothing.
