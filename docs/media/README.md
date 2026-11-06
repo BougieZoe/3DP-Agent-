@@ -26,15 +26,16 @@ recording + ffmpeg compositing). Nothing is mocked or hand-animated.
 4. **Film** — ffmpeg, 28 s (AK tour):
 
    ```
-   [room]   2400x1500 still: warm off-white studio, silver Mac, screen = the
-            running app. Opening is a scale + blur-to-focus: z 1.12 → 1.00 over
-            1.4 s while gblur sigma 18 cross-dissolves to sharp, then z 1.00 →
-            1.86 smoothstep into the screen. x/y pin the screen centre
-            (1200, 929.5); clamp ≥ 0. Light studio vs dark app is the point.
+   [title]  2.4 s card on the app's own background (#04070a + cyan glow),
+            blur-to-focus: gblur(22) cross-dissolves over 0.9 s while the frame
+            settles from z=1.06 to 1.00. No device mockup, no dolly from a room
+            — the product is the screen, so the film opens on typography and
+            hard-cuts into the UI, the way product films do.
    [clip]    four trims concatenated (1.5x / 1.5x / 1.05x / 1.2x)
             the 1.05x segment holds the thicken click → READY TO PRINT un-rushed
    [end]     card, fade-in, xfade 0.8 s from the live block
    finish:   noise=alls=2:allf=t (grain) → h264 crf 20, faststart
+   letterbox: 2.39:1 bars over the orbit/heatmap insert only
    ```
 
    The zoom lands full-bleed on the screen, so the cut to the live app is
