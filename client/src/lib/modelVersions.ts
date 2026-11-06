@@ -30,6 +30,12 @@ export interface ModelVersion {
   at: number;
   action: VersionAction;
   snapshot: ModelSnapshot;
+  /**
+   * 'discarded' = the action ran, the measurement regressed, the model was
+   * left untouched. Recorded so "I clicked it and nothing happened" has an
+   * explanation instead of silence.
+   */
+  outcome?: 'applied' | 'discarded';
   /** Free-text detail, e.g. "rotated 90° about X" or a repair note. */
   note?: string;
 }
@@ -121,7 +127,12 @@ export function appendVersion(
 ): ModelVersion[] {
   const existing = loadVersions(fileName);
   const last = existing[existing.length - 1];
-  if (last && last.action === entry.action && JSON.stringify(last.snapshot) === JSON.stringify(entry.snapshot)) {
+  if (
+    last
+    && last.action === entry.action
+    && (last.outcome ?? 'applied') === (entry.outcome ?? 'applied')
+    && JSON.stringify(last.snapshot) === JSON.stringify(entry.snapshot)
+  ) {
     return existing;
   }
   const next: ModelVersion[] = [

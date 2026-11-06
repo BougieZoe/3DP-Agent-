@@ -26,6 +26,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { readPref, writePref } from '@/lib/prefs';
 import { appendVersion, clearVersions, diffSnapshots, loadVersions, snapshotFromAnalysis, type ModelVersion, type VersionAction } from '@/lib/modelVersions';
 import { VersionHistoryPanel } from '@/components/VersionHistoryPanel';
+import { generateVersionDiffPDF } from '@/components/ReportGenerator';
 import { listProjects, loadProject, deleteProject, type StoredProjectMeta } from '@/lib/projectStore';
 import { autoThicken, isThickenImprovement } from '@/lib/autoThicken';
 import { useIsMobile } from '@/hooks/useMobile';
@@ -487,10 +488,17 @@ export default function Home() {
    * Record a measurement snapshot after a state-changing action.
    * Keyed by file name so switching models shows that model's own history.
    */
-  const recordVersion = (fileName: string, action: VersionAction, analysis: UploadedModel['unifiedAnalysis'], note?: string) => {
+  const recordVersion = (
+    fileName: string,
+    action: VersionAction,
+    analysis: UploadedModel['unifiedAnalysis'],
+    note?: string,
+    outcome: 'applied' | 'discarded' = 'applied',
+  ) => {
     const previous = loadVersions(fileName).slice(-1)[0];
     const snapshot = snapshotFromAnalysis(analysis);
-    setVersions(appendVersion(fileName, { at: Date.now(), action, snapshot, note }));
+    setVersions(appendVersion(fileName, { at: Date.now(), action, snapshot, note, outcome }));
+    if (outcome === 'discarded') return;
 
     // Close the loop: say what the action actually changed, in the same units
     // the verdict bar shows. Without this the user has to diff two rows.
@@ -846,22 +854,51 @@ export default function Home() {
         wasmSuggestionsRef.current,
         beforeMin,
       );
+      let finalGeometry = outcome.geometry;
+      let finalAnalysis = outcome.analysis;
+      let finalNote = outcome.note;
+
+      // Pipeline step: once the shell is closed, thicken if walls are still
+      // under target. This is the case that used to dead-end — repair fixed
+      // the shell but the thin walls stayed thin, and a second manual click
+      // was needed. Only runs when the repair actually closed the mesh.
+      const wallAfter = finalAnalysis.metrics?.result?.p5WallThicknessMm ?? null;
+      if (finalAnalysis.validation?.result?.isWatertight && wallAfter != null && wallAfter < 0.8) {
+        try {
+          const samples = finalAnalysis.metrics?.result?.wallThicknessSamples ?? [];
+          const thickened = await autoThicken(finalGeometry, wallAfter, 0.8, samples);
+          const check = await runAnalysisInWorker(
+            fromThreeBufferGeometry(thickened.geometry),
+            { fileName: uploadedModel.fileName, material },
+          );
+          if (isThickenImprovement(wallAfter, check.metrics?.result?.p5WallThicknessMm ?? null)) {
+            finalGeometry = thickened.geometry;
+            finalAnalysis = check;
+            finalNote = `${outcome.note} · ${thickened.note}`;
+          }
+        } catch {
+          /* repair result stands on its own */
+        }
+      }
+
       commitModel({
         ...uploadedModel,
-        geometry: outcome.geometry,
-        mesh: createMeshFromGeometry(outcome.geometry),
-        unifiedAnalysis: outcome.analysis,
-        rawGeometry: outcome.geometry.clone(),
+        geometry: finalGeometry,
+        mesh: createMeshFromGeometry(finalGeometry),
+        unifiedAnalysis: finalAnalysis,
+        rawGeometry: finalGeometry.clone(),
       });
-      refreshMaterialRecs(outcome.geometry);
-      recordVersion(uploadedModel.fileName, 'repair', outcome.analysis, outcome.note);
+      refreshMaterialRecs(finalGeometry);
+      recordVersion(uploadedModel.fileName, 'repair', finalAnalysis, finalNote);
       deepAnalysisSeq.current += 1;
       setDeepAgentRun(null);
       setDeepSteps([]);
       setDeepError(null);
-      toast.success(outcome.note);
+      toast.success(finalNote);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      recordVersion(uploadedModel.fileName, 'repair', uploadedModel.unifiedAnalysis, msg, 'discarded');
+      toast.error(msg);
     } finally {
       setRepairing(false);
     }
@@ -888,6 +925,7 @@ export default function Home() {
       // policy the tiered repair uses. Never commit a regression.
       const afterMin = analysis.metrics?.result?.p5WallThicknessMm ?? null;
       if (!isThickenImprovement(current, afterMin)) {
+        recordVersion(uploadedModel.fileName, 'repair', analysis, 'thicken discarded: no measured gain', 'discarded');
         toast.error(t('thickenNoGain')
           .replace('{from}', current != null ? current.toFixed(2) : '—')
           .replace('{to}', afterMin != null ? afterMin.toFixed(2) : '—'));
@@ -1758,6 +1796,9 @@ export default function Home() {
                       <VersionHistoryPanel
                         versions={versions}
                         language={language}
+                        onExportPdf={() => {
+                          void generateVersionDiffPDF(versions, uploadedModel.unifiedAnalysis, uploadedModel.fileName, language);
+                        }}
                         onClear={() => {
                           clearVersions(uploadedModel.fileName);
                           setVersions([]);
