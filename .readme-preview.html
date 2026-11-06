@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+  :root { --bg:#ffffff; --fg:#1f2328; --muted:#59636e; --border:#d1d9e0; --code:#f6f8fa; }
+  body { margin:0; background:#f6f8fa; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; color:var(--fg);}
+  .wrap{max-width:1012px;margin:0 auto;padding:32px 16px}
+  .md{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:40px 48px;font-size:16px;line-height:1.6}
+  .md h1{font-size:2em;border-bottom:1px solid var(--border);padding-bottom:.3em;margin:24px 0 16px}
+  .md h2{font-size:1.5em;border-bottom:1px solid var(--border);padding-bottom:.3em;margin:24px 0 16px}
+  .md h3{font-size:1.25em;margin:24px 0 16px}
+  .md img{max-width:100%;box-sizing:content-box}
+  .md code{background:var(--code);padding:.2em .4em;border-radius:6px;font-size:85%;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .md pre{background:var(--code);padding:16px;border-radius:6px;overflow:auto}
+  .md pre code{background:none;padding:0}
+  .md table{border-collapse:collapse;margin:0 0 16px;display:block;width:max-content;max-width:100%;overflow:auto}
+  .md th,.md td{border:1px solid var(--border);padding:6px 13px}
+  .md th{background:#f6f8fa;font-weight:600}
+  .md a{color:#0969da;text-decoration:none}
+  .md a:hover{text-decoration:underline}
+  .md blockquote{border-left:.25em solid var(--border);color:var(--muted);margin:0 0 16px;padding:0 1em}
+  .md hr{height:.25em;background:var(--border);border:0;margin:24px 0}
+  .md p{margin:0 0 16px}
+  .md [align="center"]{text-align:center}
+  .md sub{vertical-align:sub;font-size:smaller;color:var(--muted)}
+  .md footer{margin-top:40px;color:var(--muted);font-size:12px;text-align:center}
+</style></head><body>
+<div class="wrap"><div class="md" id="md">rendering…</div>
+<footer>local GitHub-style render of README.md — not an identical renderer</footer></div>
+<script src="./.readme-preview-marked.js"></script>
+<script>
+fetch('./README.md')
+  .then(r=>r.text())
+  .then(t=>{ document.getElementById('md').innerHTML = marked.parse(t, {mangle:false, headerIds:true}); })
+  .catch(e=>{ document.getElementById('md').textContent = 'FETCH FAILED: '+e; });
+</script></body></html>
