@@ -11,7 +11,7 @@ and the cheapest change that fixes it — before the first layer.
 
 <br />
 
-[**Live demo**](https://3dp-agent.vercel.app) &nbsp;·&nbsp; [**Watch the 29-second tour**](docs/media/ad.mp4) &nbsp;·&nbsp; [**Run locally**](#run-locally)
+[**Live demo**](https://3dp-agent.vercel.app) &nbsp;·&nbsp; [**Watch the 24-second tour**](docs/media/ad.mp4) &nbsp;·&nbsp; [**Run locally**](#run-locally)
 
 <br />
 
@@ -23,9 +23,9 @@ and the cheapest change that fixes it — before the first layer.
 
 <br />
 
-<a href="docs/media/ad.mp4"><img src="docs/media/film.webp" width="880" alt="3DP Agent — a title on the app's own background, then a sportbike orbiting under an overhang heatmap, then every analysis tab" /></a>
+<a href="docs/media/ad.mp4"><img src="docs/media/film.webp" width="880" alt="3DP Agent — the empty state, a sportbike dropping in, the verdict and its zoomed detail, then the agents' office" /></a>
 
-<sub><b>▶ excerpt</b> (animated WebP, plays inline) · <a href="docs/media/ad.mp4">watch the full 29-second tour</a></sub>
+<sub><b>▶ excerpt</b> (animated WebP, plays inline) · <a href="docs/media/ad.mp4">watch the full 24-second tour</a></sub>
 
 </div>
 
