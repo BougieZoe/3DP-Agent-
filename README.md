@@ -23,9 +23,9 @@ and the cheapest change that fixes it — before the first layer.
 
 <br />
 
-<a href="docs/media/ad.mp4"><img src="docs/media/ad-poster.jpg" width="880" alt="3DP Agent — 24-second film (click to play)" /></a>
+<a href="docs/media/ad.mp4"><img src="docs/media/film.webp" width="880" alt="3DP Agent — a Mac in a dark room, then the app: drop an STL, get a verdict, fix the wall" /></a>
 
-<sub>▶ 24 seconds — from a Mac to the answer. <a href="docs/media/ad.mp4">Play the film</a></sub>
+<sub><b>▶ 14-second excerpt</b> (animated WebP, plays inline) · <a href="docs/media/ad.mp4">watch the full 24-second film</a></sub>
 
 </div>
 
