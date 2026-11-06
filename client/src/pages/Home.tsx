@@ -1496,6 +1496,12 @@ export default function Home() {
             <SceneContent model={uploadedModel} />
             <ViewportCameraFit geometry={uploadedModel?.geometry ?? null} controlsRef={controlsRef} />
             <PlaybackUpdater />
+            {/* Local boundary for the lazy overlays. Without it a first-time
+                overlay toggle suspends the page-level Suspense and the whole
+                workspace is replaced by "LOADING…" for seconds — observed on a
+                362k-triangle model. Nothing loads = nothing shown; the scene
+                and panels stay put. */}
+            <Suspense fallback={null}>
             {uploadedModel?.geometry && <CognitiveScan geometry={uploadedModel.geometry} visible />}
             {uploadedModel?.geometry && agentMarkers.length > 0 && (
               <AttentionPulse markers={agentMarkers} geometry={uploadedModel.geometry} visible />
@@ -1544,6 +1550,7 @@ export default function Home() {
             {uploadedModel?.geometry && showWebGPU && (
               <WebGPUOverlay geometry={uploadedModel.geometry} mode="stress" opacity={overlayOpacity} visible />
             )}
+            </Suspense>
             <OrbitControls ref={controlsRef} enablePan={false} autoRotate={!uploadedModel} autoRotateSpeed={0.4} />
           </Canvas>
           {uploadedModel && (
