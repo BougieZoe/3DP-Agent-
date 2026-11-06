@@ -126,7 +126,7 @@ CHANGES SINCE UPLOAD
 <br />
 
 <div align="center">
-  <sub>A Sand3D <code>.usda</code> scene imported straight into the app — two flags in <code>scripts/usda-to-stl.py</code> and it lands in a printable pose.<br />
+  <sub><b>Import note.</b> A Sand3D <code>.usda</code> scene goes straight in — two flags in <code>scripts/usda-to-stl.py</code> and it lands in a printable pose.<br />
   The body stays neutral on purpose; the cube button switches on a <b>material preview</b> swatch without touching any measurement.</sub>
 </div>
 
@@ -149,9 +149,10 @@ into one weighted verdict — with the disagreements kept visible.
 <br />
 
 <div align="center">
-  <img src="docs/media/office.gif" width="820" alt="The four agents working in the Live Floor office" />
+  <img src="docs/media/office.jpg" width="900" alt="The Live Floor: four agents at their desks in the fullscreen office" />
   <br />
-  <sub>The Live Floor: four agents at their desks, each reporting what it found — orbit the room while they work.</sub>
+  <sub>The Live Floor, fullscreen: four agents at their desks, each reporting what it found.<br />
+  Orbit the room, or jump to a preset view — ISO, TOP, PRINT, FRONT, GYM, PANTRY, DESKS.</sub>
 </div>
 
 <br />
