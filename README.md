@@ -89,9 +89,17 @@ kept. A change is only committed when a second analysis proves it improved somet
 <br />
 
 <div align="center">
-  <img src="docs/media/03-heatmap.jpg" width="880" alt="Wall-thickness heatmap on a neutral clay model" />
+  <img src="docs/media/verdict.jpg" width="880" alt="One part, four numbers, one verdict" />
   <br />
-  <sub>Wall thickness on a 362k-triangle AK-47 — neutral base material so the geometry reads, colour reserved for meaning.</sub>
+  <sub>One part, four numbers, one verdict — 61,152 triangles, watertight, 4.788&nbsp;mm walls, 5,778 overhang faces.</sub>
+</div>
+
+<br />
+
+<div align="center">
+  <img src="docs/media/heatmap.gif" width="820" alt="Turning the overhang heatmap on and orbiting the part" />
+  <br />
+  <sub>The overhang layer, live: colour arrives where the part is risky, and the model keeps moving so you can read it in 3D.</sub>
 </div>
 
 <br />
@@ -118,16 +126,8 @@ CHANGES SINCE UPLOAD
 <br />
 
 <div align="center">
-  <img src="docs/media/07-sportbike.jpg" width="880" alt="A Sand3D sportbike imported from .usda — 61k triangles, watertight, minor fixes" />
-  <br />
-  <sub>A Sand3D <code>.usda</code> scene, 61,152 triangles, watertight — two minutes from file to verdict.<br />
+  <sub>A Sand3D <code>.usda</code> scene imported straight into the app — two flags in <code>scripts/usda-to-stl.py</code> and it lands in a printable pose.<br />
   The body stays neutral on purpose; the cube button switches on a <b>material preview</b> swatch without touching any measurement.</sub>
-</div>
-
-<br />
-
-<div align="center">
-  <img src="docs/media/05-report.jpg" width="880" alt="Report: verdict, deductions, changes, export" />
 </div>
 
 <br />
@@ -149,7 +149,9 @@ into one weighted verdict — with the disagreements kept visible.
 <br />
 
 <div align="center">
-  <img src="docs/media/06-agents.jpg" width="880" alt="Agent office and consensus" />
+  <img src="docs/media/office.gif" width="820" alt="The four agents working in the Live Floor office" />
+  <br />
+  <sub>The Live Floor: four agents at their desks, each reporting what it found — orbit the room while they work.</sub>
 </div>
 
 <br />
