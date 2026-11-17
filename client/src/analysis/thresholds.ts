@@ -230,6 +230,32 @@ export interface AnalysisThresholds {
   };
 
   /**
+   * Printability gate (reportUtils.getTrafficLight). These literals used to be
+   * scattered inside the score writer; they are consolidated here so the
+   * machine-readable DecisionRecord can quote the exact threshold it applied.
+   * Values are byte-identical to the previous hardcoded behaviour.
+   */
+  gate: {
+    shellPenalty: number;
+    holesPenaltyPerHole: number;
+    flippedNormalRatioMax: number;
+    flippedNormalPenalty: number;
+    degenerateFaceCountMax: number;
+    degeneratePenalty: number;
+    thinWallCriticalPenalty: number;
+    thinWallWarningPenalty: number;
+    lowConfidenceMax: number;
+    lowConfidenceThinRatioMax: number;
+    lowConfidencePenalty: number;
+    overhangCriticalPenalty: number;
+    overhangWarningPenalty: number;
+    supportCriticalPenalty: number;
+    supportWarningPenalty: number;
+    passScoreMin: number;
+    reviewScoreMin: number;
+  };
+
+  /**
    * Cross-check between server-side (trimesh) and client-side (tetrahedron)
    * volume computations. Both use the same mathematical principle (signed
    * tetrahedra from origin), so on the same watertight mesh they should agree
@@ -443,6 +469,26 @@ export const DEFAULT_ANALYSIS_THRESHOLDS: AnalysisThresholds = {
 
   verdictGate: {
     minTrustedWallConfidence: 0.4,
+  },
+
+  gate: {
+    shellPenalty: 30,
+    holesPenaltyPerHole: 8,
+    flippedNormalRatioMax: 0.1,
+    flippedNormalPenalty: 15,
+    degenerateFaceCountMax: 10,
+    degeneratePenalty: 10,
+    thinWallCriticalPenalty: 30,
+    thinWallWarningPenalty: 15,
+    lowConfidenceMax: 0.3,
+    lowConfidenceThinRatioMax: 0.02,
+    lowConfidencePenalty: 3,
+    overhangCriticalPenalty: 20,
+    overhangWarningPenalty: 10,
+    supportCriticalPenalty: 20,
+    supportWarningPenalty: 10,
+    passScoreMin: 75,
+    reviewScoreMin: 45,
   },
 
   volumeCrossCheck: {
@@ -701,6 +747,38 @@ export function validateThresholds(
   ratio('verdictGate.minTrustedWallConfidence', thresholds.verdictGate.minTrustedWallConfidence);
   if (thresholds.verdictGate.minTrustedWallConfidence <= 0 || thresholds.verdictGate.minTrustedWallConfidence > 1) {
     errors.push('verdictGate.minTrustedWallConfidence must be in (0, 1]');
+  }
+
+  // ── gate ─────────────────────────────────────────────────────────────────────
+  const gate = thresholds.gate;
+  ratio('gate.flippedNormalRatioMax', gate.flippedNormalRatioMax);
+  ratio('gate.lowConfidenceMax', gate.lowConfidenceMax);
+  ratio('gate.lowConfidenceThinRatioMax', gate.lowConfidenceThinRatioMax);
+  for (const [path, value] of [
+    ['gate.passScoreMin', gate.passScoreMin],
+    ['gate.reviewScoreMin', gate.reviewScoreMin],
+  ] as const) {
+    if (!Number.isFinite(value) || value <= 0 || value > 100) {
+      errors.push(`${path} must be a score in (0, 100], got ${value}`);
+    }
+  }
+  if (gate.reviewScoreMin >= gate.passScoreMin) {
+    errors.push('gate.reviewScoreMin must be < gate.passScoreMin');
+  }
+  const gatePenalties = [
+    gate.shellPenalty, gate.holesPenaltyPerHole, gate.flippedNormalPenalty,
+    gate.degeneratePenalty, gate.thinWallCriticalPenalty, gate.thinWallWarningPenalty,
+    gate.lowConfidencePenalty, gate.overhangCriticalPenalty, gate.overhangWarningPenalty,
+    gate.supportCriticalPenalty, gate.supportWarningPenalty,
+  ];
+  for (let i = 0; i < gatePenalties.length; i++) {
+    if (!Number.isFinite(gatePenalties[i]) || gatePenalties[i] < 0) {
+      errors.push(`gate penalty[${i}] must be a finite number >= 0, got ${gatePenalties[i]}`);
+    }
+  }
+  finitePositive('gate.holesPenaltyPerHole', gate.holesPenaltyPerHole);
+  if (!Number.isInteger(gate.degenerateFaceCountMax) || gate.degenerateFaceCountMax < 0) {
+    errors.push('gate.degenerateFaceCountMax must be a non-negative integer');
   }
 
   // ── volumeCrossCheck ────────────────────────────────────────────────────────

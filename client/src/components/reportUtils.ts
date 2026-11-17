@@ -1,4 +1,5 @@
 import type { UnifiedAnalysis } from "../analysis/types";
+import { getThresholds, type AnalysisThresholds } from "@/analysis/thresholds";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
 import type { ToneMode, Language, TrafficLight, ChatMessage } from "./reportTypes";
 
@@ -66,7 +67,10 @@ export type GateDeduction = {
   severity?: 'critical' | 'warning';
 };
 
-export function getTrafficLight(analysis: UnifiedAnalysis): {
+export function getTrafficLight(
+  analysis: UnifiedAnalysis,
+  thresholds: AnalysisThresholds = getThresholds(),
+): {
   light: TrafficLight;
   score: number;
   /**
@@ -80,6 +84,7 @@ export function getTrafficLight(analysis: UnifiedAnalysis): {
   deductions: GateDeduction[];
 } {
   let score = 100;
+  const gate = thresholds.gate;
   const deductions: GateDeduction[] = [];
   const v = analysis.validation?.result;
   const m = analysis.metrics?.result;
@@ -91,34 +96,34 @@ export function getTrafficLight(analysis: UnifiedAnalysis): {
   };
 
   if (v) {
-    if (!v.isWatertight) deduct({ rule: 'shell', penalty: 30, value: v.boundaryEdgeCount });
-    if (v.holeCount > 0) deduct({ rule: 'holes', penalty: v.holeCount * 8, value: v.holeCount });
-    if (v.flippedNormalRatio > 0.1) deduct({ rule: 'normals', penalty: 15, value: v.flippedNormalRatio });
-    if (v.degenerateFaceCount > 10) deduct({ rule: 'degenerate', penalty: 10, value: v.degenerateFaceCount });
+    if (!v.isWatertight) deduct({ rule: 'shell', penalty: gate.shellPenalty, value: v.boundaryEdgeCount });
+    if (v.holeCount > 0) deduct({ rule: 'holes', penalty: v.holeCount * gate.holesPenaltyPerHole, value: v.holeCount });
+    if (v.flippedNormalRatio > gate.flippedNormalRatioMax) deduct({ rule: 'normals', penalty: gate.flippedNormalPenalty, value: v.flippedNormalRatio });
+    if (v.degenerateFaceCount > gate.degenerateFaceCountMax) deduct({ rule: 'degenerate', penalty: gate.degeneratePenalty, value: v.degenerateFaceCount });
   }
 
   if (m) {
     const wtStatus = deriveWtStatus(m.thinWallRatio ?? 0, m.p5WallThicknessMm);
-    if (wtStatus === 'critical') deduct({ rule: 'thinWall', penalty: 30, severity: 'critical', value: m.p5WallThicknessMm ?? undefined });
-    else if (wtStatus === 'warning') deduct({ rule: 'thinWall', penalty: 15, severity: 'warning', value: m.p5WallThicknessMm ?? undefined });
-    if ((m.averageConfidence ?? 0) < 0.3 && (m.thinWallRatio ?? 0) < 0.02) {
-      deduct({ rule: 'lowConfidence', penalty: 3, value: m.averageConfidence });
+    if (wtStatus === 'critical') deduct({ rule: 'thinWall', penalty: gate.thinWallCriticalPenalty, severity: 'critical', value: m.p5WallThicknessMm ?? undefined });
+    else if (wtStatus === 'warning') deduct({ rule: 'thinWall', penalty: gate.thinWallWarningPenalty, severity: 'warning', value: m.p5WallThicknessMm ?? undefined });
+    if ((m.averageConfidence ?? 0) < gate.lowConfidenceMax && (m.thinWallRatio ?? 0) < gate.lowConfidenceThinRatioMax) {
+      deduct({ rule: 'lowConfidence', penalty: gate.lowConfidencePenalty, value: m.averageConfidence });
     }
     const ohStatus = deriveOhStatus(m.overhang.ratio);
-    if (ohStatus === 'critical') deduct({ rule: 'overhang', penalty: 20, severity: 'critical', value: m.overhang.ratio });
-    else if (ohStatus === 'warning') deduct({ rule: 'overhang', penalty: 10, severity: 'warning', value: m.overhang.ratio });
+    if (ohStatus === 'critical') deduct({ rule: 'overhang', penalty: gate.overhangCriticalPenalty, severity: 'critical', value: m.overhang.ratio });
+    else if (ohStatus === 'warning') deduct({ rule: 'overhang', penalty: gate.overhangWarningPenalty, severity: 'warning', value: m.overhang.ratio });
   }
 
   if (s) {
     const supportStatus = deriveSupportStatus(s);
-    if (supportStatus.status === 'critical') deduct({ rule: 'support', penalty: 20, severity: 'critical' });
-    else if (supportStatus.status === 'warning') deduct({ rule: 'support', penalty: 10, severity: 'warning' });
+    if (supportStatus.status === 'critical') deduct({ rule: 'support', penalty: gate.supportCriticalPenalty, severity: 'critical' });
+    else if (supportStatus.status === 'warning') deduct({ rule: 'support', penalty: gate.supportWarningPenalty, severity: 'warning' });
   }
 
   score = Math.max(0, Math.min(100, score));
 
   const light: TrafficLight =
-    score >= 75 ? "green" : score >= 45 ? "yellow" : "red";
+    score >= gate.passScoreMin ? "green" : score >= gate.reviewScoreMin ? "yellow" : "red";
 
   return { light, score, deductions };
 }

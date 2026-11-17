@@ -10,22 +10,51 @@
 import type { UnifiedAnalysis } from '../analysis/types';
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from '@/analysis/metrics';
 import { getTrafficLight } from '../components/reportUtils';
+import { getThresholds } from '@/analysis/thresholds';
+import { RULES_VERSION } from '@shared/domain/decisionRecord';
+import { stableHash } from './decisionRecord';
 
 /** Bump when the deduction table changes. Auditors pin this. */
-export const RULES_VERSION = 1;
+export { RULES_VERSION };
 
 export interface AuditRow {
   rule: string;
   input: string;
   deduction: number;
   status: 'pass' | 'warn' | 'fail' | 'skip';
+  /**
+   * Configuration baseline that produced this row. Omitted means "inherits the
+   * trail-level baseline" — the normal case, where one report used one config.
+   * Present only when a row was judged under a different configuration than the
+   * trail, which is exactly the case an auditor needs flagged rather than
+   * smoothed over.
+   */
+  configBaselineId?: string;
 }
 
 export interface AuditTrail {
   rulesVersion: number;
+  /**
+   * Configuration baseline the whole report was judged under: the topology
+   * profile id plus a hash of the thresholds it actually resolved to. Two
+   * reports with the same score but different baselines are not the same claim,
+   * and this is the field that makes that visible.
+   */
+  configBaselineId: string;
   score: number;
   light: string;
   rows: AuditRow[];
+}
+
+/**
+ * `profileId@thresholdsHash` — the profile alone is not enough (an override can
+ * change the numbers under a stable id) and the hash alone is not enough (two
+ * profiles can resolve to the same numbers today and diverge tomorrow).
+ */
+export function computeConfigBaselineId(analysis: UnifiedAnalysis): string {
+  const selection = analysis.topologyProfile;
+  const profileId = selection?.profile.id ?? 'default';
+  return `${profileId}@${stableHash(getThresholds(selection?.profile.thresholds))}`;
 }
 
 export function buildAuditTrail(analysis: UnifiedAnalysis): AuditTrail {
@@ -92,5 +121,11 @@ export function buildAuditTrail(analysis: UnifiedAnalysis): AuditTrail {
     rows.push({ rule: 'SUPPORT', input: 'module absent', deduction: 0, status: 'skip' });
   }
 
-  return { rulesVersion: RULES_VERSION, score, light, rows };
+  return {
+    rulesVersion: RULES_VERSION,
+    configBaselineId: computeConfigBaselineId(analysis),
+    score,
+    light,
+    rows,
+  };
 }
