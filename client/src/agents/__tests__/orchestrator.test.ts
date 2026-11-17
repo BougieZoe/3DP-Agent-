@@ -3,20 +3,6 @@ import { AgentOrchestrator } from '../orchestrator';
 import { getAgentRegistry } from '../core/agentRegistry';
 import { visionProvider } from '../visionProvider';
 import { buildMockUnifiedAnalysis, normalMetrics, thinWallMetrics, overhangMetrics, criticalBothMetrics, mockGeometry, mockMaterial } from './testAgentFixtures';
-import type { AgentStageConfig } from '../types';
-
-function makeConfigs(overrides?: Partial<Record<string, Partial<AgentStageConfig>>>): AgentStageConfig[] {
-  const ids: Array<'geometry_analyst' | 'printability_scorer' | 'failure_predictor' | 'optimization_advisor'> = [
-    'geometry_analyst', 'printability_scorer', 'failure_predictor', 'optimization_advisor',
-  ];
-  return ids.map(id => ({
-    agentId: id,
-    enabled: overrides?.[id]?.enabled !== false,
-    weight: overrides?.[id]?.weight ?? 0.25,
-    useVision: false,
-    timeoutMs: 5000,
-  }));
-}
 
 describe('AgentOrchestrator', () => {
   it('runs full analysis with real agents and returns consensus for normal model', async () => {
@@ -57,18 +43,33 @@ describe('AgentOrchestrator', () => {
   });
 
   it('respects custom agent weights in consensus', async () => {
-    const configs = makeConfigs({
-      geometry_analyst: { weight: 0.70 },
-      printability_scorer: { weight: 0.10 },
-      failure_predictor: { weight: 0.10 },
-      optimization_advisor: { weight: 0.10 },
-    });
-    const geo = mockGeometry();
-    const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
-    const orch = new AgentOrchestrator(configs);
-    const result = await orch.runFullAnalysis(geo, ua, 'weighted.stl');
-    expect(result.consensus.overallScore).toBeGreaterThan(0);
-    expect(result.votingRecords.length).toBe(4);
+    const registry = getAgentRegistry();
+    const originals = registry.getAll();
+    const custom: Record<string, number> = {
+      geometry_analyst: 0.70,
+      printability_scorer: 0.10,
+      failure_predictor: 0.10,
+      optimization_advisor: 0.10,
+    };
+    try {
+      for (const slot of originals) {
+        registry.register({ ...slot, weight: custom[slot.id] ?? slot.weight });
+      }
+      const geo = mockGeometry();
+      const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
+      const orch = new AgentOrchestrator();
+      // mjf has no material override, so the configured weights are the ones used.
+      const result = await orch.runFullAnalysis(
+        geo, ua, 'weighted.stl', undefined, 'en',
+        mockMaterial({ technology: 'mjf', name: 'MJF' }),
+      );
+      expect(result.consensus.overallScore).toBeGreaterThan(0);
+      expect(result.votingRecords.length).toBe(4);
+      expect(result.votingRecords.find(r => r.agentId === 'geometry_analyst')!.weight).toBe(0.70);
+      expect(result.votingRecords.find(r => r.agentId === 'printability_scorer')!.weight).toBe(0.10);
+    } finally {
+      for (const slot of originals) registry.register(slot);
+    }
   });
 
   it('handles disabled agents', async () => {
@@ -106,10 +107,9 @@ describe('AgentOrchestrator', () => {
   });
 
   it('produces proper voting records with weight information', async () => {
-    const configs = makeConfigs();
     const geo = mockGeometry();
     const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
-    const orch = new AgentOrchestrator(configs);
+    const orch = new AgentOrchestrator();
     const result = await orch.runFullAnalysis(geo, ua, 'votes.stl');
     result.votingRecords.forEach(record => {
       expect(record.initialScore).toBeGreaterThanOrEqual(0);
@@ -213,4 +213,120 @@ describe('AgentOrchestrator', () => {
       vi.unstubAllGlobals();
     }
   });
+  it('uses PipelineFactory material filters to choose agents per run', async () => {
+    const registry = getAgentRegistry();
+    const original = registry.get('optimization_advisor')!;
+    try {
+      registry.register({ ...original, materialFilter: ['sla'] });
+      const geo = mockGeometry();
+      const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
+      const orch = new AgentOrchestrator();
+      const fdm = await orch.runFullAnalysis(
+        geo, ua, 'filtered.stl', undefined, 'en',
+        mockMaterial({ technology: 'fdm', name: 'PLA' }),
+      );
+      expect(fdm.results.map(r => r.agentId)).not.toContain('optimization_advisor');
+      expect(fdm.results.length).toBe(3);
+
+      const sla = await orch.runFullAnalysis(
+        geo, ua, 'filtered-sla.stl', undefined, 'en',
+        mockMaterial({ technology: 'sla', name: 'Resin' }),
+      );
+      expect(sla.results.map(r => r.agentId)).toContain('optimization_advisor');
+    } finally {
+      registry.register(original);
+    }
+  });
+
+  it('uses material weight overrides at runtime without persisting them', async () => {
+    const registry = getAgentRegistry();
+    const before = registry.get('optimization_advisor')!.weight;
+    const geo = mockGeometry();
+    const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
+    const orch = new AgentOrchestrator();
+    const result = await orch.runFullAnalysis(
+      geo, ua, 'fdm.stl', undefined, 'en',
+      mockMaterial({ technology: 'fdm', name: 'PLA' }),
+    );
+    expect(result.votingRecords.find(r => r.agentId === 'failure_predictor')!.weight).toBe(0.30);
+    expect(result.votingRecords.find(r => r.agentId === 'optimization_advisor')!.weight).toBe(0.20);
+    expect(registry.get('optimization_advisor')!.weight).toBe(before);
+  });
+
+  it('keeps early-triage weight adjustments runtime-only', () => {
+    const registry = getAgentRegistry();
+    const spy = vi.spyOn(registry, 'updateWeight');
+    try {
+      const weights = new Map<'geometry_analyst', number>([['geometry_analyst', 0.2]]);
+      const orch = new AgentOrchestrator();
+      (orch as any).adjustWeightsByEarlyTriage(weights, {
+        riskCategory: 'watertight',
+        agentPriority: 'geometry_analyst',
+      });
+      expect(weights.get('geometry_analyst')).toBeCloseTo(0.3);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('applies the concrete pipeline: fewer debate rounds and no Jev calls', async () => {
+    const geo = mockGeometry();
+    const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
+    const orch = new AgentOrchestrator();
+    const triage = vi.spyOn(orch as any, 'runJevEarlyTriage').mockResolvedValue(undefined);
+    const decision = vi.spyOn(orch as any, 'runJevDecision').mockResolvedValue(undefined);
+    const debate = vi.spyOn(orch as any, 'runDebatePhase');
+    try {
+      const result = await orch.runFullAnalysis(
+        geo, ua, 'concrete.stl', undefined, 'en',
+        mockMaterial({ technology: 'concrete', name: 'Concrete' }),
+      );
+      expect(triage).not.toHaveBeenCalled();
+      expect(decision).not.toHaveBeenCalled();
+      expect(debate).toHaveBeenCalledTimes(1);
+      expect(debate.mock.calls[0][4]).toBe(1);
+      expect(result.consensus.totalRounds).toBeLessThanOrEqual(1);
+    } finally {
+      triage.mockRestore();
+      decision.mockRestore();
+      debate.mockRestore();
+    }
+  });
+
+  it('uses the SLS pipeline debate-round count', async () => {
+    const geo = mockGeometry();
+    const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
+    const orch = new AgentOrchestrator();
+    const debate = vi.spyOn(orch as any, 'runDebatePhase');
+    try {
+      await orch.runFullAnalysis(
+        geo, ua, 'sls.stl', undefined, 'en',
+        mockMaterial({ technology: 'sls', name: 'PA12' }),
+      );
+      expect(debate.mock.calls[0][4]).toBe(3);
+    } finally {
+      debate.mockRestore();
+    }
+  });
+
+  it('enables Jev for the FDM pipeline', async () => {
+    const geo = mockGeometry();
+    const ua = buildMockUnifiedAnalysis({ metrics: normalMetrics() });
+    const orch = new AgentOrchestrator();
+    const triage = vi.spyOn(orch as any, 'runJevEarlyTriage').mockResolvedValue(undefined);
+    const debate = vi.spyOn(orch as any, 'runDebatePhase');
+    try {
+      await orch.runFullAnalysis(
+        geo, ua, 'fdm-jev.stl', undefined, 'en',
+        mockMaterial({ technology: 'fdm', name: 'PLA' }),
+      );
+      expect(triage).toHaveBeenCalledTimes(1);
+      expect(debate.mock.calls[0][4]).toBe(2);
+    } finally {
+      triage.mockRestore();
+      debate.mockRestore();
+    }
+  });
+
 });
