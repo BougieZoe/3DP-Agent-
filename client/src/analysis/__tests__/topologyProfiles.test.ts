@@ -239,6 +239,30 @@ describe('inferProvenance', () => {
     expect(inferProvenance('part-build123d.stl').provenance).toBe('cad');
   });
 
+  it('measures quad flow only when the resolved profile expects it', () => {
+    const quadDerived = runAnalysisPipeline(makeTriangulatedQuadSphere(24, 48), {
+      fileName: 'parts/quad-sphere.stl',
+      language: 'en',
+    });
+    expect(quadDerived.topologyProfile?.profile.rules.criteria).toBe('quad-flow');
+    // The measurement must actually be attached, with the numbers the module
+    // exists to produce — a non-null placeholder would pass a weaker assertion
+    // while telling the caller nothing.
+    expect(quadDerived.quadFlow).not.toBeNull();
+    expect(quadDerived.quadFlow?.quadFaceCount).toBeGreaterThan(0);
+    expect(quadDerived.quadFlow?.coverage).toBeGreaterThan(0.25);
+
+    const triangleMesh = runAnalysisPipeline(makeIcosphere(3), {
+      fileName: 'parts/ico.stl',
+      language: 'en',
+    });
+    expect(triangleMesh.topologyProfile?.profile.rules.criteria).not.toBe('quad-flow');
+    // Not measured is distinct from measured-as-zero. Running the reconstruction
+    // here would spend a full traversal to confirm what the profile already
+    // decided, so the slot stays empty.
+    expect(triangleMesh.quadFlow).toBeNull();
+  });
+
   it('recognises scans and slicer re-imports', () => {
     expect(inferProvenance('photogrammetry_scan.ply').provenance).toBe('scan');
     expect(inferProvenance('orcaslicer_prepared.3mf').provenance).toBe('slicer');

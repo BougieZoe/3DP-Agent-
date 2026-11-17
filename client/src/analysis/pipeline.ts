@@ -20,6 +20,7 @@ import { estimatePrintTime } from './printTime';
 import { buildGeometryGraph } from './geometryGraph';
 import { getThresholds, type ThresholdsOverride } from './thresholds';
 import { mergeThresholdOverrides, selectTopologyProfile } from './topologyProfiles';
+import { analyzeQuadFlow } from './quadFlow';
 import { type GeometryModel } from './geometryModel';
 import type { PrinterProfileId } from './types';
 import type { Material } from '@shared/domain/material';
@@ -139,6 +140,20 @@ export function runAnalysisPipeline(
     try { return validateMesh(model, graph, lang, thresholds); }
     catch (e) { return failResult('validation', e, emptyValidation); }
   });
+
+  // Quad edge-flow quality, measured only when the resolved profile declares
+  // quad flow as the governing criterion. Running the reconstruction on a mesh
+  // the profile already classified as triangle-based would spend a full edge
+  // traversal to answer a question that is already settled.
+  //
+  // Failure here is tolerable: flow quality is a diagnostic, not a verdict, so
+  // it degrades to null (recorded in `errors`) rather than inventing a number.
+  const quadFlow = topologyProfile.profile.rules.criteria === 'quad-flow'
+    ? time('quadFlow', () => {
+        try { return analyzeQuadFlow(graph); }
+        catch (e) { return skippedByError('quadFlow', e); }
+      })
+    : null;
 
   const metrics = time('metrics', () => {
     try { return computeMetrics(model, graph, mat?.overhangThreshold, profiling, lang, thresholds); }
@@ -513,6 +528,7 @@ export function runAnalysisPipeline(
     modelFileName: fileName,
     overallConfidence,
     topologyProfile,
+    quadFlow,
     ...(errors.length > 0 ? { errors } : {}),
     profiling,
   };
