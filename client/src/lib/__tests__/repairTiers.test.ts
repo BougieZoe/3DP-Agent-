@@ -45,6 +45,13 @@ describe('pickWasmSuggestion', () => {
     expect(pickWasmSuggestion([sug({ type: 'add_support' }), s])).toBe(s);
   });
 
+  it('ranks applicable candidates by risk reduction, then confidence', () => {
+    const low = sug({ id: 'low', riskReduction: 10, confidence: 0.9 });
+    const high = sug({ id: 'high', riskReduction: 60, confidence: 0.4 });
+    const tie = sug({ id: 'tie', riskReduction: 60, confidence: 0.8 });
+    expect(pickWasmSuggestion([low, high, tie])?.id).toBe('tie');
+  });
+
   it('returns null when nothing appliable', () => {
     expect(pickWasmSuggestion([])).toBeNull();
     expect(pickWasmSuggestion([sug({ type: 'add_support' })])).toBeNull();

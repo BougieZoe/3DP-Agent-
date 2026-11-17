@@ -2,7 +2,8 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
 import { loadModelFile } from '@/lib/modelLoader';
 import { Language } from '@/lib/i18n';
-import { runAnalysisInWorker, fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
+import { fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
+import { analyzeWithTelemetry } from '@/lib/analysisProfiling';
 import { normalizeModelGeometry } from '@/lib/modelNormalization';
 import { autoOrientGeometry } from '@/lib/autoOrient';
 import { geometryToStl } from '@/lib/meshOps';
@@ -10,6 +11,7 @@ import { sliceSTL, type SliceMetadata, type SliceProvenance, type SlicerId, type
 import { parseToolpath, type Toolpath } from '@/lib/toolpath';
 import { getCachedAnalysis, setCachedAnalysis, hashFileBytes, cacheKeyFromParts } from '@/lib/analysisCache';
 import { recordLoopPrint } from '@/lib/loopLedger';
+import { saveAnalysisRun } from '@/lib/analysisRuns';
 import { logLoopPrediction } from '@/lib/loopCalibration';
 import { scoreBand } from '@/analysis/loop';
 import { notifyAnalysisComplete } from '@/lib/notifications';
@@ -26,6 +28,10 @@ export interface UploadedModel {
   mesh: THREE.Mesh;
   unifiedAnalysis: UnifiedAnalysis;
   fileName: string;
+  /** SHA-256 of the uploaded bytes — identity for history/outcome linkage. */
+  fileHash: string;
+  /** Local AnalysisRecord id for THIS run; null when history is unavailable. */
+  analysisRecordId?: string | null;
   fileSizeBytes?: number;
   /** Declared units of the source file; geometry is normalized to mm before analysis. */
   units: LengthUnit;
@@ -239,7 +245,7 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
         } else {
           const model = fromThreeBufferGeometry(geometry);
           log(`> ANALYZING ${file.name}...`);
-          unifiedAnalysis = await runAnalysisInWorker(model, pipelineOptions);
+          unifiedAnalysis = await analyzeWithTelemetry(model, pipelineOptions);
           // Cache the result for future uploads
           await setCachedAnalysis(null, pipelineOptions, unifiedAnalysis, file.name, file.size, { cacheKey, fileHash });
         }
@@ -323,11 +329,32 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
         }
 
         const mesh = createMeshFromGeometry(geometry);
+        const analysisRecordId = (
+          await saveAnalysisRun({
+            analysis: unifiedAnalysis,
+            fileName: file.name,
+            fileHash,
+            fileSizeBytes: file.size,
+            units: effectiveUnits,
+            material: material ?? DEFAULT_MATERIAL,
+            materialFamily,
+            slicer: sliceMetadata
+              ? {
+                  source: 'slicer',
+                  slicerId: sliceProvenance?.slicerId ?? null,
+                  printTimeMinutes: sliceMetadata.printTimeMinutes,
+                  layerCount: sliceMetadata.layerCount,
+                }
+              : null,
+          })
+        )?.id ?? null;
         results.push({
           geometry,
           mesh,
           unifiedAnalysis,
           fileName: file.name,
+          fileHash,
+          analysisRecordId,
           fileSizeBytes: file.size,
           units: effectiveUnits,
           rawGeometry,
@@ -361,7 +388,7 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
     if (timerIdRef.current !== null) { window.clearInterval(timerIdRef.current); timerIdRef.current = null; }
     setElapsedMs(Date.now() - startedAtRef.current);
     setIsLoading(false);
-  }, [onModelsLoaded, onError, t, units, materialFamily]);
+  }, [onModelsLoaded, onError, t, units, materialFamily, material]);
 
   // Resume: run a stored file through the exact same pipeline as a drop.
   useEffect(() => {
