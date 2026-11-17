@@ -662,17 +662,19 @@ export function resolveTopologyProfile(
  * profile that should judge it. Returns the evidence trail so a report can
  * justify the choice rather than asserting it.
  */
-export function selectTopologyProfile(
-  model: GeometryModel,
-  provenanceHint?: string,
-): {
+export interface TopologyProfileSelection {
   profile: TopologyProfile;
   detection: TopologyDetection;
   fingerprint: TopologyFingerprint;
   resolution: ProfileResolution;
   provenance: MeshProvenance;
   provenanceConfidence: number;
-} {
+}
+
+export function selectTopologyProfile(
+  model: GeometryModel,
+  provenanceHint?: string,
+): TopologyProfileSelection {
   const fingerprint = computeTopologyFingerprint(model);
   const detection = classifyTopology(fingerprint);
   const hinted = inferProvenance(provenanceHint);
@@ -686,4 +688,60 @@ export function selectTopologyProfile(
     provenance: hinted.provenance,
     provenanceConfidence: hinted.confidence,
   };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Layer two threshold overrides, `override` winning field by field at every
+ * depth.
+ *
+ * A shallow spread is not good enough here: once both the profile and the
+ * caller mention `wallThickness`, a spread replaces the whole group and
+ * silently drops the sibling fields the other side set. Thresholds are also
+ * where a wrong merge would be least visible and most expensive — it would
+ * shift verdicts without changing any code that looks like it decides
+ * anything.
+ *
+ * Precedence: profile baseline < explicit caller override. A per-run override
+ * always outranks a profile default, because the caller is describing *this*
+ * print rather than a class of geometry.
+ */
+function mergeDeep(
+  base: Record<string, unknown>,
+  override: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    const previous = merged[key];
+    merged[key] =
+      isPlainObject(previous) && isPlainObject(value)
+        ? mergeDeep(previous, value)
+        : value;
+  }
+  return merged;
+}
+
+/**
+ * Declared via `unknown` on purpose: `ThresholdsOverride` is a recursive mapped
+ * type, and any bare `{}` literal annotated with it makes TypeScript try to
+ * instantiate the mapped type and reject it as self-referential (TS2615).
+ */
+const EMPTY_THRESHOLDS_OVERRIDE = {} as unknown as ThresholdsOverride;
+
+export function mergeThresholdOverrides(
+  base?: ThresholdsOverride,
+  override?: ThresholdsOverride,
+): ThresholdsOverride {
+  if (!base) return override ?? EMPTY_THRESHOLDS_OVERRIDE;
+  if (!override) return base;
+  // Typed at the boundary only: `ThresholdsOverride` is a recursive mapped
+  // type, so recursing on it directly makes TypeScript reject the definition
+  // as self-referential. The recursion itself is plain structural merging.
+  return mergeDeep(
+    base as unknown as Record<string, unknown>,
+    override as unknown as Record<string, unknown>,
+  ) as unknown as ThresholdsOverride;
 }

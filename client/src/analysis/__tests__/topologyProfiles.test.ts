@@ -11,6 +11,7 @@ import {
   type TopologyKind,
 } from '../topologyProfiles';
 import { CONTENT } from '@shared/i18n/content';
+import { runAnalysisPipeline } from '../pipeline';
 
 // ─── Synthetic geometry helpers ───────────────────────────────────────────────
 // These build meshes with a *known* ground-truth topology so the classifier is
@@ -351,5 +352,58 @@ describe('selectTopologyProfile', () => {
     expect(selection.provenance).toBe('unknown');
     expect(selection.profile.id).toBe('unknown:tri');
     expect(selection.resolution.tier).toBe('exact');
+  });
+});
+
+// ─── Pipeline integration ────────────────────────────────────────────────────
+// The profile is only worth anything if it actually reaches the analysis
+// result. These assertions exist to catch "wired up but never called".
+
+describe('pipeline integration', () => {
+  it('records the profile that judged the model', () => {
+    const analysis = runAnalysisPipeline(makeTriangulatedQuadSphere(12, 24), {
+      fileName: 'tripo_p2_asset.glb',
+    });
+
+    expect(analysis.topologyProfile).toBeTruthy();
+    expect(analysis.topologyProfile?.profile.id).toBe('ai-generation:quad');
+    expect(analysis.topologyProfile?.detection.kind).toBe('quad');
+    expect(analysis.topologyProfile?.resolution.tier).toBe('exact');
+    // The evidence trail travels with the decision, so a report can explain it.
+    expect(analysis.topologyProfile?.detection.evidence.length).toBeGreaterThan(0);
+    expect(analysis.topologyProfile?.fingerprint.triangleCount).toBeGreaterThan(0);
+  });
+
+  it('keeps the recorded profile reproducible from the filename alone', () => {
+    const model = makeIcosphere(3);
+    const first = runAnalysisPipeline(model, { fileName: 'bracket_fusion360.stl' });
+    const second = runAnalysisPipeline(model, { fileName: 'bracket_fusion360.stl' });
+
+    expect(first.topologyProfile?.profile.id).toBe('cad:tri');
+    expect(second.topologyProfile?.profile.id).toBe(first.topologyProfile?.profile.id);
+    expect(second.topologyProfile?.detection.confidence).toBe(
+      first.topologyProfile?.detection.confidence,
+    );
+  });
+
+  it('lets an explicit provenance override the filename', () => {
+    const analysis = runAnalysisPipeline(makeIcosphere(3), {
+      fileName: 'export.stl',
+      topologyProvenance: 'meshy_refined.glb',
+    });
+    expect(analysis.topologyProfile?.provenance).toBe('ai-generation');
+    expect(analysis.topologyProfile?.profile.id).toBe('ai-generation:tri');
+  });
+
+  it('does not disturb verdicts: every shipped profile leaves thresholds empty', () => {
+    // This is the safety property that makes rolling profiles out harmless.
+    // The moment a profile starts overriding thresholds, verdicts can shift,
+    // and that must be a deliberate, reviewed change — not a side effect.
+    for (const [id, profile] of Object.entries(TOPOLOGY_PROFILES)) {
+      expect(
+        Object.keys(profile.thresholds ?? {}),
+        `profile ${id} must not override thresholds until it is calibrated on real parts`,
+      ).toHaveLength(0);
+    }
   });
 });

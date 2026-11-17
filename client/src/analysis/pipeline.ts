@@ -19,6 +19,7 @@ import { estimateSupportVolume } from './support';
 import { estimatePrintTime } from './printTime';
 import { buildGeometryGraph } from './geometryGraph';
 import { getThresholds, type ThresholdsOverride } from './thresholds';
+import { mergeThresholdOverrides, selectTopologyProfile } from './topologyProfiles';
 import { type GeometryModel } from './geometryModel';
 import type { PrinterProfileId } from './types';
 import type { Material } from '@shared/domain/material';
@@ -37,6 +38,11 @@ export interface PipelineOptions {
    * Intended for tests and calibration runs; production callers omit it.
    */
   thresholds?: ThresholdsOverride;
+  /**
+   * Where the geometry came from (a filename or an explicit label). Only a hint:
+   * the geometry itself outranks it when the two disagree.
+   */
+  topologyProvenance?: string;
   /**
    * When true, each module (and the wall-thickness sub-modules) records its
    * own wall-clock duration in the result's `profiling` map. This is the
@@ -73,7 +79,16 @@ export function runAnalysisPipeline(
   const fileName = options.fileName ?? 'unknown.stl';
   const mat = options.material;
   const lang = options.language ?? 'en';
-  const thresholds = getThresholds(options.thresholds);
+  // Resolve the profile before anything is judged. Thresholds flow out of it,
+  // so selecting the profile afterwards would mean judging first and
+  // justifying later — the report would describe a decision it did not make.
+  const topologyProfile = selectTopologyProfile(
+    model,
+    options.topologyProvenance ?? fileName,
+  );
+  const thresholds = getThresholds(
+    mergeThresholdOverrides(topologyProfile.profile.thresholds, options.thresholds),
+  );
 
   const profiling = options.enableProfiling ? ({} as Record<string, number>) : undefined;
   const time = <T>(key: string, fn: () => T): T => {
@@ -497,6 +512,7 @@ export function runAnalysisPipeline(
     timestamp: now,
     modelFileName: fileName,
     overallConfidence,
+    topologyProfile,
     ...(errors.length > 0 ? { errors } : {}),
     profiling,
   };

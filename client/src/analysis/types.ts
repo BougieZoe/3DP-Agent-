@@ -366,6 +366,12 @@ export interface UnifiedAnalysis {
     printTime: { printTime: number; filamentLength: number; layerCount: number } | null;
     modelsLoaded: { wallThickness: boolean; overhang: boolean; printTime: boolean };
   }> | null;
+  /**
+   * Which topology profile judged this model, plus the evidence that selected
+   * it. Recorded so a report can justify the choice rather than assert it, and
+   * so a verdict can be replayed against the same profile later.
+   */
+  topologyProfile?: import('./topologyProfiles').TopologyProfileSelection | null;
   /** ISO timestamp of when analysis was run */
   timestamp: string;
   modelFileName: string;
