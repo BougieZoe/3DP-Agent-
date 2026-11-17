@@ -5,12 +5,16 @@ import * as THREE from 'three';
 import { Sparkles, Download, Box, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 import { parseSTL } from '@/lib/stlParser';
 import { fitCameraToGeometry } from '@/lib/modelNormalization';
-import { countTriangles, decimateGeometry } from '@/lib/meshOps';
+import { countTriangles, decimateGeometry, geometryToStl } from '@/lib/meshOps';
 import { formatVolume } from '@/lib/volumeDisplay';
 import { processMesh, type MeshProcessDiagnostics } from '@/lib/meshProcessClient';
 import { runCadAnalysis } from '@/lib/cadAnalysis';
 import { geometryToThreeMf } from '@/lib/threeMf';
-import { recordPrintOutcome, getPrintStats, type PrintOutcome } from '@/lib/printFeedback';
+import { recordCalibrationOutcome, getPrintStats, type PrintOutcome } from '@/lib/printFeedback';
+import { buildDecisionBundle, stableHash } from '@/lib/decisionRecord';
+import { getThresholds } from '@/analysis/thresholds';
+import { CAD_CONFIDENCE_RULES_VERSION } from '@/cad-confidence';
+import { hashFileBytes } from '@/lib/analysisCache';
 import { createMeshGenerator, generateDesign, type GeneratorAdapter } from '@/design/generator';
 import { useMaterial } from '@/contexts/MaterialContext';
 import { getTranslation, translations } from '@/lib/i18n';
@@ -191,9 +195,21 @@ export function MeshStudio({ language }: { language: Language }) {
     URL.revokeObjectURL(url);
   };
 
-  const handlePrintFeedback = (outcome: PrintOutcome) => {
-    if (!gate) return;
-    recordPrintOutcome({ confidence: gate.overallScore, verdict: gate.verdict, outcome });
+  const handlePrintFeedback = async (outcome: PrintOutcome) => {
+    if (!gate || !unified || !geometry) return;
+    const decision = buildDecisionBundle(unified);
+    const fileHash = await hashFileBytes(geometryToStl(geometry));
+    recordCalibrationOutcome({
+      fileHash,
+      rulesVersion: CAD_CONFIDENCE_RULES_VERSION,
+      thresholdsHash: stableHash(getThresholds()),
+      inputHash: decision.inputHash,
+      source: 'cad-confidence',
+      material: material.name,
+      confidence: gate.overallScore / 100,
+      verdict: gate.verdict,
+      outcome,
+    });
     setPrintStats(getPrintStats());
   };
 
@@ -507,21 +523,21 @@ export function MeshStudio({ language }: { language: Language }) {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => handlePrintFeedback('ok')}
+                      onClick={() => void handlePrintFeedback('ok')}
                       title={t('meshPrintOk')}
                       className="h-6 w-6 inline-flex items-center justify-center border border-border/40 rounded-sm text-emerald-400/70 hover:text-emerald-400 hover:border-emerald-400/40 transition-colors"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => handlePrintFeedback('issue')}
+                      onClick={() => void handlePrintFeedback('issue')}
                       title={t('meshPrintIssue')}
                       className="h-6 w-6 inline-flex items-center justify-center border border-border/40 rounded-sm text-amber-400/70 hover:text-amber-400 hover:border-amber-400/40 transition-colors"
                     >
                       <AlertTriangle className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => handlePrintFeedback('fail')}
+                      onClick={() => void handlePrintFeedback('fail')}
                       title={t('meshPrintFail')}
                       className="h-6 w-6 inline-flex items-center justify-center border border-border/40 rounded-sm text-red-400/70 hover:text-red-400 hover:border-red-400/40 transition-colors"
                     >

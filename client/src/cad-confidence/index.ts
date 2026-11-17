@@ -151,6 +151,8 @@ export function runConfidenceGate(
   };
 }
 
+export { CAD_CONFIDENCE_RULES_VERSION } from './confidenceEngine';
+
 export type {
   Verdict,
   GenerationQuality,
