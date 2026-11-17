@@ -25,6 +25,7 @@ import {
 } from '@/lib/analysisHistory';
 import { PrintOutcomeCard } from '../PrintOutcomeCard';
 import type { AnonymousOutcomePayload } from '@/lib/outcomeUpload';
+import { getCalibrationReport } from '@/lib/printFeedback';
 
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
@@ -57,6 +58,7 @@ async function seed(store: RecordStore, id: string, fileHash = HASH_A) {
 
 beforeEach(() => {
   cleanup();
+  localStorage.clear();
 });
 afterEach(() => {
   cleanup();
@@ -92,6 +94,29 @@ describe('PrintOutcomeCard', () => {
     expect(saved?.outcome.recordedAt).toBeTruthy();
     // Requirement 5 guard: a fingerprint-neighbor record is never touched.
     expect((await store.get('r-3'))?.outcome.status).toBe('not_tested');
+  });
+
+  it('mirrors a saved record into the calibration index', async () => {
+    const store = createMemoryStore();
+    await seed(store, 'r-cal');
+
+    render(<PrintOutcomeCard recordId="r-cal" language="en" store={store} />);
+    await waitFor(() => expect(screen.getByRole('radio', { name: /Successful print/ })).toBeDefined());
+    fireEvent.click(screen.getByRole('radio', { name: /Successful print/ }));
+    fireEvent.click(screen.getByRole('button', { name: /SAVE OUTCOME/i }));
+    await waitFor(() => expect(screen.getByText(/✓ Saved to local history/i)).toBeDefined());
+
+    const saved = (await store.get('r-cal'))!;
+    const report = getCalibrationReport({
+      fileHash: saved.model.fileHash,
+      rulesVersion: saved.analyzer.rulesVersion,
+      thresholdsHash: saved.analyzer.thresholdsHash!,
+      inputHash: saved.analyzer.inputHash!,
+      source: 'analysis-record',
+      material: saved.context.material ?? undefined,
+    });
+    expect(report.total).toBe(1);
+    expect(report.buckets.find((b) => b.band === 'high')!.okCount).toBe(1);
   });
 
   it('supports unknown and not_tested as honest non-success states', async () => {

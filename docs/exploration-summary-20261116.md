@@ -108,12 +108,11 @@
 
 ## 5. 当前最大的技术债 / 薄弱点
 
-1. **反馈数据源仍未统一**：`lib/printFeedback.ts`（localStorage，Mesh 置信度校准）、
-   `lib/feedback.ts`（通用反馈）、`AnalysisRecord.outcome`（报告实测结果）三套并存。
-   制造结果闭环已使用 `AnalysisRecord.outcome`，但尚未建立唯一事实来源与合并策略。
-2. **Jev 路径仍有两个缺陷**：登录后 `getJevApiKey()` 返回空字符串（不是 `undefined`），
-   仍可能发起无效 Jev 调用；recalibrator 先改写 `original.score` 再拼日志，
-   导致日志的 “from X to Y” 两端相同。
+1. **反馈数据源已收敛**：`AnalysisRecord.outcome` 是权威记录；
+   `lib/printFeedback.ts` 是版本化派生校准索引（`source: 'analysis-record'`）；
+   `lib/feedback.ts` 仅存产品反馈。旧 `3dp.printFeedback` 会一次性迁移并删除。
+2. **Jev 路径缺陷已修复**：空字符串是“服务端持有密钥”的 sentinel，
+   只有 `undefined` 才跳过；recalibrator 在改写分数前保存 `originalScore`。
 3. **历史/版本能力弱**：`RepairLink` 只保存一条派生关系，没有完整版本链或回滚 UI。
    记录已可写入，但浏览器历史列表/恢复入口尚未产品化。
 4. **性能**：每次修复都会完整重跑分析（正确性要求），但几何图/BVH 可缓存，
@@ -122,8 +121,9 @@
    mesh/process 的权威实现需明确（当前前端调用 TS `server/meshProcess.ts`）。
 6. **历史记忆未实现**：Manufacturing Knowledge Graph 与 Historical Failure Memory
    仍只在 README 路线图中。
-7. **校准尚未消费实测结果**：数据已具备 `fileHash + createdAt + outcome`，
-   但还没有把多轮实际结果反馈到 Agent 权重或 Jev 的拟合任务。
+7. **校准已消费实测结果**：`PrintOutcomeCard` 保存后写入版本化 calibration store，
+   并按 `rulesVersion + thresholdsHash + inputHash` 分组；尚未把结果自动反馈到
+   Agent 权重或 Jev 的拟合任务（仍只报告，不自动改阈值）。
 
 ## 6. 四个优先级的落点（探索结论，均已完成）
 
@@ -141,7 +141,8 @@
 
 ## 7. 实现状态与剩余决策
 
-- 已创建分支 `feature/core-upgrades-data-loop-autofix-physics`，未提交改动保留在工作区。
-- P1–P4 已完成并通过全量验证；等待 review 决定提交/拆分方式。
-- 当前无实现阻塞项。下一步应优先处理 Jev 路径缺陷与反馈数据源统一，
-  再考虑历史列表/回滚 UI 和实测结果驱动的权重校准。
+- `feature/core-upgrades-data-loop-autofix-physics` 已按 P1–P4 拆分提交，
+  并合并进 `feature/decision-record-calibration`（merge `a09bb2b9`）。
+- P1–P4、Jev sentinel/recalibration 修复、反馈源统一均已完成并通过全量验证。
+- 当前无实现阻塞项。下一步：浏览器历史列表/回滚 UI、匿名聚合的可选远端实现，
+  以及实测结果驱动的权重校准（只生成 review 建议，不自动改阈值）。

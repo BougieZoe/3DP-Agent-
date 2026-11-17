@@ -26,11 +26,12 @@ import type {
 import { extractFindings } from '@/analysis/findingExtractor';
 import { RULES_VERSION } from './auditTrail';
 import { getTrafficLight } from '@/components/reportUtils';
+import { buildDecisionBundle } from './decisionRecord';
 
 // ── Schema version ───────────────────────────────────────────────────────────
 
 /** Bump when the stored record shape changes incompatibly. */
-export const ANALYSIS_RECORD_SCHEMA_VERSION = 2;
+export const ANALYSIS_RECORD_SCHEMA_VERSION = 3;
 
 // ── Finding epistemic kinds ─────────────────────────────────────────────────
 
@@ -211,6 +212,13 @@ export interface AnalysisRecord {
   analyzer: {
     /** Deduction-table version from auditTrail (RULES_VERSION). */
     rulesVersion: number;
+    /**
+     * Hash of the threshold config that produced the score, and the gate-relevant
+     * input fingerprint. Both are copied from the decision bundle at build time
+     * so an outcome can be tied to the exact rule set even after thresholds move.
+     */
+    thresholdsHash: string | null;
+    inputHash: string | null;
   };
   geometry: GeometrySummary;
   findings: RecordedFinding[];
@@ -259,6 +267,7 @@ export function buildAnalysisRecord(input: BuildRecordInput): AnalysisRecord {
   const m = analysis.metrics?.result ?? null;
   const v = analysis.validation?.result ?? null;
   const { light, score } = getTrafficLight(analysis);
+  const decisionBundle = buildDecisionBundle(analysis);
 
   const findings: RecordedFinding[] = extractFindings(analysis).map((f) => {
     const kind = classifyFindingKind(f);
@@ -285,7 +294,11 @@ export function buildAnalysisRecord(input: BuildRecordInput): AnalysisRecord {
       layerHeightMm: ctx.layerHeightMm ?? null,
       process: ctx.process ?? null,
     },
-    analyzer: { rulesVersion: RULES_VERSION },
+    analyzer: {
+      rulesVersion: RULES_VERSION,
+      thresholdsHash: decisionBundle.thresholdsHash,
+      inputHash: decisionBundle.inputHash,
+    },
     geometry: {
       dimensionsMm: m ? { ...m.boundingBoxDimensionsMm } : null,
       volumeMm3: m ? m.meshVolumeMm3 : null,
@@ -609,7 +622,11 @@ export function normalizeAnalysisRecord(raw: unknown): AnalysisRecord | null {
       layerHeightMm: asNum(ctx?.layerHeightMm),
       process: asStr(ctx?.process),
     },
-    analyzer: { rulesVersion: asNum(asObj(r.analyzer)?.rulesVersion) ?? 0 },
+    analyzer: {
+      rulesVersion: asNum(asObj(r.analyzer)?.rulesVersion) ?? 0,
+      thresholdsHash: asStr(asObj(r.analyzer)?.thresholdsHash),
+      inputHash: asStr(asObj(r.analyzer)?.inputHash),
+    },
     geometry: {
       dimensionsMm:
         dims && asNum(dims.x) !== null && asNum(dims.y) !== null && asNum(dims.z) !== null

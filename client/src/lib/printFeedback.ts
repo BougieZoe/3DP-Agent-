@@ -10,11 +10,12 @@
  * One store: the versioned calibration entries below. The old unversioned
  * `3dp.printFeedback` list is migrated in and deleted. Generic bug/feature
  * feedback lives in `feedback.ts` — it is product feedback, not a print result.
- * Record-bound outcomes should call recordCalibrationOutcome with
- * source 'analysis-record' instead of opening another store.
+ * Record-bound outcomes should call recordAnalysisOutcome instead of opening
+ * another store; it tags the entry with source 'analysis-record'.
  */
 
 import { stableHash } from './decisionRecord';
+import type { AnalysisRecord, OutcomeStatus } from './analysisRecord';
 
 export type PrintOutcome = 'ok' | 'issue' | 'fail';
 
@@ -208,6 +209,58 @@ export function recordCalibrationOutcome(
   entries.push(full);
   writeCalibration(entries);
   return full;
+}
+
+const OUTCOME_BY_STATUS: Partial<Record<OutcomeStatus, PrintOutcome>> = {
+  success: 'ok',
+  partial: 'issue',
+  failure: 'fail',
+};
+
+const VERDICT_BY_LIGHT: Record<string, string> = {
+  green: 'PASS',
+  yellow: 'WARN',
+  red: 'FAIL',
+};
+
+function removeCalibrationPrint(printId: string): void {
+  writeCalibration(readCalibration().filter((e) => e.printId !== printId));
+}
+
+/**
+ * Bridge one canonical AnalysisRecord outcome into the calibration index.
+ *
+ * The record id is the print id, so editing the same report replaces its entry
+ * instead of adding a duplicate. Setting the status back to not_tested/unknown
+ * removes the entry rather than leaving a stale success. Returns null when no
+ * calibration point was written.
+ */
+export function recordAnalysisOutcome(record: AnalysisRecord): CalibrationEntry | null {
+  const outcome = OUTCOME_BY_STATUS[record.outcome.status];
+  if (!outcome) {
+    removeCalibrationPrint(record.id);
+    return null;
+  }
+
+  const confidence =
+    record.overallConfidence > 1 ? record.overallConfidence / 100 : record.overallConfidence;
+
+  return recordCalibrationOutcome({
+    fileHash: record.model.fileHash,
+    rulesVersion: record.analyzer.rulesVersion,
+    thresholdsHash: record.analyzer.thresholdsHash ?? 'unknown',
+    inputHash:
+      record.analyzer.inputHash ??
+      stableHash({ fileHash: record.model.fileHash, geometry: record.geometry }),
+    source: 'analysis-record',
+    material: record.context.material ?? undefined,
+    machine: record.context.printerId ?? undefined,
+    slicerProfile: record.context.process ?? undefined,
+    printId: record.id,
+    confidence,
+    verdict: VERDICT_BY_LIGHT[record.score.light] ?? 'UNKNOWN',
+    outcome,
+  });
 }
 
 /** Aggregate outcomes for one exact rule-set context, with unknown preserved. */

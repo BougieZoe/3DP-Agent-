@@ -148,6 +148,8 @@ describe('record creation and read-back', () => {
     expect(read!.model.format).toBe('stl');
     expect(read!.geometry.volumeMm3).toBe(8000);
     expect(read!.geometry.isWatertight).toBe(true);
+    expect(read!.analyzer.thresholdsHash).toMatch(/^[0-9a-f]{8}$/);
+    expect(read!.analyzer.inputHash).toMatch(/^[0-9a-f]{8}$/);
     expect(read!.outcome.status).toBe('not_tested');
     expect(read!.decision).toBeNull();
   });
@@ -345,6 +347,8 @@ describe('normalization and identity', () => {
     expect(record!.schemaVersion).toBe(0);
     expect(record!.context.material).toBeNull();
     expect(record!.geometry.isWatertight).toBeNull();
+    expect(record!.analyzer.thresholdsHash).toBeNull();
+    expect(record!.analyzer.inputHash).toBeNull();
     expect(record!.outcome.status).toBe('not_tested');
     expect(record!.findings).toEqual([]);
   });

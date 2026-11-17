@@ -19,6 +19,7 @@ import {
   type OutcomeStatus,
 } from '@/lib/analysisRecord';
 import { uploadOutcomeAnonymous, type OutcomeUploader } from '@/lib/outcomeUpload';
+import { recordAnalysisOutcome } from '@/lib/printFeedback';
 import type { Language } from '@/lib/i18n';
 
 const L = {
@@ -259,6 +260,9 @@ export function PrintOutcomeCard({ recordId, language, store, uploader }: Props)
         return;
       }
       setRecord(reread);
+      // Canonical record is the source of truth; calibration is its derived
+      // index. Editing the same record replaces its printId entry.
+      recordAnalysisOutcome(reread);
       setPhase('saved');
       // Reserved opt-in aggregation. The default uploader is local-only and
       // never touches the network; an upload failure must not mask the save.

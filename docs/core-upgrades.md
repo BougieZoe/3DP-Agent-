@@ -56,10 +56,15 @@
 
 ### 边界与未做
 
-- `client/src/lib/printFeedback.ts` 仍是 Mesh Studio 的置信度校准数据源，未合并；
-  本次的制造结果闭环使用 `AnalysisRecord.outcome`，两者职责不同。
+- 反馈源已收敛：`AnalysisRecord.outcome` 是单次打印的权威记录，
+  `printFeedback.ts`（`3dp.printCalibration.v1`）是带 `rulesVersion` /
+  `thresholdsHash` / `inputHash` 的派生校准索引。`PrintOutcomeCard` 保存后用
+  record id 作为 `printId` 调用 `recordAnalysisOutcome()`；修正同一条记录会替换
+  旧条目，改回 `not_tested` 会移除条目。通用 `feedback.ts` 仍是产品反馈，不混入。
+- 分析记录 schema 升至 3，`analyzer.thresholdsHash` 与 `analyzer.inputHash`
+  随记录持久化，保证结果能追溯到产生评分的规则集。
 - 匿名上传只有接口与默认 no-op，未接任何远端服务。
-- P1–P4 全部完成。
+- P1–P4 全部完成；decision-record/calibration 合并后已完成反馈源收敛。
 
 ## P2 — 修复回归闭环（已完成）
 
