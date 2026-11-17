@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { createGeometryModel, type GeometryModel } from '../geometryModel';
 import {
   TOPOLOGY_PROFILES,
+  THRESHOLD_PRESENCE,
+  checkRegistryThresholdPresence,
+  checkThresholdPresence,
   classifyTopology,
   computeTopologyFingerprint,
   inferProvenance,
@@ -346,6 +349,67 @@ describe('TOPOLOGY_PROFILES registry', () => {
       expect(
         ['default', 'provisional', 'measured'],
         `row ${key} has invalid calibration`,
+      ).toContain(profile.calibration);
+    }
+  });
+});
+
+// ─── Calibration claims are backed by data ────────────────────────────────────
+// The registry test above only checks that `calibration` holds one of three
+// strings. These tests check that the chosen string is *earned*: an unmeasured
+// row must not carry overrides, and a measured row must carry at least one.
+
+describe('threshold presence matches calibration', () => {
+  it('accepts an unmeasured row that inherits every default', () => {
+    expect(checkThresholdPresence('cad:tri', { calibration: 'default', thresholds: {} })).toEqual([]);
+    expect(checkThresholdPresence('ai:quad', { calibration: 'provisional', thresholds: {} })).toEqual([]);
+  });
+
+  it('rejects a measured row that overrides nothing', () => {
+    const problems = checkThresholdPresence('pla:tri', { calibration: 'measured', thresholds: {} });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('measured');
+    expect(problems[0]).toContain('overrides nothing');
+  });
+
+  it('rejects an unmeasured row that carries overrides', () => {
+    const problems = checkThresholdPresence('cad:tri', {
+      calibration: 'provisional',
+      thresholds: { overhangThresholdDeg: 45 },
+    });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('overhangThresholdDeg');
+    expect(problems[0]).toContain('inherit the defaults');
+  });
+
+  it('treats nested-empty overrides as empty', () => {
+    const problems = checkThresholdPresence('cad:tri', {
+      calibration: 'default',
+      thresholds: { wallThickness: {} },
+    });
+    expect(problems).toEqual([]);
+  });
+
+  it('rejects a calibration state nobody decided on', () => {
+    const problems = checkThresholdPresence('cad:tri', {
+      calibration: 'vibes' as never,
+      thresholds: {},
+    });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('THRESHOLD_PRESENCE');
+  });
+
+  it('holds for every registered row', () => {
+    expect(checkRegistryThresholdPresence()).toEqual([]);
+  });
+
+  it('keeps THRESHOLD_PRESENCE in step with the calibration enum', () => {
+    // Every state a row actually uses must have a presence rule; otherwise the
+    // check would pass by falling through, which is the bug this table prevents.
+    for (const [key, profile] of Object.entries(TOPOLOGY_PROFILES)) {
+      expect(
+        Object.keys(THRESHOLD_PRESENCE),
+        `row ${key} calibration ${profile.calibration} has no presence rule`,
       ).toContain(profile.calibration);
     }
   });

@@ -97,8 +97,14 @@ export interface TopologyFingerprint {
   sampled: boolean;
 }
 
-/** Faces closer than ~0.8° apart count as coplanar. */
-const COPLANAR_DOT = 0.9999;
+/**
+ * Faces closer than ~0.8° apart count as coplanar.
+ *
+ * Exported so quad flow analysis uses the same bar: if the fingerprint calls an
+ * edge coplanar and the flow reconstruction does not, a report ends up claiming
+ * both "30% of pairs are quad artifacts" and "0% reconstructed" at once.
+ */
+export const COPLANAR_DOT = 0.9999;
 
 /**
  * Hard ceiling on triangles walked for the coplanar census. Above this the mesh
@@ -237,8 +243,15 @@ function packEdge(a: number, b: number, stride: number): number {
   return a <= b ? a * stride + b : b * stride + a;
 }
 
-/** True when the two cached normals point the same way (within ~0.8°). */
-function areCoplanar(normals: Float32Array, faceA: number, faceB: number): boolean {
+/**
+ * True when the two cached normals point the same way (within ~0.8°).
+ *
+ * Contract: `normals` is a packed stride-3 array of unit normals. This is NOT
+ * the layout of `GeometryGraph.faceNormals`, which stores stride-4
+ * [nx, ny, nz, length]. Passing a graph's buffer here silently reads the wrong
+ * faces instead of erroring.
+ */
+export function areCoplanar(normals: Float32Array, faceA: number, faceB: number): boolean {
   const a = faceA * 3;
   const b = faceB * 3;
   const dot =
@@ -419,11 +432,6 @@ export interface JudgingRules {
    */
   shellCountMeaningful: boolean;
   /**
-   * Strength of vertex-degree-based uniformity checks. `skip` means the mesh
-   * genuinely has no uniform tessellation contract to violate.
-   */
-  degreeCheck: 'strict' | 'relaxed' | 'skip';
-  /**
    * Which notion of "good topology" governs this mesh.
    *  - `triangle-flow`: manifoldness, shell count, winding consistency
    *  - `quad-flow`: edge loops follow the load path, poles placed intentionally;
@@ -458,21 +466,18 @@ export interface TopologyProfile {
 const TRI_RULES: JudgingRules = {
   coplanarEdgesAreArtifacts: false,
   shellCountMeaningful: true,
-  degreeCheck: 'strict',
   criteria: 'triangle-flow',
 };
 
 const QUAD_RULES: JudgingRules = {
   coplanarEdgesAreArtifacts: true,
   shellCountMeaningful: true,
-  degreeCheck: 'relaxed',
   criteria: 'quad-flow',
 };
 
 const SCAN_RULES: JudgingRules = {
   coplanarEdgesAreArtifacts: false,
   shellCountMeaningful: false,
-  degreeCheck: 'skip',
   criteria: 'mixed',
 };
 
@@ -492,7 +497,6 @@ export const TOPOLOGY_PROFILES: Record<string, TopologyProfile> = {
     rules: {
       coplanarEdgesAreArtifacts: false,
       shellCountMeaningful: true,
-      degreeCheck: 'relaxed',
       criteria: 'uncalibrated',
     },
     calibration: 'default',
@@ -607,6 +611,89 @@ export const TOPOLOGY_PROFILES: Record<string, TopologyProfile> = {
     descriptionKey: 'topology.profile.unknownQuad',
   },
 };
+
+// ─── Calibration claims ↔ threshold presence ─────────────────────────────────
+//
+// A row's `calibration` is a promise about its numbers. Before this table the
+// subscription was untested in one direction: flipping every row to `measured`
+// while leaving `thresholds: {}` in place stayed green, so the claim could rot
+// without a single failing assertion.
+
+export type ThresholdPresenceRule = 'mustBeEmpty' | 'mustBeNonEmpty';
+
+/**
+ * What the presence of a `thresholds` override must mean for each state.
+ *
+ *   default / provisional → nothing was measured, so no override may exist.
+ *   measured              → a run happened, so at least one override must exist.
+ *
+ * Keyed by the calibration enum: adding a new state without deciding its
+ * presence rule fails the registry test instead of silently defaulting.
+ */
+export const THRESHOLD_PRESENCE = {
+  default: 'mustBeEmpty',
+  provisional: 'mustBeEmpty',
+  measured: 'mustBeNonEmpty',
+} as const;
+
+/** True when an override carries no leaf value (nested empties do not count). */
+function isEmptyOverride(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).every(isEmptyOverride);
+  }
+  return false;
+}
+
+/** Top-level override keys that carry a value — names only, never numbers. */
+function populatedOverridePaths(override: ThresholdsOverride): string[] {
+  return Object.entries(override as Record<string, unknown>)
+    .filter(([, v]) => !isEmptyOverride(v))
+    .map(([k]) => k);
+}
+
+/**
+ * Check one row against THRESHOLD_PRESENCE. Returns human-readable problems;
+ * an empty array means the calibration claim is backed by the row's data.
+ *
+ * Messages name the offending field but never print threshold values, so a
+ * legitimate number change cannot churn the assertion diff.
+ */
+export function checkThresholdPresence(
+  rowKey: string,
+  profile: Pick<TopologyProfile, 'calibration' | 'thresholds'>,
+): string[] {
+  const table: Readonly<Record<string, ThresholdPresenceRule | undefined>> = THRESHOLD_PRESENCE;
+  const expectation = table[profile.calibration];
+  if (!expectation) {
+    return [
+      `row ${rowKey} declares unknown calibration \`${profile.calibration}\` — ` +
+        'decide its presence rule in THRESHOLD_PRESENCE first',
+    ];
+  }
+  const populated = populatedOverridePaths(profile.thresholds);
+  if (expectation === 'mustBeEmpty' && populated.length > 0) {
+    return [
+      `row ${rowKey} is \`${profile.calibration}\` but overrides ${populated.join(', ')} — ` +
+        'unmeasured rows must inherit the defaults',
+    ];
+  }
+  if (expectation === 'mustBeNonEmpty' && populated.length === 0) {
+    return [
+      `row ${rowKey} is \`${profile.calibration}\` but overrides nothing — ` +
+        'a measured row must carry the thresholds that were measured',
+    ];
+  }
+  return [];
+}
+
+/** Run checkThresholdPresence across the whole registry. */
+export function checkRegistryThresholdPresence(
+  registry: Record<string, Pick<TopologyProfile, 'calibration' | 'thresholds'>> = TOPOLOGY_PROFILES,
+): string[] {
+  return Object.entries(registry).flatMap(([key, row]) => checkThresholdPresence(key, row));
+}
 
 /** Kind-keyed fallback rows, consulted when the exact composite id is missing. */
 const KIND_FALLBACK: Record<TopologyKind, TopologyProfileId> = {
