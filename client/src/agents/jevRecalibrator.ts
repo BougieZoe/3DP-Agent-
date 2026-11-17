@@ -51,13 +51,14 @@ export async function recalibrateFlaggedAgents(
       const recalibrated = await agent.execute(correctiveCtx);
       const durationMs = Math.round(performance.now() - startTime);
 
+      const originalScore = original.score;
       const blendedScore = Math.round(
-        original.score * ORIGINAL_WEIGHT + recalibrated.score * RECALIBRATED_WEIGHT,
+        originalScore * ORIGINAL_WEIGHT + recalibrated.score * RECALIBRATED_WEIGHT,
       );
 
       results.push({
         agentId: anomaly.agentId,
-        originalScore: original.score,
+        originalScore,
         recalibratedScore: recalibrated.score,
         blendedScore,
         reason: anomaly.reason,
@@ -66,7 +67,7 @@ export async function recalibrateFlaggedAgents(
 
       original.score = blendedScore;
       original.verdict = agent.computeVerdict(blendedScore);
-      original.explanation += `\n\n[Jev Recalibration] ${anomaly.jevContext} → Score adjusted from ${original.score} to ${blendedScore}`;
+      original.explanation += `\n\n[Jev Recalibration] ${anomaly.jevContext} → Score adjusted from ${originalScore} to ${blendedScore}`;
     } catch {
       results.push({
         agentId: anomaly.agentId,

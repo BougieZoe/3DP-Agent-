@@ -338,7 +338,9 @@ export class AgentOrchestrator {
     material: Material,
   ): Promise<{ riskCategory: string; agentPriority: string } | undefined> {
     const apiKey = this.getJevApiKey();
-    if (!apiKey) return undefined;
+    // '' is the signed-in sentinel: the server holds the key. Only undefined
+    // means "no Jev access at all" (anonymous with no BYOK).
+    if (apiKey === undefined) return undefined;
 
     const dims = unifiedAnalysis.metrics.result.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
     const state = [
@@ -406,6 +408,7 @@ export class AgentOrchestrator {
 
   private getJevApiKey(): string | undefined {
     const token = getAuthSnapshot().token;
+    // Signed-in: return the empty-string sentinel; the server uses its env key.
     if (token) return '';
     return getApiKey('openrouter');
   }
