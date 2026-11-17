@@ -130,7 +130,7 @@
   "description": "3DP Agent — a manufacturing intelligence workspace for geometry, printability, and failure prevention.",
   "author": "BougieZoe",
   "build": {
-    "appId": "com.bougiezoe.3dp-agent",
+    "appId": "com.3dpagent.desktop",
     "productName": "3DP Agent",
     "directories": {
       "output": "release"
