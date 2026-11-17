@@ -117,7 +117,7 @@ clay; tokens live in `MODEL_MATERIALS` (`visualLanguage.ts`). The preview never
 touches measurement, overlays, lighting or the empty-state placeholder.
 
 ## Important Conventions
-- **Project root is `<repo>/`** — always confirm the full path before any file edit. Never assume or guess the project location; Desktop or other paths are NOT project roots.
+- **Project root is the repository root (the directory containing this file)** — always confirm the full path before any file edit. Never assume or guess the project location; Desktop or other paths are NOT project roots.
 - `progressRef.current` ranges 0.0–1.0, ~8.7s full cycle at speed=1
 - `delta * speed * 0.12` increment per frame
 - No modifications to STL colors, lighting, fog, tints, layout, or base rendering — except the approved base-material change documented above (neutral clay + edges). Overlays still never recolour the base mesh.

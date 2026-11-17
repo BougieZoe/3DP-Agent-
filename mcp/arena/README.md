@@ -5,7 +5,7 @@
 ```json
 { "mcp": { "arena": {
   "type": "local",
-  "command": ["node", "<repo>/mcp/arena/dist/index.js"],
+  "command": ["node", "<path-to-repo>/mcp/arena/dist/index.js"],
   "enabled": true,
   "environment": { "ARENA_URL": "http://localhost:8931" }
 } } }

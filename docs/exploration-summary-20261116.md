@@ -1,6 +1,6 @@
 # 探索总结 — 2026-11-16
 
-> 项目根目录：`/Users/bougiezoe/3DP-Agent-/`
+> 项目根目录：`<repo>`（本文件所在仓库根目录）
 > 当前分支：`feature/core-upgrades-data-loop-autofix-physics`（基线 `20509a97`）
 > 探索范围：README / AGENTS / DESIGN / `client/src/agents` / `server` 桥接 / 分析测量 / 修复 / 测试 / CI
 

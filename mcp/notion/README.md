@@ -11,7 +11,7 @@
   "mcp": {
     "handoff-notion": {
       "type": "local",
-      "command": ["node", "<repo>/mcp/notion/dist/index.js"],
+      "command": ["node", "<path-to-repo>/mcp/notion/dist/index.js"],
       "enabled": true,
       "environment": {
         "NOTION_TOKEN": "secret_xxx",
