@@ -407,3 +407,33 @@ describe('pipeline integration', () => {
     }
   });
 });
+
+describe('judging rules reach the report, and only the report', () => {
+  it('carries the rules through to the analysis result', () => {
+    const analysis = runAnalysisPipeline(makeTriangulatedQuadSphere(12, 24), {
+      fileName: 'tripo.glb',
+    });
+    // Reporting needs these to explain a verdict in the right vocabulary.
+    expect(analysis.topologyProfile?.profile.rules.criteria).toBe('quad-flow');
+    expect(analysis.topologyProfile?.profile.rules.coplanarEdgesAreArtifacts).toBe(true);
+  });
+
+  it('declares rules for every profile, and criteria always matches kind', () => {
+    const allowed = new Set(['triangle-flow', 'quad-flow', 'mixed', 'uncalibrated']);
+    for (const [id, profile] of Object.entries(TOPOLOGY_PROFILES)) {
+      const rules = profile.rules;
+      expect(rules, `profile ${id} needs judging rules`).toBeTruthy();
+      expect(allowed.has(rules.criteria), `profile ${id} has an unknown criteria`).toBe(true);
+
+      // A profile must not claim a criteria family its own geometry can't be.
+      if (profile.kind === 'quad') {
+        expect(rules.criteria, `${id}: quad meshes are judged on quad flow`).not.toBe(
+          'triangle-flow',
+        );
+      }
+      if (profile.kind === 'tri') {
+        expect(rules.criteria, `${id}: tri meshes are judged on tri flow`).not.toBe('quad-flow');
+      }
+    }
+  });
+});

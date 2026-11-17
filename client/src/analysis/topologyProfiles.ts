@@ -396,6 +396,14 @@ export function inferProvenance(hint?: string): {
  * coplanar interior edge count as degenerate geometry?"). Mixing them into
  * `thresholds.ts` would put quad-specific behaviour behind a numeric override,
  * which is the wrong knob — you would have to set it to 0 or 1 and hope.
+ *
+ * STATUS: declarative today. These switches travel into the analysis result so
+ * reporting can read them, but no scoring module consumes them yet — the
+ * verdict layer still runs a single criteria family (triangle flow). A
+ * `quad-flow` profile therefore means "we know what the right question is",
+ * not "we have answered it". Wiring these into the verdict path is a separate,
+ * reviewed change; implying otherwise would make every quad report look judged
+ * when it is not.
  */
 export interface JudgingRules {
   /**
