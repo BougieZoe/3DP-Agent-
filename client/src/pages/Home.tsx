@@ -1038,7 +1038,7 @@ export default function Home() {
         note = `${local.note} (${why})`;
       }
 
-      const analysis = await runAnalysisInWorker(
+      const analysis = await analyzeWithTelemetry(
         fromThreeBufferGeometry(geometry),
         { fileName: uploadedModel.fileName, material },
       );

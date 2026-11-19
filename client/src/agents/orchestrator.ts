@@ -122,7 +122,7 @@ export class AgentOrchestrator {
     );
 
     // Run agents and Jev Early Triage in parallel (Jev is opt-in per pipeline).
-    const earlyTriagePromise = pipeline.jevEnabled
+    const earlyTriagePromise = llm && pipeline.jevEnabled
       ? this.runJevEarlyTriage(unifiedAnalysis, material)
       : Promise.resolve(undefined);
 
@@ -160,7 +160,7 @@ export class AgentOrchestrator {
       pipeline.debateRounds,
     );
 
-    const jevDecision = pipeline.jevEnabled
+    const jevDecision = llm && pipeline.jevEnabled
       ? await this.runJevDecision(initialResults, unifiedAnalysis, debateResults, material) ?? undefined
       : undefined;
 
