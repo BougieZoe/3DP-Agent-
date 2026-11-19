@@ -21,4 +21,11 @@ useDefault = true
     # the key from GLM_API_KEY / the gitignored server/config/llm-keys.yaml.
     # Same policy as above: historical finding silenced, history NOT rewritten.
     "80adb359a0e0408b690fe8d01fe0ad448187a9ed",
+    # Sanitized-history counterparts of the same four commits (the privacy
+    # rewrite changed their SHAs while preserving content). Keep both sets so
+    # full-history scans pass on the sanitized remote and on local history.
+    "07549b25a32a9646ab0e1707d64305a76c2a8259",
+    "0dfac62c99a1d1c3351211b55bea2a2452755d80",
+    "4be1475b32a52704f22dc62e08861ef4614c2d9e",
+    "e0d19a0896f9af5b17269829277d528e5244cf6e",
   ]
