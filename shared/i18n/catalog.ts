@@ -1359,6 +1359,116 @@ export const MESSAGES = {
     ja: "修復と処理",
     zh: "修复并处理",
   },
+  "repairVerified": {
+    en: "REPAIR VERIFIED",
+    ja: "修復を検証済み",
+    zh: "修复已验证",
+  },
+  "repairDiscarded": {
+    en: "REPAIR DISCARDED",
+    ja: "修復を破棄",
+    zh: "修复已丢弃",
+  },
+  "repairAutoFixStl": {
+    en: "AUTO-FIX & STL",
+    ja: "自動修復 & STL",
+    zh: "自动修复 & STL",
+  },
+  "repairAutoFixBusy": {
+    en: "▋ AUTO-FIX",
+    ja: "▋ 自動修復",
+    zh: "▋ 自动修复",
+  },
+  "repairAutoFixExported": {
+    en: "auto-fix verified · STL exported",
+    ja: "自動修復を検証済み · STL を書き出しました",
+    zh: "自动修复已验证 · STL 已导出",
+  },
+  "repairMethodLabel": {
+    en: "method: {method}",
+    ja: "方法: {method}",
+    zh: "方法：{method}",
+  },
+  "repairVerifiedNoRegression": {
+    en: "repair verified: no measured regression (no key metric improved)",
+    ja: "修復を検証済み：測定上の後退なし（主要指標の改善なし）",
+    zh: "修复已验证：未测到回退（关键指标未改善）",
+  },
+  "repairVerifiedWith": {
+    en: "repair verified: {items}",
+    ja: "修復を検証済み：{items}",
+    zh: "修复已验证：{items}",
+  },
+  "repairRejectedWith": {
+    en: "repair rejected: {items}",
+    ja: "修復を拒否：{items}",
+    zh: "修复已拒绝：{items}",
+  },
+  "repairIssueNoBaseline": {
+    en: "no baseline measurement — repair cannot be verified",
+    ja: "基準測定がないため、修復を検証できません",
+    zh: "没有基准测量——无法验证修复",
+  },
+  "repairIssueNoAnalysis": {
+    en: "re-analysis produced no usable measurements",
+    ja: "再解析で有効な測定値が得られませんでした",
+    zh: "重新分析未产生可用测量",
+  },
+  "repairIssueEmptyMesh": {
+    en: "repair produced an empty mesh",
+    ja: "修復後にメッシュが空になりました",
+    zh: "修复后网格为空",
+  },
+  "repairMetricNonManifold": {
+    en: "non-manifold edges {from}→{to}",
+    ja: "非多様体エッジ {from}→{to}",
+    zh: "非流形边 {from}→{to}",
+  },
+  "repairMetricBoundary": {
+    en: "boundary edges {from}→{to}",
+    ja: "境界エッジ {from}→{to}",
+    zh: "边界边 {from}→{to}",
+  },
+  "repairMetricHoles": {
+    en: "holes {from}→{to}",
+    ja: "穴 {from}→{to}",
+    zh: "孔洞 {from}→{to}",
+  },
+  "repairMetricMinWall": {
+    en: "min wall {from}→{to}mm",
+    ja: "最小肉厚 {from}→{to}mm",
+    zh: "最小壁厚 {from}→{to}mm",
+  },
+  "repairMetricP5Wall": {
+    en: "p5 wall {from}→{to}mm",
+    ja: "p5 肉厚 {from}→{to}mm",
+    zh: "p5 壁厚 {from}→{to}mm",
+  },
+  "repairMetricVolume": {
+    en: "volume changed {from}→{to}mm³ ({ratio}×)",
+    ja: "体積が {from}→{to}mm³ に変化（{ratio}×）",
+    zh: "体积变化 {from}→{to}mm³（{ratio}×）",
+  },
+  "repairWatertightGained": {
+    en: "watertight",
+    ja: "水密",
+    zh: "水密",
+  },
+  "repairWatertightLost": {
+    en: "watertightness lost",
+    ja: "水密性を喪失",
+    zh: "失去水密性",
+  },
+  "repairVolumeUnreliable": {
+    en: "volume became unreliable (open shell)",
+    ja: "体積が不確実に（開放シェル）",
+    zh: "体积变得不可靠（开放壳体）",
+  },
+  "repairVolumeReliable": {
+    en: "volume reliable",
+    ja: "体積が信頼可能",
+    zh: "体积可靠",
+  },
   "featureFree": {
     en: "FREE",
     ja: "無料",

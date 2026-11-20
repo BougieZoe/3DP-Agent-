@@ -42,6 +42,7 @@ import { createMeshFromGeometry } from '@/lib/stlLoader';
 import { runTieredRepair, type RepairOutcome } from '@/lib/repairFlow';
 import type { RepairMethod } from '@/lib/meshRepair';
 import type { RepairVerification } from '@/lib/repairVerification';
+import { describeRepairVerification } from '@/lib/repairVerificationText';
 import { saveAnalysisRun } from '@/lib/analysisRuns';
 import { geometryToStl } from '@/lib/meshOps';
 import { parseSTL } from '@/lib/stlParser';
@@ -919,6 +920,12 @@ export default function Home() {
   const [exportedRecordId, setExportedRecordId] = useState<string | null>(null);
   const [repairVerification, setRepairVerification] = useState<RepairVerification | null>(null);
   const [repairMethod, setRepairMethod] = useState<RepairMethod | null>(null);
+  const repairVerificationText = useMemo(
+    () => repairVerification
+      ? describeRepairVerification(repairVerification, language)
+      : null,
+    [repairVerification, language],
+  );
   // Mirrors counterfactualSuggestions (declared below) for the repair fallback.
   // A ref avoids the use-before-declaration trap: the handler only reads it at event time.
   const wasmSuggestionsRef = useRef<any[]>([]);
@@ -941,8 +948,9 @@ export default function Home() {
     );
     setRepairVerification(outcome.verification);
     setRepairMethod(outcome.repairMethod);
+    const verificationText = describeRepairVerification(outcome.verification, language);
     if (!outcome.accepted) {
-      toast.error(outcome.note);
+      toast.error(verificationText.summary);
       return { ...outcome, recordId: null };
     }
     const savedRun = await saveAnalysisRun({
@@ -971,9 +979,9 @@ export default function Home() {
     setDeepAgentRun(null);
     setDeepSteps([]);
     setDeepError(null);
-    toast.success(outcome.note);
+    toast.success(verificationText.summary);
     return { ...outcome, recordId: savedRun?.id ?? null };
-  }, [uploadedModel, material]);
+  }, [uploadedModel, material, language]);
 
   const handleRepairProcess = useCallback(async () => {
     setRepairing(true);
@@ -997,13 +1005,13 @@ export default function Home() {
         new Blob([geometryToStl(outcome.geometry)], { type: 'model/stl' }),
       );
       setExportedRecordId(outcome.recordId);
-      toast.success('auto-fix verified · STL exported');
+      toast.success(getTranslation(language, 'repairAutoFixExported'));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setRepairing(false);
     }
-  }, [performTieredRepair, uploadedModel]);
+  }, [performTieredRepair, uploadedModel, language]);
 
   /**
    * One-click thicken: real manifold offset, then re-analyse so the user sees
@@ -1131,7 +1139,10 @@ export default function Home() {
   const valid = unifiedAnalysis?.validation.result;
   const modelData = getModelData();
   const providerLabel = getActiveProvider() ? AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel : null;
-  const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
+  const t = (
+    key: keyof typeof import('@/lib/i18n').translations.en,
+    params?: Record<string, string | number>,
+  ) => getTranslation(language, key, params);
   // Metric display in the selected unit (analysis is always computed in mm).
   const mmPerUnit = LENGTH_UNIT_TO_MM[units];
   const unitSuffix = units === 'inch' ? 'in' : units;
@@ -2130,7 +2141,7 @@ export default function Home() {
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
                       {t('generateReport')}
                     </button>
-                    {repairVerification && (
+                    {repairVerification && repairVerificationText && (
                       <div
                         role="status"
                         className={`border rounded-sm p-3 text-[11px] font-mono leading-relaxed ${
@@ -2140,16 +2151,18 @@ export default function Home() {
                         }`}
                       >
                         <div className="tracking-wider mb-1">
-                          {repairVerification.accepted ? 'REPAIR VERIFIED' : 'REPAIR DISCARDED'}
+                          {repairVerificationText.title}
                         </div>
-                        <div className="text-muted-foreground/70">{repairVerification.summary}</div>
+                        <div className="text-muted-foreground/70">{repairVerificationText.summary}</div>
                         {repairMethod && (
-                          <div className="text-muted-foreground/50 mt-1">method: {repairMethod}</div>
+                          <div className="text-muted-foreground/50 mt-1">
+                            {t('repairMethodLabel', { method: repairMethod })}
+                          </div>
                         )}
-                        {repairVerification.regressions.length > 0 && (
+                        {repairVerificationText.regressions.length > 0 && (
                           <ul className="mt-1.5 space-y-0.5">
-                            {repairVerification.regressions.map((r) => (
-                              <li key={r.code}>— {r.message}</li>
+                            {repairVerificationText.regressions.map((message, index) => (
+                              <li key={`${repairVerification.regressions[index].code}-${index}`}>— {message}</li>
                             ))}
                           </ul>
                         )}
@@ -2161,7 +2174,7 @@ export default function Home() {
                     </button>
                     <button onClick={handleAutoFixExport} disabled={repairing}
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all disabled:opacity-50">
-                      {repairing ? '▋ AUTO-FIX' : 'AUTO-FIX & STL'}
+                      {repairing ? t('repairAutoFixBusy') : t('repairAutoFixStl')}
                     </button>
                     <div className="flex items-stretch gap-2">
                       <button onClick={handleDownloadStl} title={t('cadDownloadStl')}
