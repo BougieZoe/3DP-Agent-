@@ -1359,6 +1359,116 @@ export const MESSAGES = {
     ja: "修復と処理",
     zh: "修复并处理",
   },
+  "repairVerified": {
+    en: "REPAIR VERIFIED",
+    ja: "修復を検証済み",
+    zh: "修复已验证",
+  },
+  "repairDiscarded": {
+    en: "REPAIR DISCARDED",
+    ja: "修復を破棄",
+    zh: "修复已丢弃",
+  },
+  "repairAutoFixStl": {
+    en: "AUTO-FIX & STL",
+    ja: "自動修復 & STL",
+    zh: "自动修复 & STL",
+  },
+  "repairAutoFixBusy": {
+    en: "▋ AUTO-FIX",
+    ja: "▋ 自動修復",
+    zh: "▋ 自动修复",
+  },
+  "repairAutoFixExported": {
+    en: "auto-fix verified · STL exported",
+    ja: "自動修復を検証済み · STL を書き出しました",
+    zh: "自动修复已验证 · STL 已导出",
+  },
+  "repairMethodLabel": {
+    en: "method: {method}",
+    ja: "方法: {method}",
+    zh: "方法：{method}",
+  },
+  "repairVerifiedNoRegression": {
+    en: "repair verified: no measured regression (no key metric improved)",
+    ja: "修復を検証済み：測定上の後退なし（主要指標の改善なし）",
+    zh: "修复已验证：未测到回退（关键指标未改善）",
+  },
+  "repairVerifiedWith": {
+    en: "repair verified: {items}",
+    ja: "修復を検証済み：{items}",
+    zh: "修复已验证：{items}",
+  },
+  "repairRejectedWith": {
+    en: "repair rejected: {items}",
+    ja: "修復を拒否：{items}",
+    zh: "修复已拒绝：{items}",
+  },
+  "repairIssueNoBaseline": {
+    en: "no baseline measurement — repair cannot be verified",
+    ja: "基準測定がないため、修復を検証できません",
+    zh: "没有基准测量——无法验证修复",
+  },
+  "repairIssueNoAnalysis": {
+    en: "re-analysis produced no usable measurements",
+    ja: "再解析で有効な測定値が得られませんでした",
+    zh: "重新分析未产生可用测量",
+  },
+  "repairIssueEmptyMesh": {
+    en: "repair produced an empty mesh",
+    ja: "修復後にメッシュが空になりました",
+    zh: "修复后网格为空",
+  },
+  "repairMetricNonManifold": {
+    en: "non-manifold edges {from}→{to}",
+    ja: "非多様体エッジ {from}→{to}",
+    zh: "非流形边 {from}→{to}",
+  },
+  "repairMetricBoundary": {
+    en: "boundary edges {from}→{to}",
+    ja: "境界エッジ {from}→{to}",
+    zh: "边界边 {from}→{to}",
+  },
+  "repairMetricHoles": {
+    en: "holes {from}→{to}",
+    ja: "穴 {from}→{to}",
+    zh: "孔洞 {from}→{to}",
+  },
+  "repairMetricMinWall": {
+    en: "min wall {from}→{to}mm",
+    ja: "最小肉厚 {from}→{to}mm",
+    zh: "最小壁厚 {from}→{to}mm",
+  },
+  "repairMetricP5Wall": {
+    en: "p5 wall {from}→{to}mm",
+    ja: "p5 肉厚 {from}→{to}mm",
+    zh: "p5 壁厚 {from}→{to}mm",
+  },
+  "repairMetricVolume": {
+    en: "volume changed {from}→{to}mm³ ({ratio}×)",
+    ja: "体積が {from}→{to}mm³ に変化（{ratio}×）",
+    zh: "体积变化 {from}→{to}mm³（{ratio}×）",
+  },
+  "repairWatertightGained": {
+    en: "watertight",
+    ja: "水密",
+    zh: "水密",
+  },
+  "repairWatertightLost": {
+    en: "watertightness lost",
+    ja: "水密性を喪失",
+    zh: "失去水密性",
+  },
+  "repairVolumeUnreliable": {
+    en: "volume became unreliable (open shell)",
+    ja: "体積が不確実に（開放シェル）",
+    zh: "体积变得不可靠（开放壳体）",
+  },
+  "repairVolumeReliable": {
+    en: "volume reliable",
+    ja: "体積が信頼可能",
+    zh: "体积可靠",
+  },
   "featureFree": {
     en: "FREE",
     ja: "無料",
@@ -3623,6 +3733,86 @@ export const MESSAGES = {
     en: "{count} boundary edge(s) — mesh has holes",
     ja: "{count}個の境界辺 — メッシュに穴があります",
     zh: "{count}条边界边 — 网格有孔洞",
+  },
+  "topology.profile.detected": {
+    en: "Judged under the {profile} profile — {criteria} criteria, calibration: {calibration}.",
+    ja: "{profile}プロファイルで判定 — 基準は{criteria}、校正状態: {calibration}。",
+    zh: "本次按 {profile} 档案判定 — 判据口径为{criteria}，标定状态：{calibration}。",
+  },
+  "topology.profile.fallbackExact": {
+    en: "Exact profile match.",
+    ja: "完全一致のプロファイルです。",
+    zh: "档案精确匹配。",
+  },
+  "topology.profile.fallbackKind": {
+    en: "No row for this upstream; fell back to the nearest topology-kind profile.",
+    ja: "この上流向けの行がないため、最も近いトポロジ種別のプロファイルに降格しました。",
+    zh: "该上游无专属档案，已降级到最接近的拓扑类型口径。",
+  },
+  "topology.profile.fallbackDefault": {
+    en: "Unknown upstream — using the conservative default profile.",
+    ja: "未知の上流 — 保守的な既定プロファイルを使用します。",
+    zh: "上游未知 — 采用保守的默认口径。",
+  },
+  "topology.profile.provisionalWarning": {
+    en: "Provisional calibration: these thresholds are reasoned, not yet measured against physical prints.",
+    ja: "暫定校正: この閾値は根拠に基づく推定であり、実機印刷での測定は未実施です。",
+    zh: "临时标定：该阈值基于推理得出，尚未以实机打印结果校准。",
+  },
+  "topology.profile.default": {
+    en: "Conservative default — no upstream or topology evidence available.",
+    ja: "保守的な既定 — 上流・トポロジの根拠がありません。",
+    zh: "保守默认口径 — 无上游与拓扑证据。",
+  },
+  "topology.profile.cadTri": {
+    en: "CAD tessellation, triangles — the baseline every factory threshold was measured against.",
+    ja: "CADテッセレーション（三角形）— 工場側の全閾値の基準。",
+    zh: "CAD 三角化 — 所有产线阈值的原始基准。",
+  },
+  "topology.profile.cadQuad": {
+    en: "CAD quad patches — coplanar diagonals are artifacts, not slivers.",
+    ja: "CADクアッドパッチ — 共面对角線はスライバーではなく生成物です。",
+    zh: "CAD 四边形补面 — 共面对角线属三角化产物，不算狭长面。",
+  },
+  "topology.profile.aiQuad": {
+    en: "AI-generated quad-dominant mesh — uneven density, scale often guessed; judged on quad flow.",
+    ja: "AI生成のクアッド主体メッシュ — 密度不均一・スケール推定。クアッドフローで判定。",
+    zh: "AI 生成的四边形主导网格 — 密度不均、尺度多为推测；按四边形边流判定。",
+  },
+  "topology.profile.aiTri": {
+    en: "AI-generated triangle mesh — judged on triangle flow, calibration provisional.",
+    ja: "AI生成の三角形メッシュ — 三角フローで判定、校正は暫定。",
+    zh: "AI 生成的三角网格 — 按三角边流判定，标定为临时值。",
+  },
+  "topology.profile.scanTri": {
+    en: "Scanned surface — shell count carries no meaning; report only, do not condemn.",
+    ja: "スキャン面 — シェル数は意味を持ちません。報告のみで欠陥判定しません。",
+    zh: "扫描面 — 壳体数量无意义，仅报告不作缺陷判定。",
+  },
+  "topology.profile.scanQuad": {
+    en: "Scanned quad surface — shell count and degree uniformity both suppressed.",
+    ja: "スキャンされたクアッド面 — シェル数と次数均一性の判定を停止。",
+    zh: "扫描四边形面 — 壳体数量与度数均匀性双重豁免。",
+  },
+  "topology.profile.slicerTri": {
+    en: "Slicer-prepared triangle mesh — already split for printing, shell count suppressed.",
+    ja: "スライサー準備済み三角形メッシュ — 印刷用に分割済み、シェル数判定を停止。",
+    zh: "切片器预处理过的三角网格 — 已按打印拆分，壳体数量豁免。",
+  },
+  "topology.profile.slicerQuad": {
+    en: "Slicer-prepared quad mesh — quad flow criteria, shell count suppressed.",
+    ja: "スライサー準備済みクアッドメッシュ — クアッドフロー基準、シェル数判定を停止。",
+    zh: "切片器预处理过的四边形网格 — 采用四边形边流口径，壳体数量豁免。",
+  },
+  "topology.profile.unknownTri": {
+    en: "Triangle mesh of unknown origin — triangle flow criteria, default calibration.",
+    ja: "由来不明の三角形メッシュ — 三角フロー基準、既定校正。",
+    zh: "来源未知的三角网格 — 三角边流口径，默认标定。",
+  },
+  "topology.profile.unknownQuad": {
+    en: "Quad mesh of unknown origin — quad flow criteria, calibration provisional.",
+    ja: "由来不明のクアッドメッシュ — クアッドフロー基準、校正は暫定。",
+    zh: "来源未知的四边形网格 — 四边形边流口径，标定为临时值。",
   },
   "validation.noPositionData": {
     en: "No position data",

@@ -45,7 +45,7 @@ func runMeshProcess(pythonPath, cadDir string, stlBytes []byte, decimateTo int) 
 	locations := []string{
 		filepath.Join(cadDir, "..", "server", "mesh_process.py"),
 		"server/mesh_process.py",
-		"<repo>/server/mesh_process.py",
+		filepath.Join(os.Getenv("HOME"), "3DP-Agent-", "server", "mesh_process.py"),
 	}
 	var scriptPath string
 	for _, loc := range locations {

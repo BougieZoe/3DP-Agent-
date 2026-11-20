@@ -23,7 +23,7 @@ import { getAuthSnapshot } from '@/lib/authStore';
 import { getKey as getApiKey } from '@/lib/apiKeys';
 import { detectAnomalies, type AnomalyReport } from './jevAnomalyDetector';
 import { recalibrateFlaggedAgents, type RecalibrationResult } from './jevRecalibrator';
-import { getAgentRegistry, type AgentSlot } from './core/agentRegistry';
+import { getAgentRegistry } from './core/agentRegistry';
 import { getTelemetryHub } from './core/agentTelemetry';
 import { PipelineFactory } from './core/pipelineFactory';
 
@@ -55,21 +55,17 @@ function buildVisionGeometrySummary(
 }
 
 export class AgentOrchestrator {
-  private agents: Map<AgentId, BaseAgent> = new Map();
   private registry = getAgentRegistry();
   private telemetry = getTelemetryHub();
 
   constructor() {
-    this.syncFromRegistry();
-    this.registry.subscribe(() => this.syncFromRegistry());
+    this.resetTelemetry();
+    this.registry.subscribe(() => this.resetTelemetry());
   }
 
-  private syncFromRegistry(): void {
-    const newAgents = this.registry.instantiate();
-    this.agents.clear();
-    for (const agent of newAgents) {
-      this.agents.set(agent.agentId, agent);
-      this.telemetry.update(agent.agentId, { status: 'idle', currentPhase: 'ready', progress: 0 });
+  private resetTelemetry(): void {
+    for (const slot of this.registry.getAll()) {
+      this.telemetry.update(slot.id, { status: 'idle', currentPhase: 'ready', progress: 0 });
     }
   }
 
@@ -117,20 +113,25 @@ export class AgentOrchestrator {
     }
 
     const pipeline = PipelineFactory.build(material.technology as MaterialTechnology);
-    const enabledAgents = Array.from(this.agents.values());
+    // PipelineFactory owns material filtering and material-specific weights.
+    // Instantiate per run instead of reusing the registry-wide set.
+    const enabledAgents = pipeline.slots.map((slot) => new slot.agentClass());
+    const agentsById = new Map(enabledAgents.map((agent) => [agent.agentId, agent]));
+    const weights = new Map<AgentId, number>(
+      pipeline.slots.map((slot) => [slot.id, slot.weight]),
+    );
 
-    // Run agents and Jev Early Triage in parallel
-    const dims = unifiedAnalysis.metrics.result.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
-    const earlyTriagePromise = llm
+    // Run agents and Jev Early Triage in parallel (Jev is opt-in per pipeline).
+    const earlyTriagePromise = llm && pipeline.jevEnabled
       ? this.runJevEarlyTriage(unifiedAnalysis, material)
       : Promise.resolve(undefined);
 
     const initialResults = await this.runAgentsParallel(ctx, enabledAgents);
 
-    // Get Early Triage results to adjust agent weights
+    // Get Early Triage results to adjust RUNTIME weights (never persisted)
     const earlyTriage = await earlyTriagePromise;
     if (earlyTriage) {
-      this.adjustWeightsByEarlyTriage(initialResults, earlyTriage);
+      this.adjustWeightsByEarlyTriage(weights, earlyTriage);
     }
 
     for (const result of initialResults) {
@@ -151,9 +152,15 @@ export class AgentOrchestrator {
       initialResults.map(result => [result.agentId, result.score]),
     );
 
-    const debateResults = await this.runDebatePhase(ctx, enabledAgents, initialResults);
+    const debateResults = await this.runDebatePhase(
+      ctx,
+      enabledAgents,
+      initialResults,
+      weights,
+      pipeline.debateRounds,
+    );
 
-    const jevDecision = llm
+    const jevDecision = llm && pipeline.jevEnabled
       ? await this.runJevDecision(initialResults, unifiedAnalysis, debateResults, material) ?? undefined
       : undefined;
 
@@ -161,19 +168,30 @@ export class AgentOrchestrator {
     let anomalies: AnomalyReport[] = [];
     let recalibrationResults: RecalibrationResult[] = [];
 
-    if (jevDecision?.jevUsed) {
+    if (jevDecision?.jevUsed && pipeline.recalibrationEnabled) {
       anomalies = detectAnomalies(initialResults, jevDecision, debateResults);
 
       // Phase 3: Targeted Recalibration — re-run only the worst offender
       if (anomalies.length > 0) {
         recalibrationResults = await recalibrateFlaggedAgents(
-          anomalies, this.agents, ctx, initialResults, jevDecision,
+          anomalies, agentsById, ctx, initialResults, jevDecision,
         );
       }
     }
 
-    const consensus = this.computeConsensus(initialResults, debateResults, language ?? 'en', jevDecision);
-    const votingRecords = this.buildVotingRecords(initialResults, debateResults, initialScores);
+    const consensus = this.computeConsensus(
+      initialResults,
+      debateResults,
+      weights,
+      language ?? 'en',
+      jevDecision,
+    );
+    const votingRecords = this.buildVotingRecords(
+      initialResults,
+      debateResults,
+      initialScores,
+      weights,
+    );
     const totalDurationMs = Math.round(performance.now() - startTime);
 
     // Fan out to live surfaces (e.g. the 3D office): fire-and-forget, browser only.
@@ -238,11 +256,12 @@ export class AgentOrchestrator {
     ctx: AgentContext,
     agents: BaseAgent[],
     currentResults: AgentResultWithExplanation[],
+    weights: Map<AgentId, number>,
+    maxRounds: number,
   ): Promise<DebateRound[]> {
     const rounds: DebateRound[] = [];
-    const MAX_ROUNDS = 2;
 
-    for (let round = 1; round <= MAX_ROUNDS; round++) {
+    for (let round = 1; round <= maxRounds; round++) {
       const otherOutputs = Array.from(ctx.previousOutputs.values());
       const votes: Record<AgentId, number> = {} as Record<AgentId, number>;
       const adjustedScores: Record<AgentId, number> = {} as Record<AgentId, number>;
@@ -253,10 +272,9 @@ export class AgentOrchestrator {
 
         const reviewResult = agent.review(ctx, otherOutputs);
         const adjustment = reviewResult.scoreAdjustment;
-        const slot = this.registry.get(agent.agentId);
 
         const adjustedScore = Math.max(0, Math.min(100, currentResult.score + adjustment));
-        votes[agent.agentId] = slot?.weight ?? 0.25;
+        votes[agent.agentId] = weights.get(agent.agentId) ?? 0.25;
         adjustedScores[agent.agentId] = adjustedScore;
 
         currentResult.score = adjustedScore;
@@ -320,7 +338,9 @@ export class AgentOrchestrator {
     material: Material,
   ): Promise<{ riskCategory: string; agentPriority: string } | undefined> {
     const apiKey = this.getJevApiKey();
-    if (!apiKey) return undefined;
+    // '' is the signed-in sentinel: the server holds the key. Only undefined
+    // means "no Jev access at all" (anonymous with no BYOK).
+    if (apiKey === undefined) return undefined;
 
     const dims = unifiedAnalysis.metrics.result.boundingBoxDimensionsMm ?? { x: 0, y: 0, z: 0 };
     const state = [
@@ -369,7 +389,7 @@ export class AgentOrchestrator {
   }
 
   private adjustWeightsByEarlyTriage(
-    results: AgentResultWithExplanation[],
+    weights: Map<AgentId, number>,
     triage: { riskCategory: string; agentPriority: string },
   ): void {
     const priorityMap: Record<string, AgentId> = {
@@ -380,16 +400,15 @@ export class AgentOrchestrator {
     };
 
     const priorityAgent = priorityMap[triage.agentPriority];
-    if (priorityAgent) {
-      const slot = this.registry.get(priorityAgent);
-      if (slot) {
-        this.registry.updateWeight(priorityAgent, Math.min(0.5, slot.weight * 1.5));
-      }
+    if (priorityAgent && weights.has(priorityAgent)) {
+      // Runtime-only: early triage must not rewrite the user's saved registry.
+      weights.set(priorityAgent, Math.min(0.5, (weights.get(priorityAgent) ?? 0.25) * 1.5));
     }
   }
 
   private getJevApiKey(): string | undefined {
     const token = getAuthSnapshot().token;
+    // Signed-in: return the empty-string sentinel; the server uses its env key.
     if (token) return '';
     return getApiKey('openrouter');
   }
@@ -397,6 +416,7 @@ export class AgentOrchestrator {
   private computeConsensus(
     results: AgentResultWithExplanation[],
     debateRounds: DebateRound[],
+    weights: Map<AgentId, number>,
     language: ContentLang = 'en',
     jevDecision?: JevDecision,
   ): AgentConsensus {
@@ -421,8 +441,7 @@ export class AgentOrchestrator {
     let totalWeight = 0;
 
     for (const result of results) {
-      const slot = this.registry.get(result.agentId);
-      const weight = slot?.weight ?? 0.25;
+      const weight = weights.get(result.agentId) ?? 0.25;
       agentScores[result.agentId] = result.score;
       agentVerdicts[result.agentId] = result.verdict;
       weightedSum += result.score * weight;
@@ -500,9 +519,9 @@ export class AgentOrchestrator {
     results: AgentResultWithExplanation[],
     debateRounds: DebateRound[],
     initialScores: Map<AgentId, number>,
+    weights: Map<AgentId, number>,
   ): VotingRecord[] {
     return results.map(result => {
-      const slot = this.registry.get(result.agentId);
       const lastRound = debateRounds[debateRounds.length - 1];
       const initialScore = initialScores.get(result.agentId) ?? result.score;
       const adjustedScore = lastRound?.adjustedScores[result.agentId] ?? result.score;
@@ -511,7 +530,7 @@ export class AgentOrchestrator {
         agentId: result.agentId,
         initialScore,
         adjustedScore,
-        weight: slot?.weight ?? 0.25,
+        weight: weights.get(result.agentId) ?? 0.25,
         confidence: result.confidence,
       };
     });

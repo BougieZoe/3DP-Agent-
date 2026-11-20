@@ -116,10 +116,18 @@ export function ensureOutwardWinding(geo: THREE.BufferGeometry): boolean {
   return true
 }
 
-export async function applyRepairAsync(
+export type RepairMethod = 'manifold-offset' | 'normal-fallback';
+
+export interface RepairApplication {
+  geometry: THREE.BufferGeometry;
+  /** Which implementation produced the geometry. Never inferred by the caller. */
+  method: RepairMethod;
+}
+
+export async function applyRepairWithMethodAsync(
   geometry: THREE.BufferGeometry,
   suggestion: GeometrySuggestion,
-): Promise<THREE.BufferGeometry> {
+): Promise<RepairApplication> {
   // 根治：优先走 manifold offset，无破面；失败回退到 +normal
   const delta = getDeltaForType(suggestion.type, suggestion.confidence) * (suggestion.riskReduction > 40 ? 1.2 : 1)
   try {
@@ -132,12 +140,23 @@ export async function applyRepairAsync(
     const repaired = fromManifoldMesh(outMesh, manifold)
     // 校验
     if (repaired.attributes.position.count === 0) throw new Error('manifold produced empty')
-    return repaired
+    return { geometry: repaired, method: 'manifold-offset' }
   } catch (e) {
-    // 回退：前端 +normal（已验证）
+    // 回退：前端 +normal（已验证）。调用方仍必须做回归门禁；
+    // fallback 不是“更安全”的捷径，只是另一种候选几何。
     console.warn('manifold failed, fallback to +normal', e)
-    return applyRepairFallback(geometry, suggestion)
+    return {
+      geometry: applyRepairFallback(geometry, suggestion),
+      method: 'normal-fallback',
+    }
   }
+}
+
+export async function applyRepairAsync(
+  geometry: THREE.BufferGeometry,
+  suggestion: GeometrySuggestion,
+): Promise<THREE.BufferGeometry> {
+  return (await applyRepairWithMethodAsync(geometry, suggestion)).geometry
 }
 
 function applyRepairFallback(

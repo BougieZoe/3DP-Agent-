@@ -366,6 +366,21 @@ export interface UnifiedAnalysis {
     printTime: { printTime: number; filamentLength: number; layerCount: number } | null;
     modelsLoaded: { wallThickness: boolean; overhang: boolean; printTime: boolean };
   }> | null;
+  /**
+   * Which topology profile judged this model, plus the evidence that selected
+   * it. Recorded so a report can justify the choice rather than assert it, and
+   * so a verdict can be replayed against the same profile later.
+   */
+  topologyProfile?: import('./topologyProfiles').TopologyProfileSelection | null;
+  /**
+   * Quad edge-flow quality.
+   *
+   * Present only when the resolved profile declares `criteria: 'quad-flow'` —
+   * absent means "not measured", which is deliberately distinct from a zero
+   * measurement. `applicable: false` means the reconstruction ran but the
+   * triangle data could not support a trustworthy flow reading.
+   */
+  quadFlow?: import('./quadFlow').QuadFlowResult | null;
   /** ISO timestamp of when analysis was run */
   timestamp: string;
   modelFileName: string;

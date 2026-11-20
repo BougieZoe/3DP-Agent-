@@ -8,7 +8,7 @@
  */
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { chromium } = require('~/.claude/skills/playwright-skill/node_modules/playwright-core');
+const { chromium } = require(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 
 import { join } from 'path';
 import { existsSync } from 'fs';

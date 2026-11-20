@@ -33,13 +33,20 @@ export function classifyBridgeError(err: unknown): BridgeFailure {
   return 'repair-failed';
 }
 
-/** WASM offset only makes sense for thin walls with affected regions. */
+/**
+ * WASM offset only makes sense for thin walls with affected regions. Among the
+ * applicable candidates, prefer the one expected to remove the most risk; ties
+ * go to the more confident suggestion. This is the candidate-ranking step of
+ * the auto-fix pipeline, not a new prediction.
+ */
 export function pickWasmSuggestion(
   suggestions: GeometrySuggestion[],
 ): GeometrySuggestion | null {
-  return (
-    suggestions.find(
-      (s) => s.type === 'thicken_wall' && s.affectedPositions.length > 0,
-    ) ?? null
+  const applicable = suggestions.filter(
+    (s) => s.type === 'thicken_wall' && s.affectedPositions.length > 0,
   );
+  if (applicable.length === 0) return null;
+  return [...applicable].sort(
+    (a, b) => b.riskReduction - a.riskReduction || b.confidence - a.confidence,
+  )[0];
 }

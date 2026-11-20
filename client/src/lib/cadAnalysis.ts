@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { fromThreeBufferGeometry, runAnalysisInWorker, type UnifiedAnalysis } from '@/analysis';
+import { fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
+import { analyzeWithTelemetry } from './analysisProfiling';
 import type { PrinterProfileId } from '@/analysis/types';
 import {
   runConfidenceGate,
@@ -30,7 +31,7 @@ export async function runCadAnalysis(
   geometry.computeBoundingBox();
   const model = fromThreeBufferGeometry(geometry);
   // Heavy analysis runs off the main thread so the CAD/Mesh UI stays responsive.
-  const unified = await runAnalysisInWorker(model, {
+  const unified = await analyzeWithTelemetry(model, {
     fileName: opts.fileName,
     material: opts.material,
     printerId: opts.printerId ?? 'bambu_x1c',

@@ -33,7 +33,7 @@ func NewCadRouter(pythonPath, cadBridgeDir string) *CadRouter {
 func findStepCLI() string {
 	// Check common locations
 	paths := []string{
-		"~/.agents/skills/cad/scripts/step",
+		os.Getenv("CAD_STEP_CLI"),
 		filepath.Join(os.Getenv("HOME"), ".agents/skills/cad/scripts/step"),
 		"/usr/local/bin/step",
 	}

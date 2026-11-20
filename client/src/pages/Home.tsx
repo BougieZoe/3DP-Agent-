@@ -34,11 +34,16 @@ import { useIsMobile } from '@/hooks/useMobile';
 import { generateQuickReport, ModelData } from '@/lib/ruleEngine';
 import { deriveOhStatus, deriveWtStatus } from '@/analysis/metrics';
 import { unifiedToModelData } from '@/lib/unifiedToModelData';
-import { fromThreeBufferGeometry, runAnalysisInWorker, assessContext, liquidCoolingFromUnified, productionFromUnified, type ObjectContext } from '@/analysis';
+import { fromThreeBufferGeometry, assessContext, liquidCoolingFromUnified, productionFromUnified, type ObjectContext } from '@/analysis';
+import { analyzeWithTelemetry } from '@/lib/analysisProfiling';
 import { normalizeModelGeometry, fitCameraToGeometry } from '@/lib/modelNormalization';
 import { autoOrientGeometry } from '@/lib/autoOrient';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
-import { runTieredRepair } from '@/lib/repairFlow';
+import { runTieredRepair, type RepairOutcome } from '@/lib/repairFlow';
+import type { RepairMethod } from '@/lib/meshRepair';
+import type { RepairVerification } from '@/lib/repairVerification';
+import { describeRepairVerification } from '@/lib/repairVerificationText';
+import { saveAnalysisRun } from '@/lib/analysisRuns';
 import { geometryToStl } from '@/lib/meshOps';
 import { parseSTL } from '@/lib/stlParser';
 import { weldGeometry } from '@/lib/weldGeometry';
@@ -60,6 +65,8 @@ import { toast } from 'sonner';
 import { PrintPlaybackProvider, PlaybackUpdater } from '@/components/playback/PrintPlaybackContext';
 import { ManufacturingRecommendationPanel } from '@/components/ManufacturingRecommendationPanel';
 import { ManufacturerExport } from '@/components/ManufacturerExport';
+import { PrintOutcomeCard } from '@/components/PrintOutcomeCard';
+import { ExportOutcomePrompt } from '@/components/ExportOutcomePrompt';
 import { GlassCard } from '@/components/GlassCard';
 import { AnalysisVerdictBar, deriveVerdict, VERDICT_THRESHOLDS, type VerdictMetric, type VerdictAction } from '@/components/AnalysisVerdictBar';
 import { recommendManufacturing, type ManufacturingGoal, type ProcessRecommendation } from '@/lib/manufacturingRecommendation';
@@ -570,6 +577,8 @@ export default function Home() {
     setSelectedSuggestionId(null);
     setOverlayOpacity(0.7);
     setVersions(loadVersions(model.fileName));
+    setRepairVerification(null);
+    setRepairMethod(null);
     toast.success(t('stlParsed') + model.fileName);
     runAgentAnalysis(model, material);
     // Auto-compose the report so the REPORT tab reads immediately — no
@@ -750,17 +759,32 @@ export default function Home() {
     setAgentRun(null);
     deepAnalysisSeq.current += 1;
     setDeepAgentRun(null);
+    setRepairVerification(null);
+    setRepairMethod(null);
 
     const model = fromThreeBufferGeometry(uploadedModel.geometry);
-    const newUnified = await runAnalysisInWorker(model, { 
-      fileName: uploadedModel.fileName, 
+    const newUnified = await analyzeWithTelemetry(model, {
+      fileName: uploadedModel.fileName,
       material: newMat,
       materialFamily: newMat.technology,
     });
 
     if (currentSeq !== materialRequestSeq.current) return;
 
-    const updatedModel: UploadedModel = { ...uploadedModel, unifiedAnalysis: newUnified };
+    const savedRun = await saveAnalysisRun({
+      analysis: newUnified,
+      fileName: uploadedModel.fileName,
+      fileHash: uploadedModel.fileHash,
+      fileSizeBytes: uploadedModel.fileSizeBytes ?? null,
+      units: uploadedModel.units,
+      material: newMat,
+      materialFamily: newMat.technology,
+    });
+    const updatedModel: UploadedModel = {
+      ...uploadedModel,
+      unifiedAnalysis: newUnified,
+      analysisRecordId: savedRun?.id ?? null,
+    };
     commitModel(updatedModel);
 
     if (currentSeq !== materialRequestSeq.current || !orchestratorRef.current) return;
@@ -790,13 +814,28 @@ export default function Home() {
     setAgentRun(null);
     deepAnalysisSeq.current += 1;
     setDeepAgentRun(null);
+    setRepairVerification(null);
+    setRepairMethod(null);
 
     const model = fromThreeBufferGeometry(uploadedModel.geometry);
     const newMaterial = MATERIALS[newMaterialKey];
-    const newUnified = await runAnalysisInWorker(model, { fileName: uploadedModel.fileName, material: newMaterial, materialFamily: family });
+    const newUnified = await analyzeWithTelemetry(model, { fileName: uploadedModel.fileName, material: newMaterial, materialFamily: family });
 
     if (currentSeq !== materialRequestSeq.current) return;
-    const updatedModel: UploadedModel = { ...uploadedModel, unifiedAnalysis: newUnified };
+    const savedRun = await saveAnalysisRun({
+      analysis: newUnified,
+      fileName: uploadedModel.fileName,
+      fileHash: uploadedModel.fileHash,
+      fileSizeBytes: uploadedModel.fileSizeBytes ?? null,
+      units: uploadedModel.units,
+      material: newMaterial,
+      materialFamily: family,
+    });
+    const updatedModel: UploadedModel = {
+      ...uploadedModel,
+      unifiedAnalysis: newUnified,
+      analysisRecordId: savedRun?.id ?? null,
+    };
     commitModel(updatedModel);
 
     if (currentSeq !== materialRequestSeq.current || !orchestratorRef.current) return;
@@ -825,12 +864,28 @@ export default function Home() {
     const { geometry: normalizedGeometry } = normalizeModelGeometry(uploadedModel.rawGeometry, newUnits);
     const geometry = autoOrientGeometry(normalizedGeometry);
     const geometryModel = fromThreeBufferGeometry(geometry);
-    const newUnified = await runAnalysisInWorker(geometryModel, { fileName: uploadedModel.fileName, material });
+    const newUnified = await analyzeWithTelemetry(geometryModel, { fileName: uploadedModel.fileName, material });
 
     if (currentSeq !== unitRequestSeq.current) return;
 
     const mesh = createMeshFromGeometry(geometry);
-    const updatedModel: UploadedModel = { ...uploadedModel, geometry, mesh, unifiedAnalysis: newUnified, units: newUnits };
+    const savedRun = await saveAnalysisRun({
+      analysis: newUnified,
+      fileName: uploadedModel.fileName,
+      fileHash: uploadedModel.fileHash,
+      fileSizeBytes: uploadedModel.fileSizeBytes ?? null,
+      units: newUnits,
+      material,
+      materialFamily: material.technology,
+    });
+    const updatedModel: UploadedModel = {
+      ...uploadedModel,
+      geometry,
+      mesh,
+      unifiedAnalysis: newUnified,
+      units: newUnits,
+      analysisRecordId: savedRun?.id ?? null,
+    };
     commitModel(updatedModel);
     refreshMaterialRecs(geometry);
     recordVersion(updatedModel.fileName, 'units', newUnified, newUnits);
@@ -860,71 +915,103 @@ export default function Home() {
   // (diagnostics, best-effort watertight repair, place on plate), then re-run
   // the analysis so the report reflects the processed model.
   const [repairing, setRepairing] = useState(false);
+  // Record id of the most recent successful export. Only shown while it still
+  // matches the active model's record, so a new analysis cannot inherit it.
+  const [exportedRecordId, setExportedRecordId] = useState<string | null>(null);
+  const [repairVerification, setRepairVerification] = useState<RepairVerification | null>(null);
+  const [repairMethod, setRepairMethod] = useState<RepairMethod | null>(null);
+  const repairVerificationText = useMemo(
+    () => repairVerification
+      ? describeRepairVerification(repairVerification, language)
+      : null,
+    [repairVerification, language],
+  );
   // Mirrors counterfactualSuggestions (declared below) for the repair fallback.
   // A ref avoids the use-before-declaration trap: the handler only reads it at event time.
   const wasmSuggestionsRef = useRef<any[]>([]);
+
+  /**
+   * Shared repair pipeline: repair → re-analyze → verify → commit only on
+   * acceptance. Rejected geometry is returned untouched and never recorded as
+   * a repair run. Callers decide whether to export the accepted mesh.
+   */
+  const performTieredRepair = useCallback(async (): Promise<
+    (RepairOutcome & { recordId: string | null }) | null
+  > => {
+    if (!uploadedModel) return null;
+    const outcome = await runTieredRepair(
+      uploadedModel.geometry,
+      uploadedModel.fileName,
+      material,
+      wasmSuggestionsRef.current,
+      uploadedModel.unifiedAnalysis,
+    );
+    setRepairVerification(outcome.verification);
+    setRepairMethod(outcome.repairMethod);
+    const verificationText = describeRepairVerification(outcome.verification, language);
+    if (!outcome.accepted) {
+      toast.error(verificationText.summary);
+      return { ...outcome, recordId: null };
+    }
+    const savedRun = await saveAnalysisRun({
+      analysis: outcome.analysis,
+      fileName: uploadedModel.fileName,
+      fileHash: uploadedModel.fileHash,
+      fileSizeBytes: uploadedModel.fileSizeBytes ?? null,
+      units: uploadedModel.units,
+      material,
+      materialFamily: material.technology,
+      repair: {
+        derivedFromRecordId: uploadedModel.analysisRecordId ?? null,
+        note: outcome.note,
+        before: uploadedModel.unifiedAnalysis,
+      },
+    });
+    commitModel({
+      ...uploadedModel,
+      geometry: outcome.geometry,
+      mesh: createMeshFromGeometry(outcome.geometry),
+      unifiedAnalysis: outcome.analysis,
+      rawGeometry: outcome.geometry.clone(),
+      analysisRecordId: savedRun?.id ?? null,
+    });
+    deepAnalysisSeq.current += 1;
+    setDeepAgentRun(null);
+    setDeepSteps([]);
+    setDeepError(null);
+    toast.success(verificationText.summary);
+    return { ...outcome, recordId: savedRun?.id ?? null };
+  }, [uploadedModel, material, language]);
+
   const handleRepairProcess = useCallback(async () => {
-    if (!uploadedModel) return;
     setRepairing(true);
     try {
-      const beforeMin = uploadedModel.unifiedAnalysis?.metrics?.result?.minWallThicknessMm ?? null;
-      const outcome = await runTieredRepair(
-        uploadedModel.geometry,
-        uploadedModel.fileName,
-        material,
-        wasmSuggestionsRef.current,
-        beforeMin,
-      );
-      let finalGeometry = outcome.geometry;
-      let finalAnalysis = outcome.analysis;
-      let finalNote = outcome.note;
-
-      // Pipeline step: once the shell is closed, thicken if walls are still
-      // under target. This is the case that used to dead-end — repair fixed
-      // the shell but the thin walls stayed thin, and a second manual click
-      // was needed. Only runs when the repair actually closed the mesh.
-      const wallAfter = finalAnalysis.metrics?.result?.p5WallThicknessMm ?? null;
-      if (finalAnalysis.validation?.result?.isWatertight && wallAfter != null && wallAfter < 0.8) {
-        try {
-          const samples = finalAnalysis.metrics?.result?.wallThicknessSamples ?? [];
-          const thickened = await autoThicken(finalGeometry, wallAfter, 0.8, samples);
-          const check = await runAnalysisInWorker(
-            fromThreeBufferGeometry(thickened.geometry),
-            { fileName: uploadedModel.fileName, material },
-          );
-          if (isThickenImprovement(wallAfter, check.metrics?.result?.p5WallThicknessMm ?? null)) {
-            finalGeometry = thickened.geometry;
-            finalAnalysis = check;
-            finalNote = `${outcome.note} · ${thickened.note}`;
-          }
-        } catch {
-          /* repair result stands on its own */
-        }
-      }
-
-      commitModel({
-        ...uploadedModel,
-        geometry: finalGeometry,
-        mesh: createMeshFromGeometry(finalGeometry),
-        unifiedAnalysis: finalAnalysis,
-        rawGeometry: finalGeometry.clone(),
-      });
-      refreshMaterialRecs(finalGeometry);
-      recordVersion(uploadedModel.fileName, 'repair', finalAnalysis, finalNote);
-      deepAnalysisSeq.current += 1;
-      setDeepAgentRun(null);
-      setDeepSteps([]);
-      setDeepError(null);
-      toast.success(finalNote);
+      await performTieredRepair();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      recordVersion(uploadedModel.fileName, 'repair', uploadedModel.unifiedAnalysis, msg, 'discarded');
-      toast.error(msg);
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setRepairing(false);
     }
-  }, [uploadedModel, material, refreshMaterialRecs]);
+  }, [performTieredRepair]);
 
+  const handleAutoFixExport = useCallback(async () => {
+    setRepairing(true);
+    try {
+      const outcome = await performTieredRepair();
+      // Export is gated on the same verification that allowed the commit.
+      if (!outcome?.accepted) return;
+      downloadBlob(
+        `${uploadedModel!.fileName.replace(/\.[^.]+$/, '')}_autofixed.stl`,
+        new Blob([geometryToStl(outcome.geometry)], { type: 'model/stl' }),
+      );
+      setExportedRecordId(outcome.recordId);
+      toast.success(getTranslation(language, 'repairAutoFixExported'));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRepairing(false);
+    }
+  }, [performTieredRepair, uploadedModel, language]);
 
   /**
    * One-click thicken: real manifold offset, then re-analyse so the user sees
@@ -959,7 +1046,7 @@ export default function Home() {
         note = `${local.note} (${why})`;
       }
 
-      const analysis = await runAnalysisInWorker(
+      const analysis = await analyzeWithTelemetry(
         fromThreeBufferGeometry(geometry),
         { fileName: uploadedModel.fileName, material },
       );
@@ -1005,6 +1092,7 @@ export default function Home() {
       `${uploadedModel.fileName.replace(/\.stl$/i, '')}_processed.stl`,
       new Blob([geometryToStl(uploadedModel.geometry)], { type: 'model/stl' }),
     );
+    setExportedRecordId(uploadedModel.analysisRecordId ?? null);
   };
   const handleDownload3mf = () => {
     if (!uploadedModel) return;
@@ -1014,6 +1102,7 @@ export default function Home() {
         type: 'application/vnd.ms-package.3dmanufacturing-3dmodel',
       }),
     );
+    setExportedRecordId(uploadedModel.analysisRecordId ?? null);
   };
 
   // Feature-section navigation. Destinations come from FEATURE_DESTINATIONS
@@ -1050,7 +1139,10 @@ export default function Home() {
   const valid = unifiedAnalysis?.validation.result;
   const modelData = getModelData();
   const providerLabel = getActiveProvider() ? AI_PROVIDER_METADATA[getActiveProvider()!].shortLabel : null;
-  const t = (key: keyof typeof import('@/lib/i18n').translations.en) => getTranslation(language, key);
+  const t = (
+    key: keyof typeof import('@/lib/i18n').translations.en,
+    params?: Record<string, string | number>,
+  ) => getTranslation(language, key, params);
   // Metric display in the selected unit (analysis is always computed in mm).
   const mmPerUnit = LENGTH_UNIT_TO_MM[units];
   const unitSuffix = units === 'inch' ? 'in' : units;
@@ -2049,9 +2141,40 @@ export default function Home() {
                       className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all">
                       {t('generateReport')}
                     </button>
+                    {repairVerification && repairVerificationText && (
+                      <div
+                        role="status"
+                        className={`border rounded-sm p-3 text-[11px] font-mono leading-relaxed ${
+                          repairVerification.accepted
+                            ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400/90'
+                            : 'border-red-500/30 bg-red-500/5 text-red-400/90'
+                        }`}
+                      >
+                        <div className="tracking-wider mb-1">
+                          {repairVerificationText.title}
+                        </div>
+                        <div className="text-muted-foreground/70">{repairVerificationText.summary}</div>
+                        {repairMethod && (
+                          <div className="text-muted-foreground/50 mt-1">
+                            {t('repairMethodLabel', { method: repairMethod })}
+                          </div>
+                        )}
+                        {repairVerificationText.regressions.length > 0 && (
+                          <ul className="mt-1.5 space-y-0.5">
+                            {repairVerificationText.regressions.map((message, index) => (
+                              <li key={`${repairVerification.regressions[index].code}-${index}`}>— {message}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
                     <button onClick={handleRepairProcess} disabled={repairing}
                       className="w-full py-2.5 text-xs font-mono border border-border/40 text-muted-foreground hover:text-foreground hover:border-foreground/30 rounded-sm transition-all disabled:opacity-50">
                       {repairing ? '▋ ' + t('analyze') : t('analyzeRepair')}
+                    </button>
+                    <button onClick={handleAutoFixExport} disabled={repairing}
+                      className="w-full py-2.5 text-xs font-mono border border-primary/40 text-primary hover:bg-primary hover:text-primary-foreground rounded-sm transition-all disabled:opacity-50">
+                      {repairing ? t('repairAutoFixBusy') : t('repairAutoFixStl')}
                     </button>
                     <div className="flex items-stretch gap-2">
                       <button onClick={handleDownloadStl} title={t('cadDownloadStl')}
@@ -2063,6 +2186,12 @@ export default function Home() {
                         3MF
                       </button>
                     </div>
+                    {exportedRecordId && exportedRecordId === uploadedModel?.analysisRecordId && (
+                      <ExportOutcomePrompt
+                        recordId={exportedRecordId}
+                        language={language}
+                      />
+                    )}
                   </div>
                 )}
 
@@ -2175,6 +2304,10 @@ export default function Home() {
                         </details>
                       </div>
                     )}
+                    <PrintOutcomeCard
+                      recordId={uploadedModel?.analysisRecordId ?? null}
+                      language={language}
+                    />
                     {/* AI interpretation — part of the report, read-only here
                         (the run control lives in the AGENTS tab) */}
                     {expertReview && (

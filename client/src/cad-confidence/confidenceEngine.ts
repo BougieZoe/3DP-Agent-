@@ -3,6 +3,9 @@ import { getThresholds } from '@/analysis/thresholds';
 import type { UnifiedAnalysis, OverhangSeverity, SupportDifficulty, SupportResult, BedFitResult } from '@/analysis';
 import type { ConfidenceCategory, ConfidenceExplanation, Impact, Issue, RepairSuggestion } from './types';
 
+/** Bump when category weights, score bands or semantic checks change. */
+export const CAD_CONFIDENCE_RULES_VERSION = 1;
+
 export function computeCategories(analysis: UnifiedAnalysis, language: ContentLang = 'en'): ConfidenceCategory[] {
   const m = analysis.metrics?.result;
   const t = analysis.topology?.result;

@@ -1,3 +1,4 @@
+import type { AgentId } from '@shared/domain/agent';
 import type { MaterialTechnology } from '@shared/domain/material';
 import type { AgentSlot } from './agentRegistry';
 import { getAgentRegistry } from './agentRegistry';
@@ -52,17 +53,23 @@ export class PipelineFactory {
   static build(material: MaterialTechnology): PipelineConfig {
     const registry = getAgentRegistry();
     const preset = PIPELINE_PRESETS[material] ?? {};
+    const overrides = this.getMaterialWeightOverrides(material);
 
+    // Material overrides are RUNTIME weights: copy the slot instead of mutating
+    // the registry, so a material-specific run never rewrites saved settings.
     return {
       material,
-      slots: registry.getEnabled(material),
+      slots: registry.getEnabled(material).map((slot) => ({
+        ...slot,
+        weight: overrides[slot.id] ?? slot.weight,
+      })),
       debateRounds: preset.debateRounds ?? 2,
       jevEnabled: preset.jevEnabled ?? true,
       recalibrationEnabled: preset.recalibrationEnabled ?? true,
     };
   }
 
-  static getMaterialWeightOverrides(material: MaterialTechnology): Partial<Record<string, number>> {
+  static getMaterialWeightOverrides(material: MaterialTechnology): Partial<Record<AgentId, number>> {
     switch (material) {
       case 'sla':
         return { geometry_analyst: 0.35, printability_scorer: 0.35 };
