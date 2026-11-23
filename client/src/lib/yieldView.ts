@@ -7,7 +7,7 @@
  * filled in, and "finished" is never allowed to read as "good".
  */
 import type { PrintJob, Printer } from '@/lib/printFarm';
-import type { CalibrationMethod } from '@shared/domain/calibration';
+import type { CalibrationMethod } from '@shared/domain/fieldCalibration';
 import type { EvidenceGrade } from '@shared/domain/evidence';
 import { getMachineModel } from '@shared/domain/machine';
 import {
@@ -15,6 +15,7 @@ import {
   type FailureCause,
   type OutcomeClass,
   type YieldScoreboard,
+  type YieldVersionExclusion,
   calibrationFromYield,
 } from '@shared/domain/yieldAttribution';
 import {
@@ -27,6 +28,7 @@ import {
   floorScoreboard,
 } from '@shared/domain/yieldLedger';
 import { type CapabilityClaim, type AxisClaim, capabilityClaim } from '@shared/domain/fieldOverlay';
+import { VERDICT_POLICY_VERSION } from '@shared/domain/verdictPolicy';
 
 export const OUTCOME_LABELS: Record<OutcomeClass, string> = {
   'true-pass': '判定通过且合格',
@@ -145,6 +147,10 @@ export interface YieldView {
   decidableText: string;
   leakRateText: string;
   falseBlockRateText: string;
+  /** The policy version the scoreboard is pinned to. */
+  policyVersion: string;
+  /** "另有 N 条属旧策略未计入" — null when nothing was excluded. */
+  excludedByVersionText: string | null;
 }
 
 export function toFloorJobs(jobs: PrintJob[]): FloorJobSnapshot[] {
@@ -216,7 +222,11 @@ function machineView(modelId: string, observations: ReturnType<typeof calibratio
 export function buildYieldView(jobs: PrintJob[], printers: Printer[]): YieldView {
   const floorJobs = toFloorJobs(jobs);
   const floorPrinters = toFloorPrinters(printers);
-  const { board, harvest } = floorScoreboard(floorJobs, floorPrinters);
+  // Pin to the policy we actually ship. Mixing versions is refused rather than
+  // averaged; whichever records fall outside the pin are counted and shown.
+  const { board, harvest } = floorScoreboard(floorJobs, floorPrinters, {
+    policyVersion: VERDICT_POLICY_VERSION,
+  });
   const attribution = floorAttribution(floorJobs, floorPrinters);
   const observations = calibrationFromYield(harvest.records);
 
@@ -273,5 +283,23 @@ export function buildYieldView(jobs: PrintJob[], printers: Printer[]): YieldView
     decidableText: `${board.decidable} / ${board.total}`,
     leakRateText: pct(board.leakRate),
     falseBlockRateText: pct(board.falseBlockRate),
+    policyVersion: VERDICT_POLICY_VERSION,
+    excludedByVersionText: excludedNote(board.excludedByVersion),
   };
+}
+
+/**
+ * "另有 N 条…未计入" — the sentence that keeps an empty denominator from
+ * reading as a clean record book.
+ *
+ * Old policy and no policy are counted separately: one is a migration fact, the
+ * other is a stamping hole, and a single blended number would hide the second.
+ */
+function excludedNote(ex: YieldVersionExclusion): string | null {
+  if (ex.count === 0) return null;
+  const stamped = ex.count - ex.unstamped;
+  const parts: string[] = [];
+  if (stamped > 0) parts.push(`${stamped} 条属旧策略未计入（${ex.versions.join('、')}）`);
+  if (ex.unstamped > 0) parts.push(`${ex.unstamped} 条未标注策略版本，未计入`);
+  return `另有 ${parts.join('；另有 ')}`;
 }

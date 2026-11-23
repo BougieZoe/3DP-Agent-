@@ -18,6 +18,7 @@ import {
   scoreYield,
   type YieldRecord,
 } from '../yieldAttribution';
+import { LEGACY_PYTHON_POLICY_VERSION, VERDICT_POLICY_VERSION } from '../verdictPolicy';
 
 function rec(over: Partial<YieldRecord>): YieldRecord {
   return {
@@ -26,7 +27,7 @@ function rec(over: Partial<YieldRecord>): YieldRecord {
     unitId: 'unit-a',
     at: '2026-11-20T10:00:00Z',
     verdict: 'pass',
-    policyVersion: 'wall-2026-11-23a',
+    policyVersion: VERDICT_POLICY_VERSION,
     outcome: 'printed-ok',
     causes: [],
     method: 'part-measurement',
@@ -111,9 +112,9 @@ describe('4 — no rate from a handful of jobs', () => {
 describe('5 — thresholds change, denominators do not', () => {
   it('refuses to quote a rate across two policy versions', () => {
     const records = [
-      rec({ id: 'old-1', policyVersion: 'py-wall-2026-11-20a' }),
-      rec({ id: 'old-2', policyVersion: 'py-wall-2026-11-20a' }),
-      rec({ id: 'old-3', policyVersion: 'py-wall-2026-11-20a' }),
+      rec({ id: 'old-1', policyVersion: LEGACY_PYTHON_POLICY_VERSION }),
+      rec({ id: 'old-2', policyVersion: LEGACY_PYTHON_POLICY_VERSION }),
+      rec({ id: 'old-3', policyVersion: LEGACY_PYTHON_POLICY_VERSION }),
       rec({ id: 'new-1' }),
       rec({ id: 'new-2' }),
       rec({ id: 'new-3' }),
@@ -121,14 +122,101 @@ describe('5 — thresholds change, denominators do not', () => {
     const mixed = scoreYield(records);
     expect(mixed.leakRate).toBeNull();
     expect(mixed.blockedBy).toMatch(/policy versions/);
+    // Nothing was pinned, so nothing was dropped.
+    expect(mixed.excludedByVersion).toEqual({ count: 0, versions: [], unstamped: 0 });
+  });
 
-    const pinned = scoreYield(records, { policyVersion: 'wall-2026-11-23a' });
-    expect(pinned.total).toBe(6); // version filter is reported by blockedBy, scope keeps model/unit only
+  it('pins by filtering, and shows how many records the pin left out', () => {
+    const records = [
+      rec({ id: 'old-1', policyVersion: LEGACY_PYTHON_POLICY_VERSION }),
+      rec({ id: 'old-2', policyVersion: LEGACY_PYTHON_POLICY_VERSION }),
+      rec({ id: 'old-3', policyVersion: LEGACY_PYTHON_POLICY_VERSION }),
+      rec({ id: 'new-1' }),
+      rec({ id: 'new-2' }),
+      rec({ id: 'new-3' }),
+    ];
+    const pinned = scoreYield(records, { policyVersion: VERDICT_POLICY_VERSION });
+    // The pin narrows the denominator — and says so instead of pretending the
+    // old records never existed.
+    expect(pinned.total).toBe(3);
+    expect(pinned.excludedByVersion).toEqual({
+      count: 3,
+      versions: [LEGACY_PYTHON_POLICY_VERSION],
+      unstamped: 0,
+    });
+    expect(pinned.leakRate).toBe(0);
+    expect(describeScoreboard(pinned)).toContain(`3 excluded on ${LEGACY_PYTHON_POLICY_VERSION}`);
+  });
+
+  it('does not file an unstamped record under "old policy"', () => {
+    // A verdict written before the engine stamped versions, or by a caller that
+    // forgot. Reporting it as "excluded on <some version>" would be a lie, and
+    // reporting it as "excluded on " (empty) is worse.
+    const records = [
+      rec({ id: 'u1', policyVersion: undefined as unknown as string }),
+      rec({ id: 'u2', policyVersion: undefined as unknown as string }),
+      rec({ id: 'u3', policyVersion: '' }),
+      rec({ id: 'new-1' }),
+    ];
+    const board = scoreYield(records, { policyVersion: VERDICT_POLICY_VERSION });
+    expect(board.total).toBe(1);
+    expect(board.excludedByVersion).toEqual({ count: 3, versions: [], unstamped: 3 });
+    const text = describeScoreboard(board);
+    expect(text).toContain('3 excluded (no policy version)');
+    expect(text).not.toContain('excluded on');
+  });
+
+  it('keeps old-policy and unstamped exclusions in separate clauses', () => {
+    const records = [
+      rec({ id: 'old-1', policyVersion: LEGACY_PYTHON_POLICY_VERSION }),
+      rec({ id: 'old-2', policyVersion: LEGACY_PYTHON_POLICY_VERSION }),
+      rec({ id: 'u1', policyVersion: undefined as unknown as string }),
+      rec({ id: 'new-1' }),
+    ];
+    const board = scoreYield(records, { policyVersion: VERDICT_POLICY_VERSION });
+    expect(board.excludedByVersion).toEqual({
+      count: 3,
+      versions: [LEGACY_PYTHON_POLICY_VERSION],
+      unstamped: 1,
+    });
+    const text = describeScoreboard(board);
+    expect(text).toContain(`2 excluded on ${LEGACY_PYTHON_POLICY_VERSION}`);
+    expect(text).toContain('1 excluded (no policy version)');
+  });
+
+  it('reads the same whether scoped by hand or by pin', () => {
+    const records = [
+      rec({ id: 'old-1', policyVersion: LEGACY_PYTHON_POLICY_VERSION }),
+      rec({ id: 'new-1' }),
+      rec({ id: 'new-2' }),
+      rec({ id: 'new-3' }),
+    ];
+    const pinned = scoreYield(records, { policyVersion: VERDICT_POLICY_VERSION });
     const scoped = scoreYield(
-      records.filter((r) => r.policyVersion === 'wall-2026-11-23a'),
-      { policyVersion: 'wall-2026-11-23a' },
+      records.filter((r) => r.policyVersion === VERDICT_POLICY_VERSION),
+      { policyVersion: VERDICT_POLICY_VERSION },
     );
     expect(scoped.leakRate).toBe(0);
+    expect(pinned.total).toBe(scoped.total);
+    expect(pinned.decidable).toBe(scoped.decidable);
+  });
+
+  it('an empty pinned board is reported as excluded data, not as a clean record', () => {
+    const board = scoreYield([rec({ id: 'old-1', policyVersion: LEGACY_PYTHON_POLICY_VERSION })], {
+      policyVersion: VERDICT_POLICY_VERSION,
+    });
+    expect(board.total).toBe(0);
+    expect(board.excludedByVersion.count).toBe(1);
+    expect(board.leakRate).toBeNull();
+    expect(describeScoreboard(board)).toMatch(/0\/0 decidable/);
+  });
+});
+
+describe('5b — one policy version, one literal', () => {
+  it('stamps the same version the engine ships', () => {
+    expect(rec({}).policyVersion).toBe(VERDICT_POLICY_VERSION);
+    // Guard: a version pinned in a test must come from the constant, never typed.
+    expect(VERDICT_POLICY_VERSION).not.toBe(LEGACY_PYTHON_POLICY_VERSION);
   });
 });
 

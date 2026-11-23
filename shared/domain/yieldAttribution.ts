@@ -30,7 +30,7 @@ import {
   type CalibrationMethod,
   type CalibrationObservation,
   aggregateCalibration,
-} from './calibration';
+} from './fieldCalibration';
 import type { AxisUnit } from './evidence';
 
 /** The three-state verdict issued by the policy layer before a job runs. */
@@ -121,9 +121,24 @@ export interface YieldScope {
   unitId?: string;
   /**
    * Pin the scoreboard to one policy version. Omit it and mixed records are
-   * detected and refused rather than silently averaged.
+   * detected and refused rather than silently averaged. When it is set,
+   * records from other versions are excluded **and counted** (see
+   * `excludedByVersion`) — the exclusion is visible, not a quiet filter.
    */
   policyVersion?: string;
+}
+
+/** Records left out of a pinned scoreboard because their policy version differs. */
+export interface YieldVersionExclusion {
+  count: number;
+  /** Versions the excluded records were judged under, sorted. Empty when count is 0. */
+  versions: string[];
+  /**
+   * Excluded records carrying no version at all (older verdicts, or an engine
+   * that forgot to stamp). Counted apart from `versions`: "stamped with an old
+   * policy" and "never stamped" are different faults and must not print as one.
+   */
+  unstamped: number;
 }
 
 export interface YieldScoreboard {
@@ -142,17 +157,35 @@ export interface YieldScoreboard {
   unresolvedScraps: number;
   /** Why the rates are null, when they are. */
   blockedBy: string | null;
+  /**
+   * Records dropped because the caller pinned a different policy version.
+   * Reported, never silent: an empty denominator and a clean record book look
+   * identical unless the excluded count is on the page.
+   */
+  excludedByVersion: YieldVersionExclusion;
   /** false-pass ids, newest first — the first thing anyone should read. */
   leaks: string[];
 }
 
 export function scoreYield(records: YieldRecord[], scope: YieldScope = {}): YieldScoreboard {
-  const scoped = records.filter(
+  const inScope = records.filter(
     (r) =>
       (scope.modelId === undefined || r.modelId === scope.modelId) &&
-      (scope.unitId === undefined || r.unitId === scope.unitId) &&
-      (scope.policyVersion === undefined || r.policyVersion === scope.policyVersion),
+      (scope.unitId === undefined || r.unitId === scope.unitId),
   );
+
+  // A pinned version filters — but the filtered-out records are counted first.
+  // Without the count, "0 leaks" and "0 data" print the same.
+  const dropped =
+    scope.policyVersion === undefined ? [] : inScope.filter((r) => r.policyVersion !== scope.policyVersion);
+  const scoped =
+    scope.policyVersion === undefined ? inScope : inScope.filter((r) => r.policyVersion === scope.policyVersion);
+  const stamped = dropped.filter((r) => typeof r.policyVersion === 'string' && r.policyVersion.length > 0);
+  const excludedByVersion: YieldVersionExclusion = {
+    count: dropped.length,
+    versions: [...new Set(stamped.map((r) => r.policyVersion))].sort(),
+    unstamped: dropped.length - stamped.length,
+  };
 
   const counts: Record<OutcomeClass, number> = {
     'true-pass': 0,
@@ -201,6 +234,7 @@ export function scoreYield(records: YieldRecord[], scope: YieldScope = {}): Yiel
     falseBlockRate,
     unresolvedScraps: unresolved(scoped).length,
     blockedBy,
+    excludedByVersion,
     leaks,
   };
 }
@@ -326,7 +360,13 @@ export function describeScoreboard(board: YieldScoreboard): string {
       ? 'false-block n/a'
       : `false-block ${(board.falseBlockRate * 100).toFixed(1)}%`;
   const why = board.blockedBy ? ` (${board.blockedBy})` : '';
-  return `${board.decidable}/${board.total} decidable, ${leak}, ${block}, ${board.unresolvedScraps} unresolved${why}`;
+  const ex = board.excludedByVersion;
+  const stampedCount = ex.count - ex.unstamped;
+  const excludedParts: string[] = [];
+  if (stampedCount > 0) excludedParts.push(`${stampedCount} excluded on ${ex.versions.join(', ')}`);
+  if (ex.unstamped > 0) excludedParts.push(`${ex.unstamped} excluded (no policy version)`);
+  const excluded = excludedParts.length > 0 ? `, ${excludedParts.join(', ')}` : '';
+  return `${board.decidable}/${board.total} decidable, ${leak}, ${block}, ${board.unresolvedScraps} unresolved${excluded}${why}`;
 }
 
 // ---------------------------------------------------------------------------

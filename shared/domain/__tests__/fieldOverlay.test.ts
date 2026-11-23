@@ -10,7 +10,7 @@ import {
   type CalibrationAxis,
   type CalibrationObservation,
   type AxisUnit,
-} from '../calibration';
+} from '../fieldCalibration';
 import { assessModelMaterial } from '../machine';
 import { assessWithField, capabilityClaim, describeClaim, overlaidCapability } from '../fieldOverlay';
 

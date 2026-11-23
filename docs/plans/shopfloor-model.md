@@ -124,4 +124,44 @@ const fitsZ = rotatedSize.z <= profile.depthMm;   // 又用 z 比 depth
 - `printFarm.ts` 的 `Printer` 接口尚未加 `modelId` 外键，机台列表仍走自己的 `getPrinters()`。下一步应让它指向 `MACHINE_UNITS`，把状态真源收敛到一处。
 - `MACHINE_UNITS` 的 `location` / `lastMaintenanceAt` 全部为 `null`，等待真实车间位置录入，未编造。
 - 工艺包络 `SLS` / `PBF` 无仓库内依据，留 `null`。
+
+## 7. 判定策略版本与校准层登记
+
+同名字东西太多会漂移。这一节是唯一登记处：新增一层校准、或改一次判定策略版本，都先在这里落一行，再动代码。
+
+### 7.1 判定策略版本（`policyVersion`）
+
+真源：`shared/domain/verdictPolicy.ts`。除该文件外**任何文件不得书写版本字面量**，包括测试——测试里手打的版本号一旦与引擎不一致，pin 会静默匹配不到任何记录，空看板会被读成"没有缺陷"，这是本项目最贵的错误。
+
+| 常量 | 值 | 用途 |
+| --- | --- | --- |
+| `VERDICT_POLICY_VERSION` | `wall-2026-11-23a` | 当前引擎给新判定盖章的版本；看板默认 pin 到它 |
+| `LEGACY_PYTHON_POLICY_VERSION` | `py-wall-2026-11-20a` | Python 原型写下的历史版本，仅用于区分历史记录，禁止 pin 到它出当前比率 |
+| `isCurrentPolicy(v)` | — | 判断某条记录是否属当前策略 |
+
+约定：
+
+1. 改策略 → 改常量 → 在本节补一行变更理由 → 历史记录**保持原版本不动**，不追认改写。
+2. 手工筛选与用 scope pin 必须得出同一个看板（已由测试锁住）。
+3. pin 之后被排除的记录**必须计数并展示**（`YieldScoreboard.excludedByVersion`，面板文案"另有 N 条属旧策略未计入"）。空分母与零缺陷在页面上不能长得一样。
+   其中**未盖章**的记录（`policyVersion` 为空，多是旧 verdict 或漏盖章的引擎）单独计入 `unstamped`，不许并进"旧策略"里——迁移欠账和盖章漏洞是两种病，混成一个数就再也查不出后者。
+
+| 版本 | 起始 | 说明 |
+| --- | --- | --- |
+| `py-wall-2026-11-20a` | 2026-11-20 | Python 原型期策略，仅存于历史记录 |
+| `wall-2026-11-23a` | 2026-11-23 | 当前策略；良率看板与其假通过/误拦截分向率的生效基线 |
+
+已知的历史拼写漂移：早期演示数据曾用 `py-wall-2026-11-23a` 给记录盖章，与当时的引擎常量 `wall-2026-11-23a` 差一个前缀，pin 后一条也匹配不到，看板直接空掉——这正是本节存在的理由。该类记录不会被追认改写，而是计入 `excludedByVersion` 显示为"旧策略未计入"，面板上看得到版本串，不静默。
+
+### 7.2 校准层分工（两个同名 `calibration` 已按层改名）
+
+两套东西都叫 calibration，读代码时无法分辨是哪一层。现按"证据从哪来"改名：
+
+| 文件 | 层 | 输入 → 输出 | 当年叫 |
+| --- | --- | --- | --- |
+| `shared/domain/fieldCalibration.ts` | 现场实测层（domain） | 机台实测读数 → 收窄后的工艺包络、证据等级 | `shared/domain/calibration.ts` |
+| `client/src/lib/loopWeightFit.ts` | 打分拟合层（client） | 几何特征 + 打印结局 → 待拟合的 LOOP 权重样本 | `client/src/lib/loopCalibration.ts` |
+
+判据：**包络变窄**属于 `fieldCalibration`；**改权重/分数**属于 `loopWeightFit`。前者有硬规则（单台不可改型谱、校准只收窄不收宽），后者只是待拟合样本，本地留存、未拟合前不生效。
+
 *（内容由AI生成，仅供参考）*

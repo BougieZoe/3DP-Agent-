@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   getLoopPredictions, logLoopPrediction, clearLoopPredictions, pairWithFeedback,
   type LoopPrediction,
-} from '../loopCalibration';
+} from '../loopWeightFit';
 
 function prediction(overrides: Partial<LoopPrediction> = {}): LoopPrediction {
   return {
@@ -23,7 +23,7 @@ function prediction(overrides: Partial<LoopPrediction> = {}): LoopPrediction {
   };
 }
 
-describe('loopCalibration', () => {
+describe('loopWeightFit', () => {
   beforeEach(() => {
     clearLoopPredictions();
   });

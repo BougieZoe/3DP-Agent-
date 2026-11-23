@@ -29,7 +29,7 @@ import {
   publishBound,
   tryNarrow,
   type CalibrationObservation,
-} from '../calibration';
+} from '../fieldCalibration';
 
 // ── 1. Every number carries an evidence grade ───────────────────────────────
 

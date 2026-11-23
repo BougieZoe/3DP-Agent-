@@ -30,7 +30,7 @@ import {
   describeScoreboard,
   scoreYield,
 } from './yieldAttribution';
-import type { CalibrationMethod } from './calibration';
+import type { CalibrationMethod } from './fieldCalibration';
 
 /** Mirrors the job states the floor actually reports. */
 export type FloorJobStatus =

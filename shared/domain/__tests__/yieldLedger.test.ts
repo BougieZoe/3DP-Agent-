@@ -15,6 +15,7 @@ import {
   floorScoreboard,
   harvestYield,
 } from '../yieldLedger';
+import { VERDICT_POLICY_VERSION } from '../verdictPolicy';
 
 const printers: FloorPrinterSnapshot[] = [
   { id: 'printer_a', modelId: 'large-format-fgf' },
@@ -29,7 +30,7 @@ function job(over: Partial<FloorJobSnapshot>): FloorJobSnapshot {
     status: 'completed',
     startedAt: '2026-11-20T08:00:00Z',
     actualEndAt: '2026-11-20T18:00:00Z',
-    verdict: { state: 'pass', policyVersion: 'wall-2026-11-23a' },
+    verdict: { state: 'pass', policyVersion: VERDICT_POLICY_VERSION },
     quality: 'good',
     ...over,
   };
@@ -76,7 +77,7 @@ describe('3 — a failed run under a pass verdict is a leak', () => {
 describe('4 — overrides are recorded, not silent', () => {
   it('counts a blocked verdict that ran anyway', () => {
     const h = harvestYield(
-      [job({ id: 'j1', verdict: { state: 'blocked', policyVersion: 'wall-2026-11-23a' } })],
+      [job({ id: 'j1', verdict: { state: 'blocked', policyVersion: VERDICT_POLICY_VERSION } })],
       printers,
     );
     expect(h.overrides).toBe(1);

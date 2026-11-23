@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getPrintJobs, getPrinters, markJobQuality } from '@/lib/printFarm';
 import type { PrintJob, Printer } from '@/lib/printFarm';
-import type { CalibrationMethod } from '@shared/domain/calibration';
+import type { CalibrationMethod } from '@shared/domain/fieldCalibration';
 import type { FailureCause } from '@shared/domain/yieldAttribution';
 import { CAUSE_LABELS, METHOD_LABELS, buildYieldView } from '@/lib/yieldView';
 
@@ -159,6 +159,11 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
                 hint="放行后出问题会被记为 overrides"
               />
             </section>
+
+            <p className="text-[11px] leading-relaxed text-zinc-500">
+              策略 {view.policyVersion}
+              {view.excludedByVersionText ? ` · ${view.excludedByVersionText}` : ''}
+            </p>
 
             <section>
               <h3 className="mb-2 text-[11px] uppercase tracking-wider text-zinc-500">结果分类</h3>

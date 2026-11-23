@@ -19,7 +19,7 @@ import {
   getMachineThermalCapability,
 } from '@shared/domain/machine';
 import type { ThermalVerdict } from '@shared/domain/thermal';
-import type { CalibrationMethod } from '@shared/domain/calibration';
+import type { CalibrationMethod } from '@shared/domain/fieldCalibration';
 import { type FailureCause, type YieldMeasurement, attributeScraps } from '@shared/domain/yieldAttribution';
 import {
   type FloorPrinterSnapshot,
