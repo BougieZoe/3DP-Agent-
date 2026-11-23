@@ -13,7 +13,7 @@
 
 - 可打印性判定引擎已有相当体量（44 个模块 / 11079 行），但 100% 运行在浏览器 Web Worker 里，服务端完全不具备判定能力。
 - 几何与切片侧是真集成（`slicerBridge.ts` 通过 `execFile` 实际调用 PrusaSlicer / OrcaSlicer / BambuStudio；`go-backend/slicer` 有完整 bridge/gcode/router）。
-- 车间与设备侧几乎是空的：机台配置只有 1 份（`server/data/machines/hanevex-fgf.json`），没有 job / 排队 / 执行记录的数据模型，`telemetry.ts` 是分析过程的埋点，不是设备遥测。
+- 车间与设备侧几乎是空的：机台配置只有 1 份（`server/data/machines/large-format-fgf.json`），没有 job / 排队 / 执行记录的数据模型，`telemetry.ts` 是分析过程的埋点，不是设备遥测。
 
 因此三件事有明确先后：**先把判定搬出浏览器 → 再建车间数据模型 → 最后开 MCP 出口**。顺序颠倒会导致下游没有可复用的判定能力，MCP 只能包一层空壳。
 
@@ -30,7 +30,7 @@
 | 可打印性判定 | 同 `client/src/analysis`，入口 `analysis.worker.ts` | 判定逻辑 1–14ms 可跑完 | 逻辑完整，但**运行时被锁在浏览器** |
 | 共享领域契约 | `shared/domain/printability.ts` | 25 行 | **仅类型定义**，无实现 |
 | 服务端 | `server/*.ts` | 33 文件 / 6114 行 | 以 relay / 桥接 / 沙箱为主，无判定接口 |
-| 车间 / 设备 | `server/data/machines/` | **1 台**（hanevex-fgf.json） | 单机样例，无 job 模型、无队列、无执行记录 |
+| 车间 / 设备 | `server/data/machines/` | **1 台**（large-format-fgf.json） | 单机样例，无 job 模型、无队列、无执行记录 |
 | 遥测 | `client/src/analysis/telemetry.ts` | — | **是分析过程埋点，不是设备遥测**，不能当作 MES 底座 |
 
 ### 2.2 仓库状态
