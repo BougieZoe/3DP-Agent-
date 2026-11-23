@@ -45,9 +45,14 @@ export function checkBedFit(
   for (const rot of ROTATIONS) {
     const rotatedSize = rotateBoundingBox(origSize, rot);
 
+    // Axis mapping is load-bearing: the profile stores width (x), depth (y) and
+    // height (z). The rotated bounding box must be checked against the matching
+    // axis on all three, or the gate disagrees with the clearance math below.
+    // (Historical bug: y was never checked against depth — `z` was compared to
+    // both heightMm and depthMm, so a part overhanging the bed in y passed.)
     const fitsX = rotatedSize.x <= profile.widthMm;
-    const fitsY = rotatedSize.z <= profile.heightMm;
-    const fitsZ = rotatedSize.z <= profile.depthMm;
+    const fitsY = rotatedSize.y <= profile.depthMm;
+    const fitsZ = rotatedSize.z <= profile.heightMm;
 
     let score = 0;
     const clearX = profile.widthMm - rotatedSize.x;
