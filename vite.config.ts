@@ -63,6 +63,15 @@ if (process.env.ANALYZE) {
   );
 }
 
+// Browser-facing bridge endpoints are served by the TypeScript Express app.
+// `pnpm dev:server` (or `pnpm dev:bridge`) listens on :3001; override both sides
+// with BRIDGE_PORT when :3001 is taken. The Go backend keeps its own copy of
+// mesh/slice/cad for legacy/operator use, but is not the browser authority.
+const BRIDGE_PORT = process.env.BRIDGE_PORT ?? "3001";
+const BRIDGE_TARGET = process.env.BRIDGE_URL ?? `http://127.0.0.1:${BRIDGE_PORT}`;
+// Remaining Go-only services: model registry, materials, thermal, memory.
+const GO_BACKEND_TARGET = process.env.GO_BACKEND_URL ?? "http://127.0.0.1:8888";
+
 export default defineConfig({
   plugins,
   resolve: {
@@ -94,63 +103,62 @@ export default defineConfig({
       deny: ["**/.*"],
     },
     proxy: {
-      // Dev: forward bridge calls to Go backend (:8888)
-      // `xfwd: true` stamps the real client address into x-forwarded-for
+      // Bridge endpoints: TypeScript Express (:3001).
+      // `xfwd: true` stamps the real client address into x-forwarded-for.
       "/api/cad": {
-        target: "http://127.0.0.1:8888",
+        target: BRIDGE_TARGET,
         changeOrigin: true,
         xfwd: true,
       },
       "/api/slice": {
-        target: "http://127.0.0.1:8888",
+        target: BRIDGE_TARGET,
         changeOrigin: true,
         xfwd: true,
       },
-      // Thicken runs on the Express bridge (node), not the Go backend.
       // Must precede "/api/mesh": Vite matches proxy keys by prefix in order.
       "/api/mesh/thicken": {
-        target: "http://127.0.0.1:3001",
+        target: BRIDGE_TARGET,
         changeOrigin: true,
         xfwd: true,
       },
       "/api/mesh": {
-        target: "http://127.0.0.1:8888",
+        target: BRIDGE_TARGET,
         changeOrigin: true,
         xfwd: true,
       },
       "/api/tripo": {
-        target: "http://127.0.0.1:8888",
+        target: BRIDGE_TARGET,
         changeOrigin: true,
         xfwd: true,
       },
       "/api/thermal": {
-        target: "http://127.0.0.1:8888",
+        target: GO_BACKEND_TARGET,
         changeOrigin: true,
         xfwd: true,
       },
       "/api/memory": {
-        target: "http://127.0.0.1:8888",
+        target: GO_BACKEND_TARGET,
         changeOrigin: true,
         xfwd: true,
       },
       "/api/step": {
-        target: "http://127.0.0.1:8888",
+        target: BRIDGE_TARGET,
         changeOrigin: true,
         xfwd: true,
       },
       "/api/materials": {
-        target: "http://127.0.0.1:8888",
+        target: GO_BACKEND_TARGET,
         changeOrigin: true,
         xfwd: true,
       },
       "/api/models": {
-        target: "http://127.0.0.1:8888",
+        target: GO_BACKEND_TARGET,
         changeOrigin: true,
         xfwd: true,
       },
       // Dev: LLM relay
       "/api/llm": {
-        target: "http://127.0.0.1:8888",
+        target: BRIDGE_TARGET,
         changeOrigin: true,
       },
       // Dev: GLM-Realtime 全双工语音桥（~/3dp-agent/voice_service/bridge_server.py, :7871）

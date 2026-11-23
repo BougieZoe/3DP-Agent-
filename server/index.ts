@@ -9,7 +9,7 @@ import { createMeshThickenRouter } from "./meshThicken";
 import { createSlicerRouter } from "./slicerRouter";
 import { createStepRouter } from "./stepRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
-import { bridgeAuthDecision } from "./loopbackGuard";
+import { createDevLocalBridgeGuard } from "./bridgeGuard";
 import { relayLLM, relayLLMStream } from "./llmRelay";
 import { relayJev } from "./jevRelay";
 import { createShareRouter } from "./shareRouter";
@@ -35,7 +35,6 @@ const AMD_MACHINE_URL =
 const BRIDGE_TOKEN = process.env.BRIDGE_TOKEN;
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
-const bridgesEnabled = !IS_PRODUCTION || !!BRIDGE_TOKEN;
 
 // Dev binds the Express server to loopback only, so the unauthenticated local
 // bridge flow (REPAIR & PROCESS etc.) is reachable from this machine alone.
@@ -52,31 +51,6 @@ const AMD_ALLOWED_MODELS = new Set<string>([
   "Qwen/Qwen3-8B",
   "Qwen/Qwen3-30B-A3B",
 ]);
-
-function bridgeAuth(req: Request, res: Response, next: NextFunction): void {
-  if (!BRIDGE_TOKEN) {
-    res.status(503).json({ error: "bridge unavailable: BRIDGE_TOKEN not configured" });
-    return;
-  }
-  const expected = `Bearer ${BRIDGE_TOKEN}`;
-  if (req.headers.authorization !== expected) {
-    res.status(401).json({ error: "unauthorized" });
-    return;
-  }
-  next();
-}
-
-/**
- * Dev gate: keeps the bridges usable from localhost while remaining token-gated
- * for everyone else. The decision is made from the REQUEST-SOURCE chain (see
- * loopbackGuard.ts), never from the bind host — so a LAN peer that reaches this
- * server through the (LAN-exposed) Vite proxy stays authenticated, and a dev
- * server accidentally published on 0.0.0.0 does not silently expose the bridges.
- */
-function devLocalBridgeGuard(req: Request, res: Response, next: NextFunction): void {
-  if (bridgeAuthDecision(req, IS_PRODUCTION)) return bridgeAuth(req, res, next);
-  next();
-}
 
 // Minimal in-memory rate limiter. Not a replacement for a real edge limiter
 // (e.g. Vercel/Cloudflare), but it stops trivial abuse of the proxy and
@@ -118,10 +92,21 @@ function rateLimit(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
+export interface CreateAppOptions {
+  /** Override for tests/operator previews. Defaults to process.env.BRIDGE_TOKEN. */
+  bridgeToken?: string;
+  /** Override for tests/operator previews. Defaults to NODE_ENV === "production". */
+  isProduction?: boolean;
+}
+
 // Builds and returns the Express app. Vercel (@vercel/node) imports this via
 // server/vercel.ts; local/Electron run startServer() which listens on a port.
-export function createApp() {
+export function createApp(options: CreateAppOptions = {}) {
   const app = express();
+  const bridgeToken = options.bridgeToken ?? BRIDGE_TOKEN;
+  const isProduction = options.isProduction ?? IS_PRODUCTION;
+  const bridgesEnabled = !isProduction || !!bridgeToken;
+  const devLocalBridgeGuard = createDevLocalBridgeGuard(bridgeToken, isProduction);
 
   if (bridgesEnabled) {
     const amdProxy = [rateLimit, devLocalBridgeGuard];
@@ -218,7 +203,7 @@ export function createApp() {
       },
     );
 
-    logger.info(`Bridges mounted${BRIDGE_TOKEN ? ' (BRIDGE_TOKEN auth)' : ' (NODE_ENV != production)'}`, {
+    logger.info(`Bridges mounted${bridgeToken ? ' (BRIDGE_TOKEN auth)' : ' (NODE_ENV != production)'}`, {
       context: 'server',
     });
 
@@ -365,6 +350,6 @@ function startServer() {
   });
 }
 
-if (!process.env.VERCEL) {
+if (!process.env.VERCEL && !process.env.VITEST) {
   startServer();
 }
