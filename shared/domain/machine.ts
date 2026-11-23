@@ -23,6 +23,19 @@
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 /** Build volume in millimetres, expressed as x (width) / y (depth) / z (height). */
+import {
+  type AxisBound,
+  type EvidenceGrade,
+  bound,
+  unverified,
+} from './evidence';
+import { assessThermal } from './thermal';
+import type { MachineThermalCapability, ThermalVerdict } from './thermal';
+
+// Re-exported so `shared/domain/machine` stays the single door into the spec
+// layer, including its thermal side.
+export type { MachineThermalCapability, ThermalVerdict };
+
 export interface BuildVolumeMm {
   x: number;
   y: number;
@@ -285,6 +298,122 @@ export const PROCESS_ENVELOPES: Record<MachineProcessId, ProcessEnvelope> = {
   },
 };
 
+// ─── Thermal capability (machine side) ────────────────────────────────────────
+//
+// The thermal ceiling of a machine is the axis that actually gates high-
+// temperature polymers, and it is almost never printed on a marketing page.
+// Where we have a corroborated number we record it; where we do not, the bound
+// is `unverified` and the verdict comes back 'unknown' — a desktop hotend spec
+// is not evidence for a 300 °C chamber.
+const FDM_ENCLOSURE = 'vendor specification for the enclosed / actively controlled chamber, where one exists';
+
+export const MACHINE_THERMAL: Record<string, MachineThermalCapability> = {
+  bambu_x1c: {
+    nozzleMaxC: bound({ unit: '°C', max: 300, grade: 'vendor-sheet', source: 'vendor hotend specification (0.4 mm hardened steel)' }),
+    chamberMaxC: bound({ unit: '°C', max: 60, grade: 'vendor-sheet', source: FDM_ENCLOSURE }),
+    bedMaxC: bound({ unit: '°C', max: 120, grade: 'vendor-sheet', source: 'vendor heated bed specification' }),
+    activeChamber: true,
+  },
+  prusa_mk4: {
+    nozzleMaxC: bound({ unit: '°C', max: 290, grade: 'vendor-sheet', source: 'vendor hotend specification (nextruder)' }),
+    // Open frame: there is no chamber to rate. Not "unknown", genuinely absent.
+    chamberMaxC: unverified('°C', 'open-frame printer; no chamber exists on this model'),
+    bedMaxC: bound({ unit: '°C', max: 120, grade: 'vendor-sheet', source: 'vendor heated bed specification' }),
+    activeChamber: false,
+  },
+  creality_k1: {
+    nozzleMaxC: bound({ unit: '°C', max: 300, grade: 'vendor-sheet', source: 'vendor hotend specification' }),
+    chamberMaxC: unverified('°C', 'enclosure is passive; no controlled chamber temperature is rated'),
+    bedMaxC: bound({ unit: '°C', max: 100, grade: 'vendor-sheet', source: 'vendor heated bed specification' }),
+    activeChamber: false,
+  },
+  ender_3: {
+    nozzleMaxC: bound({ unit: '°C', max: 260, grade: 'vendor-sheet', source: 'vendor hotend specification (stock MK8)' }),
+    chamberMaxC: unverified('°C', 'open-frame printer; no chamber exists on this model'),
+    bedMaxC: bound({ unit: '°C', max: 110, grade: 'vendor-sheet', source: 'vendor heated bed specification' }),
+    activeChamber: false,
+  },
+  fgf_1800_pro: {
+    // Pellet machines are chamber-controlled by process necessity, but we have
+    // not corroborated the ceiling, so we refuse to publish a number for it.
+    nozzleMaxC: unverified('°C', 'pellet extruder melt-zone ceiling not corroborated in-repo'),
+    chamberMaxC: unverified('°C', 'chamber is actively controlled by design; the rated ceiling is not corroborated'),
+    bedMaxC: unverified('°C', 'no bed temperature rated for pellet process'),
+    activeChamber: true,
+  },
+  fgf_1200: {
+    nozzleMaxC: unverified('°C', 'pellet extruder melt-zone ceiling not corroborated in-repo'),
+    chamberMaxC: unverified('°C', 'chamber is actively controlled by design; the rated ceiling is not corroborated'),
+    bedMaxC: unverified('°C', 'no bed temperature rated for pellet process'),
+    activeChamber: true,
+  },
+  formlabs_form3: {
+    // Photopolymer: thermal axis is not the gate, and we do not pretend the
+    // FDM thermal model applies to it.
+    nozzleMaxC: unverified('°C', 'SLA process has no hotend; thermal model does not apply'),
+    chamberMaxC: unverified('°C', 'SLA process is not chamber-temperature gated'),
+    bedMaxC: unverified('°C', 'SLA process has no heated bed in the FDM sense'),
+    activeChamber: false,
+  },
+};
+
+const ALL_UNKNOWN: MachineThermalCapability = {
+  nozzleMaxC: unverified('°C', 'machine model not in MACHINE_THERMAL; no thermal data recorded'),
+  chamberMaxC: unverified('°C', 'machine model not in MACHINE_THERMAL; no thermal data recorded'),
+  bedMaxC: unverified('°C', 'machine model not in MACHINE_THERMAL; no thermal data recorded'),
+  activeChamber: false,
+};
+
+export function getMachineThermalCapability(modelId: string): MachineThermalCapability {
+  return MACHINE_THERMAL[modelId] ?? ALL_UNKNOWN;
+}
+
+/** "Can this specific model actually run this material?" — the question the
+ *  shopfloor asks before quoting a high-temperature job. */
+export function assessModelMaterial(modelId: string, material: string): ThermalVerdict {
+  return assessThermal({ material, machine: getMachineThermalCapability(modelId) });
+}
+
+// ─── Process envelope, graded ────────────────────────────────────────────────
+//
+// PROCESS_ENVELOPES keeps its numeric buildVolume for backward compatibility,
+// but every number now has a door to its evidence grade. This is what stops an
+// `unverified` triple from being treated as a hard limit downstream.
+function gradeForModel(modelId: string | null): EvidenceGrade {
+  if (modelId === null) return 'unverified';
+  const model = MACHINE_MODELS[modelId];
+  if (!model) return 'unverified';
+  switch (model.buildVolumeVerification) {
+    case 'verified':
+      return 'two-source';
+    case 'single-source':
+      return 'vendor-sheet';
+    default:
+      return 'unverified';
+  }
+}
+
+/** Per-axis bounds for a process envelope, each carrying its own provenance. */
+export function envelopeAxes(env: ProcessEnvelope): AxisBound[] {
+  const grade = gradeForModel(env.representativeModelId);
+  if (env.buildVolume === null) {
+    return [
+      unverified('mm', env.source),
+      unverified('mm', env.source),
+      unverified('mm', env.source),
+    ];
+  }
+  const mk = (value: number): AxisBound => {
+    if (grade === 'unverified') {
+      // A number carried over from a generic table is not evidence for a ceiling.
+      return unverified('mm', env.source);
+    }
+    return bound({ unit: 'mm', max: value, grade, source: env.source });
+  };
+  return [mk(env.buildVolume.x), mk(env.buildVolume.y), mk(env.buildVolume.z)];
+}
+
+// ─── Lookups
 // ─── Lookups ──────────────────────────────────────────────────────────────────
 
 export function getMachineModel(modelId: string): MachineModel | undefined {

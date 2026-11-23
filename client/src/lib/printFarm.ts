@@ -12,10 +12,36 @@
 // Types
 // ---------------------------------------------------------------------------
 
+import type { MachineModel, MachineThermalCapability } from '@shared/domain/machine';
+import {
+  assessModelMaterial,
+  getMachineModel,
+  getMachineThermalCapability,
+} from '@shared/domain/machine';
+import type { ThermalVerdict } from '@shared/domain/thermal';
+import type { CalibrationMethod } from '@shared/domain/calibration';
+import { type FailureCause, type YieldMeasurement, attributeScraps } from '@shared/domain/yieldAttribution';
+import {
+  type FloorPrinterSnapshot,
+  type JobVerdictSnapshot,
+  type PartQuality,
+  describeFloor,
+  floorScoreboard,
+} from '@shared/domain/yieldLedger';
+
 export interface Printer {
   id: string;
   name: string;
   model: string;
+  /**
+   * Foreign key into MACHINE_MODELS (shared/domain/machine) — the spec layer.
+   * This is the whole point of the column: a printer row used to be free text
+   * (`model: 'X1C'`), which made it impossible to answer "what is this machine's
+   * thermal ceiling" without a human reading a PDF. null = legacy row that has
+   * not been bound to a spec; lookups then degrade to `unverified`, never to a
+   * guessed number.
+   */
+  modelId?: string | null;
   manufacturer: string;
   status: PrinterStatus;
   capabilities: PrinterCapabilities;
@@ -70,6 +96,23 @@ export interface PrintJob {
   layers: { current: number; total: number };
   temperatures: { nozzle: number; bed: number };
   errors: JobError[];
+  /**
+   * Verdict checkpoint written before the job ran. Optional because legacy rows
+   * predate it — but a job without it can never be scored, which is exactly what
+   * `yieldLedger` reports as `unjudged`.
+   */
+  verdict?: JobVerdictSnapshot;
+  /**
+   * Inspection result of the part. Absent / 'pending' means "the machine
+   * finished, nobody looked yet" — deliberately not the same as good.
+   */
+  quality?: PartQuality;
+  /** Why the part was scrapped or the run aborted. Empty stays empty: unresolved, on purpose. */
+  scrapCauses?: FailureCause[];
+  /** How the scrap cause was established; feeds the evidence grade, not the story. */
+  attributionMethod?: CalibrationMethod;
+  /** Measured values this job produced, for the field-calibration loop. */
+  measurements?: YieldMeasurement[];
 }
 
 export type JobStatus =
@@ -231,15 +274,33 @@ export function updateJobProgress(
 }
 
 /**
- * Complete a job
+ * Complete a job.
+ *
+ * `success` describes the run — the machine finished or it did not. It says
+ * nothing about the part. Inspection results arrive later and are recorded via
+ * `markJobQuality`; a completed job with no quality stays `pending` and is
+ * counted as awaiting inspection, never as a good part.
  */
-export function completeJob(jobId: string, success: boolean): void {
+export function completeJob(
+  jobId: string,
+  success: boolean,
+  result?: {
+    quality?: PartQuality;
+    causes?: FailureCause[];
+    method?: CalibrationMethod;
+    measurements?: YieldMeasurement[];
+  },
+): void {
   const jobs = getPrintJobs();
   const job = jobs.find(j => j.id === jobId);
   if (job) {
     job.status = success ? 'completed' : 'failed';
     job.progress = 100;
     job.actualEndAt = new Date().toISOString();
+    if (result?.quality !== undefined) job.quality = result.quality;
+    if (result?.causes !== undefined) job.scrapCauses = result.causes;
+    if (result?.method !== undefined) job.attributionMethod = result.method;
+    if (result?.measurements !== undefined) job.measurements = result.measurements;
     savePrintJobs(jobs);
 
     // Update printer stats
@@ -253,6 +314,47 @@ export function completeJob(jobId: string, success: boolean): void {
       printer.status = 'idle';
       savePrinters(printers);
     }
+  }
+}
+
+/**
+ * Attach the pre-flight verdict to a job.
+ *
+ * Must be called before the job runs. A verdict written after the outcome is a
+ * verdict that already knew the answer, and it would poison every rate computed
+ * from the ledger.
+ */
+export function recordJobVerdict(jobId: string, verdict: JobVerdictSnapshot): void {
+  const jobs = getPrintJobs();
+  const job = jobs.find(j => j.id === jobId);
+  if (job) {
+    job.verdict = verdict;
+    savePrintJobs(jobs);
+  }
+}
+
+/**
+ * Record the inspection result — the step that turns a finished job into
+ * scorable evidence. Until this is called the job remains `pending` and is
+ * reported as awaiting inspection.
+ */
+export function markJobQuality(
+  jobId: string,
+  quality: PartQuality,
+  opts?: {
+    causes?: FailureCause[];
+    method?: CalibrationMethod;
+    measurements?: YieldMeasurement[];
+  },
+): void {
+  const jobs = getPrintJobs();
+  const job = jobs.find(j => j.id === jobId);
+  if (job) {
+    job.quality = quality;
+    if (opts?.causes !== undefined) job.scrapCauses = opts.causes;
+    if (opts?.method !== undefined) job.attributionMethod = opts.method;
+    if (opts?.measurements !== undefined) job.measurements = opts.measurements;
+    savePrintJobs(jobs);
   }
 }
 
@@ -406,4 +508,64 @@ export function autoAssignJobs(): number {
   }
 
   return assignedCount;
+}
+
+
+// ---------------------------------------------------------------------------
+// Spec binding — printer rows resolve into the machine spec layer
+// ---------------------------------------------------------------------------
+
+/** Resolve a printer's spec. Returns undefined for legacy rows (modelId null). */
+export function resolvePrinterModel(printer: Printer): MachineModel | undefined {
+  if (!printer.modelId) return undefined;
+  return getMachineModel(printer.modelId);
+}
+
+/** Thermal ceilings for this printer, via its modelId. Unbound rows are all-unknown. */
+export function printerThermalCapability(printer: Printer): MachineThermalCapability {
+  if (!printer.modelId) return getMachineThermalCapability('__unbound__');
+  return getMachineThermalCapability(printer.modelId);
+}
+
+/**
+ * "Can this floor machine actually run this material, and if not, which axis
+ * blocks it?" Answered from the spec layer, not from whoever is on shift.
+ */
+export function printerCanRunMaterial(printer: Printer, material: string): ThermalVerdict {
+  if (!printer.modelId) {
+    return {
+      material,
+      printable: 'unknown',
+      blockedBy: ['unknown-machine'],
+      headroomC: { nozzle: null, chamber: null, bed: null },
+      bindingAxis: null,
+      grade: 'unverified',
+      reason: `printer ${printer.id} has no modelId; bind it to MACHINE_MODELS before judging material fit`,
+    };
+  }
+  return assessModelMaterial(printer.modelId, material);
+}
+
+export interface MaterialFitReport {
+  material: string;
+  usable: Printer[];
+  blocked: Array<{ printer: Printer; verdict: ThermalVerdict }>;
+  unjudged: Array<{ printer: Printer; verdict: ThermalVerdict }>;
+}
+
+/**
+ * Fleet-level triage for a material. Deliberately keeps `unjudged` separate from
+ * `blocked`: a missing spec is a data debt to pay, not a machine to write off.
+ */
+export function printersForMaterial(printers: Printer[], material: string): MaterialFitReport {
+  const usable: Printer[] = [];
+  const blocked: Array<{ printer: Printer; verdict: ThermalVerdict }> = [];
+  const unjudged: Array<{ printer: Printer; verdict: ThermalVerdict }> = [];
+  for (const printer of printers) {
+    const verdict = printerCanRunMaterial(printer, material);
+    if (verdict.printable === true) usable.push(printer);
+    else if (verdict.printable === false) blocked.push({ printer, verdict });
+    else unjudged.push({ printer, verdict });
+  }
+  return { material, usable, blocked, unjudged };
 }
