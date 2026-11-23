@@ -33,13 +33,13 @@ describe('machine models', () => {
   });
 
   it('keeps the unconfirmed generic FGF profile unquantified', () => {
-    const generic = getMachineModel('hanevex-fgf');
+    const generic = getMachineModel('large-format-fgf');
     expect(generic).toBeDefined();
     expect(generic?.buildVolume).toBeNull();
     expect(generic?.buildVolumeVerification).toBe('unverified');
     // requireBuildVolume must fail loudly rather than fall back to a sibling machine.
-    expect(() => requireBuildVolume('hanevex-fgf')).toThrow(/no confirmed build volume/);
-    expect(tryBuildVolume('hanevex-fgf')).toBeNull();
+    expect(() => requireBuildVolume('large-format-fgf')).toThrow(/no confirmed build volume/);
+    expect(tryBuildVolume('large-format-fgf')).toBeNull();
   });
 
   it('rejects unknown ids instead of returning undefined dimensions', () => {
@@ -123,7 +123,7 @@ describe('bed profile projection', () => {
   });
 
   it('does not expose the unquantified profile as a selectable bed', () => {
-    expect(Object.keys(PRINTER_PROFILES)).not.toContain('hanevex-fgf');
+    expect(Object.keys(PRINTER_PROFILES)).not.toContain('large-format-fgf');
   });
 });
 

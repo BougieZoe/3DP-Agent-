@@ -25,7 +25,7 @@ AIGC:
 | 2 | `client/src/analysis/types.ts` | `PrinterBedProfile` | 层 1 的类型副本 |
 | 3 | `client/src/lib/printFarm.ts` | `PrinterCapabilities.maxBuildVolume` | 机台尺寸再次硬编码，与机型无外键 |
 | 4 | `client/src/lib/manufacturingRecommendation.ts` | `PROCESSES[].buildVol` | 工艺级包络，FGF 又抄一遍 1800×1200×1300 |
-| 5 | `server/data/machines/*.json` | 供应商档案 | `hanevex-fgf.json` 无尺寸字段，todo 注明"尺寸未确认" |
+| 5 | `server/data/machines/*.json` | 供应商档案 | `large-format-fgf.json` 无尺寸字段，todo 注明"尺寸未确认" |
 
 本质缺失是**机台实例层**：数据从工艺直接跳到机器，没有"某台具体机器"这一层，因此状态、位置、维护、排产都无处安放。`printFarm.ts` 的 `Printer` 接口有 `status`/`lastSeen`，却没有任何字段指向它属于哪个机型。
 
@@ -46,15 +46,15 @@ AIGC:
 - `requireBuildVolume(id)` — 抛错，禁止任何"猜一个差不多的尺寸"的降级路径；
 - `tryBuildVolume(id)` — 返回 `null`，供 UI 走"尺寸待确认"分支。
 
-### 2.1 hanevex-fgf.json 的处理
+### 2.1 large-format-fgf.json 的处理
 
 该档案明确写着成型尺寸未确认。处理方式是不填：
 
 ```ts
-'hanevex-fgf': {
+'large-format-fgf': {
   buildVolume: null,
   buildVolumeVerification: 'unverified',
-  source: 'server/data/machines/hanevex-fgf.json — 6.1 节记录 1800×1200×1300 为家族标称值，'
+  source: 'server/data/machines/large-format-fgf.json — 6.1 节记录 1800×1200×1300 为家族标称值，'
         + '本档位具体机型未确认，故不填尺寸',
 }
 ```
@@ -63,7 +63,7 @@ AIGC:
 
 ### 2.2 档案 id 必须与真源 key 一致
 
-真源键使用供应商档案的 `id`（如 `hanevex-fgf`），不另起一套命名。早期曾把该条目命名为 `large-format-fgf-generic`，导致
+真源键使用供应商档案的 `id`（如 `large-format-fgf`），不另起一套命名。早期曾把文件名写成供应商真名、而 `id` 另起 `large-format-fgf-generic`，两者对不上，导致
 `server/__tests__/machineProfiles.test.ts` 的交叉校验 `getMachineModel(p.id)` 取不到对应条目——而当时本机 vitest 无法启动，
 这条校验从未真正执行过。现已改为与档案 id 同名，并把交叉校验纳入 esbuild 实测路径。
 
@@ -78,7 +78,7 @@ AIGC:
 | `creality_k1` | 220 × 220 × 250 | `verified` | 公开机型参数 |
 | `ender_3` | 220 × 220 × 250 | `verified` | 公开机型参数 |
 | `formlabs_form3` | 145 × 145 × 185 | `verified` | 公开机型参数 |
-| `hanevex-fgf` | `null` | `unverified` | Formnext Asia 深圳展会目击档案，厂商自身标注尺寸待确认 |
+| `large-format-fgf` | `null` | `unverified` | 大幅面颗粒料 FGF 品类档案（供应商匿名化），成型尺寸未经确认 |
 
 `verified` / `single-source` / `unverified` 的区别是有意保留的：`fgf_1200` 只有一个内部来源，与公开机型参数的可信度不同，不应混为一谈。
 

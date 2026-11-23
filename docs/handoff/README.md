@@ -28,7 +28,7 @@ docs/handoff/
 | Hub | 角色 | 盯什么 |
 |-----|------|--------|
 | 日本 北九州/東京 | 高附加值PoC、建築、品牌故事 | Takenaka/Daicel系、Expo遗产 |
-| 中国 深圳/广东 | 量产、便宜大机、粒子料 | Formnext Asia、Hanevex类FGF |
+| 中国 深圳/广东 | 量产、便宜大机、粒子料 | Formnext Asia、大幅面颗粒料FGF |
 | 欧盟 法兰克福 | 材料认证、Formnext本家 | 可降解、医疗、汽车 |
 | 美国 德州/中西部 | 大尺寸、建筑、创客 | R&D免税、高校合作 |
 
