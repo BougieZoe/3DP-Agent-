@@ -177,15 +177,15 @@ export const MACHINE_MODELS: Record<string, MachineModel> = {
     source: 'vendor public specification (Form 3: 14.5 x 14.5 x 18.5 cm)',
     status: 'production',
   },
-  'hanevex-fgf': {
-    id: 'hanevex-fgf',
-    vendor: 'Hanevex（青岛瀚海常青科技有限公司）',
-    name: 'Hanevex FGF (candidate, unspecified size)',
+  'large-format-fgf': {
+    id: 'large-format-fgf',
+    vendor: 'Large-format FGF supplier (anonymized)',
+    name: 'Large-Format FGF (candidate, unspecified size)',
     process: 'FGF',
     buildVolume: null,
     buildVolumeVerification: 'unverified',
     source:
-      'server/data/machines/hanevex-fgf.json declares no build volume and its todo field says ' +
+      'server/data/machines/large-format-fgf.json declares no build volume and its todo field says ' +
       '"once build volume is confirmed" — the dimensions were never established',
     status: 'generic profile — recalibrate per machine before production use',
     notes:
