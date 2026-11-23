@@ -1,3 +1,14 @@
+---
+AIGC:
+    Label: "1"
+    ContentProducer: 001191440300708461136T1XGW3
+    ProduceID: 60511e479f736a9399334d56570e10ac_ac1f52f9e6f211f184bd52540072b1e8
+    ReservedCode1: DgSq3JmAo1+XaPM9wR37VYOmeKyvKDwDqsBsGlw9Vd9rojoMCWbE4lGKtSRg8s/G3aGZz5ROseXKAm1TAcQF1bKBrWhDtCsH1xUPODhDLg5wUBsjeaAEd9pvEmGVpkAKWTwZj3d/g7w872B8goHE47AzhNWVomyyNgzaRk+yU2hZYkcrH2Yv4vqsozw=
+    ContentPropagator: 001191440300708461136T1XGW3
+    PropagateID: 60511e479f736a9399334d56570e10ac_ac1f52f9e6f211f184bd52540072b1e8
+    ReservedCode2: DgSq3JmAo1+XaPM9wR37VYOmeKyvKDwDqsBsGlw9Vd9rojoMCWbE4lGKtSRg8s/G3aGZz5ROseXKAm1TAcQF1bKBrWhDtCsH1xUPODhDLg5wUBsjeaAEd9pvEmGVpkAKWTwZj3d/g7w872B8goHE47AzhNWVomyyNgzaRk+yU2hZYkcrH2Yv4vqsozw=
+---
+
 # 车间数据模型：五层机器数据合并为单一真源
 
 状态：已实现（`feat/shopfloor-model`）
@@ -40,7 +51,7 @@
 该档案明确写着成型尺寸未确认。处理方式是不填：
 
 ```ts
-'large-format-fgf-generic': {
+'hanevex-fgf': {
   buildVolume: null,
   buildVolumeVerification: 'unverified',
   source: 'server/data/machines/hanevex-fgf.json — 6.1 节记录 1800×1200×1300 为家族标称值，'
@@ -50,7 +61,13 @@
 
 它不会出现在 `PRINTER_PROFILES` 里，因为那不是一台可选床型。工艺包络 `FGF` 也不从它派生，而是从有双源佐证的 `fgf_1800_pro` 派生。
 
-### 2.2 尺寸出处
+### 2.2 档案 id 必须与真源 key 一致
+
+真源键使用供应商档案的 `id`（如 `hanevex-fgf`），不另起一套命名。早期曾把该条目命名为 `large-format-fgf-generic`，导致
+`server/__tests__/machineProfiles.test.ts` 的交叉校验 `getMachineModel(p.id)` 取不到对应条目——而当时本机 vitest 无法启动，
+这条校验从未真正执行过。现已改为与档案 id 同名，并把交叉校验纳入 esbuild 实测路径。
+
+### 2.3 尺寸出处
 
 | 机型 | 尺寸 (mm) | 验证状态 | 出处 |
 | --- | --- | --- | --- |
@@ -61,7 +78,7 @@
 | `creality_k1` | 220 × 220 × 250 | `verified` | 公开机型参数 |
 | `ender_3` | 220 × 220 × 250 | `verified` | 公开机型参数 |
 | `formlabs_form3` | 145 × 145 × 185 | `verified` | 公开机型参数 |
-| `large-format-fgf-generic` | `null` | `unverified` | 供应商档案未确认 |
+| `hanevex-fgf` | `null` | `unverified` | Formnext Asia 深圳展会目击档案，厂商自身标注尺寸待确认 |
 
 `verified` / `single-source` / `unverified` 的区别是有意保留的：`fgf_1200` 只有一个内部来源，与公开机型参数的可信度不同，不应混为一谈。
 
@@ -99,7 +116,7 @@ const fitsZ = rotatedSize.z <= profile.depthMm;   // 又用 z 比 depth
 ## 5. 验证
 
 - `tsc --noEmit`：0 错误
-- 行为验证：36 项断言全部通过（三轴判定 14 项、真源契约 15 项、投影一致性 7 项）
+- 行为验证：44 项断言全部通过（三轴判定 14 项、真源契约 15 项、投影一致性 7 项、产能对齐 2 项、供应商档案交叉校验 6 项）
 - 本机 `vitest` 因 rollup 原生模块签名失效无法启动（`ERR_DLOPEN_FAILED`，与设备既有问题一致），故用 esbuild 打包后由 node 执行真实源码路径完成验证；vitest 用例已同语义写好，供正常环境与 CI 执行。
 
 ## 6. 未做与后续
@@ -107,3 +124,4 @@ const fitsZ = rotatedSize.z <= profile.depthMm;   // 又用 z 比 depth
 - `printFarm.ts` 的 `Printer` 接口尚未加 `modelId` 外键，机台列表仍走自己的 `getPrinters()`。下一步应让它指向 `MACHINE_UNITS`，把状态真源收敛到一处。
 - `MACHINE_UNITS` 的 `location` / `lastMaintenanceAt` 全部为 `null`，等待真实车间位置录入，未编造。
 - 工艺包络 `SLS` / `PBF` 无仓库内依据，留 `null`。
+*（内容由AI生成，仅供参考）*
