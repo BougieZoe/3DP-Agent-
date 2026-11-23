@@ -148,6 +148,22 @@ describe('5 — thresholds change, denominators do not', () => {
     expect(describeScoreboard(pinned)).toContain(`3 excluded on ${LEGACY_PYTHON_POLICY_VERSION}`);
   });
 
+  it('never names a blank version when stamped and unstamped records mix', () => {
+    // Caught on a screenshot of the real panel: the referee line read
+    // "records span 3 policy versions (py-…, wall-…, ) — pin one before…",
+    // i.e. the unstamped records were counted as a third, nameless policy.
+    const records = [
+      rec({ id: 'old-1', policyVersion: LEGACY_PYTHON_POLICY_VERSION }),
+      rec({ id: 'new-1' }),
+      rec({ id: 'u1', policyVersion: undefined as unknown as string }),
+      rec({ id: 'u2', policyVersion: '' }),
+    ];
+    const board = scoreYield(records);
+    expect(board.blockedBy).toContain('2 policy versions');
+    expect(board.blockedBy).toContain(LEGACY_PYTHON_POLICY_VERSION);
+    expect(board.blockedBy).not.toMatch(/,\s*\)/);
+  });
+
   it('does not file an unstamped record under "old policy"', () => {
     // A verdict written before the engine stamped versions, or by a caller that
     // forgot. Reporting it as "excluded on <some version>" would be a lie, and

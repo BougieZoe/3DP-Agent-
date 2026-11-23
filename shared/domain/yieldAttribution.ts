@@ -201,7 +201,11 @@ export function scoreYield(records: YieldRecord[], scope: YieldScope = {}): Yiel
   const decidable = counts['true-pass'] + counts['false-pass'] + counts['false-block'] + counts['override-failed'];
 
   let blockedBy: string | null = null;
-  const versions = new Set(scoped.map((r) => r.policyVersion));
+  // Only stamped records name a policy. An unstamped record has no version to
+  // report, so it must not inflate the count nor print an empty "…, )" entry.
+  const versions = new Set(
+    scoped.map((r) => r.policyVersion).filter((v): v is string => typeof v === 'string' && v.length > 0),
+  );
   if (scope.policyVersion !== undefined) {
     // Caller pinned a version; nothing to referee.
   } else if (versions.size > 1) {
