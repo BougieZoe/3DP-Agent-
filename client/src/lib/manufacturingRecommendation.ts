@@ -1,4 +1,16 @@
 import type { UnifiedAnalysis, MetricsResult } from '../analysis/types';
+import { PROCESS_ENVELOPES } from '@shared/domain/machine';
+
+/**
+ * FGF envelope comes from shared/domain/machine.ts instead of being typed again
+ * here. This used to be a third hard-coded copy of 1800x1200x1300 alongside
+ * PRINTER_PROFILES and the machine JSON files.
+ */
+function fgfProcessEnvelope(): { x: number; y: number; z: number } {
+  const env = PROCESS_ENVELOPES.FGF.buildVolume;
+  if (!env) throw new Error('FGF process envelope has no confirmed build volume');
+  return { x: env.x, y: env.y, z: env.z };
+}
 
 export interface ProcessRecommendation {
   processId: string;
@@ -30,7 +42,7 @@ const PROCESSES = [
     name: 'FGF (Fused Granulate Fabrication)',
     maxWallMm: 2.0,
     minDetailMm: 1.0,
-    buildVol: { x: 1800, y: 1200, z: 1300 },
+    buildVol: fgfProcessEnvelope(),
     materials: ['PETG pellet', 'ABS pellet', 'PP', 'PA', 'recycled plastics'],
     strengths: ['very large parts', 'low material cost', 'fast print speed', 'sustainable materials'],
     weaknesses: ['lower detail resolution', 'visible nozzle lines', 'limited fine features'],

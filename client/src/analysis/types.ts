@@ -15,6 +15,8 @@
 // 0.6 = reasonable confidence, standard algorithm
 // 0.8 = high confidence, well-validated algorithm
 // 1.0 = exact (e.g., triangle count from index buffer length)
+import { getMachineModel, requireBuildVolume } from '@shared/domain/machine';
+
 export type Confidence = 0.0 | 0.1 | 0.2 | 0.3 | 0.4 | 0.5 | 0.6 | 0.7 | 0.8 | 0.9 | 1.0;
 
 export interface AnalysisModuleResult<T> {
@@ -200,15 +202,36 @@ export interface MetricsResult {
 
 // ─── Bed Fit ───────────────────────────────────────────────────────────────────
 // Checks if the model fits on a printer's build plate.
+//
+// Dimensions are NOT authored here. This table is a projection of
+// shared/domain/machine.ts (MACHINE_MODELS) — the single source of truth — so the
+// analysis worker and the server can no longer drift apart. Profile ids are
+// persisted in analysis records: keep them stable even if a model is renamed.
+//
+// A model whose dimensions are still unconfirmed (build volume null in the source
+// table) cannot be projected here: requireBuildVolume() throws at load time rather
+// than letting a fabricated triple reach the bed-fit gate.
+
+function toBedProfile<K extends string>(modelId: K) {
+  const model = getMachineModel(modelId);
+  const vol = requireBuildVolume(modelId);
+  return {
+    id: modelId,
+    name: model?.name ?? modelId,
+    widthMm: vol.x,
+    depthMm: vol.y,
+    heightMm: vol.z,
+  };
+}
 
 export const PRINTER_PROFILES = {
-  bambu_x1c: { id: 'bambu_x1c', name: 'Bambu Lab X1C', widthMm: 256, depthMm: 256, heightMm: 256 },
-  prusa_mk4: { id: 'prusa_mk4', name: 'Prusa MK4', widthMm: 250, depthMm: 210, heightMm: 220 },
-  creality_k1: { id: 'creality_k1', name: 'Creality K1', widthMm: 220, depthMm: 220, heightMm: 250 },
-  ender_3: { id: 'ender_3', name: 'Ender 3', widthMm: 220, depthMm: 220, heightMm: 250 },
-  fgf_1800_pro: { id: 'fgf_1800_pro', name: 'Kings 3D FGF 1800 Pro', widthMm: 1800, depthMm: 1200, heightMm: 1300 },
-  fgf_1200: { id: 'fgf_1200', name: 'FGF 1200 Large-Format', widthMm: 1200, depthMm: 800, heightMm: 1000 },
-} as const;
+  bambu_x1c: toBedProfile('bambu_x1c'),
+  prusa_mk4: toBedProfile('prusa_mk4'),
+  creality_k1: toBedProfile('creality_k1'),
+  ender_3: toBedProfile('ender_3'),
+  fgf_1800_pro: toBedProfile('fgf_1800_pro'),
+  fgf_1200: toBedProfile('fgf_1200'),
+};
 
 export type PrinterProfileId = keyof typeof PRINTER_PROFILES;
 
