@@ -9,7 +9,7 @@ import { useMemo } from 'react';
 import type { Language } from '@/lib/i18n';
 import { pickLang } from '@shared/i18n/content';
 import type { Order } from '@shared/domain/order';
-import { STATUS_COLORS, SHIPPING_TERMS } from '@shared/domain/order';
+import { STATUS_COLORS, SHIPPING_TERMS, shippingTermLabel } from '@shared/domain/order';
 
 interface OrderCardProps {
   order: Order;
@@ -52,8 +52,9 @@ export function OrderCard({ order, language, onSelect, onDelete, selected, onTog
   }, [order]);
 
   const statusColor = STATUS_COLORS[order.status];
-  const termsDict = SHIPPING_TERMS[order.shipping.terms];
-  const shippingLabel = termsDict ? pickLang(termsDict, language) : order.shipping.terms;
+  const shippingLabel = SHIPPING_TERMS.includes(order.shipping.terms)
+    ? shippingTermLabel(order.shipping.terms, language)
+    : order.shipping.terms;
   const isSelectMode = !!onToggleSelect;
 
   return (
