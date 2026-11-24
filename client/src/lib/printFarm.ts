@@ -27,6 +27,12 @@ import type { ThermalVerdict } from '@shared/domain/thermal';
 import type { CalibrationMethod } from '@shared/domain/fieldCalibration';
 import { type FailureCause, type YieldMeasurement, attributeScraps } from '@shared/domain/yieldAttribution';
 import {
+  type FarmSchedule,
+  type SchedulerJob,
+  type SchedulerPrinter,
+  scheduleFarm,
+} from '@shared/domain/farmScheduler';
+import {
   type FloorPrinterSnapshot,
   type JobVerdictSnapshot,
   type PartQuality,
@@ -55,6 +61,12 @@ export interface Printer {
   lastSeen: string;
   ipAddress?: string;
   apiEndpoint?: string;
+  /**
+   * When a machine under maintenance is expected back. Without it the scheduler
+   * treats the machine as having no known free window instead of assuming it is
+   * available at the next plan boundary.
+   */
+  maintenanceUntil?: string | null;
 }
 
 export type PrinterStatus =
@@ -84,6 +96,24 @@ export interface PrinterStats {
   totalMaterialUsedGrams: number;
   lastMaintenance?: string;
   errorCount: number;
+}
+
+/**
+ * The facts a job needs in order to be time-phased.
+ *
+ * Kept separate from the execution fields on purpose: a job can be queued with
+ * nothing but a name and a material (that is how a person adds work), and such a
+ * job is then reported as unplannable instead of being given invented numbers.
+ */
+export interface PrintSpec {
+  /** Part footprint in mm. null = never measured, which blocks scheduling. */
+  footprintMm: { x: number; y: number; z: number } | null;
+  /** Estimated run time in minutes; must be > 0 to reserve a slot. */
+  durationMinutes: number;
+  technology?: string;
+  layerHeightMm?: number | null;
+  dueAt?: string | null;
+  priority?: number;
 }
 
 export interface PrintJob {
@@ -118,6 +148,11 @@ export interface PrintJob {
   attributionMethod?: CalibrationMethod;
   /** Measured values this job produced, for the field-calibration loop. */
   measurements?: YieldMeasurement[];
+  /**
+   * Scheduling facts (footprint, duration, due date). Absent means the job cannot
+   * be time-phased yet; it stays queued and is reported, never guessed into a slot.
+   */
+  spec?: PrintSpec;
 }
 
 export type JobStatus =
@@ -454,8 +489,177 @@ export function getPrinterUtilization(
 // Batch Operations
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Scheduling (delegated to shared/domain/farmScheduler)
+// ---------------------------------------------------------------------------
+
 /**
- * Find best printer for a job
+ * Usable build volume, or null when it was never recorded.
+ *
+ * A zero/absent box means "nobody filled this in", not "this machine prints
+ * nothing", and the scheduler must see the difference: the first blocks the job
+ * with a stated reason, the second would wrongly rule the machine out forever.
+ */
+function knownBuildVolume(printer: Printer): { x: number; y: number; z: number } | null {
+  const volume = printer.capabilities?.maxBuildVolume;
+  if (!volume) return null;
+  if (!(volume.x > 0) || !(volume.y > 0) || !(volume.z > 0)) return null;
+  return { x: volume.x, y: volume.y, z: volume.z };
+}
+
+function knownLayerRange(printer: Printer): { min: number; max: number } | null {
+  const min = printer.capabilities?.minLayerHeight;
+  const max = printer.capabilities?.maxLayerHeight;
+  if (!(min > 0) || !(max >= min)) return null;
+  return { min, max };
+}
+
+/** Project a stored fleet row into the planner's input shape. */
+export function toSchedulerPrinter(printer: Printer): SchedulerPrinter {
+  return {
+    id: printer.id,
+    name: printer.name,
+    status: printer.status,
+    technologies: printer.capabilities?.technologies ?? [],
+    materials: printer.capabilities?.materials ?? [],
+    buildVolumeMm: knownBuildVolume(printer),
+    layerRangeMm: knownLayerRange(printer),
+    successRatePct: printer.stats?.successRate ?? 0,
+    current: printer.currentJob
+      ? {
+          jobId: printer.currentJob.id,
+          material: printer.currentJob.material ?? null,
+          endsAt: printer.currentJob.estimatedEndAt ?? null,
+        }
+      : null,
+    availableAt: printer.maintenanceUntil ?? null,
+  };
+}
+
+/**
+ * Project a queued job into the planner's input shape.
+ *
+ * A job without `spec` yields a zero duration on purpose: the planner then reports
+ * it as `invalid-duration` instead of putting a guessed slot in the timeline.
+ */
+export function toSchedulerJob(job: PrintJob): SchedulerJob {
+  const spec = job.spec;
+  return {
+    id: job.id,
+    name: job.name,
+    material: job.material,
+    technology: spec?.technology,
+    footprintMm: spec?.footprintMm ?? null,
+    durationMinutes: spec?.durationMinutes ?? 0,
+    priority: spec?.priority,
+    dueAt: spec?.dueAt ?? null,
+    layerHeightMm: spec?.layerHeightMm ?? null,
+  };
+}
+
+export interface PlanFarmQueueOptions {
+  /** Plan reference time. Defaults to the wall clock — pass a fixed value in tests. */
+  now?: string;
+  marginMm?: number;
+  changeoverMinutes?: number;
+}
+
+/**
+ * Plan every `queued` job across the registered fleet.
+ *
+ * Read-only by design: a plan is a proposal, so nothing is written here. The
+ * dashboard can render this and let a human commit to it.
+ */
+export function planFarmQueue(options: PlanFarmQueueOptions = {}): FarmSchedule {
+  const now = options.now ?? new Date().toISOString();
+  const printers = getPrinters().map(toSchedulerPrinter);
+  const jobs = getPrintJobs()
+    .filter((job) => job.status === 'queued')
+    .map(toSchedulerJob);
+
+  return scheduleFarm(jobs, printers, {
+    now,
+    marginMm: options.marginMm,
+    changeoverMinutes: options.changeoverMinutes,
+  });
+}
+
+export interface AdoptScheduleResult {
+  /** Jobs that received a printer and a planned end time from the plan. */
+  planned: number;
+  /** Jobs actually claimed onto hardware because their window had opened. */
+  started: number;
+}
+
+/**
+ * Write a plan back onto the queue.
+ *
+ * Recording the plan (printerId + estimatedEndAt) and claiming a machine are kept
+ * apart: bookkeeping is safe to do for a plan that starts tomorrow, flipping a
+ * printer to `printing` is not.
+ */
+export function adoptFarmSchedule(
+  plan: FarmSchedule,
+  options: { start?: boolean; now?: string } = {},
+): AdoptScheduleResult {
+  const start = options.start ?? false;
+  const nowMs = Date.parse(options.now ?? new Date().toISOString());
+  const printers = getPrinters();
+  const jobs = getPrintJobs();
+  let planned = 0;
+  let started = 0;
+
+  for (const assignment of plan.assignments) {
+    const job = jobs.find((j) => j.id === assignment.jobId);
+    if (!job) continue;
+
+    job.printerId = assignment.printerId;
+    job.estimatedEndAt = assignment.plannedEndAt;
+    planned++;
+
+    if (!start) continue;
+    const startMs = Date.parse(assignment.plannedStartAt);
+    if (Number.isNaN(startMs) || startMs > nowMs) continue;
+
+    const printer = printers.find((p) => p.id === assignment.printerId);
+    if (!printer) continue;
+    // One machine, one job. The plan is serial per machine, but a stale row may
+    // still be holding a finished print, so never overwrite a live currentJob.
+    if (printer.currentJob && printer.status === 'printing') continue;
+
+    job.status = 'preparing';
+    job.startedAt = new Date(startMs).toISOString();
+    printer.currentJob = job;
+    printer.status = 'printing';
+    printer.lastSeen = new Date(nowMs).toISOString();
+    started++;
+  }
+
+  savePrintJobs(jobs);
+  // Persist the array that was actually mutated. The previous path re-read storage
+  // here and silently discarded the printer status it had just changed.
+  savePrinters(printers);
+
+  return { planned, started };
+}
+
+/**
+ * Dispatch whatever can start right now.
+ *
+ * Retained as the single-call entry point, but the decision comes from the
+ * planner: no hard-coded 200 mm envelope and no assumption that every machine is
+ * some generic FDM box.
+ */
+export function autoAssignJobs(now: string = new Date().toISOString()): number {
+  const plan = planFarmQueue({ now });
+  return adoptFarmSchedule(plan, { start: true, now }).started;
+}
+
+/**
+ * Best machine for one hypothetical part.
+ *
+ * Kept for callers that only need the pick; the answer now comes from the planner
+ * (footprint, material, technology, existing load) rather than a fixed 200 mm box.
  */
 export function findBestPrinter(
   requirements: {
@@ -465,54 +669,24 @@ export function findBestPrinter(
   }
 ): Printer | null {
   const printers = getPrinters();
+  if (printers.length === 0) return null;
 
-  const candidates = printers.filter(p => {
-    if (p.status !== 'idle') return false;
-    if (!p.capabilities.technologies.includes(requirements.technology)) return false;
-    if (!p.capabilities.materials.includes(requirements.material)) return false;
-    if (p.capabilities.maxBuildVolume.x < requirements.buildVolumeRequired.x) return false;
-    if (p.capabilities.maxBuildVolume.y < requirements.buildVolumeRequired.y) return false;
-    if (p.capabilities.maxBuildVolume.z < requirements.buildVolumeRequired.z) return false;
-    return true;
+  const probe: SchedulerJob = {
+    id: '__probe__',
+    name: '__probe__',
+    material: requirements.material,
+    technology: requirements.technology,
+    footprintMm: requirements.buildVolumeRequired,
+    durationMinutes: 1,
+  };
+
+  const plan = scheduleFarm([probe], printers.map(toSchedulerPrinter), {
+    now: new Date().toISOString(),
   });
 
-  if (candidates.length === 0) return null;
-
-  // Prefer printer with best success rate
-  return candidates.sort((a, b) => b.stats.successRate - a.stats.successRate)[0];
-}
-
-/**
- * Auto-assign queued jobs to available printers
- */
-export function autoAssignJobs(): number {
-  const jobs = getPrintJobs();
-  const queuedJobs = jobs.filter(j => j.status === 'queued');
-  let assignedCount = 0;
-
-  for (const job of queuedJobs) {
-    const printer = findBestPrinter({
-      technology: 'fdm', // Default
-      material: job.material,
-      buildVolumeRequired: { x: 200, y: 200, z: 200 },
-    });
-
-    if (printer) {
-      job.printerId = printer.id;
-      job.status = 'preparing';
-      job.startedAt = new Date().toISOString();
-      printer.currentJob = job;
-      printer.status = 'printing';
-      assignedCount++;
-    }
-  }
-
-  if (assignedCount > 0) {
-    savePrintJobs(jobs);
-    savePrinters(getPrinters());
-  }
-
-  return assignedCount;
+  const picked = plan.assignments[0];
+  if (!picked) return null;
+  return printers.find((p) => p.id === picked.printerId) ?? null;
 }
 
 
