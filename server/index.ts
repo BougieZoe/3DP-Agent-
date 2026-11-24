@@ -8,6 +8,7 @@ import { createMeshProcessRouter } from "./meshProcess";
 import { createMeshThickenRouter } from "./meshThicken";
 import { createSlicerRouter } from "./slicerRouter";
 import { createAnalyzeRouter } from "./analyzeRouter";
+import { createFleetRouter } from "./fleetRouter";
 import { createStepRouter } from "./stepRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
@@ -178,6 +179,10 @@ export function createApp() {
 
     // Slicer bridge: STL → G-code via a local slicer CLI.
     app.use("/api/slice", ...amdProxy, createSlicerRouter());
+    // Fleet telemetry: the browser posts { provider, baseUrl, apiKey } and the
+    // server talks to the controller, so the printer API key never leaves the
+    // host. Mounted under the same bridge guards as the other host-side features.
+    app.use("/api/fleet", ...amdProxy, createFleetRouter());
 
     // STEP file parser: STEP → geometry + metadata via OpenCASCADE WASM.
     app.use("/api/step", ...amdProxy, createStepRouter());
