@@ -13,6 +13,11 @@
 // ---------------------------------------------------------------------------
 
 import type { MachineModel, MachineThermalCapability } from '@shared/domain/machine';
+import type {
+  FleetProviderId,
+  PrinterTelemetry,
+  TelemetryState,
+} from '@shared/domain/fleetTelemetry';
 import {
   assessModelMaterial,
   getMachineModel,
@@ -568,4 +573,127 @@ export function printersForMaterial(printers: Printer[], material: string): Mate
     else unjudged.push({ printer, verdict });
   }
   return { material, usable, blocked, unjudged };
+}
+
+// ---------------------------------------------------------------------------
+// Fleet telemetry write-back (real device source)
+// ---------------------------------------------------------------------------
+
+/**
+ * Telemetry state to PrinterStatus. `unknown` maps to null on purpose: when the
+ * controller does not say what it is doing, the printer keeps whatever status it
+ * already had instead of being relabelled with a guess.
+ */
+const TELEMETRY_STATUS: Record<TelemetryState, PrinterStatus | null> = {
+  idle: 'idle',
+  printing: 'printing',
+  paused: 'paused',
+  completed: 'completed',
+  error: 'error',
+  offline: 'offline',
+  unknown: null,
+};
+
+export interface TelemetryMatch {
+  printerId: string;
+  printerName: string;
+  previousStatus: PrinterStatus;
+  nextStatus: PrinterStatus;
+  changed: boolean;
+}
+
+export interface ApplyTelemetryResult {
+  provider: FleetProviderId;
+  printerKey: string;
+  observedAt: string;
+  matches: TelemetryMatch[];
+  /** True when nothing in the fleet list matched. Nothing is auto-created. */
+  unmatched: boolean;
+  notes: string[];
+}
+
+function hostOf(value: string | undefined): string | null {
+  if (!value) return null;
+  const raw = value.trim().toLowerCase();
+  if (raw.length === 0) return null;
+  try {
+    return new URL(raw.includes('://') ? raw : `http://${raw}`).host;
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * Write one normalized telemetry snapshot back onto the matching local printer.
+ *
+ * Scope is deliberately narrow: it may change `status`, `currentJob.progress`
+ * and `lastSeen` — nothing else. It never touches `stats`, never creates a job
+ * record, and never invents a printer, because yield attribution and cost data
+ * must keep coming from the job pipeline rather than from a poll. A poll that is
+ * briefly wrong must not be able to move a success rate.
+ *
+ * Matching prefers an exact endpoint host (ipAddress / apiEndpoint) and falls
+ * back to printer name. Anything ambiguous is reported as unmatched, never
+ * resolved by silently picking the first candidate.
+ */
+export function applyTelemetry(telemetry: PrinterTelemetry): ApplyTelemetryResult {
+  const printers = getPrinters();
+  const key = telemetry.printerKey.trim().toLowerCase();
+
+  const byEndpoint = printers.filter(
+    (p) => hostOf(p.apiEndpoint) === key || hostOf(p.ipAddress) === key,
+  );
+  const candidates =
+    byEndpoint.length > 0
+      ? byEndpoint
+      : printers.filter((p) => p.name.trim().toLowerCase() === key);
+
+  const nextStatus = TELEMETRY_STATUS[telemetry.state];
+  const matches: TelemetryMatch[] = [];
+
+  for (const printer of candidates) {
+    const previousStatus = printer.status;
+    let changed = false;
+
+    if (nextStatus !== null && printer.status !== nextStatus) {
+      printer.status = nextStatus;
+      changed = true;
+    }
+
+    if (
+      (telemetry.state === 'printing' || telemetry.state === 'paused') &&
+      printer.currentJob &&
+      telemetry.progressPct !== null &&
+      printer.currentJob.progress !== telemetry.progressPct
+    ) {
+      printer.currentJob = { ...printer.currentJob, progress: telemetry.progressPct };
+      changed = true;
+    }
+
+    printer.lastSeen = telemetry.observedAt;
+
+    matches.push({
+      printerId: printer.id,
+      printerName: printer.name,
+      previousStatus,
+      nextStatus: printer.status,
+      changed,
+    });
+  }
+
+  if (matches.length > 0) savePrinters(printers);
+
+  const notes = [...telemetry.notes];
+  if (matches.length === 0) {
+    notes.push(`no printer in the fleet list matches "${telemetry.printerKey}"`);
+  }
+
+  return {
+    provider: telemetry.provider,
+    printerKey: telemetry.printerKey,
+    observedAt: telemetry.observedAt,
+    matches,
+    unmatched: matches.length === 0,
+    notes,
+  };
 }
