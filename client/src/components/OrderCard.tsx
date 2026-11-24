@@ -6,12 +6,14 @@
  */
 
 import { useMemo } from 'react';
+import type { Language } from '@/lib/i18n';
+import { pickLang } from '@shared/i18n/content';
 import type { Order } from '@shared/domain/order';
 import { STATUS_COLORS, SHIPPING_TERMS } from '@shared/domain/order';
 
 interface OrderCardProps {
   order: Order;
-  language: 'en' | 'ja' | 'zh';
+  language: Language;
   onSelect?: (orderId: string) => void;
   onDelete?: (orderId: string) => void;
   selected?: boolean;
@@ -38,7 +40,7 @@ const L = {
 };
 
 export function OrderCard({ order, language, onSelect, onDelete, selected, onToggleSelect, compact = false }: OrderCardProps) {
-  const t = L[language] || L.en;
+  const t = pickLang(L, language);
 
   const specs = useMemo(() => {
     const d = order.specs.dimensions;
@@ -50,7 +52,8 @@ export function OrderCard({ order, language, onSelect, onDelete, selected, onTog
   }, [order]);
 
   const statusColor = STATUS_COLORS[order.status];
-  const shippingLabel = SHIPPING_TERMS[order.shipping.terms]?.[language] || order.shipping.terms;
+  const termsDict = SHIPPING_TERMS[order.shipping.terms];
+  const shippingLabel = termsDict ? pickLang(termsDict, language) : order.shipping.terms;
   const isSelectMode = !!onToggleSelect;
 
   return (

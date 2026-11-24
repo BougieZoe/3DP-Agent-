@@ -21,6 +21,7 @@ import {
 import { uploadOutcomeAnonymous, type OutcomeUploader } from '@/lib/outcomeUpload';
 import { recordAnalysisOutcome } from '@/lib/printFeedback';
 import type { Language } from '@/lib/i18n';
+import { pickLang } from '@shared/i18n/content';
 
 const L = {
   en: {
@@ -179,7 +180,7 @@ interface Props {
 type Phase = 'loading' | 'ready' | 'saving' | 'saved' | 'error';
 
 export function PrintOutcomeCard({ recordId, language, store, uploader }: Props) {
-  const t = L[language] || L.en;
+  const t = pickLang(L, language);
   const history = store ?? getAnalysisHistory();
 
   const [phase, setPhase] = useState<Phase>(recordId ? 'loading' : 'error');

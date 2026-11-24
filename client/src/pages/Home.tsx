@@ -50,7 +50,7 @@ import { weldGeometry } from '@/lib/weldGeometry';
 import { thickenMesh, ThickenRejected } from '@/lib/meshThickenClient';
 import { geometryToThreeMf } from '@/lib/threeMf';
 import { LENGTH_UNIT_TO_MM, type LengthUnit } from '@shared/domain/geometry';
-import { CONTENT, translate, SUPPORTED_LANGUAGES } from '@shared/i18n/content';
+import { CONTENT, translate, SUPPORTED_LANGUAGES, LANGUAGE_NAMES } from '@shared/i18n/content';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
 import { isWallConfidenceTrusted } from '@/lib/lowConfidence';
 import { Language, getTranslation } from '@/lib/i18n';
@@ -1469,7 +1469,7 @@ export default function Home() {
               className="text-xs font-mono px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer"
             >
               {SUPPORTED_LANGUAGES.map(lang => (
-                <option key={lang} value={lang}>{lang.toUpperCase()}</option>
+                <option key={lang} value={lang}>{LANGUAGE_NAMES[lang]}</option>
               ))}
             </select>
             <InstallButton language={language} />
@@ -1574,7 +1574,7 @@ export default function Home() {
               className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
             >
               {SUPPORTED_LANGUAGES.map(lang => (
-                <option key={lang} value={lang}>{lang.toUpperCase()}</option>
+                <option key={lang} value={lang}>{LANGUAGE_NAMES[lang]}</option>
               ))}
             </select>
           </div>
@@ -2810,6 +2810,7 @@ export default function Home() {
       <YieldPanel
         isOpen={showYieldPanel}
         onClose={() => setShowYieldPanel(false)}
+        language={language}
       />
       <AgentExecutionGraph
         isVisible={showAgentGraph}

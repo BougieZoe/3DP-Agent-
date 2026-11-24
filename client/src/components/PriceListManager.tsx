@@ -5,11 +5,13 @@
  */
 
 import { useState, useRef } from 'react';
+import type { Language } from '@/lib/i18n';
+import { pickLang } from '@shared/i18n/content';
 import type { SupplierPriceList } from '@shared/domain/order';
 import { parsePriceListCSV, generateSampleCSV } from '@/lib/priceListImporter';
 
 interface PriceListManagerProps {
-  language: 'en' | 'ja' | 'zh';
+  language: Language;
   onPriceListUpdate?: (prices: SupplierPriceList[]) => void;
 }
 
@@ -71,7 +73,7 @@ const L = {
 };
 
 export function PriceListManager({ language, onPriceListUpdate }: PriceListManagerProps) {
-  const t = L[language] || L.en;
+  const t = pickLang(L, language);
   const [prices, setPrices] = useState<SupplierPriceList[]>([]);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

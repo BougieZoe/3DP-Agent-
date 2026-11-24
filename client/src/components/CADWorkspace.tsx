@@ -3,6 +3,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls, PerspectiveCamera, Environment } from "@react-three/drei";
 import * as THREE from "three";
 import { COLORS } from "@/lib/visualLanguage";
+import { pickLang, type PartialLangDict } from "@shared/i18n/content";
 import {
   Download,
   RotateCcw,
@@ -200,7 +201,7 @@ def gen_step():
   }
 };
 
-const STARTER_EXAMPLES: Record<Language, string[]> = {
+const STARTER_EXAMPLES: PartialLangDict<string[]> = {
   en: [
     "Create a 60mm x 45mm mounting plate with four 5mm holes and rounded corners",
     "Make a flange, outer diameter 100mm, inner diameter 50mm, 8 bolt holes",
@@ -649,7 +650,7 @@ interface CADWorkspaceProps {
 export function CADWorkspace({ language }: CADWorkspaceProps) {
   const { material, materialName } = useMaterial();
   const t = (key: TKey) => getTranslation(language, key);
-  const [prompt, setPrompt] = useState(STARTER_EXAMPLES[language][0]);
+  const [prompt, setPrompt] = useState(pickLang(STARTER_EXAMPLES, language)[0]);
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
   const [analysis, setAnalysis] = useState<UnifiedAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
@@ -710,7 +711,7 @@ export function CADWorkspace({ language }: CADWorkspaceProps) {
   }, []);
 
   useEffect(() => {
-    setPrompt(STARTER_EXAMPLES[language][0]);
+    setPrompt(pickLang(STARTER_EXAMPLES, language)[0]);
   }, [language]);
 
   useEffect(() => () => abortRef.current?.abort(), []);

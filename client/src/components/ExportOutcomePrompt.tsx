@@ -9,6 +9,7 @@
 import { PrintOutcomeCard } from './PrintOutcomeCard';
 import type { RecordStore } from '@/lib/analysisHistory';
 import type { Language } from '@/lib/i18n';
+import { pickLang } from '@shared/i18n/content';
 
 const L = {
   en: {
@@ -37,7 +38,7 @@ interface Props {
 }
 
 export function ExportOutcomePrompt({ recordId, language, store }: Props) {
-  const t = L[language] || L.en;
+  const t = pickLang(L, language);
   if (!recordId) return null;
 
   return (

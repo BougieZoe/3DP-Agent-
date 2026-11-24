@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+import type { Language } from '@/lib/i18n';
+import { pickLang } from '@shared/i18n/content';
 import type { UnifiedAnalysis } from '@/analysis/types';
 import type { Material } from '@shared/domain/material';
 import { MATERIALS } from '@shared/domain/material';
@@ -6,7 +8,7 @@ import { MATERIALS } from '@shared/domain/material';
 interface Props {
   unifiedAnalysis: UnifiedAnalysis;
   material: Material;
-  language: 'en' | 'ja' | 'zh';
+  language: Language;
 }
 
 const L = {
@@ -16,7 +18,7 @@ const L = {
 };
 
 export function CostCard({ unifiedAnalysis, material, language }: Props) {
-  const t = L[language] || L.en;
+  const t = pickLang(L, language);
 
   const data = useMemo(() => {
     const pt = unifiedAnalysis.printTime?.result;

@@ -3,7 +3,7 @@
  * Handles common 3D printing questions with deterministic answers
  */
 
-import { CONTENT, translate } from '@shared/i18n/content';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { Material } from '@shared/domain/material';
 import { DEFAULT_MATERIAL } from '@shared/domain/material';
 import { getThresholds, type AnalysisThresholds } from '@/analysis/thresholds';
@@ -42,7 +42,7 @@ export interface RuleResult {
 
 // Format a wall-thickness value for display; an unmeasured (null) value is
 // reported honestly instead of substituting a fabricated number.
-function formatMinThickness(v: number | null, lang: 'en' | 'ja' | 'zh'): string {
+function formatMinThickness(v: number | null, lang: ContentLang): string {
   if (v === null) return translate(CONTENT, 'notMeasured', lang);
   return `${v.toFixed(2)}mm`;
 }
@@ -50,7 +50,7 @@ function formatMinThickness(v: number | null, lang: 'en' | 'ja' | 'zh'): string 
 // Quick local analysis report — no API
 export function generateQuickReport(
   model: ModelData,
-  lang: 'en' | 'ja' | 'zh',
+  lang: ContentLang,
   material: Material = DEFAULT_MATERIAL,
   thresholds: AnalysisThresholds = getThresholds(),
 ): string {
@@ -152,7 +152,7 @@ export function classifyQuestion(question: string): { needsAI: boolean; category
 export function answerLocally(
   category: string,
   model: ModelData,
-  lang: 'en' | 'ja' | 'zh',
+  lang: ContentLang,
   material: Material = DEFAULT_MATERIAL,
   thresholds: AnalysisThresholds = getThresholds(),
 ): string {

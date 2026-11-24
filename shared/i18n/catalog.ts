@@ -18,6 +18,18 @@
  *  - Placeholders use {name} and are substituted by the caller.
  *  - Keep keys stable; they are referenced from tests and PDF output.
  */
+import { DE } from './lang/de';
+import { ES } from './lang/es';
+import { FR } from './lang/fr';
+import { IT } from './lang/it';
+import { KO } from './lang/ko';
+import { SV } from './lang/sv';
+import { applyOverlays, type OverlayTable } from './overlays';
+
+/**
+ * Overlay batches (./lang/*.ts) are merged at the bottom of this file; this
+ * table stays the authored en/ja/zh source of truth.
+ */
 export const MESSAGES = {
   "thickenNotWatertight": {
     en: "The offset result was not watertight — change discarded, original kept.",
@@ -5557,3 +5569,22 @@ export const MESSAGES = {
 } as const;
 
 export type MessageKey = keyof typeof MESSAGES;
+
+/**
+ * Translation batches. Order does not matter: an overlay only fills a language
+ * slot that is still empty, so later batches can be appended safely.
+ */
+const OVERLAYS: Record<string, OverlayTable | undefined> = {
+  ko: KO,
+  de: DE,
+  es: ES,
+  fr: FR,
+  it: IT,
+  sv: SV,
+};
+
+/** Number of overlay strings applied at load (read by the audit script). */
+export const OVERLAY_STATS = applyOverlays(
+  MESSAGES as unknown as Record<string, Record<string, string>>,
+  OVERLAYS,
+);

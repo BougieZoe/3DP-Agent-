@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { MESSAGES } from '../catalog';
-import { CONTENT, translate } from '../content';
+import { CONTENT, SUPPORTED_LANGUAGES, entryText, translate } from '../content';
 import { getTranslation, translations } from '@/lib/i18n';
 
 const keys = Object.keys(MESSAGES);
@@ -16,7 +16,7 @@ describe('message catalogue', () => {
     expect(keys.length).toBeGreaterThan(900);
   });
 
-  it('carries en, ja and zh for every key', () => {
+  it('carries en, ja and zh for every key (baseline languages)', () => {
     const bad: string[] = [];
     for (const [key, entry] of Object.entries(MESSAGES)) {
       for (const lang of ['en', 'ja', 'zh'] as const) {
@@ -25,6 +25,36 @@ describe('message catalogue', () => {
       }
     }
     expect(bad).toEqual([]);
+  });
+
+  it('never stores an empty string for any supported language', () => {
+    // Newer languages (ko/de/es/fr/it/sv) may be missing while translations
+    // land, but a present value must never be blank — a blank label is worse
+    // than an English fallback because it looks like a rendering bug.
+    const bad: string[] = [];
+    for (const [key, entry] of Object.entries(MESSAGES)) {
+      for (const lang of SUPPORTED_LANGUAGES) {
+        const v = (entry as Record<string, string | undefined>)[lang];
+        if (v !== undefined && v.trim().length === 0) bad.push(`${key}.${lang}`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('falls back to English when a newer language is missing', () => {
+    const partial = { en: 'Wall too thin', ja: '壁が薄い', zh: '壁太薄' };
+    for (const lang of ['ko', 'de', 'es', 'fr', 'it', 'sv'] as const) {
+      expect(entryText(partial as never, lang)).toBe('Wall too thin');
+      expect(getTranslation(lang, 'verdictReady')).toBe(
+        translate(CONTENT, 'verdictReady', 'en'),
+      );
+    }
+  });
+
+  it('keeps every supported language reachable through the flat UI map', () => {
+    for (const lang of SUPPORTED_LANGUAGES) {
+      expect(Object.keys(translations[lang])).toHaveLength(keys.length);
+    }
   });
 
   it('exposes the same value through both lookup APIs', () => {

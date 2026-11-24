@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
+import type { Language } from '@/lib/i18n';
+import { pickLang } from '@shared/i18n/content';
 import type { UnifiedAnalysis } from '@/analysis/types';
 import type { Material } from '@shared/domain/material';
 
 interface Props {
   unifiedAnalysis: UnifiedAnalysis;
   material: Material;
-  language: 'en' | 'ja' | 'zh';
+  language: Language;
 }
 
 interface Step {
@@ -22,7 +24,7 @@ const L = {
 };
 
 export function PostProcessingCard({ unifiedAnalysis, material, language }: Props) {
-  const t = L[language] || L.en;
+  const t = pickLang(L, language);
 
   const steps = useMemo<Step[]>(() => {
     const m = unifiedAnalysis.metrics?.result;

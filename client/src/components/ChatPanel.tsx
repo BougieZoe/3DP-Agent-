@@ -3,7 +3,7 @@ import { ModelData, classifyQuestion, answerLocally } from '@/lib/ruleEngine';
 import { callAI, AIProvider } from '@/lib/apiKeys';
 import { getLLMProvider } from '@/lib/llmAccess';
 import { getAuthSnapshot } from '@/lib/authStore';
-import { CONTENT, translate } from '@shared/i18n/content';
+import { CONTENT, translate, pickLang, type PartialLangDict } from '@shared/i18n/content';
 import { Language } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
 import type { Material } from '@shared/domain/material';
@@ -24,7 +24,7 @@ interface ChatPanelProps {
   material?: Material;
 }
 
-const SUGGESTED: Record<Language, string[]> = {
+const SUGGESTED: PartialLangDict<string[]> = {
   en: [
     'Where will this warp or fail first?',
     'Is PETG or PLA the right material?',
@@ -304,7 +304,7 @@ export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATE
 
       {messages.length <= 1 && (
         <div className="px-3 pb-2 flex flex-wrap gap-1.5 shrink-0">
-          {SUGGESTED[language].map((s, i) => (
+          {pickLang(SUGGESTED, language).map((s, i) => (
             <button
               key={i}
               onClick={() => sendMessage(s)}

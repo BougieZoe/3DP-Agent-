@@ -8,8 +8,15 @@
  */
 import type { PrintJob, Printer } from '@/lib/printFarm';
 import type { CalibrationMethod } from '@shared/domain/fieldCalibration';
+import type { ContentLang } from '@shared/i18n/content';
 import type { EvidenceGrade } from '@shared/domain/evidence';
 import { getMachineModel } from '@shared/domain/machine';
+import {
+  type YieldLabels,
+  type YieldSentences,
+  yieldLabels,
+  yieldSentences,
+} from './yieldLabels';
 import {
   type AttributionReport,
   type FailureCause,
@@ -30,15 +37,9 @@ import {
 import { type CapabilityClaim, type AxisClaim, capabilityClaim } from '@shared/domain/fieldOverlay';
 import { VERDICT_POLICY_VERSION } from '@shared/domain/verdictPolicy';
 
-export const OUTCOME_LABELS: Record<OutcomeClass, string> = {
-  'true-pass': '判定通过且合格',
-  'false-pass': '判定通过却报废',
-  'unverified-block': '被拦截未上机',
-  'false-block': '拦截但本可成功',
-  'override-failed': '强行放行后报废',
-  unexercised: '无判定记录',
-  'inconclusive-outcome': '判定不确定',
-};
+// Labels moved to ./yieldLabels.ts, which carries every supported language.
+// They used to be Chinese-only constants here — that is why the panel stayed
+// Chinese no matter which language the user picked.
 
 /** The one class that means the policy was wrong in the expensive direction. */
 export const LEAK_CLASS: OutcomeClass = 'false-pass';
@@ -52,37 +53,6 @@ export const OUTCOME_ORDER: OutcomeClass[] = [
   'unexercised',
   'inconclusive-outcome',
 ];
-
-export const CAUSE_LABELS: Record<FailureCause, string> = {
-  material: '材料',
-  machine: '机器',
-  params: '工艺参数',
-  model: '模型',
-  operator: '操作',
-  'post-process': '后处理',
-  design: '设计',
-  unknown: '未查明',
-};
-
-export const METHOD_LABELS: Record<CalibrationMethod, string> = {
-  thermocouple: '热电偶实测',
-  'part-measurement': '零件实测',
-  'slicer-log': '切片日志',
-  'operator-note': '操作员记录',
-};
-
-export const GRADE_LABELS: Record<EvidenceGrade, string> = {
-  unverified: '未验证',
-  'vendor-sheet': '厂商标称',
-  'two-source': '双来源',
-  'field-calibrated': '现场标定',
-};
-
-export const APPLICABILITY_LABELS: Record<AxisClaim['applicability'], string> = {
-  stated: '已标称',
-  absent: '无此能力',
-  unknown: '未知',
-};
 
 export interface OutcomeCountView {
   key: OutcomeClass;
@@ -177,28 +147,33 @@ function pct(rate: number | null): string {
   return `${(rate * 100).toFixed(1)}%`;
 }
 
-function axisRow(claim: AxisClaim): AxisRowView {
+function axisRow(claim: AxisClaim, labels: YieldLabels, t: YieldSentences): AxisRowView {
   const ceil = claim.ceiling;
   return {
     axis: claim.axis,
     label: claim.label,
     unit: claim.unit,
     ceilingText: ceil === null ? '—' : `${ceil} ${claim.unit}`,
-    applicabilityLabel: APPLICABILITY_LABELS[claim.applicability],
-    gradeLabel: GRADE_LABELS[claim.grade],
+    applicabilityLabel: labels.applicability[claim.applicability],
+    gradeLabel: labels.grade[claim.grade],
     source: claim.source,
     samplesText:
       claim.sampleCount === null
-        ? `样本 ${claim.unitsContributing} 台`
-        : `样本 ${claim.sampleCount} · ${claim.unitsContributing} 台`,
+        ? t.samplesOne(claim.unitsContributing)
+        : t.samplesMany(claim.sampleCount, claim.unitsContributing),
     contradictionText:
       claim.contradiction === null
         ? null
-        : `现场读数 ${claim.contradiction.observedMax} 已超厂商上限 ${claim.contradiction.vendorCeiling}`,
+        : t.contradiction(claim.contradiction.observedMax, claim.contradiction.vendorCeiling),
   };
 }
 
-function machineView(modelId: string, observations: ReturnType<typeof calibrationFromYield>): MachineView | null {
+function machineView(
+  modelId: string,
+  observations: ReturnType<typeof calibrationFromYield>,
+  labels: YieldLabels,
+  t: YieldSentences,
+): MachineView | null {
   // A model with no dossier has nothing honest to say; skip it rather than
   // conjure a claim out of a bare id.
   if (!getMachineModel(modelId)) return null;
@@ -211,15 +186,21 @@ function machineView(modelId: string, observations: ReturnType<typeof calibratio
   return {
     modelId,
     name: getMachineModel(modelId)?.name ?? modelId,
-    gradeLabel: GRADE_LABELS[claim.grade],
+    gradeLabel: labels.grade[claim.grade],
     publishable: claim.publishable,
     fullyFieldCalibrated: claim.fullyFieldCalibrated,
-    axes: claim.axes.map(axisRow),
+    axes: claim.axes.map((axis) => axisRow(axis, labels, t)),
     notes: claim.notes,
   };
 }
 
-export function buildYieldView(jobs: PrintJob[], printers: Printer[]): YieldView {
+export function buildYieldView(
+  jobs: PrintJob[],
+  printers: Printer[],
+  lang: ContentLang = 'en',
+): YieldView {
+  const labels = yieldLabels(lang);
+  const t = yieldSentences(lang);
   const floorJobs = toFloorJobs(jobs);
   const floorPrinters = toFloorPrinters(printers);
   // Pin to the policy we actually ship. Mixing versions is refused rather than
@@ -238,7 +219,9 @@ export function buildYieldView(jobs: PrintJob[], printers: Printer[]): YieldView
       name: job.name,
       printerName: printerNames.get(job.printerId) ?? job.printerId,
       finishedAt: job.actualEndAt ?? job.startedAt,
-      verdictText: job.verdict ? `判定 ${job.verdict.state} · 策略 ${job.verdict.policyVersion}` : '无判定记录',
+      verdictText: job.verdict
+        ? t.verdict(job.verdict.state, job.verdict.policyVersion)
+        : t.noVerdict,
       status: job.status,
     }));
 
@@ -254,7 +237,7 @@ export function buildYieldView(jobs: PrintJob[], printers: Printer[]): YieldView
     (modelId) => modelId !== UNBOUND_MACHINE,
   );
   const machines = modelIds
-    .map((modelId) => machineView(modelId, observations))
+    .map((modelId) => machineView(modelId, observations, labels, t))
     .filter((view): view is MachineView => view !== null);
 
   return {
@@ -263,17 +246,17 @@ export function buildYieldView(jobs: PrintJob[], printers: Printer[]): YieldView
     harvest,
     outcomes: OUTCOME_ORDER.map((key) => ({
       key,
-      label: OUTCOME_LABELS[key],
+      label: labels.outcome[key],
       count: board.counts[key] ?? 0,
       leak: key === LEAK_CLASS,
     })),
     attribution,
     causeRows: attribution.causes.map((tally) => ({
       cause: tally.cause,
-      label: CAUSE_LABELS[tally.cause],
+      label: labels.cause[tally.cause],
       count: tally.count,
       sharePct: tally.share === null ? null : Math.round(tally.share * 100),
-      methodLabel: tally.strongestMethod === null ? null : METHOD_LABELS[tally.strongestMethod],
+      methodLabel: tally.strongestMethod === null ? null : labels.method[tally.strongestMethod],
     })),
     machines,
     pending,
@@ -284,7 +267,7 @@ export function buildYieldView(jobs: PrintJob[], printers: Printer[]): YieldView
     leakRateText: pct(board.leakRate),
     falseBlockRateText: pct(board.falseBlockRate),
     policyVersion: VERDICT_POLICY_VERSION,
-    excludedByVersionText: excludedNote(board.excludedByVersion),
+    excludedByVersionText: excludedNote(board.excludedByVersion, t),
   };
 }
 
@@ -295,11 +278,11 @@ export function buildYieldView(jobs: PrintJob[], printers: Printer[]): YieldView
  * Old policy and no policy are counted separately: one is a migration fact, the
  * other is a stamping hole, and a single blended number would hide the second.
  */
-function excludedNote(ex: YieldVersionExclusion): string | null {
+function excludedNote(ex: YieldVersionExclusion, t: YieldSentences): string | null {
   if (ex.count === 0) return null;
   const stamped = ex.count - ex.unstamped;
   const parts: string[] = [];
-  if (stamped > 0) parts.push(`${stamped} 条属旧策略未计入（${ex.versions.join('、')}）`);
-  if (ex.unstamped > 0) parts.push(`${ex.unstamped} 条未标注策略版本，未计入`);
-  return `另有 ${parts.join('；另有 ')}`;
+  if (stamped > 0) parts.push(t.exclusionStamped(stamped, ex.versions.join(' · ')));
+  if (ex.unstamped > 0) parts.push(t.exclusionUnstamped(ex.unstamped));
+  return t.exclusionPrefix(parts.join(t.separator));
 }

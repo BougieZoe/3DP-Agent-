@@ -5,13 +5,15 @@
  */
 
 import { useState } from 'react';
+import type { Language } from '@/lib/i18n';
+import { pickLang } from '@shared/i18n/content';
 import { OrderCard } from './OrderCard';
 import type { Order, OrderStatus } from '@shared/domain/order';
 import { ORDER_STATUS_FLOW, STATUS_COLORS } from '@shared/domain/order';
 
 interface OrderListViewProps {
   orders: Order[];
-  language: 'en' | 'ja' | 'zh';
+  language: Language;
   onSelectOrder?: (orderId: string) => void;
   onUpdateStatus?: (orderId: string, status: OrderStatus) => void;
   onDeleteOrder?: (orderId: string) => void;
@@ -48,7 +50,7 @@ const STATUS_LABELS: Record<OrderStatus, Record<string, string>> = {
 };
 
 export function OrderListView({ orders, language, onSelectOrder, onUpdateStatus, onDeleteOrder, onDeleteOrders }: OrderListViewProps) {
-  const t = L[language] || L.en;
+  const t = pickLang(L, language);
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import type { Language } from '@/lib/i18n';
+import { pickLang } from '@shared/i18n/content';
 import type { UnifiedAnalysis } from '@/analysis/types';
 import { MATERIALS, type Material } from '@shared/domain/material';
 import { resolveWasteFate, scoreBand, type ScoreBand, type WasteFate } from '@/analysis/loop';
@@ -7,7 +9,7 @@ import { loadLedger, clearLedger, ledgerTotals, ledgerToCSV, type LoopLedgerEntr
 interface Props {
   unifiedAnalysis: UnifiedAnalysis;
   material: Material;
-  language: 'en' | 'ja' | 'zh';
+  language: Language;
   onNavigate: (tab: 'geometry' | 'agents') => void;
 }
 
@@ -73,7 +75,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 }
 
 export function LoopTab({ unifiedAnalysis, material, language, onNavigate }: Props) {
-  const t = L[language] || L.en;
+  const t = pickLang(L, language);
   const loop = unifiedAnalysis.loop?.result;
   // Tab remounts on every open (conditional render in Home), so the
   // initializer snapshot is always fresh; useState only re-renders on Clear.
