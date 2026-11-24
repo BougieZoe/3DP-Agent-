@@ -38,7 +38,7 @@ export function generateStructuredReport(
   options: ReportGeneratorOptions = {},
 ): StructuredReport {
   const findings = extractFindings(analysis, options.language ?? 'en');
-  const recommendations = aggregateRecommendations(findings, analysis);
+  const recommendations = aggregateRecommendations(findings, analysis, options.language ?? 'en');
   const costBreakdown = calculateCostBreakdown(analysis);
 
   const metadata = buildMetadata(analysis, options);

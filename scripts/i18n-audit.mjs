@@ -97,6 +97,34 @@ function dataLines(src) {
       if (/^\s*\];/.test(lines[n])) break;
     }
   });
+  // 1c) 输入解析别名表：`*ALIASES` 常量对象里的中/日文是表头别名，用来匹配
+  //     外部 CSV/Excel 的表头（如 priceListImporter 的 COLUMN_ALIASES）。
+  //     把它们翻译成别的语言反而会让匹配失效，它们从不展示给用户。
+  //     只认以 ALIASES 结尾的具名常量表，避免下一次又变成泛豁免。
+  const skipBracedBlock = (startRe) => {
+    for (let i = 0; i < lines.length; i += 1) {
+      if (!startRe.test(lines[i])) continue;
+      let depth = 0;
+      let opened = false;
+      let j = i;
+      for (; j < lines.length; j += 1) {
+        for (const ch of lines[j]) {
+          if (ch === '{') {
+            depth += 1;
+            opened = true;
+          } else if (ch === '}') depth -= 1;
+        }
+        if (opened && depth <= 0) break;
+      }
+      const end = Math.min(j + 1, lines.length);
+      for (let n = i + 1; n <= end; n += 1) skip.add(n);
+      i = j;
+    }
+  };
+  skipBracedBlock(/^\s*(?:export\s+)?(?:const\s+)?[A-Z0-9_]*ALIASES\s*(?::[^=]+)?=\s*\{/);
+  // 1d) 语言自称表：LANGUAGE_NAMES / LANGUAGE_TAGS 必须写各语言自己的名字
+  //     （简体中文、日本語…），翻译它们本身就是错的。
+  skipBracedBlock(/^\s*(?:export\s+)?(?:const\s+)?LANGUAGE_(?:NAMES|TAGS)\s*(?::[^=]+)?=\s*\{/);
   // 2) block comments (multi-line JSDoc with Chinese prose)
   let inComment = false;
   lines.forEach((line, i) => {

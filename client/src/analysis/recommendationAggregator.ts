@@ -5,6 +5,7 @@
  * Produces a prioritized list of actionable recommendations.
  */
 
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type {
   UnifiedAnalysis,
   Finding,
@@ -20,11 +21,12 @@ import type {
 export function aggregateRecommendations(
   findings: Finding[],
   analysis: UnifiedAnalysis,
+  lang: ContentLang = 'en',
 ): Recommendation[] {
   const recommendations: Recommendation[] = [];
 
   // Generate recommendations from findings
-  recommendations.push(...generateFindingsRecommendations(findings));
+  recommendations.push(...generateFindingsRecommendations(findings, lang));
 
   // Generate recommendations from thermal analysis
   recommendations.push(...generateThermalRecommendations(analysis));
@@ -42,12 +44,12 @@ export function aggregateRecommendations(
 /**
  * Generate recommendations from critical findings.
  */
-function generateFindingsRecommendations(findings: Finding[]): Recommendation[] {
+function generateFindingsRecommendations(findings: Finding[], lang: ContentLang): Recommendation[] {
   const recommendations: Recommendation[] = [];
 
   for (const finding of findings) {
     if (finding.severity === 'critical') {
-      const rec = findingToRecommendation(finding);
+      const rec = findingToRecommendation(finding, lang);
       if (rec) recommendations.push(rec);
     }
   }
@@ -58,7 +60,7 @@ function generateFindingsRecommendations(findings: Finding[]): Recommendation[] 
 /**
  * Convert a finding to a recommendation.
  */
-function findingToRecommendation(finding: Finding): Recommendation | null {
+function findingToRecommendation(finding: Finding, lang: ContentLang): Recommendation | null {
   const categoryMap: Record<string, RecommendationCategory> = {
     geometry: 'design',
     printability: 'process',
@@ -81,26 +83,21 @@ function findingToRecommendation(finding: Finding): Recommendation | null {
     'thermal-001': 'easy',    // thermal gradient
   };
 
-  const impactMap: Record<string, string> = {
-    'geo-001': '修复后模型可正常打印',
-    'geo-002': '修复后表面质量改善',
-    'geo-003': '修复后模型完整性提高',
-    'geo-004': '修复后切片更可靠',
-    'geo-005': '增加壁厚后强度提高',
-    'print-001': '需要调整模型尺寸或选择更大打印机',
-    'print-002': '优化设计可减少支撑材料',
-    'fail-001': '调整打印方向或增加支撑可降低翘曲',
-    'fail-002': '优化设计可降低金属打印风险',
-    'thermal-001': '调整打印参数可减少热应力',
-  };
+  // Expected impact: per-finding copy when the catalogue has it, generic otherwise.
+  const impactKey = `rec.impact.${finding.id}`;
+  const impactText = translate(
+    CONTENT,
+    CONTENT[impactKey] ? impactKey : 'rec.impact.default',
+    lang,
+  );
 
   return {
     id: `rec-${finding.id}`,
     priority: finding.severity === 'critical' ? 'high' : 'medium',
     category: categoryMap[finding.category] ?? 'design',
-    title: `修复: ${finding.title}`,
+    title: translate(CONTENT, 'rec.fixPrefix', lang, { title: finding.title }),
     description: finding.description,
-    expectedImpact: impactMap[finding.id] ?? '改善打印质量',
+    expectedImpact: impactText,
     effort: effortMap[finding.id] ?? 'moderate',
     relatedFindings: [finding.id],
   };
