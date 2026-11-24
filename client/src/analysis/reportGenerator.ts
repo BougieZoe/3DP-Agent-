@@ -14,6 +14,7 @@ import type {
   ActionItem,
   Finding,
   Recommendation,
+  CostBreakdown,
 } from './types';
 import type { AgentRunSummary } from '../agents/types';
 import { extractFindings } from './findingExtractor';
@@ -80,7 +81,7 @@ function buildExecutiveSummary(
   agentSummary: AgentRunSummary,
   findings: Finding[],
   recommendations: Recommendation[],
-  costBreakdown: { totalCostUsd: number },
+  costBreakdown: CostBreakdown,
 ): ExecutiveSummary {
   const keyIssues = findings
     .filter((f) => f.severity === 'critical')
@@ -99,6 +100,9 @@ function buildExecutiveSummary(
     quickWins,
     estimatedCost: costBreakdown.totalCostUsd,
     estimatedPrintTime: printTime?.estimatedPrintTimeMinutes ?? 0,
+    // Surface the gap instead of letting a partial sum read as the whole bill.
+    costIsComplete: costBreakdown.isComplete ?? true,
+    unpricedCostKeys: costBreakdown.unpricedKeys ?? [],
   };
 }
 

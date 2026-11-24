@@ -481,6 +481,20 @@ export interface CostBreakdown {
   totalCostUsd: number;
   failureRiskCostUsd: number;
   expectedTotalCostUsd: number;
+  /**
+   * Ledger with per-line provenance. The numeric mirrors above are convenience
+   * values; anything listed in `unpricedKeys` was never priced and must not be
+   * displayed as a real $0.
+   */
+  ledger?: import('@shared/domain/costLedger').CostLedger;
+  /** Cost lines the analysis could not price (absent input, not zero cost). */
+  unpricedKeys?: import('@shared/domain/costLedger').CostLineKey[];
+  /** True when failure risk had no probability to multiply with. */
+  failureRiskUnpriced?: boolean;
+  /** True only when every cost line was priced. */
+  isComplete?: boolean;
+  /** Provenance per cost line, for UI badges. */
+  provenance?: Record<string, import('@shared/domain/costLedger').CostProvenance>;
 }
 
 export interface ConfidenceBreakdown {
@@ -508,6 +522,10 @@ export interface ExecutiveSummary {
   quickWins: Recommendation[];
   estimatedCost: number;
   estimatedPrintTime: number;
+  /** True when every cost line was priced. When false, `estimatedCost` is a floor. */
+  costIsComplete?: boolean;
+  /** Cost lines that could not be priced; their absence is not a $0 saving. */
+  unpricedCostKeys?: string[];
 }
 
 export interface StructuredReport {
