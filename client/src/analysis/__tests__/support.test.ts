@@ -19,6 +19,27 @@ describe('estimateSupportVolume', () => {
     expect(result.result.tallSupportRatio).toBe(0);
   });
 
+  it('refuses to guess supports for non-indexed geometry, and says so', () => {
+    // The overhang here is real (it yields supports when indexed), so if the
+    // non-indexed guard ever disappeared this case would report supports
+    // instead of zeros — that is what this test is pinning down. Production
+    // loaders always index, so the guard only serves direct callers; it must
+    // stay loud (confidence 0 + reason) rather than silently reporting "none".
+    const geo = createOverhangPlate(10, 10, OVERHANG_PLATE_ANGLE).toNonIndexed();
+    expect(geo.getIndex()).toBeNull();
+    const result = estimateSupportVolume(fromThreeBufferGeometry(geo));
+
+    expect(result.result.supportFaceCount).toBe(0);
+    expect(result.result.totalSupportVolumeMm3).toBe(0);
+    expect(result.result.estimatedSupportGrams).toBe(0);
+    expect(result.result.difficulty).toBe('none');
+    expect(result.result.supportRegions).toEqual([]);
+    // Zero confidence is what keeps this from being mistaken for a clean part:
+    // overallConfidence is a Math.min over modules, so 0 drags the run to 0.
+    expect(result.confidence).toBe(0);
+    expect(result.explanation.length).toBeGreaterThan(0);
+  });
+
   function ohPlate(): ReturnType<typeof fromThreeBufferGeometry> {
     return fromThreeBufferGeometry(createOverhangPlate(10, 10, OVERHANG_PLATE_ANGLE));
   }

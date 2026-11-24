@@ -17,6 +17,12 @@ export function estimateSupportVolume(
   const startTime = performance.now();
   const g = graph ?? buildGeometryGraph(model);
 
+  // Non-indexed geometry cannot be walked triangle-by-triangle, so there is no
+  // support estimate to give. Every production loader indexes what it returns
+  // (stlLoader/stlParser call setIndex; modelLoader synthesises OBJ/3MF indices),
+  // so this branch is unreachable from the UI — it only guards direct callers.
+  // It is deliberately loud: confidence 0 (Math.min propagates it into
+  // overallConfidence) plus a reason, never a silent "needs no supports".
   if (!g || g.indices.length === 0) {
     return moduleResult('support', 0.0, 0, {
       totalSupportVolumeMm3: 0, supportFaceCount: 0,
