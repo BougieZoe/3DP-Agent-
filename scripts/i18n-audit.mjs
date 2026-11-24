@@ -7,6 +7,12 @@
  *  1. HARDCODED  — CJK string literals sitting directly in UI/pipeline source.
  *     These ignore the language selector entirely: switching to German shows
  *     Chinese, which is exactly the bug this audit exists to catch.
+ *     Components that carry their own per-language tables (`{ zh: {…}, en: {…} }`)
+ *     are already selector-aware, so those entries are excluded here — counting
+ *     them used to make the number grow every time a translation was added.
+ *     Regex/keyword tables (ruleEngine, intentParser) are still counted: they
+ *     never reach the UI, but they are neither translated nor data — read them
+ *     as "language-specific logic", not as copy to migrate.
  *  2. MISSING    — catalogue keys that no longer carry a translation for a
  *     supported language. They fall back to English, so they are a translation
  *     backlog, not a correctness bug.
@@ -50,6 +56,54 @@ function walk(dir, out = []) {
   return out;
 }
 
+/**
+ * In-component translation tables are not hardcoded UI copy: a component that
+ * carries its own per-language map (`{ zh: {…}, en: {…} }`) is already
+ * selector-aware. Counting those entries made the number go UP every time a
+ * translation was added, which is the opposite of what this audit means.
+ * Returns 1-based line numbers that are translation data or block comments.
+ */
+const LANG_START = new RegExp(`^\\s*(${LANGS.join('|')})\\s*:\\s*[\\{[]`);
+
+function dataLines(src) {
+  const lines = src.split('\n');
+  const skip = new Set();
+  // 1) per-language tables: brace/bracket-matched ranges starting at `xx: {`
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!LANG_START.test(lines[i])) continue;
+    let depth = 0;
+    let opened = false;
+    let j = i;
+    for (; j < lines.length; j += 1) {
+      for (const ch of lines[j]) {
+        if (ch === '{' || ch === '[') {
+          depth += 1;
+          opened = true;
+        } else if (ch === '}' || ch === ']') depth -= 1;
+      }
+      if (opened && depth <= 0) break;
+    }
+    const end = Math.min(j + 1, lines.length);
+    for (let n = i + 1; n <= end; n += 1) skip.add(n);
+    i = j;
+  }
+  // 2) block comments (multi-line JSDoc with Chinese prose)
+  let inComment = false;
+  lines.forEach((line, i) => {
+    const t = line.trim();
+    if (inComment) {
+      skip.add(i + 1);
+      if (t.includes('*/')) inComment = false;
+    } else if (t.startsWith('/*') && !t.includes('*/')) {
+      inComment = true;
+      skip.add(i + 1);
+    }
+  });
+  return skip;
+}
+
+let dictSkipped = 0;
+
 /** Count CJK literals that actually reach the UI (skips comments and keys). */
 function scanHardcoded() {
   const files = [];
@@ -65,9 +119,14 @@ function scanHardcoded() {
       if (DATA_FILE.test(relative(ROOT, file))) continue;
       const src = readFileSync(file, 'utf8');
       const hits = [];
+      const skip = dataLines(src);
       src.split('\n').forEach((line, i) => {
         const trimmed = line.trim();
         if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+        if (skip.has(i + 1)) {
+          if (CJK.test(line)) dictSkipped += 1;
+          return;
+        }
         const literals = line.match(/(["'`>])([^"'`<>\n]*)(["'`<])/g) ?? [];
         for (const lit of literals) {
           if (CJK.test(lit)) hits.push({ line: i + 1, text: lit.trim().slice(0, 120) });
@@ -134,7 +193,7 @@ const catalog = scanCatalog();
 const hardcodedTotal = hardcoded.reduce((n, f) => n + f.count, 0);
 
 if (asJson) {
-  console.log(JSON.stringify({ hardcodedTotal, hardcoded, catalog }, null, 2));
+  console.log(JSON.stringify({ hardcodedTotal, dictSkipped, hardcoded, catalog }, null, 2));
   process.exit(0);
 }
 
@@ -151,6 +210,10 @@ console.log(`\nBaseline gaps (en/ja/zh, must be zero): ${catalog.baselineGaps.le
 if (catalog.baselineGaps.length) console.log('  ' + catalog.baselineGaps.slice(0, LIMIT).join(', '));
 
 console.log(`\nHardcoded CJK literals outside the catalogue: ${hardcodedTotal} in ${hardcoded.length} files`);
+if (dictSkipped) {
+  console.log(`  (${dictSkipped} CJK lines inside in-component translation tables / block`);
+  console.log('   comments were excluded — they are selector-aware data, not missed copy)');
+}
 for (const f of hardcoded.slice(0, LIMIT)) {
   console.log(`  ${String(f.count).padStart(4)}  ${f.file}`);
   if (process.env.I18N_AUDIT_VERBOSE) {

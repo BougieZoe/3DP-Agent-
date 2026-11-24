@@ -11,6 +11,7 @@
 
 import express, { Router, type Request, type Response } from 'express';
 import { analyzeStlBuffer, AnalyzeInputError, type AnalyzeResult } from './analyzeService';
+import { isContentLang } from '../shared/i18n/content';
 import { describeVerdictPolicy } from './verdictPolicy';
 
 /** 单次分析载荷上限。STL 是明文浮点，50MB 约等于数百万三角面。 */
@@ -78,7 +79,9 @@ export function createAnalyzeRouter(): Router {
 
     let result: AnalyzeResult;
     try {
-      result = analyzeStlBuffer(payload.bytes, { fileName: payload.fileName });
+      // `?lang=` 可选，缺省英文；用于让返回的 findings 文案跟随请求语言。
+      const language = isContentLang(req.query.lang) ? req.query.lang : 'en';
+      result = analyzeStlBuffer(payload.bytes, { fileName: payload.fileName, language });
     } catch (err) {
       if (err instanceof AnalyzeInputError) {
         res.status(422).json({ error: err.message });

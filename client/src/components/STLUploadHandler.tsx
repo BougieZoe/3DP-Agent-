@@ -337,6 +337,7 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
             fileHash,
             fileSizeBytes: file.size,
             units: effectiveUnits,
+            language,
             material: material ?? DEFAULT_MATERIAL,
             materialFamily,
             slicer: sliceMetadata

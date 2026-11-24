@@ -134,7 +134,7 @@ export function analyzeStlBuffer(
   const model = fromThreeBufferGeometry(geometry);
   const analysis = runAnalysisPipeline(model, options);
 
-  const findings = extractFindings(analysis).map<AnalyzeFinding>((f) => ({
+  const findings = extractFindings(analysis, options.language ?? 'en').map<AnalyzeFinding>((f) => ({
     id: f.id,
     category: f.category,
     severity: f.severity,

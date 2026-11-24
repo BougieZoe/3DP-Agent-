@@ -17,6 +17,7 @@ import type {
 } from './types';
 import type { AgentRunSummary } from '../agents/types';
 import { extractFindings } from './findingExtractor';
+import type { ContentLang } from '@shared/i18n/content';
 import { aggregateRecommendations } from './recommendationAggregator';
 import { calculateCostBreakdown } from './costCalculator';
 
@@ -24,6 +25,7 @@ interface ReportGeneratorOptions {
   material?: { name: string; family: string };
   printerProfile?: { name: string };
   analysisMode?: 'rules' | 'llm' | 'hybrid';
+  language?: ContentLang;
 }
 
 /**
@@ -34,7 +36,7 @@ export function generateStructuredReport(
   agentSummary: AgentRunSummary,
   options: ReportGeneratorOptions = {},
 ): StructuredReport {
-  const findings = extractFindings(analysis);
+  const findings = extractFindings(analysis, options.language ?? 'en');
   const recommendations = aggregateRecommendations(findings, analysis);
   const costBreakdown = calculateCostBreakdown(analysis);
 

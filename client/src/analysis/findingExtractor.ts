@@ -13,27 +13,31 @@ import type {
   Evidence,
   Confidence,
 } from './types';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 
 /**
  * Extract all findings from a UnifiedAnalysis.
  */
-export function extractFindings(analysis: UnifiedAnalysis): Finding[] {
+export function extractFindings(
+  analysis: UnifiedAnalysis,
+  language: ContentLang = 'en',
+): Finding[] {
   const findings: Finding[] = [];
 
   // Geometry findings
-  extractGeometryFindings(analysis, findings);
+  extractGeometryFindings(analysis, findings, language);
 
   // Printability findings
-  extractPrintabilityFindings(analysis, findings);
+  extractPrintabilityFindings(analysis, findings, language);
 
   // Failure risk findings
-  extractFailureFindings(analysis, findings);
+  extractFailureFindings(analysis, findings, language);
 
   // Thermal findings
-  extractThermalFindings(analysis, findings);
+  extractThermalFindings(analysis, findings, language);
 
   // Cost findings
-  extractCostFindings(analysis, findings);
+  extractCostFindings(analysis, findings, language);
 
   return findings;
 }
@@ -41,7 +45,11 @@ export function extractFindings(analysis: UnifiedAnalysis): Finding[] {
 /**
  * Extract geometry-related findings.
  */
-function extractGeometryFindings(analysis: UnifiedAnalysis, findings: Finding[]): void {
+function extractGeometryFindings(
+  analysis: UnifiedAnalysis,
+  findings: Finding[],
+  language: ContentLang,
+): void {
   const validation = analysis.validation?.result;
   const topology = analysis.topology?.result;
   const metrics = analysis.metrics?.result;
@@ -54,25 +62,25 @@ function extractGeometryFindings(analysis: UnifiedAnalysis, findings: Finding[])
       id: 'geo-001',
       category: 'geometry',
       severity: 'critical',
-      title: '模型不防水',
-      description: `发现 ${validation.holeCount} 个孔洞，模型无法正常打印`,
+      title: translate(CONTENT, 'finding.geo001.title', language),
+      description: translate(CONTENT, 'finding.geo001.desc', language, { count: validation.holeCount }),
       evidence: [
         {
           type: 'metric',
-          label: '孔洞数量',
+          label: translate(CONTENT, 'finding.geo001.evHoles', language),
           value: validation.holeCount,
           unit: '',
           status: 'fail',
         },
         {
           type: 'metric',
-          label: '边界边数量',
+          label: translate(CONTENT, 'finding.geo001.evBoundary', language),
           value: validation.boundaryEdgeCount,
           unit: '',
           status: 'fail',
         },
       ],
-      impact: '打印会失败，需要修复孔洞',
+      impact: translate(CONTENT, 'finding.geo001.impact', language),
       moduleSource: 'validation',
       confidence: analysis.validation?.confidence ?? 0,
     });
@@ -85,26 +93,26 @@ function extractGeometryFindings(analysis: UnifiedAnalysis, findings: Finding[])
       id: 'geo-002',
       category: 'geometry',
       severity,
-      title: '法线方向错误',
-      description: `${validation.flippedNormalFaceCount} 个面的法线方向朝内（${(validation.flippedNormalRatio * 100).toFixed(1)}%）`,
+      title: translate(CONTENT, 'finding.geo002.title', language),
+      description: translate(CONTENT, 'finding.geo002.desc', language, { count: validation.flippedNormalFaceCount, pct: (validation.flippedNormalRatio * 100).toFixed(1) }),
       evidence: [
         {
           type: 'metric',
-          label: '错误法线面数',
+          label: translate(CONTENT, 'finding.geo002.evFlipped', language),
           value: validation.flippedNormalFaceCount,
           unit: '',
           status: severity === 'critical' ? 'fail' : 'warning',
         },
         {
           type: 'metric',
-          label: '错误比例',
+          label: translate(CONTENT, 'finding.geo002.evRatio', language),
           value: (validation.flippedNormalRatio * 100).toFixed(1),
           unit: '%',
           threshold: 10,
           status: severity === 'critical' ? 'fail' : 'warning',
         },
       ],
-      impact: '可能导致打印方向错误或表面缺陷',
+      impact: translate(CONTENT, 'finding.geo002.impact', language),
       moduleSource: 'validation',
       confidence: analysis.validation?.confidence ?? 0,
     });
@@ -116,18 +124,18 @@ function extractGeometryFindings(analysis: UnifiedAnalysis, findings: Finding[])
       id: 'geo-003',
       category: 'geometry',
       severity: 'warning',
-      title: '退化面',
-      description: `发现 ${validation.degenerateFaceCount} 个退化面（面积接近零）`,
+      title: translate(CONTENT, 'finding.geo003.title', language),
+      description: translate(CONTENT, 'finding.geo003.desc', language, { count: validation.degenerateFaceCount }),
       evidence: [
         {
           type: 'metric',
-          label: '退化面数量',
+          label: translate(CONTENT, 'finding.geo003.evDegenerate', language),
           value: validation.degenerateFaceCount,
           unit: '',
           status: 'warning',
         },
       ],
-      impact: '可能影响打印质量和模型完整性',
+      impact: translate(CONTENT, 'finding.geo003.impact', language),
       moduleSource: 'validation',
       confidence: analysis.validation?.confidence ?? 0,
     });
@@ -139,18 +147,18 @@ function extractGeometryFindings(analysis: UnifiedAnalysis, findings: Finding[])
       id: 'geo-004',
       category: 'geometry',
       severity: 'warning',
-      title: '非流形边',
-      description: `发现 ${topology.nonManifoldEdgeCount} 条非流形边`,
+      title: translate(CONTENT, 'finding.geo004.title', language),
+      description: translate(CONTENT, 'finding.geo004.desc', language, { count: topology.nonManifoldEdgeCount }),
       evidence: [
         {
           type: 'metric',
-          label: '非流形边数量',
+          label: translate(CONTENT, 'finding.geo004.evNonManifold', language),
           value: topology.nonManifoldEdgeCount,
           unit: '',
           status: 'warning',
         },
       ],
-      impact: '可能导致切片错误或打印失败',
+      impact: translate(CONTENT, 'finding.geo004.impact', language),
       moduleSource: 'topology',
       confidence: analysis.topology?.confidence ?? 0,
     });
@@ -165,12 +173,12 @@ function extractGeometryFindings(analysis: UnifiedAnalysis, findings: Finding[])
         id: 'geo-005',
         category: 'geometry',
         severity,
-        title: '壁厚过薄',
-        description: `最小壁厚 ${metrics.minWallThicknessMm.toFixed(2)}mm 低于推荐值 ${THIN_WALL_THRESHOLD}mm`,
+        title: translate(CONTENT, 'finding.geo005.title', language),
+        description: translate(CONTENT, 'finding.geo005.desc', language, { wall: metrics.minWallThicknessMm.toFixed(2), threshold: THIN_WALL_THRESHOLD }),
         evidence: [
           {
             type: 'threshold',
-            label: '最小壁厚',
+            label: translate(CONTENT, 'finding.geo005.evMinWall', language),
             value: metrics.minWallThicknessMm,
             unit: 'mm',
             threshold: THIN_WALL_THRESHOLD,
@@ -178,13 +186,13 @@ function extractGeometryFindings(analysis: UnifiedAnalysis, findings: Finding[])
           },
           {
             type: 'metric',
-            label: '平均壁厚',
+            label: translate(CONTENT, 'finding.geo005.evAvgWall', language),
             value: metrics.avgWallThicknessMm?.toFixed(2) ?? 'N/A',
             unit: 'mm',
             status: 'pass',
           },
         ],
-        impact: '可能导致打印失败或强度不足',
+        impact: translate(CONTENT, 'finding.geo005.impact', language),
         moduleSource: 'metrics',
         confidence: analysis.metrics?.confidence ?? 0,
       });
@@ -195,7 +203,11 @@ function extractGeometryFindings(analysis: UnifiedAnalysis, findings: Finding[])
 /**
  * Extract printability-related findings.
  */
-function extractPrintabilityFindings(analysis: UnifiedAnalysis, findings: Finding[]): void {
+function extractPrintabilityFindings(
+  analysis: UnifiedAnalysis,
+  findings: Finding[],
+  language: ContentLang,
+): void {
   const bedFit = analysis.bedFit?.result;
   const support = analysis.support?.result;
 
@@ -205,25 +217,25 @@ function extractPrintabilityFindings(analysis: UnifiedAnalysis, findings: Findin
       id: 'print-001',
       category: 'printability',
       severity: 'critical',
-      title: '模型超出打印床',
-      description: `模型尺寸 ${bedFit.modelDimensionsMm.x.toFixed(1)} × ${bedFit.modelDimensionsMm.y.toFixed(1)} × ${bedFit.modelDimensionsMm.z.toFixed(1)}mm 超出 ${bedFit.printerProfile.name} 的打印床`,
+      title: translate(CONTENT, 'finding.print001.title', language),
+      description: translate(CONTENT, 'finding.print001.desc', language, { x: bedFit.modelDimensionsMm.x.toFixed(1), y: bedFit.modelDimensionsMm.y.toFixed(1), z: bedFit.modelDimensionsMm.z.toFixed(1), printer: bedFit.printerProfile.name }),
       evidence: [
         {
           type: 'metric',
-          label: '模型宽度',
+          label: translate(CONTENT, 'finding.print001.evModelWidth', language),
           value: bedFit.modelDimensionsMm.x,
           unit: 'mm',
           status: 'fail',
         },
         {
           type: 'metric',
-          label: '打印床宽度',
+          label: translate(CONTENT, 'finding.print001.evBedWidth', language),
           value: bedFit.printerProfile.widthMm,
           unit: 'mm',
           status: 'pass',
         },
       ],
-      impact: '无法在选定打印机上打印',
+      impact: translate(CONTENT, 'finding.print001.impact', language),
       moduleSource: 'bedFit',
       confidence: analysis.bedFit?.confidence ?? 0,
     });
@@ -236,25 +248,25 @@ function extractPrintabilityFindings(analysis: UnifiedAnalysis, findings: Findin
         id: 'print-002',
         category: 'printability',
         severity: 'warning',
-        title: '支撑结构复杂',
-        description: `支撑难度：${support.difficulty}，预计需要 ${support.estimatedSupportGrams.toFixed(1)}g 支撑材料`,
+        title: translate(CONTENT, 'finding.print002.title', language),
+        description: translate(CONTENT, 'finding.print002.desc', language, { difficulty: support.difficulty, grams: support.estimatedSupportGrams.toFixed(1) }),
         evidence: [
           {
             type: 'metric',
-            label: '支撑难度',
+            label: translate(CONTENT, 'finding.print002.evDifficulty', language),
             value: support.difficulty,
             unit: '',
             status: 'warning',
           },
           {
             type: 'metric',
-            label: '支撑材料重量',
+            label: translate(CONTENT, 'finding.print002.evWeight', language),
             value: support.estimatedSupportGrams,
             unit: 'g',
             status: 'warning',
           },
         ],
-        impact: '增加打印时间和后处理工作量',
+        impact: translate(CONTENT, 'finding.print002.impact', language),
         moduleSource: 'support',
         confidence: analysis.support?.confidence ?? 0,
       });
@@ -265,7 +277,11 @@ function extractPrintabilityFindings(analysis: UnifiedAnalysis, findings: Findin
 /**
  * Extract failure risk findings.
  */
-function extractFailureFindings(analysis: UnifiedAnalysis, findings: Finding[]): void {
+function extractFailureFindings(
+  analysis: UnifiedAnalysis,
+  findings: Finding[],
+  language: ContentLang,
+): void {
   const thermal = analysis.thermal?.result;
   const metal = analysis.metal?.result;
 
@@ -276,12 +292,12 @@ function extractFailureFindings(analysis: UnifiedAnalysis, findings: Finding[]):
         id: 'fail-001',
         category: 'failure',
         severity: 'critical',
-        title: '翘曲风险高',
-        description: `翘曲风险评分 ${(thermal.warpingRiskScore * 100).toFixed(0)}%，存在 ${thermal.warpingHotspots.length} 个热点`,
+        title: translate(CONTENT, 'finding.fail001.title', language),
+        description: translate(CONTENT, 'finding.fail001.desc', language, { score: (thermal.warpingRiskScore * 100).toFixed(0), count: thermal.warpingHotspots.length }),
         evidence: [
           {
             type: 'threshold',
-            label: '翘曲风险',
+            label: translate(CONTENT, 'finding.fail001.evRisk', language),
             value: (thermal.warpingRiskScore * 100).toFixed(0),
             unit: '%',
             threshold: 70,
@@ -289,13 +305,13 @@ function extractFailureFindings(analysis: UnifiedAnalysis, findings: Finding[]):
           },
           {
             type: 'metric',
-            label: '热点数量',
+            label: translate(CONTENT, 'finding.fail001.evHotspots', language),
             value: thermal.warpingHotspots.length,
             unit: '',
             status: 'warning',
           },
         ],
-        impact: '打印件可能翘曲变形',
+        impact: translate(CONTENT, 'finding.fail001.impact', language),
         moduleSource: 'thermal',
         confidence: analysis.thermal?.confidence ?? 0,
       });
@@ -309,19 +325,19 @@ function extractFailureFindings(analysis: UnifiedAnalysis, findings: Finding[]):
         id: 'fail-002',
         category: 'failure',
         severity: 'critical',
-        title: '金属打印风险高',
-        description: `金属打印整体风险评分 ${(metal.overallRiskScore * 100).toFixed(0)}%`,
+        title: translate(CONTENT, 'finding.fail002.title', language),
+        description: translate(CONTENT, 'finding.fail002.desc', language, { score: (metal.overallRiskScore * 100).toFixed(0) }),
         evidence: [
           {
             type: 'threshold',
-            label: '整体风险',
+            label: translate(CONTENT, 'finding.fail002.evRisk', language),
             value: (metal.overallRiskScore * 100).toFixed(0),
             unit: '%',
             threshold: 70,
             status: 'fail',
           },
         ],
-        impact: '可能导致打印失败或零件失效',
+        impact: translate(CONTENT, 'finding.fail002.impact', language),
         moduleSource: 'metal',
         confidence: analysis.metal?.confidence ?? 0,
       });
@@ -332,7 +348,11 @@ function extractFailureFindings(analysis: UnifiedAnalysis, findings: Finding[]):
 /**
  * Extract thermal-related findings.
  */
-function extractThermalFindings(analysis: UnifiedAnalysis, findings: Finding[]): void {
+function extractThermalFindings(
+  analysis: UnifiedAnalysis,
+  findings: Finding[],
+  language: ContentLang,
+): void {
   const thermal = analysis.thermal?.result;
   if (!thermal) return;
 
@@ -342,19 +362,19 @@ function extractThermalFindings(analysis: UnifiedAnalysis, findings: Finding[]):
       id: 'thermal-001',
       category: 'thermal',
       severity: 'warning',
-      title: '温度梯度大',
-      description: `最大温度梯度 ${thermal.maxThermalGradientCPerMm.toFixed(1)}°C/mm`,
+      title: translate(CONTENT, 'finding.thermal001.title', language),
+      description: translate(CONTENT, 'finding.thermal001.desc', language, { gradient: thermal.maxThermalGradientCPerMm.toFixed(1) }),
       evidence: [
         {
           type: 'threshold',
-          label: '温度梯度',
+          label: translate(CONTENT, 'finding.thermal001.evGradient', language),
           value: thermal.maxThermalGradientCPerMm,
           unit: '°C/mm',
           threshold: 10,
           status: 'warning',
         },
       ],
-      impact: '可能导致热应力和翘曲',
+      impact: translate(CONTENT, 'finding.thermal001.impact', language),
       moduleSource: 'thermal',
       confidence: analysis.thermal?.confidence ?? 0,
     });
@@ -364,7 +384,11 @@ function extractThermalFindings(analysis: UnifiedAnalysis, findings: Finding[]):
 /**
  * Extract cost-related findings.
  */
-function extractCostFindings(analysis: UnifiedAnalysis, findings: Finding[]): void {
+function extractCostFindings(
+  analysis: UnifiedAnalysis,
+  findings: Finding[],
+  language: ContentLang,
+): void {
   const printTime = analysis.printTime?.result;
   if (!printTime) return;
 
@@ -374,25 +398,25 @@ function extractCostFindings(analysis: UnifiedAnalysis, findings: Finding[]): vo
       id: 'cost-001',
       category: 'cost',
       severity: 'info',
-      title: '打印成本较高',
-      description: `预计总成本 $${printTime.totalCostUsd.toFixed(2)}`,
+      title: translate(CONTENT, 'finding.cost001.title', language),
+      description: translate(CONTENT, 'finding.cost001.desc', language, { cost: printTime.totalCostUsd.toFixed(2) }),
       evidence: [
         {
           type: 'metric',
-          label: '材料成本',
+          label: translate(CONTENT, 'finding.cost001.evMaterial', language),
           value: printTime.materialCostUsd,
           unit: '$',
           status: 'pass',
         },
         {
           type: 'metric',
-          label: '打印时间',
+          label: translate(CONTENT, 'finding.cost001.evTime', language),
           value: printTime.estimatedPrintTimeHours.toFixed(1),
-          unit: '小时',
+          unit: translate(CONTENT, 'unit.hours', language),
           status: 'pass',
         },
       ],
-      impact: '考虑优化设计以降低成本',
+      impact: translate(CONTENT, 'finding.cost001.impact', language),
       moduleSource: 'printTime',
       confidence: analysis.printTime?.confidence ?? 0,
     });
