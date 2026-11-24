@@ -12,8 +12,16 @@
  * 阈值全部集中在此，前端与服务端引用同一份 POLICY，避免两套口径漂移。
  */
 
-/** 每次改阈值必须同时升版本号，报告与决策记录会引用它。 */
-export const VERDICT_POLICY_VERSION = 'wall-2026-11-23a';
+/**
+ * 每次改阈值必须同时升版本号，报告与决策记录会引用它。
+ *
+ * 版本字面量的唯一真源在 shared/domain/verdictPolicy.ts：若此处再写一份，
+ * 一旦两处拼写漂移，pin 与记录的版本对不上而不报错，看板会静默变空。
+ * 这里只做转出，保持既有 import 路径不变。
+ */
+import { VERDICT_POLICY_VERSION } from '../shared/domain/verdictPolicy';
+
+export { VERDICT_POLICY_VERSION };
 
 export interface VerdictPolicy {
   version: string;

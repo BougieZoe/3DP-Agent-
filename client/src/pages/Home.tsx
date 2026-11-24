@@ -116,6 +116,7 @@ const PrintDashboard = lazy(() => import('@/components/PrintDashboard').then(m =
 const AgentExecutionGraph = lazy(() => import('@/components/AgentExecutionGraph').then(m => ({ default: m.AgentExecutionGraph })));
 const VoiceControl = lazy(() => import('@/components/VoiceControl').then(m => ({ default: m.VoiceControl })));
 const ManufacturingTimeline = lazy(() => import('@/components/causality/ManufacturingTimeline').then(m => ({ default: m.ManufacturingTimeline })));
+const YieldPanel = lazy(() => import('@/components/YieldPanel').then(m => ({ default: m.YieldPanel })));
 
 // Lazy-loaded agents and causality engines
 const loadAgents = () => import('@/agents');
@@ -476,6 +477,7 @@ export default function Home() {
   const deepAnalysisSeq = useRef(0);
   // New feature states
   const [showPrintDashboard, setShowPrintDashboard] = useState(false);
+  const [showYieldPanel, setShowYieldPanel] = useState(false);
   const [showAgentGraph, setShowAgentGraph] = useState(false);
   const [showWebGPU, setShowWebGPU] = useState(false);
 
@@ -1737,6 +1739,15 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                 </svg>
               </button>
+              <button
+                onClick={() => setShowYieldPanel(true)}
+                className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center hover:bg-emerald-500/30 transition-colors"
+                title="Floor Yield"
+              >
+                <svg className="w-3.5 h-3.5 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </button>
             </div>
           )}
         </div>
@@ -2795,6 +2806,10 @@ export default function Home() {
       <PrintDashboard
         isOpen={showPrintDashboard}
         onClose={() => setShowPrintDashboard(false)}
+      />
+      <YieldPanel
+        isOpen={showYieldPanel}
+        onClose={() => setShowYieldPanel(false)}
       />
       <AgentExecutionGraph
         isVisible={showAgentGraph}

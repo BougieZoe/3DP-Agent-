@@ -1,4 +1,4 @@
-// client/src/lib/loopCalibration.ts
+// client/src/lib/loopWeightFit.ts
 //
 // Calibration hook for the LOOP first-time-right score.
 //

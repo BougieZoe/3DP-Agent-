@@ -12,7 +12,7 @@ import { parseToolpath, type Toolpath } from '@/lib/toolpath';
 import { getCachedAnalysis, setCachedAnalysis, hashFileBytes, cacheKeyFromParts } from '@/lib/analysisCache';
 import { recordLoopPrint } from '@/lib/loopLedger';
 import { saveAnalysisRun } from '@/lib/analysisRuns';
-import { logLoopPrediction } from '@/lib/loopCalibration';
+import { logLoopPrediction } from '@/lib/loopWeightFit';
 import { scoreBand } from '@/analysis/loop';
 import { notifyAnalysisComplete } from '@/lib/notifications';
 import { saveProject } from '@/lib/projectStore';
@@ -272,7 +272,7 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
             monthsCompostMax: loopResult.eol.monthsCompost?.[1] ?? null,
           });
           // Calibration trail: prediction + geometry features for future
-          // weight fitting against printFeedback outcomes (see loopCalibration).
+          // weight fitting against printFeedback outcomes (see loopWeightFit).
           const mRes = unifiedAnalysis.metrics?.result;
           logLoopPrediction({
             fileHash,
