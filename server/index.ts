@@ -7,6 +7,7 @@ import { createCadBridgeRouter } from "./cadBridge";
 import { createMeshProcessRouter } from "./meshProcess";
 import { createMeshThickenRouter } from "./meshThicken";
 import { createSlicerRouter } from "./slicerRouter";
+import { createAnalyzeRouter } from "./analyzeRouter";
 import { createStepRouter } from "./stepRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
@@ -247,6 +248,11 @@ export function createApp() {
       context: 'server',
     });
   }
+
+  // -------------------------------------------------------------------------
+  // Verdict service (/api/analyze) — 纯进程内判定：无外部二进制、无沙箱、
+  // 无宿主代码执行。因此不挂在 bridgesEnabled 分支内：服务在，判定就在。
+  app.use("/api/analyze", rateLimit, createAnalyzeRouter());
 
   // -------------------------------------------------------------------------
   // LLM relay (/api/llm) — the CORS fix for BYOK providers.
