@@ -87,9 +87,9 @@ function dataLines(src) {
     for (let n = i + 1; n <= end; n += 1) skip.add(n);
     i = j;
   }
-  // 1b) 语言/术语检测词表：expertTerms、casualPatterns 一类数组里的多语关键词
+  // 1b) 语言/语气检测词表：expertTerms、casualPatterns 数组里的多语关键词
   //     是给 detectLanguage / detectTone 做匹配用的，不是要展示给用户的文案。
-  const DETECT_START = /^\s*(?:const\s+)?(?:expertTerms|casualPatterns|terms|stopwords)\s*(?::[^=]+)?=\s*\[/;
+  const DETECT_START = /^\s*(?:const\s+)?(?:expertTerms|casualPatterns)\s*(?::[^=]+)?=\s*\[/;
   lines.forEach((line, i) => {
     if (!DETECT_START.test(line)) return;
     for (let n = i; n < lines.length; n += 1) {
