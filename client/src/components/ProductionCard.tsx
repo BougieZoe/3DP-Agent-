@@ -33,7 +33,7 @@ export function ProductionCard({ analysis, material, language }: {
         </div>
         <div className="flex justify-between text-xs">
           <span className="text-muted-foreground/60">{t('prodPerPartCost')}</span>
-          <span className="font-mono text-foreground/90">${prod.perPartCostUsd.toFixed(2)}</span>
+          <span className="font-mono text-foreground/90">{prod.perPartCostIsLowerBound ? '≥' : ''}${prod.perPartCostUsd.toFixed(2)}</span>
         </div>
       </div>
       <div className="text-[11px] font-mono text-foreground/80 mt-2">{verdictLabel}</div>

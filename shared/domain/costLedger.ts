@@ -28,6 +28,11 @@ export interface CostLine {
   label: string;
   /** `null` means unpriced — never 0, never silently dropped. */
   amountUsd: number | null;
+  /**
+   * Unrounded amount behind `amountUsd`. A $0.002 support line rounds to 0.00,
+   * and "0.00" reads as free — consumers use this to render `<$0.01` instead.
+   */
+  rawAmountUsd: number | null;
   provenance: CostProvenance;
   /** Why the number exists, or why it does not. Always populated. */
   basis: string;
@@ -89,7 +94,7 @@ function line(
   provenance: CostProvenance,
   basis: string,
 ): CostLine {
-  return { key, label, amountUsd: amountUsd === null ? null : round2(amountUsd), provenance, basis };
+  return { key, label, amountUsd: amountUsd === null ? null : round2(amountUsd), rawAmountUsd: amountUsd, provenance, basis };
 }
 
 export function buildCostLedger(input: CostLedgerInput): CostLedger {

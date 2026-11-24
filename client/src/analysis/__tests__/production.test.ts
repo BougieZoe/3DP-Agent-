@@ -52,4 +52,20 @@ describe('productionFromUnified', () => {
     expect(p.partsPerBatch).toBe(1);
     expect(p.score).toBeLessThan(70);
   });
+
+  it('per-part cost comes from the ledger, not from printTime.totalCostUsd', () => {
+    // Machine cost is derived per line; support/post stay unpriced without inputs.
+    const p = productionFromUnified(fakeUnified({ x: 80, y: 80, z: 80 }, 25, 2), FDM)!;
+    expect(p.perPartCostUsd).toBe(25);
+    expect(p.unpricedCostKeys).toContain('postProcessing');
+    expect(p.perPartCostIsLowerBound).toBe(true); // post-processing has no price
+    expect(p.note).toContain('≥');
+  });
+
+  it('per-part cost never collapses to $0 for a priced part', () => {
+    const u = fakeUnified({ x: 80, y: 80, z: 80 }, 25, 2);
+    const p = productionFromUnified(u, FDM)!;
+    // No support material and no labour inputs → still a priced floor, not "free".
+    expect(p.perPartCostUsd).toBeGreaterThan(0);
+  });
 });

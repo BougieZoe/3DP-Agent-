@@ -17,6 +17,8 @@
 
 import type { UnifiedAnalysis } from './types';
 import type { Material } from '@shared/domain/material';
+import { calculateCostBreakdown } from './costCalculator';
+import { getCostLine, type CostLineKey } from '@shared/domain/costLedger';
 
 /** Representative build volume (mm) per technology. Concrete is single-piece construction. */
 const BUILD_VOLUME_MM: Record<string, [number, number, number] | null> = {
@@ -44,6 +46,13 @@ export interface ProductionSuitability {
   partsPerBatch: number;
   /** Estimated cost per part (powder bed amortizes machine time). */
   perPartCostUsd: number;
+  /**
+   * True when at least one ledger line could not be priced, so `perPartCostUsd`
+   * is a floor rather than a total. Consumers must render it as `≥ $x`.
+   */
+  perPartCostIsLowerBound: boolean;
+  /** Ledger lines that have no price, and therefore no contribution. */
+  unpricedCostKeys: CostLineKey[];
   verdict: 'production' | 'small-batch' | 'prototype';
   /** One-line human verdict. */
   note: string;
@@ -68,12 +77,27 @@ export function productionFromUnified(unified: UnifiedAnalysis, material: Materi
   }
 
   // Per-part cost: batch processes build N in one run (machine time shared);
-  // serial processes pay per part.
-  const machineCost = Math.max(0, pt.totalCostUsd - (pt.materialCostUsd ?? 0));
+  // serial processes pay per part. Amounts come from the shared cost ledger so a
+  // missing line stays visible as a gap instead of collapsing into $0.
+  const ledger = calculateCostBreakdown(unified).ledger;
+  // No ledger means no defensible cost at all — refuse rather than invent one.
+  if (!ledger) return null;
+  const lineUsd = (key: CostLineKey): number | null => getCostLine(ledger, key)?.amountUsd ?? null;
+
+  const materialUsd = lineUsd('material');
+  const machineUsd = lineUsd('machine');
+  const supportUsd = lineUsd('support');
+  const postUsd = lineUsd('postProcessing');
+
   const isBatch = BATCH_PROCESSES.has(material.technology);
-  const perPartCostUsd = isBatch
-    ? (pt.materialCostUsd ?? 0) + machineCost / Math.max(1, partsPerBatch)
-    : pt.totalCostUsd;
+  // Only machine time is amortized across a powder-bed batch; material, support
+  // and post-processing are consumed per part.
+  const machineShare = machineUsd === null ? 0 : isBatch ? machineUsd / Math.max(1, partsPerBatch) : machineUsd;
+  const pricedSum = (materialUsd ?? 0) + machineShare + (supportUsd ?? 0) + (postUsd ?? 0);
+
+  const unpricedCostKeys = ledger.lines.filter((l) => l.amountUsd === null).map((l) => l.key);
+  const perPartCostIsLowerBound = unpricedCostKeys.length > 0;
+  const perPartCostUsd = Math.round(pricedSum * 100) / 100;
 
   let score = PROCESS_BASE[material.technology] ?? 50;
   if (partsPerBatch <= 1) score -= 25;
@@ -85,9 +109,11 @@ export function productionFromUnified(unified: UnifiedAnalysis, material: Materi
 
   const verdict: ProductionSuitability['verdict'] = score >= 70 ? 'production' : score >= 40 ? 'small-batch' : 'prototype';
 
+  const costText = `${perPartCostIsLowerBound ? '≥' : ''}$${perPartCostUsd.toFixed(2)}/part`;
+  const gapText = perPartCostIsLowerBound ? ` (unpriced: ${unpricedCostKeys.join(', ')})` : '';
   const note = build === null
     ? 'Single-piece construction process — batch production does not apply.'
-    : `${material.technology.toUpperCase()}: ~${partsPerBatch} parts per build, ~$${perPartCostUsd.toFixed(2)}/part — ${verdict}.`;
+    : `${material.technology.toUpperCase()}: ~${partsPerBatch} parts per build, ${costText}${gapText} — ${verdict}.`;
 
-  return { score, partsPerBatch, perPartCostUsd, verdict, note };
+  return { score, partsPerBatch, perPartCostUsd, perPartCostIsLowerBound, unpricedCostKeys, verdict, note };
 }

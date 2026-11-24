@@ -191,4 +191,14 @@ describe('costLedger — accessor contract', () => {
     }
     expect(ledger.pricedSubtotalUsd).toBe(Math.round(ledger.pricedSubtotalUsd * 100) / 100);
   });
+
+  it('keeps sub-cent amounts distinguishable from a true zero', () => {
+    // 0.08 g of support at the derived material rate is ~$0.002: it rounds to
+    // 0.00, which used to read as "supports are free" in the UI.
+    const ledger = buildCostLedger({ materialCostUsd: 0.5, materialWeightGrams: 20, supportGrams: 0.0824 });
+    const support = getCostLine(ledger, 'support');
+    expect(support.amountUsd).toBe(0);
+    expect(support.rawAmountUsd).toBeGreaterThan(0);
+    expect(support.rawAmountUsd).toBeLessThan(0.01);
+  });
 });

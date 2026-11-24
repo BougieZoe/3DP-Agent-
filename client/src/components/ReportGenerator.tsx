@@ -600,7 +600,7 @@ function drawProductionSection(doc: JsPDF, prod: ProductionSuitability, lang: La
         ? translate(CONTENT, 'pdf.prodSmallBatch', lang)
         : translate(CONTENT, 'pdf.prodPrototype', lang);
   y = drawDataRow(doc, translate(CONTENT, 'pdf.prodPerBatch', lang), `${prod.partsPerBatch}`, y);
-  y = drawDataRow(doc, translate(CONTENT, 'pdf.prodPerPartCost', lang), `$${prod.perPartCostUsd.toFixed(2)}`, y);
+  y = drawDataRow(doc, translate(CONTENT, 'pdf.prodPerPartCost', lang), `${prod.perPartCostIsLowerBound ? '≥' : ''}$${prod.perPartCostUsd.toFixed(2)}`, y);
   y = drawDataRow(doc, translate(CONTENT, 'pdf.prodVerdict', lang), `${prod.score}/100 · ${verdictLabel}`, y);
   y += 2;
   const advisory = translate(CONTENT, 'pdf.prodAdvisory', lang);

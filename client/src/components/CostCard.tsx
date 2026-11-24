@@ -100,6 +100,14 @@ export function CostCard({ unifiedAnalysis, material, language }: Props) {
 
   if (!data) return null;
 
+  // A $0.002 support line rounds to "$0.00", which reads as free. Sub-cent lines
+  // are shown as "<$0.01" so a priced-but-tiny cost never looks like no cost.
+  const formatLineUsd = (l: { amountUsd: number | null; rawAmountUsd?: number | null }): string => {
+    if (l.amountUsd === null) return '—';
+    if (l.amountUsd === 0 && (l.rawAmountUsd ?? 0) > 0) return '<$0.01';
+    return `$${l.amountUsd.toFixed(2)}`;
+  };
+
   const { ledger } = data;
   const subtotal = ledger.pricedSubtotalUsd;
   const complete = ledger.isComplete;
@@ -142,7 +150,7 @@ export function CostCard({ unifiedAnalysis, material, language }: Props) {
           <div key={l.key} className="flex justify-between" title={l.basis}>
             <span className="text-muted-foreground/50">{t.labels[l.key]}</span>
             <span className={l.amountUsd === null ? 'text-muted-foreground/25' : 'text-muted-foreground/70'}>
-              {l.amountUsd === null ? '—' : `$${l.amountUsd.toFixed(2)}`}
+              {formatLineUsd(l)}
             </span>
           </div>
         ))}
