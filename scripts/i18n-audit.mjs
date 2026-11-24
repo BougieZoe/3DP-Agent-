@@ -87,6 +87,16 @@ function dataLines(src) {
     for (let n = i + 1; n <= end; n += 1) skip.add(n);
     i = j;
   }
+  // 1b) 语言/术语检测词表：expertTerms、casualPatterns 一类数组里的多语关键词
+  //     是给 detectLanguage / detectTone 做匹配用的，不是要展示给用户的文案。
+  const DETECT_START = /^\s*(?:const\s+)?(?:expertTerms|casualPatterns|terms|stopwords)\s*(?::[^=]+)?=\s*\[/;
+  lines.forEach((line, i) => {
+    if (!DETECT_START.test(line)) return;
+    for (let n = i; n < lines.length; n += 1) {
+      skip.add(n + 1);
+      if (/^\s*\];/.test(lines[n])) break;
+    }
+  });
   // 2) block comments (multi-line JSDoc with Chinese prose)
   let inComment = false;
   lines.forEach((line, i) => {
@@ -103,6 +113,7 @@ function dataLines(src) {
 }
 
 let dictSkipped = 0;
+let regexSkipped = 0;
 
 /** Count CJK literals that actually reach the UI (skips comments and keys). */
 function scanHardcoded() {
@@ -127,7 +138,14 @@ function scanHardcoded() {
           if (CJK.test(line)) dictSkipped += 1;
           return;
         }
-        const literals = line.match(/(["'`>])([^"'`<>\n]*)(["'`<])/g) ?? [];
+        // 正则字面量里的 CJK 是字符类范围（如 /[\u3040-\u30ff一-鿿]/），
+        // 用来做"文本是否需要逐字排版"判断，不是待翻译文案 —— 先整段抹掉再取字面量。
+        const scrubbed = line.replace(/\/(?:[^\/\\\n]|\\.)*\/[gimsuy]*/g, ' ');
+        if (!CJK.test(scrubbed)) {
+          if (CJK.test(line)) regexSkipped += 1;
+          return;
+        }
+        const literals = scrubbed.match(/(["'`>])([^"'`<>\n]*)(["'`<])/g) ?? [];
         for (const lit of literals) {
           if (CJK.test(lit)) hits.push({ line: i + 1, text: lit.trim().slice(0, 120) });
         }
@@ -213,6 +231,7 @@ console.log(`\nHardcoded CJK literals outside the catalogue: ${hardcodedTotal} i
 if (dictSkipped) {
   console.log(`  (${dictSkipped} CJK lines inside in-component translation tables / block`);
   console.log('   comments were excluded — they are selector-aware data, not missed copy)');
+  console.log(`  (${regexSkipped} CJK lines inside regex character classes were excluded — they detect script, they are not copy)`);
 }
 for (const f of hardcoded.slice(0, LIMIT)) {
   console.log(`  ${String(f.count).padStart(4)}  ${f.file}`);

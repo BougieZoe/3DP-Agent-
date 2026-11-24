@@ -2,6 +2,7 @@ import type { UnifiedAnalysis } from "../analysis/types";
 import { getThresholds, type AnalysisThresholds } from "@/analysis/thresholds";
 import { deriveOhStatus, deriveSupportStatus, deriveWtStatus } from "@/analysis/metrics";
 import type { ToneMode, Language, TrafficLight, ChatMessage } from "./reportTypes";
+import { CONTENT, translate } from "@shared/i18n/content";
 
 // ─── Language Detection ─────────────────────────────────────────────────────────
 
@@ -158,92 +159,54 @@ export function buildClientIssues(analysis: UnifiedAnalysis, lang: Language): st
   const v = analysis.validation?.result;
   const m = analysis.metrics?.result;
   const s = analysis.support?.result;
+  const t = (key: string, params?: Record<string, string | number>) =>
+    translate(CONTENT, key, lang, params);
 
   if (m) {
-    const twr = (m.thinWallRatio ?? 0);
+    const twr = m.thinWallRatio ?? 0;
     const p5 = m.p5WallThicknessMm;
     const wtStatus = deriveWtStatus(twr, p5);
+    const pct = (twr * 100).toFixed(0);
     if (wtStatus === 'critical') {
-      issues.push(
-        lang === "ja"
-          ? `壁が薄すぎる領域が広範囲にあります (サンプルの${(twr * 100).toFixed(0)}%)。印刷中に破損の可能性。`
-          : `${(twr * 100).toFixed(0)}% of sampled walls are below safe thickness — risk of print failure.`
-      );
+      issues.push(t('issue.client.wtCritical', { pct }));
     } else if (wtStatus === 'warning') {
-      issues.push(
-        lang === "ja"
-          ? `${(twr * 100).toFixed(0)}%の領域で壁が薄いです。印刷前に確認を推奨。`
-          : `${(twr * 100).toFixed(0)}% of areas have thin walls — review recommended.`
-      );
+      issues.push(t('issue.client.wtWarning', { pct }));
     } else if ((m.averageConfidence ?? 0) < 0.5) {
-      issues.push(
-        lang === "ja"
-          ? `${m.minWallThicknessMm != null ? `最小壁厚 ${m.minWallThicknessMm.toFixed(2)}mm — ` : ''}信頼度が低いため、壁厚測定は参考値です。`
-          : `${m.minWallThicknessMm != null ? `Min measured ${m.minWallThicknessMm.toFixed(2)}mm — ` : ''}Low confidence measurement, results are approximate.`
-      );
+      const prefix = m.minWallThicknessMm != null
+        ? t('issue.client.minWallPrefix', { mm: m.minWallThicknessMm.toFixed(2) })
+        : '';
+      issues.push(t('issue.client.wtLowConf', { prefix }));
     }
   }
 
   if (v && !v.isWatertight) {
-    issues.push(
-      lang === "ja"
-        ? "モデルに隙間があり、完全に閉じていません。"
-        : "The model has gaps — it's not fully closed."
-    );
+    issues.push(t('issue.client.meshOpen'));
     if (v.holeCount > 0) {
-      issues.push(
-        lang === "ja"
-          ? `${v.holeCount}ヶ所に穴があります。`
-          : `${v.holeCount} hole${v.holeCount > 1 ? "s" : ""} found in the model.`
-      );
+      issues.push(t('issue.client.holes', { count: v.holeCount }));
     }
   } else if (v && v.holeCount > 0) {
-    issues.push(
-      lang === "ja"
-        ? `${v.holeCount}ヶ所に穴があります。`
-        : `${v.holeCount} hole${v.holeCount > 1 ? "s" : ""} found in the model.`
-    );
+    issues.push(t('issue.client.holes', { count: v.holeCount }));
   }
 
   if (v && v.flippedNormalRatio > 0.05) {
-    issues.push(
-      lang === "ja"
-        ? "一部の面が裏返しになっています。見た目に影響するかもしれません。"
-        : "Some surfaces are facing the wrong way — this may affect appearance."
-    );
+    issues.push(t('issue.client.flipped'));
   }
 
   if (m) {
     const ohStatus = deriveOhStatus(m.overhang.ratio);
     if (ohStatus === 'critical') {
-      issues.push(
-        lang === "ja"
-          ? "大きく張り出した部分があります。サポート材が必要です。"
-          : "Large overhanging areas will need support material."
-      );
+      issues.push(t('issue.client.ohCritical'));
     } else if (ohStatus === 'warning') {
-      issues.push(
-        lang === "ja"
-          ? "やや張り出した部分があります。サポート材を検討してください。"
-          : "Some areas stick out — consider using supports."
-      );
+      issues.push(t('issue.client.ohWarning'));
     }
   }
 
   if (s) {
     const supportStatus = deriveSupportStatus(s);
     if (supportStatus.status === 'critical') {
-      issues.push(
-        lang === "ja"
-          ? "サポート構造が複雑で、除去が難しい可能性があります。"
-          : "Complex support structure — removal may be difficult."
-      );
+      issues.push(t('issue.client.supportComplex'));
     } else if (supportStatus.status === 'warning' && supportStatus.reasons.length > 0) {
-      issues.push(
-        lang === "ja"
-          ? `サポートに関する注意: ${supportStatus.reasons[0]}`
-          : `Support caution: ${supportStatus.reasons[0]}`
-      );
+      issues.push(t('issue.client.supportCaution', { reason: supportStatus.reasons[0] }));
     }
   }
 
@@ -258,98 +221,60 @@ export function buildDesignerIssues(
   const issues: string[] = [];
   const v = analysis.validation?.result;
   const m = analysis.metrics?.result;
+  const t = (key: string, params?: Record<string, string | number>) =>
+    translate(CONTENT, key, lang, params);
 
   if (m) {
-    const twr = (m.thinWallRatio ?? 0);
+    const twr = m.thinWallRatio ?? 0;
     const p5 = m.p5WallThicknessMm;
     const p10 = m.p10WallThicknessMm;
     const avg = m.avgWallThicknessMm;
     const conf = m.averageConfidence ?? 0;
     const wtStatus = deriveWtStatus(twr, p5);
+    const pct = (twr * 100).toFixed(0);
     if (wtStatus === 'critical') {
-      issues.push(
-        lang === "ja"
-          ? `壁厚: サンプルの${(twr * 100).toFixed(0)}%がFDM閾値未満 (p5=${(p5 ?? avg ?? 0).toFixed(2)} mm) — 広範囲に薄い壁`
-          : `Walls: ${(twr * 100).toFixed(0)}% of samples below FDM threshold (p5=${(p5 ?? avg ?? 0).toFixed(2)} mm) — widespread thin walls`
-      );
+      issues.push(t('issue.designer.wtCritical', { pct, p5: (p5 ?? avg ?? 0).toFixed(2) }));
     } else if (wtStatus === 'warning') {
       const display = p10 ?? p5 ?? avg;
-      issues.push(
-        lang === "ja"
-          ? `壁厚: ${(twr * 100).toFixed(0)}%の領域で薄い (p10=${(display ?? 0).toFixed(2)} mm)`
-          : `Walls: ${(twr * 100).toFixed(0)}% of areas thin (p10=${(display ?? 0).toFixed(2)} mm)`
-      );
+      issues.push(t('issue.designer.wtWarning', { pct, p10: (display ?? 0).toFixed(2) }));
     } else if (conf < 0.5) {
-      issues.push(
-        lang === "ja"
-          ? `壁厚測定の信頼度が低い (${(conf * 100).toFixed(0)}%)。${m.minWallThicknessMm != null ? `最小測定値 ${m.minWallThicknessMm.toFixed(2)} mm は参考値として表示。` : ''}`
-          : `Wall thickness confidence low (${(conf * 100).toFixed(0)}%). ${m.minWallThicknessMm != null ? `Min measured ${m.minWallThicknessMm.toFixed(2)} mm shown for reference.` : ''}`
-      );
+      const prefix = m.minWallThicknessMm != null
+        ? t('issue.designer.minWallPrefix', { mm: m.minWallThicknessMm.toFixed(2) })
+        : '';
+      issues.push(t('issue.designer.wtLowConf', { conf: (conf * 100).toFixed(0), prefix }));
     }
   }
 
   if (v && !v.isWatertight) {
-    issues.push(
-      lang === "ja"
-        ? "メッシュが密閉されていません。スライサーエラーの原因になります。"
-        : "Mesh is not watertight. May cause slicing errors."
-    );
+    issues.push(t('issue.designer.meshOpen'));
     if (v.holeCount > 0) {
-      issues.push(
-        lang === "ja"
-          ? `メッシュに${v.holeCount}個の穴があります。印刷前に修正してください。`
-          : `${v.holeCount} hole${v.holeCount > 1 ? "s" : ""} found. Repair before slicing.`
-      );
+      issues.push(t('issue.designer.holes', { count: v.holeCount }));
     }
   } else if (v && v.holeCount > 0) {
-    issues.push(
-      lang === "ja"
-        ? `メッシュに${v.holeCount}個の穴があります。印刷前に修正してください。`
-        : `${v.holeCount} hole${v.holeCount > 1 ? "s" : ""} found. Repair before slicing.`
-    );
+    issues.push(t('issue.designer.holes', { count: v.holeCount }));
   }
 
   if (v && v.flippedNormalRatio > 0.05) {
-    issues.push(
-      lang === "ja"
-        ? `面の${(v.flippedNormalRatio * 100).toFixed(0)}% で法線が反転しています。スライスアーティファクトの原因に。`
-        : `${(v.flippedNormalRatio * 100).toFixed(0)}% of faces have inverted normals. May cause slicing artifacts.`
-    );
+    issues.push(t('issue.designer.flipped', { pct: (v.flippedNormalRatio * 100).toFixed(0) }));
   }
 
   if (m) {
     const ohStatus = deriveOhStatus(m.overhang.ratio);
     if (ohStatus === 'critical') {
-      issues.push(
-        lang === "ja"
-          ? "深刻なオーバーハング。サポート構造が必須です。"
-          : "Severe overhang. Support structures are required."
-      );
+      issues.push(t('issue.designer.ohSevere'));
     } else if (ohStatus === 'warning') {
-      issues.push(
-        lang === "ja"
-          ? "中程度のオーバーハング。サポート構造を推奨します。"
-          : "Moderate overhang. Support structures are advisable."
-      );
+      issues.push(t('issue.designer.ohModerate'));
     }
   }
 
-  const s = analysis.support?.result;
-  if (s) {
-    const supportStatus = deriveSupportStatus(s);
+  const sup = analysis.support?.result;
+  if (sup) {
+    const supportStatus = deriveSupportStatus(sup);
     if (supportStatus.status === 'critical') {
-      issues.push(
-        lang === "ja"
-          ? `${supportStatus.reasons[0] ?? 'サポート構造に問題があります'}`
-          : `${supportStatus.reasons[0] ?? 'Support structure issue detected'}`
-      );
+      issues.push(supportStatus.reasons[0] ?? t('issue.designer.supportFallback'));
     } else if (supportStatus.status === 'warning') {
       for (const reason of supportStatus.reasons.slice(0, 2)) {
-        issues.push(
-          lang === "ja"
-            ? `サポート: ${reason}`
-            : `Support: ${reason}`
-        );
+        issues.push(t('issue.designer.supportItem', { reason }));
       }
     }
   }
