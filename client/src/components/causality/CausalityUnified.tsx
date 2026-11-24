@@ -3,16 +3,18 @@ import { PatternMatch } from './topologyPatternEngine'
 import { GeometrySuggestion } from './counterfactualEngine'
 import { CausalityTimeline } from './CausalityTimeline'
 import { PANEL } from '@/lib/visualLanguage'
-import type { ContentLang } from '@shared/i18n/content'
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content'
 
 function CausalityGraphView({
   graph,
   onSelectEvent,
   selectedId,
+  language = 'en',
 }: {
   graph: CausalityGraph | null
   onSelectEvent: (id: string | null) => void
   selectedId: string | null
+  language?: ContentLang
 }) {
   if (!graph) return null
   const nodes = graph.events
@@ -28,7 +30,7 @@ function CausalityGraphView({
   })
   return (
     <div className={`${PANEL.border} ${PANEL.rounded} ${PANEL.padding} bg-background/40 overflow-hidden`}>
-      <div className={`${PANEL.fontLabel} mb-2`}>Graph · 专家视图 · 点节点钻取</div>
+      <div className={`${PANEL.fontLabel} mb-2`}>{translate(CONTENT, 'causality.unified.graphHint', language)}</div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[180px] bg-muted/5 rounded-sm border border-border/10">
         {edges.map((e, i) => {
           const a = pos.get(e.sourceId), b = pos.get(e.targetId)
@@ -47,7 +49,7 @@ function CausalityGraphView({
           )
         })}
       </svg>
-      <div className="text-[10px] font-mono text-muted-foreground/30 mt-1">点节点看因果 · 仅专家展开</div>
+      <div className="text-[10px] font-mono text-muted-foreground/30 mt-1">{translate(CONTENT, 'causality.unified.collapsedHint', language)}</div>
     </div>
   )
 }
@@ -80,14 +82,14 @@ export function CausalityUnified(props: {
       />
       <details className="group">
         <summary className="text-[10px] font-mono text-muted-foreground/30 cursor-pointer list-none flex items-center gap-1 hover:text-muted-foreground/60">
-          <span className="group-open:rotate-90 transition-transform">›</span> 专家图谱（Obsidian）
+          <span className="group-open:rotate-90 transition-transform">›</span> {translate(CONTENT, 'causality.unified.expertGraph', props.language ?? 'en')}
         </summary>
         <div className="pt-2">
-          <CausalityGraphView graph={props.graph} onSelectEvent={props.onSelectEvent} selectedId={props.selectedEventId} />
+          <CausalityGraphView graph={props.graph} onSelectEvent={props.onSelectEvent} selectedId={props.selectedEventId} language={props.language} />
         </div>
       </details>
       {props.suggestions.length > 0 && (
-        <div className="text-[10px] font-mono text-muted-foreground/30">点时间线上事件展开，再点 Preview 在视口直接看修复（已用真实几何，非 dummy）</div>
+        <div className="text-[10px] font-mono text-muted-foreground/30">{translate(CONTENT, 'causality.unified.expertNote', props.language ?? 'en')}</div>
       )}
     </div>
   )
