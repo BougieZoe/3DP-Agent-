@@ -11,6 +11,7 @@
 
 import express, { Router, type Request, type Response } from 'express';
 import { analyzeStlBuffer, AnalyzeInputError, type AnalyzeResult } from './analyzeService';
+import { describeVerdictPolicy } from './verdictPolicy';
 
 /** 单次分析载荷上限。STL 是明文浮点，50MB 约等于数百万三角面。 */
 export const MAX_ANALYZE_BYTES = 50 * 1024 * 1024;
@@ -55,6 +56,14 @@ export function createAnalyzeRouter(): Router {
 
   router.get('/health', (_req: Request, res: Response) => {
     res.json({ ok: true, service: 'analyze', maxPayloadBytes: MAX_ANALYZE_BYTES });
+  });
+
+  /**
+   * 暴露当前生效的判定阈值。前端据此渲染"硬门是多少"，
+   * 避免把阈值复制一份到客户端后两边漂移。
+   */
+  router.get('/policy', (_req: Request, res: Response) => {
+    res.json(describeVerdictPolicy());
   });
 
   router.post('/', binaryParser, jsonParser, (req: Request, res: Response) => {

@@ -16,6 +16,7 @@ import { fromThreeBufferGeometry } from '../client/src/analysis/geometryConversi
 import { runAnalysisPipeline, type PipelineOptions } from '../client/src/analysis/pipeline';
 import { extractFindings } from '../client/src/analysis/findingExtractor';
 import type { Finding } from '../client/src/analysis/types';
+import { evaluateVerdict, type Verdict, type VerdictObservation } from './verdictPolicy';
 
 /** 输入非法（不是可解析的 STL 等）时抛出，路由层映射为 4xx。 */
 export class AnalyzeInputError extends Error {
@@ -66,6 +67,11 @@ export interface AnalyzeResult {
   topologyProfile: string | null;
   summary: AnalyzeSummary;
   gate: AnalyzeGate;
+  /**
+   * 真值墙结论（见 verdictPolicy）。gate 是"缺陷计数聚合"的旧口径，保留只为兼容；
+   * 对外声明"能不能打"一律以 verdict 为准，二者冲突时 verdict 优先。
+   */
+  verdict: Verdict;
   findings: AnalyzeFinding[];
   elapsedMs: number;
 }
@@ -169,6 +175,17 @@ export function analyzeStlBuffer(
     printTimeSource: printTime?.source ?? null,
   };
 
+  const observation: VerdictObservation = {
+    isWatertight: summary.isWatertight,
+    holeCount: summary.holeCount,
+    boundaryEdgeCount: summary.boundaryEdgeCount,
+    volumeReliable: summary.volumeReliable,
+    minWallThicknessMm: summary.minWallThicknessMm,
+    fitsBuildVolume: summary.fitsBuildVolume,
+    estimatedPrintTimeMinutes: summary.estimatedPrintTimeMinutes,
+    estimatedSupportGrams: summary.estimatedSupportGrams,
+  };
+
   return {
     modelFileName: options.fileName ?? analysis.modelFileName ?? 'unnamed.stl',
     analyzedAt: new Date().toISOString(),
@@ -177,6 +194,7 @@ export function analyzeStlBuffer(
       typeof analysis.topologyProfile === 'string' ? analysis.topologyProfile : null,
     summary,
     gate: aggregateGate(findings),
+    verdict: evaluateVerdict(observation),
     findings,
     elapsedMs: Number((performance.now() - startedAt).toFixed(2)),
   };
