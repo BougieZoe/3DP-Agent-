@@ -13,6 +13,14 @@
  * min_wall_mm / overhang / bed-fit defects are explicitly NOT ported).
  *
  * Contract (unchanged from the Python implementation):
+ * - `note` / `signals` / `confidence` are diagnostic traces of how the unit
+ *   guess was reached. They are NOT user-facing copy and must never be bound to
+ *   UI elements directly. If a future screen needs to display this module's
+ *   verdict, map only the three enums below into `guard.*` catalogue keys
+ *   (`ScaleGuardStatus`, `ScaleGuardDisambiguation`, `ScaleGuardCoordBias`) and
+ *   render those five short strings from catalog — do not translate these long
+ *   interpolation strings. This keeps the audit clean while preserving a clear
+ *   migration path for when the engine output is actually shown to users.
  *  - Read-only: never rescales, never mutates geometry, never feeds a score.
  *  - Never throws: any failure degrades to `status: 'ok'` with an explanatory
  *    note, so the sentinel can never break the analysis pipeline.
