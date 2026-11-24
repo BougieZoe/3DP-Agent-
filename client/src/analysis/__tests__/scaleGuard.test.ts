@@ -86,7 +86,39 @@ describe('scaleGuard (ported from the Python engine)', () => {
     });
   });
 
-  describe('oversize and unclassifiable parts', () => {
+    describe('suspect metre', () => {
+    it('flags a metre export that reads as a sub-millimetre speck', () => {
+      const r = assessScale([0.1, 0.1, 0.1]);
+      expect(r.status).toBe('suspect_metre');
+      expect(r.suggestedScale).toBe(1000);
+      expect(r.suggestedExtentsMm).toEqual([100, 100, 100]);
+      expect(r.disambiguation).toBe('metre_preferred');
+      expect(r.note).toContain('疑似米（m）单位被按毫米读取');
+    });
+    it('reaches the metre branch where the inch and cm windows both miss', () => {
+      // 0.15 m = 150 mm fits the envelope; x25.4 = 3.81 mm and x10 = 1.5 mm do not.
+      const r = assessScale([0.15, 0.15, 0.15]);
+      expect(r.status).toBe('suspect_metre');
+      expect(r.suggestedExtentsMm).toEqual([150, 150, 150]);
+      // No tick set exists for metres, so the verdict must not borrow that signal.
+      expect(r.signals.join(' ')).toContain('无整齐刻度可对齐');
+    });
+    it('declares the metre reading instead of hiding it when inch wins', () => {
+      // 0.25 is 6.35 mm as inch and 250 mm as metre; both are plausible parts.
+      const r = assessScale([0.25, 0.25, 0.25]);
+      expect(r.status).toBe('suspect_inch');
+      expect(r.suggestedScale).toBe(25.4);
+      expect(r.note).toContain('米（m）解释同样成立');
+    });
+    it('keeps the metre window upper edge inclusive', () => {
+      // 0.3 m = 300 mm is the ceiling; 0.3 x 25.4 = 7.62 mm also fits.
+      const r = assessScale([0.3, 0.3, 0.3]);
+      expect(r.status).toBe('suspect_inch');
+      expect(r.note).toContain('米（m）解释同样成立');
+    });
+  });
+
+describe('oversize and unclassifiable parts', () => {
     it('flags parts beyond the desktop build envelope', () => {
       const r = assessScale([500, 500, 500]);
       expect(r.status).toBe('oversize');
@@ -94,12 +126,14 @@ describe('scaleGuard (ported from the Python engine)', () => {
       expect(r.note).toContain('未做单位换算');
     });
 
-    it('does not call a sub-limit part a unit error when neither rescale fits', () => {
-      // 0.05 × 25.4 = 1.27 mm and 0.05 × 10 = 0.5 mm: both below the build
-      // window, so this stays "ok" with an explanatory note.
-      const r = assessScale([0.05, 0.05, 0.05]);
+    it('does not call a sub-limit part a unit error when no rescale fits', () => {
+      // 0.004 × 25.4 = 0.10 mm, × 10 = 0.04 mm, × 1000 = 4 mm: all below the
+      // build window, so this stays "ok" with an explanatory note. (The old
+      // sample here was 0.05, which is now a legit metre reading: 50 mm.)
+      const r = assessScale([0.004, 0.004, 0.004]);
       expect(r.status).toBe('ok');
       expect(r.note).toContain('未判定为单位错误');
+      expect(r.signals.join(' ')).toContain('×1000');
     });
   });
 

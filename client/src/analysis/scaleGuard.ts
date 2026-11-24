@@ -52,6 +52,13 @@ export const SCALE_GUARD_MM_TICKS: readonly number[] = [1.0, 2.0, 5.0, 10.0, 20.
 /** Relative tolerance for a tick hit (±2%). */
 export const SCALE_GUARD_TICK_TOL = 0.02;
 
+/**
+ * Metre-scale CAD exports. STEP/FBX files out of some CAD tools carry metres,
+ * so a 150 mm part arrives as 0.15 and reads as a sub-millimetre speck. That is
+ * a real export bug on the floor, not an anomaly worth discarding.
+ */
+export const SCALE_GUARD_METRE_SCALE = 1000;
+
 /** Cap on sampled vertices for the weak coordinate signal (bounds the cost). */
 export const SCALE_GUARD_COORD_CAP = 4096;
 /** Grid steps: 1/16 inch and 0.1 mm. */
@@ -65,12 +72,13 @@ export const SCALE_GUARD_COORD_LO = 0.3;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ScaleGuardStatus = 'ok' | 'oversize' | 'suspect_inch' | 'suspect_cm';
+export type ScaleGuardStatus = 'ok' | 'oversize' | 'suspect_inch' | 'suspect_cm' | 'suspect_metre';
 
 export type ScaleGuardDisambiguation =
   | 'n/a'
   | 'inch_preferred'
   | 'cm_preferred'
+  | 'metre_preferred'
   | 'ambiguous_ticks'
   | 'no_tick_signal';
 
@@ -220,8 +228,10 @@ export function assessScale(
     const rawEdges = edges.map((e) => roundNum(e, 3));
     const inchEdges = edges.map((e) => roundNum(e * 25.4, 3));
     const cmEdges = edges.map((e) => roundNum(e * 10.0, 3));
+    const metreEdges = edges.map((e) => roundNum(e * SCALE_GUARD_METRE_SCALE, 3));
     const inchOk = lo <= L * 25.4 && L * 25.4 <= hi;
     const cmOk = lo <= L * 10.0 && L * 10.0 <= hi;
+    const metreOk = lo <= L * SCALE_GUARD_METRE_SCALE && L * SCALE_GUARD_METRE_SCALE <= hi;
 
     // ── Disambiguation signals (advisory, never grade-shifting) ──
     const inchHit = tickHit(L * 25.4, SCALE_GUARD_INCH_TICKS_MM);
@@ -321,6 +331,16 @@ export function assessScale(
         } else {
           note = '疑似英制单位（inch）被按毫米读取';
         }
+        if (metreOk) {
+          signals.push(
+            `×1000 换算后最大边 ${fmt(L * SCALE_GUARD_METRE_SCALE, 2)} mm 亦落在 ` +
+            `${fmt(lo, 0)}~${fmt(hi, 0)} mm 幅面内，米（m）解释无法排除，` +
+            `此处按英寸优先提示（先判定英寸，沿用既有口径），请人工确认上游导出单位`,
+          );
+          note +=
+            `；米（m）解释同样成立（×1000 后 ${fmt(L * SCALE_GUARD_METRE_SCALE, 2)} mm），` +
+            `请确认导出单位`;
+        }
         if (inchTick !== null && cmTick === null) {
           disambiguation = 'inch_preferred';
           confidence = 'high';
@@ -352,6 +372,10 @@ export function assessScale(
           signals.push(tickLine);
         }
       } else if (cmOk) {
+        // Unreachable as written, kept so it cannot vanish silently:
+        // with L < 3 mm, cmOk needs L >= 0.5 and inchOk only needs L >= 0.1968,
+        // so the inch branch above always fires first. The cm reading is still
+        // declared there rather than dropped - see the note it appends.
         status = 'suspect_cm';
         suggestedScale = 10;
         suggestedExtents = cmEdges;
@@ -374,14 +398,34 @@ export function assessScale(
         } else {
           signals.push(tickLine);
         }
+      } else if (metreOk) {
+        // Reachable, unlike the cm branch: L in (0.005, 0.1968) misses both the
+        // inch window (needs L >= 0.1968) and the cm window (needs L >= 0.5),
+        // yet a metre export lands squarely inside the build envelope. Metres
+        // have no tidy tick set, so this verdict rests on the window alone and
+        // says so instead of borrowing confidence from a tick signal.
+        status = 'suspect_metre';
+        suggestedScale = SCALE_GUARD_METRE_SCALE;
+        suggestedExtents = metreEdges;
+        disambiguation = 'metre_preferred';
+        confidence = 'high（仅米制解释落入幅面，无刻度信号可对齐）';
+        signals = [
+          base,
+          `×1000 换算后最大边 ${fmt(L * SCALE_GUARD_METRE_SCALE, 2)} mm 落入 ${fmt(lo, 0)}~${fmt(hi, 0)} mm 常见桌面机幅面内，` +
+          `而 ×25.4 / ×10 换算后分别为 ${fmt(L * 25.4, 2)} mm / ${fmt(L * 10.0, 2)} mm，均不在该区间`,
+          '米（m）无整齐刻度可对齐，此判定仅依据幅面窗口，不叠加刻度信号',
+        ];
+        note =
+          '疑似米（m）单位被按毫米读取：上游按米导出（STEP / FBX 常见），' +
+          '请确认导出单位为 mm 后重新导出';
       } else {
         signals = [
           base,
-          `×10 / ×25.4 换算后最大边分别为 ${fmt(L * 10.0, 2)} mm / ${fmt(L * 25.4, 2)} mm，` +
-          `均未落入 ${fmt(lo, 0)}~${fmt(hi, 0)} mm 常见幅面内`,
+          `×10 / ×25.4 / ×1000 换算后最大边分别为 ${fmt(L * 10.0, 2)} mm / ${fmt(L * 25.4, 2)} mm / ` +
+          `${fmt(L * SCALE_GUARD_METRE_SCALE, 2)} mm，均未落入 ${fmt(lo, 0)}~${fmt(hi, 0)} mm 常见幅面内`,
         ];
         note =
-          '最大边低于常规零件尺度下限，但两种单位换算后仍不在常见幅面内：可能为占位 / 异常模型，未判定为单位错误';
+          '最大边低于常规零件尺度下限，但三种单位换算后仍不在常见幅面内：可能为占位 / 异常模型，未判定为单位错误';
       }
     } else {
       signals = [
