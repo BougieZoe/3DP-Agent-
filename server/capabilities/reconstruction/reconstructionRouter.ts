@@ -352,7 +352,9 @@ export function createReconstructionRouter(
       const job = await deps.store.create({
         request: body,
         context,
-        provider: { id: deps.provider.id, version: deps.provider.version },
+        // Record the version the engine reported a moment ago, not the provider's static
+        // placeholder: a job that says "unknown" cannot be reproduced from its own ledger.
+        provider: { id: deps.provider.id, version: capabilities.version ?? deps.provider.version },
         idempotency_key: idempotencyKey,
       });
       const withInputs = await deps.store.update(job.job_id, {

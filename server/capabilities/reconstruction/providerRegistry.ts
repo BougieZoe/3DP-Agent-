@@ -15,6 +15,8 @@ import type {
   ReconstructionProvider,
 } from "./types.js";
 import { MeshroomProvider } from "./providers/meshroom.js";
+import { ColmapProvider } from "./providers/colmap.js";
+import { ApplePhotogrammetryProvider } from "./providers/applePhotogrammetry.js";
 
 /** Placeholder for a future remote data plane. It refuses work instead of pretending. */
 class UnconfiguredProvider implements ReconstructionProvider {
@@ -62,7 +64,12 @@ export interface ProviderFactoryOptions {
 }
 
 export function createProvider(options: ProviderFactoryOptions): ReconstructionProvider {
-  const requested = (process.env.RECON_PROVIDER ?? "meshroom").trim().toLowerCase();
+  // Platform default, not a silent fallback: Meshroom was the original choice but no
+  // longer ships a macOS build, so on macOS the default is the engine that can actually
+  // produce a mesh. On other hosts Meshroom stays the default. Either way the chosen
+  // engine reports its own availability truthfully through /v1/capabilities.
+  const platformDefault = process.platform === "darwin" ? "apple" : "meshroom";
+  const requested = (process.env.RECON_PROVIDER ?? platformDefault).trim().toLowerCase();
 
   if (requested === "meshroom") {
     return new MeshroomProvider({
@@ -72,15 +79,34 @@ export function createProvider(options: ProviderFactoryOptions): ReconstructionP
     });
   }
 
+  if (requested === "apple") {
+    return new ApplePhotogrammetryProvider({
+      workRoot: options.workRoot,
+      detail: process.env.RECON_APPLE_DETAIL,
+      version: process.env.RECON_APPLE_VERSION,
+    });
+  }
+
   if (requested === "remote") {
     return new UnconfiguredProvider(
       "remote",
-      "Remote reconstruction data plane is reserved by contract but not implemented on this install. Run with RECON_PROVIDER=meshroom.",
+      "Remote reconstruction data plane is reserved by contract but not implemented on this install. Run with RECON_PROVIDER=apple, colmap or meshroom.",
     );
+  }
+
+  if (requested === "colmap") {
+    // Kept for hosts with CUDA: on Apple silicon COLMAP can register cameras but its
+    // dense stereo stage refuses to run, so it reports itself unavailable there instead of
+    // stopping halfway through a job.
+    return new ColmapProvider({
+      workRoot: options.workRoot,
+      binPath: process.env.RECON_COLMAP_BIN,
+      version: process.env.RECON_COLMAP_VERSION,
+    });
   }
 
   return new UnconfiguredProvider(
     requested,
-    `Unknown RECON_PROVIDER "${requested}"; supported values: meshroom.`,
+    `Unknown RECON_PROVIDER "${requested}"; supported values: apple, colmap, meshroom.`,
   );
 }

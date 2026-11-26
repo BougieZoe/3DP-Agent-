@@ -189,17 +189,32 @@ export interface ReconstructionProvider {
 ```
 
 - `meshroom` (AliceVision, MIT/BSD-family) is **one implementation**, run as a separate process.
+- `apple` (Object Capture, macOS 12+) is a second implementation, also a separate process. It was
+  added because Meshroom stopped shipping a macOS build and COLMAP's dense stereo needs CUDA, so
+  on Apple silicon neither older option could actually turn photos into a mesh. Swapping it in
+  changed no request, no response and no frontend code — which is the whole point of this layer.
+- `colmap` (BSD-3) remains for CUDA hosts. Where its build has no GPU support it reports itself
+  unavailable rather than accepting work it would abort halfway through.
 - `scanruler` (occt-wasm) is another candidate.
 - Changing the engine changes no external contract and no frontend code.
+
+**Availability is measured, never assumed.** Every provider answers `GET /v1/capabilities/reconstruction`
+from what it can verify on the host — binary present, toolchain present, GPU support present — and
+reports `available: false` with a machine-readable reason otherwise. A missing engine is a 503
+`ENGINE_NOT_AVAILABLE`, never a fabricated job, progress bar or output file.
 
 **Licence boundary.** The contract layer contains no AGPL code. AGPL-licensed engines may only
 be reached across a process boundary (CLI or HTTP) as an independent provider, so the licence
 cannot propagate into the main product.
 
-**Data-plane separability.** `RECON_PROVIDER` selects the implementation at boot. `local` runs
-Meshroom on this machine; a remote provider forwards the same job payload to an external
-service. Because the job payload is already standard, moving the data plane off-box requires no
-contract change. This machine ships with the `local` provider only.
+**Data-plane separability.** `RECON_PROVIDER` selects the implementation at boot. A local
+provider runs the engine on this machine; a remote provider forwards the same job payload to an
+external service. Because the job payload is already standard, moving the data plane off-box
+requires no contract change. This machine defaults to `apple` on macOS (the only engine here that
+can actually produce a mesh) and to `meshroom` elsewhere; `RECON_PROVIDER=colmap` remains
+selectable for CUDA hosts. A platform default is a boot-time choice, not a silent fallback: the
+selected engine still reports its own availability truthfully, and an unavailable engine refuses
+the job with `ENGINE_NOT_AVAILABLE`.
 
 ---
 
