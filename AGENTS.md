@@ -181,6 +181,14 @@ touches measurement, overlays, lighting or the empty-state placeholder.
 - `pnpm run build` — must succeed
 - Enforced automatically by `.github/workflows/ci.yml` on every push/PR; no branch lands without it.
 
+### Local node caveat (read before blaming the tests)
+If `pnpm test` aborts at startup with `Cannot find module @rollup/rollup-darwin-arm64`,
+`different Team IDs`, or `missing code signature`, the test harness is fine — the node
+binary is the problem. macOS will not load an ad-hoc signed native addon into a node
+process that carries its own hardened Team ID, and Marvis' bundled node does exactly that.
+Use `scripts/test-local.sh [args]`, which picks an ad-hoc signed node (Homebrew) and is what
+`pnpm test:contract` runs. Never "fix" this by deleting `node_modules` or re-signing addons.
+
 ## Ops Discipline (irreversible actions)
 - Any irreversible op — `kill`/`pkill`, `rm -rf`, force-push, irreversible
   migrations, killing ports/processes owned by someone else — must be announced

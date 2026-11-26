@@ -1,3 +1,14 @@
+---
+AIGC:
+    Label: "1"
+    ContentProducer: 001191440300708461136T1XGW3
+    ProduceID: 60511e479f736a9399334d56570e10ac_1bed2c6ce95211f1a20652540072b1e8
+    ReservedCode1: 57d7jN8iqvCC3xTYE7tLYj3mog/mjao+EN+08ORtXuPWHVkuU8cMYU370iI9mRETzgEHq+QivV0fsPPG50v9Qg4EK1xTNjPho2Q6WVqz9tEkqxPmsoreO/9wfqqYCRROh3gGn0vIHentwtCpBlu7ZOUjek25Rqao31P78iMiZ1ghXOxrayE/wq6Nsw0=
+    ContentPropagator: 001191440300708461136T1XGW3
+    PropagateID: 60511e479f736a9399334d56570e10ac_1bed2c6ce95211f1a20652540072b1e8
+    ReservedCode2: 57d7jN8iqvCC3xTYE7tLYj3mog/mjao+EN+08ORtXuPWHVkuU8cMYU370iI9mRETzgEHq+QivV0fsPPG50v9Qg4EK1xTNjPho2Q6WVqz9tEkqxPmsoreO/9wfqqYCRROh3gGn0vIHentwtCpBlu7ZOUjek25Rqao31P78iMiZ1ghXOxrayE/wq6Nsw0=
+---
+
 # 3DP Agent Capability Open Standard — Contract v0.1
 
 > **Positioning.** This is not "a feature we use internally". It is a capability that other
@@ -192,3 +203,4 @@ a stub success is worse than an endpoint that is honestly absent.
 | Version | Date | Change |
 |---|---|---|
 | v0.1 | 2026-11-26 | Initial draft. Photo-to-CAD as first capability; six hard rules; provider abstraction; tenant field reservation. |
+*（内容由AI生成，仅供参考）*

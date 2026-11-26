@@ -107,7 +107,9 @@ export class MeshroomProvider implements ReconstructionProvider {
     };
   }
 
-  private jobDir(job: ReconstructionJob): string {
+  private jobDir(job: ReconstructionJob): string | null {
+    // A job without an id can never have produced outputs; degrade instead of throwing.
+    if (!job?.job_id || !this.workRoot) return null;
     return path.join(this.workRoot, job.job_id);
   }
 
@@ -122,6 +124,7 @@ export class MeshroomProvider implements ReconstructionProvider {
     }
 
     const workDir = this.jobDir(job);
+    if (!workDir) throw new CapabilityError("REQUEST_INVALID", "Job has no job_id; refusing to run.", 400);
     const inputsDir = path.join(workDir, "images");
     await fs.mkdir(inputsDir, { recursive: true });
 
@@ -195,8 +198,10 @@ export class MeshroomProvider implements ReconstructionProvider {
   }
 
   private async readMeta(job: ReconstructionJob): Promise<ProviderMeta | null> {
+    const dir = this.jobDir(job);
+    if (!dir) return null;
     try {
-      const raw = await fs.readFile(path.join(this.jobDir(job), "meta.json"), "utf8");
+      const raw = await fs.readFile(path.join(dir, "meta.json"), "utf8");
       return JSON.parse(raw) as ProviderMeta;
     } catch {
       return null;
@@ -274,7 +279,10 @@ export class MeshroomProvider implements ReconstructionProvider {
 
   /** Walk the output tree for open-format meshes; returns file facts, not promises. */
   async collect(_providerJobId: string, job: ReconstructionJob): Promise<ReconOutput[]> {
-    const outputDir = path.join(this.jobDir(job), "output");
+    const jobDir = this.jobDir(job);
+    // No job dir yet (or no job id): nothing has been produced, so report nothing.
+    if (!jobDir) return [];
+    const outputDir = path.join(jobDir, "output");
     const found: ReconOutput[] = [];
     const walk = async (dir: string): Promise<void> => {
       let entries;

@@ -41,15 +41,15 @@ class UnconfiguredProvider implements ReconstructionProvider {
   }
 
   async submit(_job: ReconstructionJob): Promise<ProviderSubmitResult> {
-    throw new CapabilityError("PROVIDER_NOT_CONFIGURED", this.reason, 501);
+    throw new CapabilityError("ENGINE_NOT_AVAILABLE", this.reason, 503);
   }
 
   async status(): Promise<ProviderStatus> {
-    throw new CapabilityError("PROVIDER_NOT_CONFIGURED", this.reason, 501);
+    throw new CapabilityError("ENGINE_NOT_AVAILABLE", this.reason, 503);
   }
 
   async cancel(): Promise<void> {
-    throw new CapabilityError("PROVIDER_NOT_CONFIGURED", this.reason, 501);
+    throw new CapabilityError("ENGINE_NOT_AVAILABLE", this.reason, 503);
   }
 
   async collect(): Promise<ReconOutput[]> {
