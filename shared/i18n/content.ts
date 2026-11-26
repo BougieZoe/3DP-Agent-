@@ -57,8 +57,8 @@ export const LANGUAGE_NAMES: Record<ContentLang, string> = {
 /** Short tag for compact selectors and badges. */
 export const LANGUAGE_TAGS: Record<ContentLang, string> = {
   en: 'EN',
-  zh: '中文',
-  ja: 'JA',
+  zh: 'ZH',
+  ja: 'JP',
   ko: 'KO',
   de: 'DE',
   es: 'ES',

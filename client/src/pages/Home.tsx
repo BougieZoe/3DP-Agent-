@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
+import { LanguageSelect } from '@/components/LanguageSelect';
 import { PRINT_TECHNOLOGIES, PRINT_TECH_BY_ID, type PrintTechnology } from '@/lib/technologies';
 import { useOrders } from '@/hooks/useOrders';
 // Hooks available for future refactoring:
@@ -51,7 +52,7 @@ import { weldGeometry } from '@/lib/weldGeometry';
 import { thickenMesh, ThickenRejected } from '@/lib/meshThickenClient';
 import { geometryToThreeMf } from '@/lib/threeMf';
 import { LENGTH_UNIT_TO_MM, type LengthUnit } from '@shared/domain/geometry';
-import { CONTENT, translate, SUPPORTED_LANGUAGES, LANGUAGE_NAMES } from '@shared/i18n/content';
+import { CONTENT, translate, SUPPORTED_LANGUAGES } from '@shared/i18n/content';
 import { getActiveProvider, hasAnyKey } from '@/lib/apiKeys';
 import { isWallConfidenceTrusted } from '@/lib/lowConfidence';
 import { Language, getTranslation } from '@/lib/i18n';
@@ -1467,16 +1468,7 @@ export default function Home() {
                   <option key={key} value={key} title={`${m.category} — ${m.description}`}>{m.name}</option>
                 ))}
             </select>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as Language)}
-              title="Language"
-              className="text-xs font-mono px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer"
-            >
-              {SUPPORTED_LANGUAGES.map(lang => (
-                <option key={lang} value={lang}>{LANGUAGE_NAMES[lang]}</option>
-              ))}
-            </select>
+            <LanguageSelect language={language} onChange={setLanguage} />
             <InstallButton language={language} />
             <button onClick={() => setShowAccountModal(true)}
               className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${
@@ -1573,15 +1565,7 @@ export default function Home() {
                   <option key={key} value={key}>{m.name}</option>
                 ))}
             </select>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as Language)}
-              className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
-            >
-              {SUPPORTED_LANGUAGES.map(lang => (
-                <option key={lang} value={lang}>{LANGUAGE_NAMES[lang]}</option>
-              ))}
-            </select>
+            <LanguageSelect language={language} onChange={setLanguage} compact />
           </div>
         </div>
       </header>
