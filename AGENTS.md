@@ -4,6 +4,46 @@
 3DP Agent — 3D printing STL analysis and manufacturing intelligence visualizer.  
 React 19 + Three.js 0.184 + @react-three/fiber 9.6.1 + Vite 7.1.9 + TypeScript strict.
 
+## Hard rules — Open-Standard Capability Discipline (non-negotiable)
+
+**Read this section before touching any capability endpoint, job model, or provider.**
+Binding on every agent and human working in this repo. Full text:
+[`docs/capability-open-standard-contract.md`](docs/capability-open-standard-contract.md).
+
+Every capability is built as a standalone product that an external company could rent,
+integrate, or embed — **the external contract exists before the internal implementation**.
+
+1. **No private protocol.** Capability surfaces are REST + JSON described by OpenAPI 3.1;
+   events follow CloudEvents 1.0 semantics. Never invent a bespoke wire format.
+2. **Long tasks are jobs.** Anything that can exceed a few seconds is `submit → job_id →
+   poll / webhook`. Never block an HTTP request waiting for an engine.
+3. **Versioned vocabulary is frozen on publication.** Event types and route paths carry a
+   major version (`*.v1`, `/v1/...`). After `v1` is published, additive-only changes; a
+   breaking change requires `v2` and `v1` stays alive ≥ 12 months with a deprecation notice.
+   Renaming or repurposing a published field is forbidden, even if it looks like cleanup.
+4. **Tenant context always exists.** Every request context carries `tenant_id` and
+   `workspace_id`, defaulting to `local`. Never introduce a code path where they are absent,
+   nullable, or dropped between layers. (Isolation itself is not implemented yet — do not
+   pretend it is.)
+5. **Every job emits a usage record.** Engine id+version, wall/gpu time, input count, output
+   bytes. A capability run with no usage record is a defect, not an optimisation.
+6. **Engines sit behind an adapter.** Capability code depends on the provider interface, never
+   on a concrete binary, CLI flag, or directory layout. `RECON_PROVIDER` selects the
+   implementation; swapping engines must not change the contract or the frontend.
+7. **Licence boundary.** No AGPL code in the contract or domain layer. AGPL engines are reached
+   only across a process boundary (CLI/HTTP) as independent providers.
+8. **Data-plane separability.** The job payload is already engine- and machine-independent, so
+   moving execution off-box is a configuration change, not a contract change. Don't write code
+   that assumes the engine runs in-process.
+9. **Open formats out.** STEP / STL / 3MF / GLB from an S3-compatible storage abstraction;
+   customers must be able to take their data away.
+10. **Honest failure beats fake success.** A missing engine, missing licence, or unimplemented
+    placeholder must return a machine-readable capability error (`*_NOT_AVAILABLE`,
+    `*_NOT_FOUND`). Never synthesise outputs, progress, or usage numbers.
+
+Reviewing a diff against a capability endpoint? Check items 1–10 explicitly and say which ones
+the change touches.
+
 ## Current Objective (2026-05-27)
 **Visual Language Consolidation** — Unify all visual tokens, colors, opacities, animation speeds, panel styles into a single source of truth (`visualLanguage.ts`). Enforce "Apple + Industrial AI + Scientific Visualization" aesthetic across all 15 components.
 

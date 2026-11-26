@@ -23,6 +23,10 @@ import healthRouter from "./healthRouter";
 import { initShutdown } from "./shutdown";
 import { setupWebSocketServer } from "./websocket";
 import { setupCollaborationServer } from "./collaboration";
+import {
+  createReconstructionCapabilityRouter,
+  createReconstructionRouter,
+} from "./capabilities/reconstruction/reconstructionRouter";
 import { loadKeysSync, startWatching, stopWatching, reloadKeys, getKeys, getLastLoadedAt, getLastError } from "./config/llmKeys";
 
 // Real address of the AMD machine, read from an environment variable instead
@@ -259,6 +263,20 @@ export function createApp() {
   // Verdict service (/api/analyze) — 纯进程内判定：无外部二进制、无沙箱、
   // 无宿主代码执行。因此不挂在 bridgesEnabled 分支内：服务在，判定就在。
   app.use("/api/analyze", rateLimit, createAnalyzeRouter());
+
+  // -------------------------------------------------------------------------
+  // Open-standard capability surface (/v1/...), starting with Photo-to-CAD.
+  //
+  // These routes live outside /api on purpose: /v1/... is a published, versioned
+  // contract (docs/capability-open-standard-contract.md), not an internal API.
+  // Once a v1 route ships, breaking it is only allowed as v2 — see AGENTS.md
+  // "Hard rules — Open-Standard Capability Discipline".
+  app.use(
+    "/v1/reconstructions",
+    express.json({ limit: "1mb" }),
+    createReconstructionRouter(),
+  );
+  app.use("/v1/capabilities/reconstruction", createReconstructionCapabilityRouter());
 
   // -------------------------------------------------------------------------
   // LLM relay (/api/llm) — the CORS fix for BYOK providers.

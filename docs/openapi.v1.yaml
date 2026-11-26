@@ -1,0 +1,413 @@
+openapi: 3.1.0
+info:
+  title: 3DP Agent — Photo-to-CAD Capability
+  version: 1.0.0
+  description: |
+    Versioned capability contract for photo-to-CAD reconstruction.
+
+    Rules that govern this file (see docs/capability-open-standard-contract.md,
+    AGENTS.md "Hard rules — Open-Standard Capability Discipline"):
+
+    - Once a route shape is published here, breaking changes require a new major
+      route prefix (`/v2/...`); `v1` stays live for at least 12 months.
+    - Fields may be added, never removed, retyped, or repurposed.
+    - Long work is a job: submit returns immediately, results come from polling.
+servers:
+  - url: http://127.0.0.1:3001
+    description: Local default install (single tenant, provider=meshroom)
+tags:
+  - name: reconstruction
+  - name: capability
+paths:
+  /v1/reconstructions:
+    post:
+      tags: [reconstruction]
+      operationId: submitReconstruction
+      summary: Submit a photo-to-CAD job
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Replaying the same key returns the original job instead of starting a second reconstruction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconstructionSubmitRequest'
+            example:
+              tenant_id: local
+              workspace_id: ws_123
+              input:
+                images:
+                  - asset_id: ast_001
+                    role: overview
+                  - asset_id: ast_002
+                    role: detail
+                scale_reference:
+                  kind: calibration_board
+                  known_mm: 50
+              output:
+                formats: [step, stl, glb]
+                units: mm
+      responses:
+        '202':
+          description: Job accepted; poll the returned job id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconstructionJob'
+        '200':
+          description: Idempotent replay of an earlier submit.
+          headers:
+            idempotency-replayed:
+              schema:
+                type: string
+              description: Present and set to "true" when the response replays an existing job.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconstructionJob'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          $ref: '#/components/responses/EngineUnavailable'
+  /v1/reconstructions/{job_id}:
+    get:
+      tags: [reconstruction]
+      operationId: getReconstruction
+      summary: Poll a reconstruction job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^job_[0-9a-f]{12}$'
+      responses:
+        '200':
+          description: Current job state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconstructionJob'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/reconstructions/{job_id}/cancel:
+    post:
+      tags: [reconstruction]
+      operationId: cancelReconstruction
+      summary: Cancel a running reconstruction
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Cancellation recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconstructionJob'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/reconstructions/{job_id}/outputs/{format}:
+    get:
+      tags: [reconstruction]
+      operationId: downloadReconstructionOutput
+      summary: Download an output in an open format
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [step, stl, glb, 3mf, obj]
+      responses:
+        '200':
+          description: Binary file.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/capabilities/reconstruction:
+    get:
+      tags: [capability]
+      operationId: describeReconstructionCapability
+      summary: Self-description of the capability and its active engine
+      responses:
+        '200':
+          description: Capability descriptor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityDescriptor'
+components:
+  responses:
+    BadRequest:
+      description: Request body or parameters do not match the contract.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    NotFound:
+      description: Job or output not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    EngineUnavailable:
+      description: No reconstruction engine is available on this install.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  schemas:
+    ReconstructionSubmitRequest:
+      type: object
+      required: [input]
+      properties:
+        tenant_id:
+          type: string
+          description: Defaults to "local" when omitted. Reserved for future isolation.
+          example: local
+        workspace_id:
+          type: string
+          description: Defaults to "local" when omitted.
+          example: ws_123
+        input:
+          type: object
+          required: [images]
+          properties:
+            images:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                properties:
+                  asset_id:
+                    type: string
+                    example: ast_001
+                  path:
+                    type: string
+                    description: Local provider only. Never accepted from remote tenants.
+                    example: /Users/me/photos/part-a.jpg
+                  role:
+                    type: string
+                    example: overview
+            scale_reference:
+              type: object
+              properties:
+                kind:
+                  type: string
+                  example: calibration_board
+                known_mm:
+                  type: number
+                  example: 50
+              required: [kind, known_mm]
+        output:
+          type: object
+          properties:
+            formats:
+              type: array
+              items:
+                type: string
+                enum: [step, stl, glb, 3mf, obj]
+              example: [step, stl, glb]
+            units:
+              type: string
+              enum: [mm, cm, in]
+              example: mm
+        engine_hint:
+          type: string
+          description: Advisory only; the server may ignore it.
+          example: meshroom
+        webhook_url:
+          type: string
+          format: uri
+          example: https://customer.example/hooks/3dp
+    ReconstructionJob:
+      type: object
+      required: [job_id, status, created_at]
+      properties:
+        job_id:
+          type: string
+          example: job_9f3a1b2c3d4e
+        tenant_id:
+          type: string
+          example: local
+        workspace_id:
+          type: string
+          example: local
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed, cancelled]
+          example: running
+        progress:
+          type: object
+          properties:
+            stage:
+              type: string
+              example: dense_reconstruction
+            percent:
+              type: number
+              example: 62
+        engine:
+          type: object
+          properties:
+            provider:
+              type: string
+              example: meshroom
+            version:
+              type: string
+              example: unknown
+        outputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconstructionOutput'
+        usage:
+          allOf:
+            - $ref: '#/components/schemas/UsageRecord'
+          nullable: true
+          description: Null until the job reaches a terminal state.
+        error:
+          $ref: '#/components/schemas/CapabilityError'
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-26T10:00:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2026-11-26T10:02:11Z'
+    ReconstructionOutput:
+      type: object
+      required: [format, bytes]
+      properties:
+        format:
+          type: string
+          enum: [step, stl, glb, 3mf, obj]
+          example: stl
+        asset_id:
+          type: string
+          example: ast_900
+        path:
+          type: string
+          description: Absolute path on a local install; absent for remote providers.
+          example: /Users/me/Library/Application Support/.../mesh.stl
+        bytes:
+          type: integer
+          example: 4812331
+    UsageRecord:
+      type: object
+      description: One row per executed job — the metering/billing unit.
+      required: [job_id, tenant_id, workspace_id, provider, images, wall_seconds, output_bytes]
+      properties:
+        job_id:
+          type: string
+          example: job_9f3a1b2c3d4e
+        tenant_id:
+          type: string
+          example: local
+        workspace_id:
+          type: string
+          example: local
+        provider:
+          type: string
+          example: meshroom
+        provider_version:
+          type: string
+          example: unknown
+        images:
+          type: integer
+          example: 12
+        wall_seconds:
+          type: integer
+          example: 131
+        gpu_seconds:
+          type: integer
+          nullable: true
+          description: Null when the engine reports no GPU telemetry; never estimated.
+          example: null
+        output_bytes:
+          type: integer
+          example: 4812331
+        finished_at:
+          type: string
+          format: date-time
+          example: '2026-11-26T10:02:11Z'
+    CapabilityError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable identifier.
+          example: ENGINE_NOT_AVAILABLE
+        message:
+          type: string
+          example: No Meshroom binary available on this host.
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/CapabilityError'
+        job_id:
+          type: string
+          example: job_9f3a1b2c3d4e
+    CapabilityDescriptor:
+      type: object
+      required: [capability, contract_version, id, available]
+      properties:
+        capability:
+          type: string
+          example: photo-to-cad
+        contract_version:
+          type: string
+          example: v1
+        id:
+          type: string
+          example: meshroom
+        version:
+          type: string
+          example: unknown
+        available:
+          type: boolean
+          example: false
+        unavailable_reason:
+          type: string
+          example: meshroom_batch not found; set RECON_MESHROOM_BIN or install Meshroom
+        inputs:
+          type: array
+          items:
+            type: string
+          example: [image_set, scale_reference]
+        outputs:
+          type: array
+          items:
+            type: string
+          example: [step, stl, glb, obj]
+        needs_gpu:
+          type: boolean
+          example: true
+        license:
+          type: string
+          example: MIT / BSD family (AliceVision, Meshroom)
+        event_types:
+          type: array
+          items:
+            type: string
+          example: [io.3dp.reconstruction.succeeded.v1]
