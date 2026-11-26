@@ -7158,6 +7158,41 @@ export const MESSAGES = {
   },
 
   // --- Photo → CAD (v1 reconstruction capability) ----------------------------------
+  "photoToCad": {
+    en: "Photo to CAD",
+    ja: "写真からCAD",
+    zh: "拍照转 CAD",
+  },
+  "photoToCadHint": {
+    en: "20–30 photos from every side, with an A4 sheet or a bank card lying flat in frame. That sheet is what turns the output into millimetres instead of arbitrary units.",
+    ja: "全方位から20〜30枚の写真を撮り、A4用紙かキャッシュカードを平らに写り込ませてください。この用紙があるからこそ、出力は任意単位ではなくミリメートルになります。",
+    zh: "围绕物体拍 20–30 张照片，并把一张 A4 纸或银行卡平铺在画面中。正是这张纸让输出的尺寸是毫米，而不是任意单位。",
+  },
+  "photoToCadAddPhotos": {
+    en: "Add photos",
+    ja: "写真を追加",
+    zh: "添加照片",
+  },
+  "photoToCadPhotosSelected": {
+    en: "{count} photos selected",
+    ja: "{count}枚の写真を選択中",
+    zh: "已选择 {count} 张照片",
+  },
+  "photoToCadDropHint": {
+    en: "JPEG, PNG, HEIC or TIFF. Every photo in one job must show the same part.",
+    ja: "JPEG・PNG・HEIC・TIFF。同じジョブの写真はすべて同じ対象を写している必要があります。",
+    zh: "支持 JPEG、PNG、HEIC、TIFF。同一任务内的照片必须是同一件物体。",
+  },
+  "photoToCadReference": {
+    en: "Scale reference",
+    ja: "スケール基準",
+    zh: "尺度基准",
+  },
+  "photoToCadRefA4": {
+    en: "A4 sheet (297 × 210 mm)",
+    ja: "A4用紙（297 × 210 mm）",
+    zh: "A4 纸（297 × 210 mm）",
+  },
   "photoToCadCameraStarting": {
     en: "Starting camera…",
     ja: "カメラを起動中…",
@@ -7223,10 +7258,85 @@ export const MESSAGES = {
     ja: "カメラ切替",
     zh: "切换前后",
   },
+  "photoToCadClip": {
+    en: "Clip",
+    ja: "動画",
+    zh: "视频",
+  },
   "photoToCadClipFrames": {
     en: "Clip sampled into {count} frames for reconstruction",
     ja: "動画から{count}フレームを再構成用に抽出しました",
     zh: "视频已抽取 {count} 帧用于重建",
+  },
+  "photoToCadRemoveShot": {
+    en: "Remove this shot",
+    ja: "この1枚を削除",
+    zh: "删除这一张",
+  },
+  "photoToCadRefCard": {
+    en: "Bank card (85.60 × 53.98 mm)",
+    ja: "キャッシュカード（85.60 × 53.98 mm）",
+    zh: "银行卡（85.60 × 53.98 mm）",
+  },
+  "photoToCadRefNone": {
+    en: "None — uncalibrated",
+    ja: "なし — 未校正",
+    zh: "不使用 — 未校准",
+  },
+  "photoToCadRefHelp": {
+    en: "The reference is located inside the mesh automatically. Choose none and the result carries no real size — and says so.",
+    ja: "基準はメッシュ内から自動的に検出されます。「なし」を選ぶと結果は実寸を持たず、その旨が明示されます。",
+    zh: "参照物会在网格中自动定位。选择「不使用」时结果没有真实尺寸，并会明确标注。",
+  },
+  "photoToCadSubmit": {
+    en: "Reconstruct",
+    ja: "再構成する",
+    zh: "开始重建",
+  },
+  "photoToCadUploading": {
+    en: "Uploading photos",
+    ja: "写真をアップロード中",
+    zh: "正在上传照片",
+  },
+  "photoToCadReconstructing": {
+    en: "Reconstructing",
+    ja: "再構成中",
+    zh: "正在重建",
+  },
+  "photoToCadStage": {
+    en: "Stage: {stage}",
+    ja: "段階: {stage}",
+    zh: "阶段：{stage}",
+  },
+  "photoToCadFailed": {
+    en: "Reconstruction failed",
+    ja: "再構成に失敗しました",
+    zh: "重建失败",
+  },
+  "photoToCadScaleApplied": {
+    en: "Calibrated: {measured} mm measured against a known {known} mm ({source}).",
+    ja: "校正済み: 既知の {known} mm に対し {measured} mm を実測（{source}）。",
+    zh: "已完成校准：已知 {known} mm，实测 {measured} mm（{source}）。",
+  },
+  "photoToCadDownloadStl": {
+    en: "Download STL",
+    ja: "STLをダウンロード",
+    zh: "下载 STL",
+  },
+  "photoToCadDownloadStep": {
+    en: "Download STEP",
+    ja: "STEPをダウンロード",
+    zh: "下载 STEP",
+  },
+  "photoToCadNoPhotos": {
+    en: "Add at least one photo first.",
+    ja: "先に写真を1枚以上追加してください。",
+    zh: "请先添加至少一张照片。",
+  },
+  "photoToCadClear": {
+    en: "Clear the panel",
+    ja: "パネルをリセット",
+    zh: "重置面板",
   },
 } as const;
 
