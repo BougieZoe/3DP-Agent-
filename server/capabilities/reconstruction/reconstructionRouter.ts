@@ -58,9 +58,13 @@ const submitSchema = z.object({
     scale_reference: z
       .object({
         kind: z.string().min(1),
-        known_mm: z.number().positive(),
+        // Optional now: kind=reference_object takes the recognised sheet's own long edge as
+        // the truth, and needs known_mm only to override a sheet that is not what it claims.
+        known_mm: z.number().positive().optional(),
         // Which mesh extent known_mm measures. Required for known_dimension, ignored otherwise.
         axis: z.enum(["x", "y", "z"]).optional(),
+        // Which reference to look for when kind=reference_object ("a4" | "card").
+        spec_id: z.string().min(1).optional(),
         // Two mesh points whose distance is known_mm. Required for two_point.
         points: z
           .array(z.object({ x: z.number(), y: z.number(), z: z.number() }))

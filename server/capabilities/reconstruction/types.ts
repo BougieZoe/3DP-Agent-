@@ -66,11 +66,21 @@ export interface ReconImageInput {
  */
 export interface ScaleReference {
   kind: string;
-  known_mm: number;
+  /**
+   * Millimetres the reference is known to be. Required for kind=known_dimension and
+   * kind=two_point. Optional for kind=reference_object, where the recognised sheet's own
+   * long edge is the truth; pass it only to override a mis-printed sheet.
+   */
+  known_mm?: number;
   /** Required for kind=known_dimension: which axis of the mesh the known_mm spans. */
   axis?: "x" | "y" | "z";
   /** Required for kind=two_point: two vertices of the reconstructed mesh. */
   points?: Array<{ x: number; y: number; z: number }>;
+  /**
+   * For kind=reference_object: which reference to look for inside the mesh ("a4" | "card").
+   * Omitted means "any reference in REFERENCE_SPECS".
+   */
+  spec_id?: string;
 }
 
 /**

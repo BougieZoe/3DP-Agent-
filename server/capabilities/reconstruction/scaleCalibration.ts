@@ -20,6 +20,7 @@ import path from "node:path";
 
 import { CapabilityError } from "./types.js";
 import type { AppliedScale, ScaleReference } from "./types.js";
+import { REFERENCE_SPECS, detectReference, type DetectionResult, type ReferenceCandidate } from "./referenceDetector.js";
 
 const HEADER_BYTES = 84;
 const TRIANGLE_BYTES = 50;
@@ -36,7 +37,7 @@ const MIN_MEASURABLE_MM = 1e-6;
  */
 export const MM_PER_UNIT: Record<"mm" | "cm" | "in", number> = { mm: 1, cm: 10, in: 25.4 };
 
-export const SUPPORTED_SCALE_KINDS = ["known_dimension", "two_point"] as const;
+export const SUPPORTED_SCALE_KINDS = ["known_dimension", "two_point", "reference_object"] as const;
 
 type Vec3 = readonly [number, number, number];
 
@@ -120,14 +121,16 @@ export function scaleStlBuffer(buffer: Buffer, factor: number, center: Vec3): Bu
 
 const AXIS_INDEX: Record<string, 0 | 1 | 2> = { x: 0, y: 1, z: 2 };
 
-function assertKnownMm(ref: ScaleReference): void {
-  if (!(typeof ref.known_mm === "number") || !Number.isFinite(ref.known_mm) || ref.known_mm <= 0) {
+function requireKnownMm(ref: ScaleReference): number {
+  const value = ref.known_mm;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw new CapabilityError(
       "SCALE_REFERENCE_INVALID",
       "scale_reference.known_mm must be a positive, finite number of millimetres.",
       422,
     );
   }
+  return value;
 }
 
 /**
@@ -139,7 +142,7 @@ export function resolveScaleFactor(
   bounds: StlBounds,
   ref: ScaleReference,
 ): { factor: number; measured_mm: number; source: string } {
-  assertKnownMm(ref);
+  const knownMm = requireKnownMm(ref);
 
   let measured: number;
   let source: string;
@@ -182,7 +185,9 @@ export function resolveScaleFactor(
     throw new CapabilityError(
       "SCALE_REFERENCE_UNSUPPORTED",
       `scale_reference.kind="${ref.kind}" is not supported in v1. Supported kinds: ` +
-        `${SUPPORTED_SCALE_KINDS.join(", ")}. Marker-based boards are not detected yet, and ` +
+        `${SUPPORTED_SCALE_KINDS.join(", ")}. kind=reference_object needs the mesh itself: ` +
+        "applyScaleReferenceToStlFile runs the detector first and then lands here with an " +
+        "ordinary two_point reference. Marker-based boards are still not detected, and " +
         "guessing a board pose would hand back a wrongly-scaled part.",
       422,
     );
@@ -196,7 +201,81 @@ export function resolveScaleFactor(
     );
   }
 
-  return { factor: ref.known_mm / measured, measured_mm: measured, source };
+  return { factor: knownMm / measured, measured_mm: measured, source };
+}
+
+/**
+ * Answer "there is an A4 sheet somewhere in this mesh — find it" as a concrete reference.
+ *
+ * The detector owns the geometry question (which coplanar cluster is a sheet, and how well its
+ * outline is actually supported); the spec owns the truth (297 x 210 mm). This function only
+ * joins the two: the detected long edge becomes a two_point reference whose known length is
+ * the spec's.
+ *
+ * A miss is a failure, never a fallback. Handing back an uncalibrated mesh while the request
+ * asked for `reference_object` in millimetres is exactly the silent-scale error this capability
+ * exists to prevent, so the error carries the closest candidate's measurements — that is what
+ * tells the operator whether to re-shoot (weak outline) or stop laying the sheet at an angle.
+ */
+export function resolveReferenceObject(
+  buffer: Buffer,
+  ref: ScaleReference,
+): { reference: ScaleReference; candidate: ReferenceCandidate; detection: DetectionResult } {
+  const wantedSpec = ref.spec_id;
+  if (wantedSpec && !REFERENCE_SPECS[wantedSpec]) {
+    throw new CapabilityError(
+      "SCALE_REFERENCE_INVALID",
+      `scale_reference.spec_id="${wantedSpec}" is not a known reference. Known: ` +
+        `${Object.keys(REFERENCE_SPECS).join(", ")}.`,
+      422,
+    );
+  }
+
+  const detection = detectReference(buffer);
+  // Candidates arrive best-first, so the head is the most confident accepted match.
+  const candidate = detection.candidates.find(
+    (item) => item.accepted && (!wantedSpec || item.specId === wantedSpec),
+  );
+
+  if (!candidate) {
+    const nearest =
+      detection.candidates.find((item) => !wantedSpec || item.specId === wantedSpec) ??
+      detection.closest;
+    const wanted = wantedSpec
+      ? REFERENCE_SPECS[wantedSpec].label
+      : Object.values(REFERENCE_SPECS)
+          .map((spec) => spec.label)
+          .join(" or ");
+    const diagnostic = nearest
+      ? ` Closest flat region: aspect ${nearest.aspect.toFixed(3)} ` +
+        `(off by ${(nearest.aspectError * 100).toFixed(1)}%), outline support ` +
+        `${(nearest.outlineFill * 100).toFixed(1)}%, planarity ` +
+        `${(nearest.planarity * 100).toFixed(2)}%, spanning ` +
+        `${(nearest.scaleRatio * 100).toFixed(1)}% of the model.`
+      : " No flat region was found in the mesh at all.";
+    throw new CapabilityError(
+      "REFERENCE_NOT_FOUND",
+      `No ${wanted} could be identified in the reconstructed mesh.${diagnostic} ` +
+        "Photograph the sheet flat and fully in frame, with its outline unobstructed.",
+      422,
+    );
+  }
+
+  const spec = REFERENCE_SPECS[candidate.specId];
+  const [a, b] = candidate.longEdgePoints;
+  return {
+    detection,
+    candidate,
+    reference: {
+      kind: "two_point",
+      // The spec's own long edge is the truth; only an explicit known_mm overrides it.
+      known_mm: ref.known_mm ?? spec.longMm,
+      points: [
+        { x: a[0], y: a[1], z: a[2] },
+        { x: b[0], y: b[1], z: b[2] },
+      ],
+    },
+  };
 }
 
 /**
@@ -212,8 +291,13 @@ export async function applyScaleReferenceToStlFile(
   units: "mm" | "cm" | "in" = "mm",
 ): Promise<AppliedScale> {
   const original = await fs.readFile(stlPath);
+  // "Find the A4 sheet in this mesh" is a different question from "this extent is N mm".
+  // Answer it first, then run the exact same arithmetic as an explicit two_point reference:
+  // one calibration path means one way to be wrong, and it is measurable.
+  const effective =
+    ref.kind === "reference_object" ? resolveReferenceObject(original, ref).reference : ref;
   const bounds = measureStl(original);
-  const { factor, measured_mm, source } = resolveScaleFactor(bounds, ref);
+  const { factor, measured_mm, source } = resolveScaleFactor(bounds, effective);
 
   // Calibration answers "how big is this really"; `units` answers "in which numbers do we say
   // it". Both must be applied here, together, or the STEP exporter will re-scale a mesh it was
@@ -238,7 +322,7 @@ export async function applyScaleReferenceToStlFile(
 
   return {
     source,
-    known_mm: ref.known_mm,
+    known_mm: requireKnownMm(effective),
     measured_mm,
     units,
     factor: vertexFactor,
