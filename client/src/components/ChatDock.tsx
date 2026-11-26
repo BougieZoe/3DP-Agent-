@@ -1,97 +1,38 @@
 /**
- * ChatDock — collapsible chat launcher with three attachment entry points
- * (file picker / drag & drop / paste) and a detachable snap window.
+ * ChatDock — floating chat launcher.
  *
- * Self-contained: renders a floating dock in the corner of the viewport so it
- * does not disturb the existing tab layout. Attachments are broadcast via a
- * `chat:attach` CustomEvent so ChatPanel (or any listener) can consume them.
+ * Uploads live in the page's own STL drop zone, so this dock deliberately owns
+ * no upload surface of its own: it is a launcher plus a camera entry that opens
+ * the photo → CAD reconstruction flow in place (the panel switches views, it
+ * does not nest a card inside a card).
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getTranslation, type Language, type TranslationKey } from "@/lib/i18n";
+import { useCallback, useState } from 'react';
+import { getTranslation, type Language } from '@/lib/i18n';
+import type { TranslationKey } from '@/lib/i18n';
+import { PhotoToCadPanel } from '@/components/PhotoToCadPanel';
 
 interface ChatDockProps {
   language: Language;
-  /** Start collapsed (default true) — the dock is an overlay, not a tab. */
   initiallyCollapsed?: boolean;
 }
 
+type DockView = 'chat' | 'photo';
+
 declare global {
   interface Window {
-    desktopChatFloat?: {
-      open: (origin?: string) => Promise<boolean>;
-      close: () => Promise<boolean>;
-      isOpen: () => Promise<boolean>;
-    };
+    desktopChatFloat?: { open: (origin: string) => Promise<void> | void };
   }
 }
 
-const tr = (language: Language, key: TranslationKey, fallback: string): string => {
-  try {
-    const value = getTranslation(language, key);
-    return value || fallback;
-  } catch {
-    return fallback;
-  }
+const tr = (language: Language, key: string, fallback: string): string => {
+  const value = getTranslation(language, key as TranslationKey);
+  return value && value !== key ? value : fallback;
 };
 
 export function ChatDock({ language, initiallyCollapsed = true }: ChatDockProps) {
   const [collapsed, setCollapsed] = useState(initiallyCollapsed);
-  const [files, setFiles] = useState<File[]>([]);
-  const [dragging, setDragging] = useState(false);
   const [floatOpen, setFloatOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dropRef = useRef<HTMLDivElement>(null);
-
-  const emitAttach = useCallback((incoming: File[]) => {
-    if (!incoming.length) return;
-    setFiles((prev) => [...prev, ...incoming]);
-    window.dispatchEvent(new CustomEvent("chat:attach", { detail: { files: incoming } }));
-  }, []);
-
-  // Paste entry: capture files from the clipboard anywhere in the document.
-  useEffect(() => {
-    const onPaste = (event: ClipboardEvent) => {
-      const items = event.clipboardData?.files;
-      if (!items || items.length === 0) return;
-      emitAttach(Array.from(items));
-    };
-    document.addEventListener("paste", onPaste);
-    return () => document.removeEventListener("paste", onPaste);
-  }, [emitAttach]);
-
-  // Drop entry: only active while the dock is expanded.
-  useEffect(() => {
-    const node = dropRef.current;
-    if (!node || collapsed) return;
-    const prevent = (event: DragEvent) => {
-      event.preventDefault();
-      event.stopPropagation();
-    };
-    const onEnter = (event: DragEvent) => {
-      prevent(event);
-      setDragging(true);
-    };
-    const onLeave = (event: DragEvent) => {
-      prevent(event);
-      setDragging(false);
-    };
-    const onDrop = (event: DragEvent) => {
-      prevent(event);
-      setDragging(false);
-      const dropped = event.dataTransfer?.files;
-      if (dropped?.length) emitAttach(Array.from(dropped));
-    };
-    node.addEventListener("dragenter", onEnter);
-    node.addEventListener("dragover", prevent);
-    node.addEventListener("dragleave", onLeave);
-    node.addEventListener("drop", onDrop);
-    return () => {
-      node.removeEventListener("dragenter", onEnter);
-      node.removeEventListener("dragover", prevent);
-      node.removeEventListener("dragleave", onLeave);
-      node.removeEventListener("drop", onDrop);
-    };
-  }, [collapsed, emitAttach]);
+  const [view, setView] = useState<DockView>('chat');
 
   const openDetached = useCallback(async () => {
     const bridge = window.desktopChatFloat;
@@ -100,24 +41,21 @@ export function ChatDock({ language, initiallyCollapsed = true }: ChatDockProps)
       setFloatOpen(true);
       return;
     }
-    window.open(`${window.location.origin}/?chatFloat=1`, "chat-float", "width=440,height=640");
+    window.open(`${window.location.origin}/?chatFloat=1`, 'chat-float', 'width=440,height=640');
     setFloatOpen(true);
   }, []);
+
+  const photoLabel = tr(language, 'photoToCad', 'Photo → CAD');
 
   if (collapsed) {
     return (
       <button
         type="button"
         onClick={() => setCollapsed(false)}
-        title={tr(language, "chatAI" as TranslationKey, "Chat")}
+        title={tr(language, 'chatAI', 'Chat')}
         className="fixed bottom-4 right-4 z-40 rounded-full bg-neutral-900/90 px-4 py-3 text-xs font-semibold text-white shadow-lg ring-1 ring-white/10 backdrop-blur transition hover:bg-neutral-800"
       >
-        {tr(language, "chatAI" as TranslationKey, "Chat").toUpperCase()}
-        {files.length > 0 && (
-          <span className="ml-2 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] text-black">
-            {files.length}
-          </span>
-        )}
+        {tr(language, 'chatAI', 'Chat').toUpperCase()}
       </button>
     );
   }
@@ -126,75 +64,70 @@ export function ChatDock({ language, initiallyCollapsed = true }: ChatDockProps)
     <div className="fixed bottom-4 right-4 z-40 w-80 rounded-xl border border-white/10 bg-neutral-950/95 p-3 text-xs text-neutral-200 shadow-2xl backdrop-blur">
       <div className="mb-2 flex items-center justify-between">
         <span className="font-semibold tracking-wide">
-          {tr(language, "chatAI" as TranslationKey, "Chat").toUpperCase()}
+          {tr(language, 'chatAI', 'Chat').toUpperCase()}
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={() => void openDetached()}
-            title="Detach"
-            className={`rounded px-2 py-1 ${floatOpen ? "bg-emerald-600 text-black" : "bg-white/10 hover:bg-white/20"}`}
+            onClick={openDetached}
+            disabled={floatOpen}
+            className="rounded-sm px-1.5 py-0.5 text-[10px] font-medium text-neutral-400 ring-1 ring-white/10 transition hover:bg-white/5 hover:text-neutral-100 disabled:opacity-40"
+            title="Open in a separate window"
           >
             Float
           </button>
           <button
             type="button"
             onClick={() => setCollapsed(true)}
+            className="rounded-sm px-1.5 py-0.5 text-[10px] font-medium text-neutral-400 ring-1 ring-white/10 transition hover:bg-white/5 hover:text-neutral-100"
             title="Collapse"
-            className="rounded bg-white/10 px-2 py-1 hover:bg-white/20"
           >
             —
           </button>
         </div>
       </div>
 
+      {/* Icon rail: the only live entry is the camera tab (photo → CAD). */}
       <div
-        ref={dropRef}
-        className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-3 text-center transition ${
-          dragging ? "border-emerald-400 bg-emerald-500/10" : "border-white/15 bg-white/[0.03]"
-        }`}
+        role="tablist"
+        aria-label={photoLabel}
+        className="mb-3 flex items-center gap-1 border-b border-white/10 pb-2"
       >
-        <span className="text-[11px] leading-relaxed text-neutral-400">
-          {tr(language, "uploadStlBegin" as TranslationKey, "Drop files")}
-        </span>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="rounded bg-white/10 px-2 py-1 hover:bg-white/20"
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'photo'}
+          aria-label={photoLabel}
+          title={view === 'photo' ? `${photoLabel} · close` : photoLabel}
+          onClick={() => setView(view === 'photo' ? 'chat' : 'photo')}
+          className={`flex items-center gap-1.5 rounded-sm border px-2 py-1 text-[11px] font-medium transition-colors ${
+            view === 'photo'
+              ? 'border-primary/50 bg-primary/10 text-primary'
+              : 'border-white/10 text-neutral-400 hover:border-primary/40 hover:text-primary'
+          }`}
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
           >
-            Choose
-          </button>
-          <span className="text-[11px] text-neutral-500">drag &amp; drop · paste</span>
-        </div>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(event) => {
-            const picked = event.target.files;
-            if (picked?.length) emitAttach(Array.from(picked));
-            event.currentTarget.value = "";
-          }}
-        />
+            <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+            <circle cx="12" cy="13" r="3" />
+          </svg>
+          <span>{photoLabel}</span>
+        </button>
       </div>
 
-      {files.length > 0 && (
-        <ul className="mt-2 max-h-28 space-y-1 overflow-auto">
-          {files.map((file, index) => (
-            <li key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 rounded bg-white/5 px-2 py-1">
-              <span className="truncate">{file.name}</span>
-              <button
-                type="button"
-                onClick={() => setFiles((prev) => prev.filter((_, i) => i !== index))}
-                className="text-neutral-500 hover:text-red-400"
-              >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
+      {view === 'photo' && (
+        <div className="max-h-[60vh] overflow-y-auto pr-0.5">
+          <PhotoToCadPanel language={language} embedded />
+        </div>
       )}
     </div>
   );
