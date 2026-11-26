@@ -8,6 +8,8 @@
  */
 
 import { callAI, getActiveProvider, getKey } from '@/lib/apiKeys';
+import { CONTENT, translate } from '@shared/i18n/content';
+import type { ContentLang } from '@shared/i18n/content';
 
 export type IntentAction =
   | 'analyze'
@@ -235,29 +237,12 @@ export async function parseIntent(text: string): Promise<UserIntent> {
  * Get suggested commands
  */
 export function getSuggestedCommands(language: string = 'en'): string[] {
-  if (language === 'zh') {
-    return [
-      '分析这个模型',
-      '用 PETG 打印',
-      '预测打印时间',
-      '导出为 STL',
-      '需要支撑吗？',
-    ];
-  }
-  if (language === 'ja') {
-    return [
-      'このモデルを分析して',
-      'PETGで印刷して',
-      '印刷時間を予測して',
-      'STLにエクスポート',
-      'サポートが必要？',
-    ];
-  }
+  const lang = language as ContentLang;
   return [
-    'Analyze this model',
-    'Print with PETG',
-    'How long will this take?',
-    'Export as STL',
-    'Do I need supports?',
+    translate(CONTENT, 'suggest.analyze', lang),
+    translate(CONTENT, 'suggest.petg', lang),
+    translate(CONTENT, 'suggest.time', lang),
+    translate(CONTENT, 'suggest.export', lang),
+    translate(CONTENT, 'suggest.support', lang),
   ];
 }

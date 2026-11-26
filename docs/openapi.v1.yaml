@@ -1,0 +1,563 @@
+openapi: 3.1.0
+info:
+  title: 3DP Agent — Photo-to-CAD Capability
+  version: 1.0.0
+  description: |
+    Versioned capability contract for photo-to-CAD reconstruction.
+
+    Rules that govern this file (see docs/capability-open-standard-contract.md,
+    AGENTS.md "Hard rules — Open-Standard Capability Discipline"):
+
+    - Once a route shape is published here, breaking changes require a new major
+      route prefix (`/v2/...`); `v1` stays live for at least 12 months.
+    - Fields may be added, never removed, retyped, or repurposed.
+    - Long work is a job: submit returns immediately, results come from polling.
+servers:
+  - url: http://127.0.0.1:3001
+    description: Local default install (single tenant, provider=meshroom)
+tags:
+  - name: reconstruction
+  - name: capability
+paths:
+  /v1/reconstructions:
+    post:
+      tags: [reconstruction]
+      operationId: submitReconstruction
+      summary: Submit a photo-to-CAD job
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Replaying the same key returns the original job instead of starting a second reconstruction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconstructionSubmitRequest'
+            example:
+              tenant_id: local
+              workspace_id: ws_123
+              input:
+                images:
+                  - asset_id: ast_001
+                    role: overview
+                  - asset_id: ast_002
+                    role: detail
+                scale_reference:
+                  kind: calibration_board
+                  known_mm: 50
+              output:
+                formats: [step, stl, glb]
+                units: mm
+      responses:
+        '202':
+          description: Job accepted; poll the returned job id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconstructionJob'
+        '200':
+          description: Idempotent replay of an earlier submit.
+          headers:
+            idempotency-replayed:
+              schema:
+                type: string
+              description: Present and set to "true" when the response replays an existing job.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconstructionJob'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          description: >
+            Refused before a job was created: either no reconstruction engine is available
+            (ENGINE_NOT_AVAILABLE) or STEP was requested while no CAD kernel can produce it
+            (STEP_EXPORT_UNAVAILABLE). Nothing ran, so nothing is billable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/reconstructions/{job_id}:
+    get:
+      tags: [reconstruction]
+      operationId: getReconstruction
+      summary: Poll a reconstruction job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^job_[0-9a-f]{12}$'
+      responses:
+        '200':
+          description: Current job state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconstructionJob'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/reconstructions/{job_id}/cancel:
+    post:
+      tags: [reconstruction]
+      operationId: cancelReconstruction
+      summary: Cancel a running reconstruction
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Cancellation recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconstructionJob'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/reconstructions/{job_id}/outputs/{format}:
+    get:
+      tags: [reconstruction]
+      operationId: downloadReconstructionOutput
+      summary: Download an output in an open format
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [step, stl, glb, 3mf, obj]
+      responses:
+        '200':
+          description: Binary file.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/capabilities/reconstruction:
+    get:
+      tags: [capability]
+      operationId: describeReconstructionCapability
+      summary: Self-description of the capability and its active engine
+      responses:
+        '200':
+          description: Capability descriptor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityDescriptor'
+components:
+  responses:
+    BadRequest:
+      description: Request body or parameters do not match the contract.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    NotFound:
+      description: Job or output not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    EngineUnavailable:
+      description: No reconstruction engine is available on this install.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  schemas:
+    ReconstructionSubmitRequest:
+      type: object
+      required: [input]
+      properties:
+        tenant_id:
+          type: string
+          description: Defaults to "local" when omitted. Reserved for future isolation.
+          example: local
+        workspace_id:
+          type: string
+          description: Defaults to "local" when omitted.
+          example: ws_123
+        input:
+          type: object
+          required: [images]
+          properties:
+            images:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                properties:
+                  asset_id:
+                    type: string
+                    example: ast_001
+                  path:
+                    type: string
+                    description: Local provider only. Never accepted from remote tenants.
+                    example: /Users/me/photos/part-a.jpg
+                  role:
+                    type: string
+                    example: overview
+            scale_reference:
+              type: object
+              description: >
+                Pins the reconstruction to a real-world size. Photogrammetry reconstructs up to
+                similarity, so the reference is applied as a geometry correction after
+                reconstruction; it is not an engine hint. Supported kinds are
+                `known_dimension` and `two_point`. `calibration_board` is not supported in v1:
+                marker detection is not implemented, and guessing a board pose would silently
+                hand back a wrongly-scaled part.
+              properties:
+                kind:
+                  type: string
+                  enum: [known_dimension, two_point]
+                  example: known_dimension
+                known_mm:
+                  type: number
+                  description: The known length, in millimetres.
+                  example: 120.5
+                axis:
+                  type: string
+                  enum: [x, y, z]
+                  description: Required for kind=known_dimension — the mesh extent known_mm measures.
+                  example: x
+                points:
+                  type: array
+                  description: Required for kind=two_point — the two mesh points whose distance is known_mm.
+                  minItems: 2
+                  maxItems: 2
+                  items:
+                    type: object
+                    properties:
+                      x: { type: number }
+                      y: { type: number }
+                      z: { type: number }
+                    required: [x, y, z]
+              required: [kind, known_mm]
+        output:
+          type: object
+          properties:
+            formats:
+              type: array
+              items:
+                type: string
+                enum: [step, stl, glb, 3mf, obj]
+              example: [step, stl, glb]
+            units:
+              type: string
+              enum: [mm, cm, in]
+              example: mm
+        engine_hint:
+          type: string
+          description: Advisory only; the server may ignore it.
+          example: meshroom
+        webhook_url:
+          type: string
+          format: uri
+          example: https://customer.example/hooks/3dp
+    ReconstructionJob:
+      type: object
+      required: [job_id, status, created_at]
+      properties:
+        job_id:
+          type: string
+          example: job_9f3a1b2c3d4e
+        tenant_id:
+          type: string
+          example: local
+        workspace_id:
+          type: string
+          example: local
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed, cancelled]
+          example: running
+        progress:
+          type: object
+          properties:
+            stage:
+              type: string
+              example: dense_reconstruction
+            percent:
+              type: number
+              example: 62
+        engine:
+          type: object
+          properties:
+            provider:
+              type: string
+              example: meshroom
+            version:
+              type: string
+              example: unknown
+        outputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconstructionOutput'
+        usage:
+          allOf:
+            - $ref: '#/components/schemas/UsageRecord'
+          nullable: true
+          description: Null until the job reaches a terminal state.
+        scale:
+          allOf:
+            - $ref: '#/components/schemas/AppliedScale'
+          nullable: true
+          description: >
+            Present once a scale reference has been applied to the delivered geometry. Absent
+            means the mesh is at the engine's arbitrary scale — do not assume millimetres.
+        error:
+          $ref: '#/components/schemas/CapabilityError'
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-26T10:00:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2026-11-26T10:02:11Z'
+        output:
+          type: object
+          description: The output spec the caller asked for; echoed so results can be judged against the request.
+          properties:
+            formats:
+              type: array
+              items:
+                type: string
+                enum: [step, stl, glb, 3mf, obj]
+              example: [step, stl]
+            units:
+              type: string
+              enum: [mm, cm, in]
+              example: mm
+        webhook:
+          type: object
+          description: >
+            Callback status. The webhook URL itself is a bearer secret and is never returned
+            once accepted; this object only reports whether one is configured and how the
+            single terminal delivery went.
+          required: [configured]
+          properties:
+            configured:
+              type: boolean
+              example: true
+            last_delivery:
+              allOf:
+                - $ref: '#/components/schemas/WebhookDelivery'
+              nullable: true
+              description: Null until the terminal event has been attempted exactly once.
+    WebhookDelivery:
+      type: object
+      description: Outcome of the single delivery attempt for a job's terminal event.
+      required: [status, at]
+      properties:
+        status:
+          type: string
+          enum: [delivered, failed]
+          example: delivered
+        http_status:
+          type: integer
+          nullable: true
+          example: 204
+        error:
+          type: string
+          example: Webhook responded 502.
+        at:
+          type: string
+          format: date-time
+          example: '2026-11-26T10:02:12Z'
+    AppliedScale:
+      type: object
+      description: What calibration was actually done to the geometry — never inferred.
+      required: [source, known_mm, measured_mm, units, factor, applied_at]
+      properties:
+        source:
+          type: string
+          description: '`axis:x` | `axis:y` | `axis:z` | `two_point`'
+          example: axis:x
+        known_mm:
+          type: number
+          description: The caller's reference length, always in millimetres.
+          example: 120.5
+        measured_mm:
+          type: number
+          description: The mesh extent along `source` before scaling, in the engine's own units.
+          example: 2.41
+        units:
+          type: string
+          enum: [mm, cm, in]
+          description: >-
+            Unit the delivered mesh is numbered in; mirrors `output.units`. Calibration stays
+            verifiable arithmetically - the mesh extent along `source` equals known_mm divided
+            by the millimetres-per-unit factor of this unit (1 for mm, 10 for cm, 25.4 for in).
+          example: mm
+        factor:
+          type: number
+          description: >-
+            Multiplier actually applied to every vertex about the bounding-box centre. It
+            already includes the millimetre-to-`units` conversion, so do not convert units
+            again after reading it.
+          example: 50.0
+        applied_at:
+          type: string
+          format: date-time
+          example: '2026-11-26T10:02:10Z'
+    ReconstructionOutput:
+      type: object
+      required: [format, bytes]
+      properties:
+        format:
+          type: string
+          enum: [step, stl, glb, 3mf, obj]
+          example: stl
+        asset_id:
+          type: string
+          example: ast_900
+        path:
+          type: string
+          description: Absolute path on a local install; absent for remote providers.
+          example: /Users/me/Library/Application Support/.../mesh.stl
+        bytes:
+          type: integer
+          example: 4812331
+    UsageRecord:
+      type: object
+      description: One row per executed job — the metering/billing unit.
+      required: [job_id, tenant_id, workspace_id, provider, images, wall_seconds, output_bytes]
+      properties:
+        job_id:
+          type: string
+          example: job_9f3a1b2c3d4e
+        tenant_id:
+          type: string
+          example: local
+        workspace_id:
+          type: string
+          example: local
+        provider:
+          type: string
+          example: meshroom
+        provider_version:
+          type: string
+          example: unknown
+        images:
+          type: integer
+          example: 12
+        wall_seconds:
+          type: integer
+          example: 131
+        gpu_seconds:
+          type: integer
+          nullable: true
+          description: Null when the engine reports no GPU telemetry; never estimated.
+          example: null
+        output_bytes:
+          type: integer
+          example: 4812331
+        finished_at:
+          type: string
+          format: date-time
+          example: '2026-11-26T10:02:11Z'
+    CapabilityError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: >
+            Stable machine-readable identifier. Scale-related values: SCALE_REFERENCE_UNSUPPORTED
+            (kind not calibratable, e.g. calibration_board), SCALE_REFERENCE_INVALID (axis or
+            points missing/malformed), SCALE_REFERENCE_DEGENERATE (selected extent is zero),
+            SCALE_REFERENCE_UNAVAILABLE (no mesh to calibrate), SCALE_APPLY_FAILED.
+          example: ENGINE_NOT_AVAILABLE
+        message:
+          type: string
+          example: No Meshroom binary available on this host.
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/CapabilityError'
+        job_id:
+          type: string
+          example: job_9f3a1b2c3d4e
+    CapabilityDescriptor:
+      type: object
+      required: [capability, contract_version, id, available]
+      properties:
+        capability:
+          type: string
+          example: photo-to-cad
+        contract_version:
+          type: string
+          example: v1
+        id:
+          type: string
+          example: meshroom
+        version:
+          type: string
+          example: unknown
+        available:
+          type: boolean
+          example: false
+        unavailable_reason:
+          type: string
+          example: meshroom_batch not found; set RECON_MESHROOM_BIN or install Meshroom
+        inputs:
+          type: array
+          items:
+            type: string
+          example: [image_set, scale_reference]
+        outputs:
+          type: array
+          items:
+            type: string
+          example: [step, stl, glb, obj]
+        needs_gpu:
+          type: boolean
+          example: true
+        license:
+          type: string
+          example: MIT / BSD family (AliceVision, Meshroom)
+        event_types:
+          type: array
+          items:
+            type: string
+          example: [io.3dp.reconstruction.succeeded.v1]
+        derived_outputs:
+          type: object
+          description: >
+            Formats produced by conversion rather than emitted by the engine. Advertised
+            separately so a caller can decide before submitting whether to ask for STEP: a
+            photogrammetry engine outputs meshes, STEP requires a CAD kernel.
+          properties:
+            step:
+              type: object
+              required: [available]
+              properties:
+                available:
+                  type: boolean
+                  example: false
+                kernel:
+                  type: string
+                  example: freecad
+                unavailable_reason:
+                  type: string
+                  example: No FreeCAD kernel found; install FreeCAD ('brew install --cask freecad') or set RECON_STEP_BIN to a runnable freecadcmd.

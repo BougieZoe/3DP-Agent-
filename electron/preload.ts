@@ -7,3 +7,12 @@ contextBridge.exposeInMainWorld("desktop", {
   isDesktop: true,
   platform: process.platform,
 });
+
+// Detachable chat panel bridge (Electron only).
+import { ipcRenderer as chatFloatRenderer } from "electron";
+
+contextBridge.exposeInMainWorld("desktopChatFloat", {
+  open: (origin?: string) => chatFloatRenderer.invoke("chat-float:open", origin),
+  close: () => chatFloatRenderer.invoke("chat-float:close"),
+  isOpen: () => chatFloatRenderer.invoke("chat-float:is-open")
+});

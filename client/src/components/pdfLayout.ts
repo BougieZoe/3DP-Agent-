@@ -1,4 +1,5 @@
 import type { Language, TrafficLight } from "./reportTypes";
+import { CONTENT, translate } from "@shared/i18n/content";
 
 // ─── JsPDF interface ───────────────────────────────────────────────────────────
 
@@ -94,7 +95,7 @@ export function drawHeader(
   doc.setFont(pdfActiveFont, "normal");
   doc.setFontSize(20);
   doc.setTextColor(...C.ink);
-  doc.text(lang === "ja" ? "プリント分析レポート" : "Print Analysis Report", PAGE_M, 36);
+  doc.text(translate(CONTENT, 'pdf.title', lang), PAGE_M, 36);
 
   // File name + date
   doc.setFont(pdfActiveFont, "normal");

@@ -5,6 +5,7 @@
  * Combines findings, recommendations, and cost breakdown into a unified report.
  */
 
+import { CONTENT, translate } from '@shared/i18n/content';
 import type {
   UnifiedAnalysis,
   StructuredReport,
@@ -17,6 +18,7 @@ import type {
 } from './types';
 import type { AgentRunSummary } from '../agents/types';
 import { extractFindings } from './findingExtractor';
+import type { ContentLang } from '@shared/i18n/content';
 import { aggregateRecommendations } from './recommendationAggregator';
 import { calculateCostBreakdown } from './costCalculator';
 
@@ -24,6 +26,7 @@ interface ReportGeneratorOptions {
   material?: { name: string; family: string };
   printerProfile?: { name: string };
   analysisMode?: 'rules' | 'llm' | 'hybrid';
+  language?: ContentLang;
 }
 
 /**
@@ -34,14 +37,14 @@ export function generateStructuredReport(
   agentSummary: AgentRunSummary,
   options: ReportGeneratorOptions = {},
 ): StructuredReport {
-  const findings = extractFindings(analysis);
-  const recommendations = aggregateRecommendations(findings, analysis);
+  const findings = extractFindings(analysis, options.language ?? 'en');
+  const recommendations = aggregateRecommendations(findings, analysis, options.language ?? 'en');
   const costBreakdown = calculateCostBreakdown(analysis);
 
   const metadata = buildMetadata(analysis, options);
   const executiveSummary = buildExecutiveSummary(analysis, agentSummary, findings, recommendations, costBreakdown);
   const confidenceBreakdown = buildConfidenceBreakdown(analysis, agentSummary);
-  const actionItems = buildActionItems(recommendations, findings);
+  const actionItems = buildActionItems(recommendations, findings, options.language ?? 'en');
 
   return {
     metadata,
@@ -135,6 +138,7 @@ function buildConfidenceBreakdown(
 function buildActionItems(
   recommendations: Recommendation[],
   findings: Finding[],
+  lang: ContentLang,
 ): ActionItem[] {
   return recommendations
     .sort((a, b) => {
@@ -146,7 +150,15 @@ function buildActionItems(
       order: index + 1,
       action: rec.title,
       reason: rec.description,
-      estimatedTime: rec.effort === 'easy' ? '5分钟' : rec.effort === 'moderate' ? '30分钟' : '2小时',
+      estimatedTime: translate(
+        CONTENT,
+        rec.effort === 'easy'
+          ? 'action.time.easy'
+          : rec.effort === 'moderate'
+            ? 'action.time.moderate'
+            : 'action.time.deep',
+        lang,
+      ),
       dependencies: rec.relatedFindings,
     }));
 }

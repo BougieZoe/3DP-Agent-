@@ -189,3 +189,24 @@ export function getSupportedLanguages(): Array<{ code: string; name: string }> {
     { code: 'zh', name: 'Chinese' },
   ];
 }
+
+/**
+ * Choose the best available speech engine.
+ *
+ * Order: local open-source Whisper (works in Electron and non-Chrome shells,
+ * handles every UI language) -> browser Web Speech API -> error.
+ */
+export async function createBestVoiceController(
+  config: VoiceInputConfig = {},
+): Promise<VoiceController> {
+  const { isLocalAsrAvailable, createLocalVoiceController } = await import('./localAsr');
+  if (await isLocalAsrAvailable()) {
+    return createLocalVoiceController(config);
+  }
+  if (isSpeechRecognitionSupported()) {
+    return createVoiceController(config);
+  }
+  throw new Error(
+    'No speech engine available: install whisper.cpp (ASR_BIN + ASR_MODEL) or mlx-whisper',
+  );
+}

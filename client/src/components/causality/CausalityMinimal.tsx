@@ -43,16 +43,16 @@ export function CausalityMinimal({
     <div className="space-y-3">
       {/* 1 摘要 */}
       <div className={`${PANEL.border} ${PANEL.rounded} ${PANEL.padding} bg-background/60 flex items-center gap-2`}>
-        <span className="text-[11px] font-mono text-foreground">{graph.events.length} 事件</span>
+        <span className="text-[11px] font-mono text-foreground">{translate(CONTENT, 'causality.eventCount', language, { count: graph.events.length })}</span>
         <span className="text-muted-foreground/20">→</span>
-        <span className="text-[11px] font-mono text-muted-foreground">{aggregated.length} 模式</span>
+        <span className="text-[11px] font-mono text-muted-foreground">{translate(CONTENT, 'causality.patternCount', language, { count: aggregated.length })}</span>
         <span className="text-muted-foreground/20">→</span>
-        {best ? <span className="text-[11px] font-mono text-cyan-400">1 个动作 -{best.riskReduction}%</span> : <span className="text-[11px] font-mono text-muted-foreground/40">暂无动作</span>}
+        {best ? <span className="text-[11px] font-mono text-cyan-400">{translate(CONTENT, 'causality.bestFix', language, { pct: best.riskReduction })}</span> : <span className="text-[11px] font-mono text-muted-foreground/40">{translate(CONTENT, 'causality.noSuggestion', language)}</span>}
       </div>
 
       {/* 1 图：迷你因果图 */}
       <div className={`${PANEL.border} ${PANEL.rounded} ${PANEL.padding} bg-background/40`}>
-        <div className={`${PANEL.fontLabel} mb-2`}>Causal Graph · 点节点看详情</div>
+        <div className={`${PANEL.fontLabel} mb-2`}>{translate(CONTENT, 'causality.minimal.graphHint', language)}</div>
         <div className="flex flex-wrap gap-1.5">
           {sorted.map(ev => (
             <button
@@ -66,7 +66,7 @@ export function CausalityMinimal({
           ))}
         </div>
         <div className="mt-2 flex items-center gap-1 text-[10px] font-mono text-muted-foreground/30">
-          <span>→</span> <span>边标 11 条因果，点节点钻取</span>
+          <span>→</span> <span>{translate(CONTENT, 'causality.minimal.edgeHint', language)}</span>
         </div>
       </div>
 
@@ -81,7 +81,7 @@ export function CausalityMinimal({
                   <span className="text-[9px] font-mono text-muted-foreground/30">mini 3D ×{a.total}</span>
                 </div>
                 <div className="text-[11px] font-mono text-foreground truncate">{a.name}</div>
-                <div className="text-[10px] font-mono text-muted-foreground/60">影响 {a.total} 处</div>
+                <div className="text-[10px] font-mono text-muted-foreground/60">{translate(CONTENT, 'causality.minimal.impact', language, { count: a.total })}</div>
                 {sug && (
                   <div className="flex gap-1 mt-auto">
                     {onPreview && <button onClick={() => onPreview(sug)} className="flex-1 text-[10px] font-mono py-1.5 rounded-sm border border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10">Preview</button>}
@@ -93,7 +93,7 @@ export function CausalityMinimal({
           })}
         </div>
       ) : (
-        <div className={`${PANEL.border} ${PANEL.rounded} ${PANEL.padding} bg-background/40 text-[11px] font-mono text-muted-foreground/40 text-center`}>暂无模式 · 模型较完美</div>
+        <div className={`${PANEL.border} ${PANEL.rounded} ${PANEL.padding} bg-background/40 text-[11px] font-mono text-muted-foreground/40 text-center`}>{translate(CONTENT, 'causality.minimal.noPatternsPerfect', language)}</div>
       )}
     </div>
   )

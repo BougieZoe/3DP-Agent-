@@ -10,6 +10,7 @@ import type { UnifiedAnalysis } from '@/analysis/types';
 import type { Material } from '@shared/domain/material';
 import type { VendorCapacityAdapter } from '@/lib/vendorCapacity';
 import { CAPACITY_STALENESS_THRESHOLD_MS, isCapacityStale } from '@/lib/vendorCapacity';
+import { pickLang, type ContentLang } from '@shared/i18n/content';
 
 interface QuoteParams {
   analysis: UnifiedAnalysis;
@@ -167,7 +168,7 @@ export async function generateQuote(params: QuoteParams): Promise<QuoteResult | 
   };
 }
 
-export function formatQuoteForDisplay(quote: QuoteResult, language: 'en' | 'ja' | 'zh' = 'en'): string {
+export function formatQuoteForDisplay(quote: QuoteResult, language: ContentLang = 'en'): string {
   const { price, leadTimeDays, notes } = quote;
 
   const lines = {
@@ -203,7 +204,7 @@ export function formatQuoteForDisplay(quote: QuoteResult, language: 'en' | 'ja' 
     ],
   };
 
-  const result = lines[language] || lines.en;
+  const result = pickLang(lines, language);
   if (notes.length > 0) {
     result.push(`\nNotes: ${notes.join(', ')}`);
   }

@@ -10,6 +10,7 @@ import { createSlicerRouter } from "./slicerRouter";
 import { createAnalyzeRouter } from "./analyzeRouter";
 import { createFleetRouter } from "./fleetRouter";
 import { createStepRouter } from "./stepRouter";
+import { createAsrRouter } from "./asrRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
 import { relayLLM, relayLLMStream } from "./llmRelay";
@@ -22,6 +23,12 @@ import healthRouter from "./healthRouter";
 import { initShutdown } from "./shutdown";
 import { setupWebSocketServer } from "./websocket";
 import { setupCollaborationServer } from "./collaboration";
+import {
+  createReconstructionCapabilityRouter,
+  createReconstructionRouter,
+  reconRootDir,
+} from "./capabilities/reconstruction/reconstructionRouter";
+import { createReconstructionUploadRouter } from "./capabilities/reconstruction/uploadRouter";
 import { loadKeysSync, startWatching, stopWatching, reloadKeys, getKeys, getLastLoadedAt, getLastError } from "./config/llmKeys";
 
 // Real address of the AMD machine, read from an environment variable instead
@@ -260,6 +267,27 @@ export function createApp() {
   app.use("/api/analyze", rateLimit, createAnalyzeRouter());
 
   // -------------------------------------------------------------------------
+  // Open-standard capability surface (/v1/...), starting with Photo-to-CAD.
+  //
+  // These routes live outside /api on purpose: /v1/... is a published, versioned
+  // contract (docs/capability-open-standard-contract.md), not an internal API.
+  // Once a v1 route ships, breaking it is only allowed as v2 — see AGENTS.md
+  // "Hard rules — Open-Standard Capability Discipline".
+  // Photo intake, mounted ahead of the job route on purpose: the v1 submit contract takes
+  // image paths, a browser only has bytes, and this is the single place that turns one into
+  // the other. It writes into the same data tree the jobs live in.
+  app.use(
+    "/v1/reconstructions/uploads",
+    createReconstructionUploadRouter({ rootDir: reconRootDir() }),
+  );
+  app.use(
+    "/v1/reconstructions",
+    express.json({ limit: "1mb" }),
+    createReconstructionRouter(),
+  );
+  app.use("/v1/capabilities/reconstruction", createReconstructionCapabilityRouter());
+
+  // -------------------------------------------------------------------------
   // LLM relay (/api/llm) — the CORS fix for BYOK providers.
   //
   // Unlike the bridges above (which execute code on this host), this route only
@@ -315,6 +343,9 @@ export function createApp() {
   });
 
   // Share report links — public, no auth required
+  // Local open-source ASR (whisper.cpp / MLX Whisper) for voice control.
+  app.use("/api/asr", express.raw({ type: ["audio/*"], limit: "25mb" }), createAsrRouter());
+
   app.use("/api/share", express.json({ limit: "5mb" }), createShareRouter());
 
   // Stripe payment — checkout, webhook, portal

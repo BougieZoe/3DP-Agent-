@@ -6,6 +6,8 @@
  */
 
 import type { UnifiedAnalysis, CostBreakdown } from './types';
+import { CONTENT, translate } from '@shared/i18n/content';
+import type { ContentLang } from '@shared/i18n/content';
 
 // Default cost rates
 const DEFAULT_PRINT_TIME_RATE_USD_PER_HOUR = 2.0;
@@ -58,15 +60,15 @@ export function calculateCostBreakdown(analysis: UnifiedAnalysis): CostBreakdown
 /**
  * Format cost breakdown for display.
  */
-export function formatCostBreakdown(cost: CostBreakdown): string {
+export function formatCostBreakdown(cost: CostBreakdown, lang: ContentLang = 'en'): string {
   const lines = [
-    `材料成本: $${cost.materialCostUsd.toFixed(2)}`,
-    `打印时间成本: $${cost.printTimeCostUsd.toFixed(2)}`,
-    `支撑材料成本: $${cost.supportCostUsd.toFixed(2)}`,
-    `后处理成本: $${cost.postProcessingCostUsd.toFixed(2)}`,
-    `总成本: $${cost.totalCostUsd.toFixed(2)}`,
-    `失败风险成本: $${cost.failureRiskCostUsd.toFixed(2)}`,
-    `预期总成本: $${cost.expectedTotalCostUsd.toFixed(2)}`,
+    translate(CONTENT, 'cost.line.material', lang, { amount: `$${cost.materialCostUsd.toFixed(2)}` }),
+    translate(CONTENT, 'cost.line.printTime', lang, { amount: `$${cost.printTimeCostUsd.toFixed(2)}` }),
+    translate(CONTENT, 'cost.line.support', lang, { amount: `$${cost.supportCostUsd.toFixed(2)}` }),
+    translate(CONTENT, 'cost.line.postProcessing', lang, { amount: `$${cost.postProcessingCostUsd.toFixed(2)}` }),
+    translate(CONTENT, 'cost.line.total', lang, { amount: `$${cost.totalCostUsd.toFixed(2)}` }),
+    translate(CONTENT, 'cost.line.failureRisk', lang, { amount: `$${cost.failureRiskCostUsd.toFixed(2)}` }),
+    translate(CONTENT, 'cost.line.expectedTotal', lang, { amount: `$${cost.expectedTotalCostUsd.toFixed(2)}` }),
   ];
 
   return lines.join('\n');

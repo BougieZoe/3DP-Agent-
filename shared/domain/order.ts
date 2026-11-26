@@ -1,3 +1,6 @@
+import { CONTENT, translate } from '../i18n/content';
+import type { ContentLang } from '../i18n/content';
+
 /**
  * Order — 3D Printing Order Data Model
  *
@@ -106,10 +109,9 @@ export const STATUS_COLORS: Record<OrderStatus, string> = {
   cancelled: 'text-red-400 bg-red-400/10',
 };
 
-// Shipping terms labels
-export const SHIPPING_TERMS: Record<ShippingTerms, { en: string; zh: string; ja: string }> = {
-  EXW: { en: 'Ex Works', zh: '工厂交货', ja: '工場渡し' },
-  FOB: { en: 'Free on Board', zh: '船上交货', ja: '本船渡し' },
-  CIF: { en: 'Cost, Insurance & Freight', zh: '到岸价', ja: 'CIF' },
-  DDP: { en: 'Delivered Duty Paid', zh: '完税后交货', ja: '関税込持込渡し' },
-};
+// Shipping terms labels — copy lives in the catalogue so every locale can be reached.
+export const SHIPPING_TERMS: ShippingTerms[] = ['EXW', 'FOB', 'CIF', 'DDP'];
+
+export function shippingTermLabel(terms: ShippingTerms, lang: ContentLang = 'en'): string {
+  return translate(CONTENT, `order.incoterm.${terms}`, lang);
+}

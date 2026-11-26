@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
+import type { Language } from '@/lib/i18n';
+import { pickLang } from '@shared/i18n/content';
 import type { UnifiedAnalysis } from '@/analysis/types';
 import type { Material } from '@shared/domain/material';
 
 interface Props {
   unifiedAnalysis: UnifiedAnalysis;
   material: Material;
-  language: 'en' | 'ja' | 'zh';
+  language: Language;
 }
 
 const L = {
@@ -25,7 +27,7 @@ const MAT_ENV: Record<string, { recyclable: boolean; co2PerKg: number }> = {
 };
 
 export function SustainabilityCard({ unifiedAnalysis, material, language }: Props) {
-  const t = L[language] || L.en;
+  const t = pickLang(L, language);
 
   const data = useMemo(() => {
     const m = unifiedAnalysis.metrics?.result;

@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import type { Language } from '@/lib/i18n';
+import { CONTENT, translate } from '@shared/i18n/content';
 import type { UnifiedAnalysis } from '@/analysis/types';
 import { MATERIALS, type Material } from '@shared/domain/material';
 import { resolveWasteFate, scoreBand, type ScoreBand, type WasteFate } from '@/analysis/loop';
@@ -7,49 +9,41 @@ import { loadLedger, clearLedger, ledgerTotals, ledgerToCSV, type LoopLedgerEntr
 interface Props {
   unifiedAnalysis: UnifiedAnalysis;
   material: Material;
-  language: 'en' | 'ja' | 'zh';
+  language: Language;
   onNavigate: (tab: 'geometry' | 'agents') => void;
 }
 
-const L = {
-  en: {
-    title: 'CIRCULARITY', firstTime: 'FIRST-TIME-RIGHT', waste: 'WASTE FATE', eol: 'END OF LIFE',
-    ledger: 'LEDGER', matrix: 'PROCESS × MATERIAL', drivers: 'Top risks', fixInGeometry: 'Fix in GEOMETRY →',
-    optimizeInAgents: 'Optimize in AGENTS →', noLoop: 'Run analysis with a material to see circularity.',
-    noLoopOpenShell: 'Circularity needs a closed shell — volume is not measurable on this mesh, so waste and end-of-life cannot be estimated. Repair the mesh first.',
-    months: 'mo', unknown: 'unknown', marine: 'Marine-degradable', support: 'Support', part: 'Part',
-    processLoss: 'Process loss', total: 'Total waste', expectedFailureCost: 'Expected failure cost',
-    exportCsv: 'Export CSV', clear: 'Clear', prints: 'prints', virgin: 'Virgin', wasteLedger: 'Waste',
-    emptyLedger: 'No prints yet — upload a model to start the ledger.',
-    bandHigh: 'High', bandMedium: 'Medium', bandLow: 'Low',
-    heuristicNote: 'Heuristic score — not yet calibrated on print outcomes.',
-  },
-  ja: {
-    title: 'サーキュラリティ', firstTime: '一発成功率', waste: '廃棄物の行方', eol: '終局',
-    ledger: '台帳', matrix: 'プロセス × 材料', drivers: '主なリスク', fixInGeometry: 'GEOMETRYで修正 →',
-    optimizeInAgents: 'AGENTSで最適化 →', noLoop: '材料を指定して解析すると表示されます。',
-    noLoopOpenShell: '循環性の算出には閉じたシェルが必要です。このメッシュは体積を測れないため、廃棄量と終局を推定できません。先にメッシュを修復してください。',
-    months: 'ヶ月', unknown: '不明', marine: '海洋生分解', support: 'サポート', part: '本体',
-    processLoss: 'プロセスロス', total: '廃棄物合計', expectedFailureCost: '失敗期待コスト',
-    exportCsv: 'CSV出力', clear: 'クリア', prints: '件', virgin: '新規材料', wasteLedger: '廃棄',
-    emptyLedger: 'まだ記録がありません — モデルをアップロードしてください。',
-    bandHigh: '高', bandMedium: '中', bandLow: '低',
-    heuristicNote: 'ヒューリスティック評価 — 実印刷結果では未検証。',
-  },
-  zh: {
-    title: '循环', firstTime: '一次打成率', waste: '废件去向', eol: '终局',
-    ledger: '台账', matrix: '工艺 × 材料', drivers: '主要风险', fixInGeometry: '去 GEOMETRY 修 →',
-    optimizeInAgents: '去 AGENTS 优化 →', noLoop: '指定材料并分析后显示。',
-    noLoopOpenShell: '循环性需要闭合网格——当前网格体积无法测量，因此无法估算废料与终局。请先修复网格。',
-    months: '个月', unknown: '未知', marine: '海洋可降解', support: '支撑', part: '本体',
-    processLoss: '过程损耗', total: '废料合计', expectedFailureCost: '打废期望成本',
-    exportCsv: '导出 CSV', clear: '清空', prints: '件', virgin: '新料', wasteLedger: '废料',
-    emptyLedger: '还没有记录——上传模型开始记账。',
-    bandHigh: '高', bandMedium: '中', bandLow: '低',
-    heuristicNote: '启发式评分——尚未经打印结果校准。',
-  },
-};
-
+const LOOP_LABEL_KEYS = [
+  'title',
+  'firstTime',
+  'waste',
+  'eol',
+  'ledger',
+  'matrix',
+  'drivers',
+  'fixInGeometry',
+  'optimizeInAgents',
+  'noLoop',
+  'noLoopOpenShell',
+  'months',
+  'unknown',
+  'marine',
+  'support',
+  'part',
+  'processLoss',
+  'total',
+  'expectedFailureCost',
+  'exportCsv',
+  'clear',
+  'prints',
+  'virgin',
+  'wasteLedger',
+  'emptyLedger',
+  'bandHigh',
+  'bandMedium',
+  'bandLow',
+  'heuristicNote',
+] as const;
 const FATE_STYLE: Record<WasteFate, string> = {
   'fgf-direct': 'text-cyan-400',
   recyclable: 'text-emerald-400',
@@ -73,7 +67,12 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 }
 
 export function LoopTab({ unifiedAnalysis, material, language, onNavigate }: Props) {
-  const t = L[language] || L.en;
+  const t = useMemo(
+    () => Object.fromEntries(
+      LOOP_LABEL_KEYS.map((k) => [k, translate(CONTENT, `loop.${k}`, language)]),
+    ) as Record<(typeof LOOP_LABEL_KEYS)[number], string>,
+    [language],
+  );
   const loop = unifiedAnalysis.loop?.result;
   // Tab remounts on every open (conditional render in Home), so the
   // initializer snapshot is always fresh; useState only re-renders on Clear.

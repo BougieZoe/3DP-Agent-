@@ -3,7 +3,7 @@
  * Handles common 3D printing questions with deterministic answers
  */
 
-import { CONTENT, translate } from '@shared/i18n/content';
+import { CONTENT, translate, type ContentLang } from '@shared/i18n/content';
 import type { Material } from '@shared/domain/material';
 import { DEFAULT_MATERIAL } from '@shared/domain/material';
 import { getThresholds, type AnalysisThresholds } from '@/analysis/thresholds';
@@ -42,7 +42,7 @@ export interface RuleResult {
 
 // Format a wall-thickness value for display; an unmeasured (null) value is
 // reported honestly instead of substituting a fabricated number.
-function formatMinThickness(v: number | null, lang: 'en' | 'ja' | 'zh'): string {
+function formatMinThickness(v: number | null, lang: ContentLang): string {
   if (v === null) return translate(CONTENT, 'notMeasured', lang);
   return `${v.toFixed(2)}mm`;
 }
@@ -50,7 +50,7 @@ function formatMinThickness(v: number | null, lang: 'en' | 'ja' | 'zh'): string 
 // Quick local analysis report — no API
 export function generateQuickReport(
   model: ModelData,
-  lang: 'en' | 'ja' | 'zh',
+  lang: ContentLang,
   material: Material = DEFAULT_MATERIAL,
   thresholds: AnalysisThresholds = getThresholds(),
 ): string {
@@ -152,57 +152,60 @@ export function classifyQuestion(question: string): { needsAI: boolean; category
 export function answerLocally(
   category: string,
   model: ModelData,
-  lang: 'en' | 'ja' | 'zh',
+  lang: ContentLang,
   material: Material = DEFAULT_MATERIAL,
   thresholds: AnalysisThresholds = getThresholds(),
 ): string {
   const reportConfig = thresholds.report;
-  const isZh = lang === 'zh', isJa = lang === 'ja';
 
   switch (category) {
     case 'printability': {
       const ok = model.wallThickness.status !== 'critical' && model.overhang.status !== 'critical';
-      return ok
-        ? (isZh ? '✓ 该模型可以打印。壁厚和悬垂角度在合理范围内。' : isJa ? '✓ このモデルは印刷可能です。' : '✓ This model is printable. Wall thickness and overhangs are within acceptable range.')
-        : (isZh ? '⚠ 存在打印风险，建议修复壁厚或悬垂问题后再打印。' : isJa ? '⚠ 印刷リスクあり。修正を推奨します。' : '⚠ Print risk detected. Fix wall thickness or overhang issues first.');
+      return translate(CONTENT, ok ? 'rule.summary.printable' : 'rule.summary.printRisk', lang);
     }
     case 'material': {
       if (model.volumeReliable === false) return translate(CONTENT, 'rule.volumeUnmeasurable', lang);
       const v = model.volume;
-      if (v > reportConfig.processLargeVolumeMm3) return isZh ? '推荐 FDM — 适合大型零件，成本低，速度快。材料建议：PLA / PETG / ABS。' : isJa ? 'FDM推奨 — 大型部品に最適。材料: PLA / PETG / ABS' : 'Recommend FDM — best for large parts. Materials: PLA / PETG / ABS.';
-      if (v > reportConfig.processMidVolumeMm3) return isZh ? '推荐 FDM 或 SLA，取决于精度需求。精度要求高选SLA，成本优先选FDM。' : isJa ? 'FDMまたはSLAを推奨。精度重視ならSLA。' : 'FDM or SLA depending on precision needs. High detail → SLA. Cost-first → FDM.';
-      return isZh ? '推荐 SLA / SLS — 适合小型精细件，表面光洁度高。' : isJa ? 'SLA / SLS推奨 — 小型精細部品に最適。' : 'Recommend SLA / SLS — ideal for small detailed parts with fine surface finish.';
+      if (v > reportConfig.processLargeVolumeMm3) return translate(CONTENT, 'rule.rec.large', lang);
+      if (v > reportConfig.processMidVolumeMm3) return translate(CONTENT, 'rule.rec.mid', lang);
+      return translate(CONTENT, 'rule.rec.small', lang);
     }
     case 'support': {
-      const needs = model.overhang.status !== 'good';
-      return needs
-        ? (isZh ? `需要支撑。检测到 ${model.overhang.areas} 个面超过${material.overhangThreshold}°悬垂角。建议在切片软件中开启自动支撑。` : isJa ? `サポート必要。${model.overhang.areas}面が${material.overhangThreshold}°超。スライサーで自動サポートを有効に。` : `Support required. ${model.overhang.areas} faces exceed ${material.overhangThreshold}°. Enable auto-support in your slicer.`)
-        : (isZh ? `无需支撑。所有悬垂角度在${material.overhangThreshold}°以内，可直接打印。` : isJa ? `サポート不要。全面が${material.overhangThreshold}°以内です。` : `No support needed. All overhangs within ${material.overhangThreshold}° limit.`);
+      if (model.overhang.status !== 'good') {
+        return translate(CONTENT, 'rule.support.needed', lang, {
+          areas: model.overhang.areas,
+          deg: material.overhangThreshold,
+        });
+      }
+      return translate(CONTENT, 'rule.support.none', lang, { deg: material.overhangThreshold });
     }
     case 'settings':
-      return isZh ? '推荐设置：层高 0.2mm，填充率 20%（结构件提高至40%+），打印速度 50mm/s，壁厚 3层。' :
-        isJa ? '推奨設定: 積層0.2mm、充填20%（構造部品は40%+）、速度50mm/s、壁3層。' :
-        'Recommended: Layer 0.2mm, Infill 20% (40%+ for structural), Speed 50mm/s, Walls 3 perimeters.';
+      return translate(CONTENT, 'rule.settings.default', lang);
     case 'time': {
       if (model.volumeReliable === false) return translate(CONTENT, 'rule.volumeUnmeasurable', lang);
-      const vol = model.volume / 1000;
-      const mins = Math.round(vol * 0.8 + 20);
-      return isZh ? `预计打印时间：${mins}–${mins + 30} 分钟（基于体积估算，FDM 0.2mm层高）。实际时间取决于切片设置。` :
-        isJa ? `推定印刷時間: ${mins}〜${mins + 30}分（体積推定、FDM 0.2mm）。実際はスライサー設定による。` :
-        `Estimated print time: ${mins}–${mins + 30} min (volume-based, FDM 0.2mm). Actual time depends on slicer settings.`;
+      const mins = Math.round((model.volume / 1000) * 0.8 + 20);
+      return translate(CONTENT, 'rule.time.estimate', lang, { min: mins, max: mins + 30 });
     }
     case 'cost': {
       if (model.volumeReliable === false) return translate(CONTENT, 'rule.volumeUnmeasurable', lang);
       const grams = model.volume * (material.densityGPerCm3 / 1000);
-      const cost = (grams * material.pricePerKgUsd / 1000).toFixed(2);
-      return isZh ? `材料成本估算：约 ¥${(parseFloat(cost) * 7).toFixed(1)}（${material.name}，基于体积）。不含机器、人工、后处理费用。` :
-        isJa ? `材料コスト概算: 約￥${(parseFloat(cost) * 150).toFixed(0)}（${material.name}、体積ベース）。機械・人件費は含まず。` :
-        `Material cost estimate: ~$${cost} (${material.name}, volume-based). Excludes machine time, labor, post-processing.`;
+      const usd = (grams * material.pricePerKgUsd / 1000).toFixed(2);
+      const amount = lang === 'zh'
+        ? `¥${(parseFloat(usd) * 7).toFixed(1)}`
+        : lang === 'ja'
+          ? `￥${(parseFloat(usd) * 150).toFixed(0)}`
+          : `$${usd}`;
+      return translate(CONTENT, 'rule.cost.estimate', lang, { amount, material: material.name });
     }
-    case 'geometry':
-      return isZh ? `模型尺寸：${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm。最小壁厚：${formatMinThickness(model.wallThickness.minThickness, lang)}。悬垂面：${model.overhang.areas} 个。` :
-        isJa ? `寸法: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm。最小壁厚: ${formatMinThickness(model.wallThickness.minThickness, lang)}。オーバーハング: ${model.overhang.areas}面。` :
-        `Dims: ${model.dims.x.toFixed(1)} × ${model.dims.y.toFixed(1)} × ${model.dims.z.toFixed(1)} mm. Min wall: ${formatMinThickness(model.wallThickness.minThickness, lang)}. Overhangs: ${model.overhang.areas} faces.`;
+    case 'geometry': {
+      return translate(CONTENT, 'rule.geometry.summary', lang, {
+        x: model.dims.x.toFixed(1),
+        y: model.dims.y.toFixed(1),
+        z: model.dims.z.toFixed(1),
+        minWall: formatMinThickness(model.wallThickness.minThickness, lang),
+        areas: model.overhang.areas,
+      });
+    }
     default:
       return '';
   }

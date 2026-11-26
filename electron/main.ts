@@ -187,3 +187,78 @@ if (!app.requestSingleInstanceLock()) {
     serverChild?.kill();
   });
 }
+
+// ---------------------------------------------------------------------------
+// Detachable chat panel window ("snap" window)
+// ---------------------------------------------------------------------------
+import { ipcMain as chatFloatRpc } from "electron";
+
+let chatFloatWindow: BrowserWindow | null = null;
+
+function chatFloatUrl(rawOrigin?: string): string {
+  const fallback = process.env.VITE_DEV_SERVER_URL || "http://localhost:3000";
+  const base = (rawOrigin || fallback).replace(/\/$/, "");
+  return `${base}/?chatFloat=1`;
+}
+
+export function openChatFloatWindow(origin?: string): BrowserWindow {
+  if (chatFloatWindow && !chatFloatWindow.isDestroyed()) {
+    chatFloatWindow.show();
+    chatFloatWindow.focus();
+    return chatFloatWindow;
+  }
+  const win = new BrowserWindow({
+    width: 440,
+    height: 640,
+    minWidth: 320,
+    minHeight: 420,
+    title: "Chat",
+    alwaysOnTop: true,
+    resizable: true,
+    maximizable: false,
+    fullscreenable: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(app.getAppPath(), "dist-electron", "preload.cjs")
+    }
+  });
+
+  // Floating level keeps the panel above the main window without stealing focus.
+  win.setAlwaysOnTop(true, "floating");
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false });
+  chatFloatWindow = win;
+
+  win.on("closed", () => {
+    chatFloatWindow = null;
+  });
+
+  void win.loadURL(chatFloatUrl(origin));
+  return win;
+}
+
+export function closeChatFloatWindow(): void {
+  if (chatFloatWindow && !chatFloatWindow.isDestroyed()) {
+    chatFloatWindow.close();
+  }
+  chatFloatWindow = null;
+}
+
+chatFloatRpc.handle("chat-float:open", (event, origin?: string) => {
+  const senderOrigin = (() => {
+    try {
+      return new URL(event.sender.getURL()).origin;
+    } catch {
+      return undefined;
+    }
+  })();
+  openChatFloatWindow(origin || senderOrigin);
+  return true;
+});
+
+chatFloatRpc.handle("chat-float:close", () => {
+  closeChatFloatWindow();
+  return true;
+});
+
+chatFloatRpc.handle("chat-float:is-open", () => Boolean(chatFloatWindow && !chatFloatWindow.isDestroyed()));

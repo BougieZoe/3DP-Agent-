@@ -125,6 +125,7 @@ function makeRecord(over: Parameters<typeof buildAnalysisRecord>[0] extends infe
     fileSizeBytes: over.fileSizeBytes ?? 1234,
     units: over.units ?? 'mm',
     context: over.context,
+    language: over.language ?? 'zh',
     slicer: over.slicer,
     repair: over.repair,
     id: over.id,

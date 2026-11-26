@@ -6,8 +6,10 @@
  */
 
 import { useState } from 'react';
+import type { Language } from '@/lib/i18n';
+import { pickLang } from '@shared/i18n/content';
 import type { Order, ShippingTerms } from '@shared/domain/order';
-import { SHIPPING_TERMS } from '@shared/domain/order';
+import { SHIPPING_TERMS, shippingTermLabel } from '@shared/domain/order';
 import type { UploadedModel } from '@/components/STLUploadHandler';
 import type { Material } from '@shared/domain/material';
 import { MATERIALS } from '@shared/domain/material';
@@ -18,7 +20,7 @@ interface OrderFormProps {
   material: Material;
   onSubmit: (order: Partial<Order>) => void;
   onCancel: () => void;
-  language: 'en' | 'ja' | 'zh';
+  language: Language;
 }
 
 const L = {
@@ -69,7 +71,7 @@ const L = {
 const COMMON_COLORS = ['#FFFFFF', '#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF6600', '#9933FF'];
 
 export function OrderForm({ model, material, onSubmit, onCancel, language }: OrderFormProps) {
-  const t = L[language] || L.en;
+  const t = pickLang(L, language);
 
   const [quantity, setQuantity] = useState(1);
   const [color, setColor] = useState('#FFFFFF');
@@ -186,8 +188,8 @@ export function OrderForm({ model, material, onSubmit, onCancel, language }: Ord
             onChange={e => setShippingTerms(e.target.value as ShippingTerms)}
             className="w-full bg-muted/20 border border-border/30 rounded px-2 py-1.5 text-xs font-mono text-foreground"
           >
-            {Object.entries(SHIPPING_TERMS).map(([key, val]) => (
-              <option key={key} value={key}>{key} — {val[language]}</option>
+            {SHIPPING_TERMS.map((key) => (
+              <option key={key} value={key}>{key} — {shippingTermLabel(key, language)}</option>
             ))}
           </select>
         </div>

@@ -24,6 +24,7 @@ import type {
   FindingSeverity,
 } from '@/analysis/types';
 import { extractFindings } from '@/analysis/findingExtractor';
+import type { ContentLang } from '@shared/i18n/content';
 import { RULES_VERSION } from './auditTrail';
 import { getTrafficLight } from '@/components/reportUtils';
 import { buildDecisionBundle } from './decisionRecord';
@@ -241,6 +242,7 @@ export interface BuildRecordInput {
   fileSizeBytes?: number | null;
   units?: string | null;
   context?: Partial<ManufacturingContext>;
+  language?: ContentLang;
   slicer?: SlicerProvenance | null;
   repair?: { derivedFromRecordId: string | null; note: string; before: UnifiedAnalysis } | null;
   /** Injectable for tests; defaults to crypto.randomUUID / current time. */
@@ -269,7 +271,7 @@ export function buildAnalysisRecord(input: BuildRecordInput): AnalysisRecord {
   const { light, score } = getTrafficLight(analysis);
   const decisionBundle = buildDecisionBundle(analysis);
 
-  const findings: RecordedFinding[] = extractFindings(analysis).map((f) => {
+  const findings: RecordedFinding[] = extractFindings(analysis, input.language ?? 'en').map((f) => {
     const kind = classifyFindingKind(f);
     return { ...f, kind, verification: VERIFICATION_BY_KIND[kind] };
   });
@@ -319,7 +321,7 @@ export function buildAnalysisRecord(input: BuildRecordInput): AnalysisRecord {
       ? {
           derivedFromRecordId: input.repair.derivedFromRecordId,
           note: input.repair.note,
-          comparison: compareAnalyses(input.repair.before, analysis),
+          comparison: compareAnalyses(input.repair.before, analysis, input.language ?? 'en'),
         }
       : null,
     decision: null,
@@ -403,14 +405,15 @@ export const COMPARISON_CLAIM_BOUNDARY =
 export function compareAnalyses(
   before: UnifiedAnalysis,
   after: UnifiedAnalysis,
+  language: ContentLang = 'en',
 ): AnalysisComparison {
   const bm = before.metrics?.result ?? null;
   const am = after.metrics?.result ?? null;
   const bv = before.validation?.result ?? null;
   const av = after.validation?.result ?? null;
 
-  const beforeFindings = extractFindings(before);
-  const afterFindings = extractFindings(after);
+  const beforeFindings = extractFindings(before, language);
+  const afterFindings = extractFindings(after, language);
   const afterIds = new Set(afterFindings.map((f) => f.id));
   const beforeIds = new Set(beforeFindings.map((f) => f.id));
 

@@ -2,6 +2,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { createMeshFromGeometry } from '@/lib/stlLoader';
 import { loadModelFile } from '@/lib/modelLoader';
 import { Language } from '@/lib/i18n';
+import { pickLang } from '@shared/i18n/content';
 import { fromThreeBufferGeometry, type UnifiedAnalysis } from '@/analysis';
 import { analyzeWithTelemetry } from '@/lib/analysisProfiling';
 import { normalizeModelGeometry } from '@/lib/modelNormalization';
@@ -164,7 +165,7 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
     if (timerIdRef.current !== null) window.clearInterval(timerIdRef.current);
     timerIdRef.current = id;
   };
-  const t = labels[language];
+  const t = pickLang(labels, language);
 
   const log = (msg: string) => setProgress(p => [...p, msg]);
 
@@ -336,6 +337,7 @@ export function STLUploadHandler({ onModelsLoaded, onError, language = 'en', uni
             fileHash,
             fileSizeBytes: file.size,
             units: effectiveUnits,
+            language,
             material: material ?? DEFAULT_MATERIAL,
             materialFamily,
             slicer: sliceMetadata

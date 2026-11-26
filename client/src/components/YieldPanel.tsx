@@ -11,11 +11,17 @@ import { getPrintJobs, getPrinters, markJobQuality } from '@/lib/printFarm';
 import type { PrintJob, Printer } from '@/lib/printFarm';
 import type { CalibrationMethod } from '@shared/domain/fieldCalibration';
 import type { FailureCause } from '@shared/domain/yieldAttribution';
-import { CAUSE_LABELS, METHOD_LABELS, buildYieldView } from '@/lib/yieldView';
+import type { ContentLang } from '@shared/i18n/content';
+import { buildYieldView } from '@/lib/yieldView';
+import { yieldLabels } from '@/lib/yieldLabels';
+import { yieldUi } from './yieldUi';
 
 interface YieldPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Active UI language. Defaults to English rather than Chinese so a missing
+   *  prop can never make the panel look untranslated. */
+  language?: ContentLang;
 }
 
 const ALL_CAUSES: FailureCause[] = [
@@ -43,7 +49,7 @@ function Kpi({ label, value, tone, hint }: { label: string; value: string; tone?
   );
 }
 
-export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
+export function YieldPanel({ isOpen, onClose, language = 'en' }: YieldPanelProps) {
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const [printers, setPrinters] = useState<Printer[]>([]);
   const [openJobId, setOpenJobId] = useState<string | null>(null);
@@ -60,7 +66,9 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
     refresh();
   }, [isOpen, refresh]);
 
-  const view = useMemo(() => buildYieldView(jobs, printers), [jobs, printers]);
+  const t = useMemo(() => yieldUi(language), [language]);
+  const labels = useMemo(() => yieldLabels(language), [language]);
+  const view = useMemo(() => buildYieldView(jobs, printers, language), [jobs, printers, language]);
 
   const resetDraft = () => {
     setOpenJobId(null);
@@ -95,7 +103,7 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
     <div className="fixed inset-0 z-[70] flex flex-col bg-black/95 text-zinc-200 backdrop-blur-sm">
       <div className="flex items-start justify-between gap-4 border-b border-zinc-800 px-5 py-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold tracking-wide text-cyan-400">Floor Yield · 车间良率</h2>
+          <h2 className="text-sm font-semibold tracking-wide text-cyan-400">{t.title}</h2>
           <p className="mt-1 truncate font-mono text-[11px] text-zinc-400" title={view.line}>
             {view.line}
           </p>
@@ -105,13 +113,13 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
             onClick={refresh}
             className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:bg-zinc-800"
           >
-            刷新
+            {t.refresh}
           </button>
           <button
             onClick={onClose}
             className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:bg-zinc-800"
           >
-            关闭
+            {t.close}
           </button>
         </div>
       </div>
@@ -119,54 +127,54 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
       <div className="flex-1 overflow-y-auto px-5 py-4">
         {view.jobCount === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-            <p className="text-sm text-zinc-300">还没有任何打印任务</p>
+            <p className="text-sm text-zinc-300">{t.emptyTitle}</p>
             <p className="max-w-md text-[11px] leading-relaxed text-zinc-500">
-              良率只统计真正上过机、并且有人看过的零件。先让任务跑起来，这里才有可读的东西。
+              {t.emptyBody}
             </p>
           </div>
         ) : (
           <div className="mx-auto flex max-w-6xl flex-col gap-5">
             <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-              <Kpi label="可判定 / 总记录" value={view.decidableText} hint="只有判定与结果都齐的样本才算分母" />
+              <Kpi label={t.kpiDecidable} value={view.decidableText} hint={t.kpiDecidableHint} />
               <Kpi
-                label="假通过率"
+                label={t.kpiLeak}
                 value={view.leakRateText}
                 tone={view.board.leakRate === null ? 'warn' : leaks > 0 ? 'bad' : 'ok'}
-                hint={view.board.leakRate === null ? view.board.blockedBy ?? '样本不足，不出比率' : `本可拦下的报废 ${leaks} 件`}
+                hint={view.board.leakRate === null ? view.board.blockedBy ?? t.kpiNoRate : t.kpiLeakHint(leaks)}
               />
               <Kpi
-                label="误拦截率"
+                label={t.kpiFalseBlock}
                 value={view.falseBlockRateText}
                 tone={view.board.falseBlockRate === null ? 'warn' : 'ok'}
-                hint={view.board.falseBlockRate === null ? '样本不足，不出比率' : '被挡住但本可成功'}
+                hint={view.board.falseBlockRate === null ? t.kpiNoRate : t.kpiFalseBlockHint}
               />
               <Kpi
-                label="待检验"
+                label={t.kpiPending}
                 value={String(view.harvest.awaitingInspection)}
                 tone={view.harvest.awaitingInspection > 0 ? 'warn' : 'ok'}
-                hint="机器跑完了，但没人看过"
+                hint={t.kpiPendingHint}
               />
               <Kpi
-                label="无判定记录"
+                label={t.kpiUnjudged}
                 value={String(view.harvest.unjudged)}
                 tone={view.harvest.unjudged > 0 ? 'warn' : 'ok'}
-                hint="上机前没留判定，无法记入良率"
+                hint={t.kpiUnjudgedHint}
               />
               <Kpi
-                label="强行放行 / 未绑定机台"
+                label={t.kpiOverrides}
                 value={`${view.harvest.overrides} / ${view.harvest.unboundMachines}`}
                 tone={view.harvest.overrides > 0 || view.harvest.unboundMachines > 0 ? 'warn' : 'ok'}
-                hint="放行后出问题会被记为 overrides"
+                hint={t.kpiOverridesHint}
               />
             </section>
 
             <p className="text-[11px] leading-relaxed text-zinc-500">
-              策略 {view.policyVersion}
+              {t.policy(view.policyVersion)}
               {view.excludedByVersionText ? ` · ${view.excludedByVersionText}` : ''}
             </p>
 
             <section>
-              <h3 className="mb-2 text-[11px] uppercase tracking-wider text-zinc-500">结果分类</h3>
+              <h3 className="mb-2 text-[11px] uppercase tracking-wider text-zinc-500">{t.outcomesTitle}</h3>
               <div className="flex flex-wrap gap-1.5">
                 {view.outcomes.map((row) => (
                   <span
@@ -185,8 +193,7 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
               </div>
               {!view.attribution.attributed && view.attribution.scraps > 0 && (
                 <p className="mt-2 text-[11px] leading-snug text-amber-400">
-                  未归因 {view.attribution.unresolved} 件：报废 {view.unresolvedDefect} 件、中断 {view.unresolvedAborted} 件
-                  （含被拦截未上机的中断）——不会补一个默认值上去。
+                  {t.unattributed(view.attribution.unresolved, view.unresolvedDefect, view.unresolvedAborted)}
                 </p>
               )}
             </section>
@@ -194,10 +201,10 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
             <div className="grid gap-4 lg:grid-cols-2">
               <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
                 <h3 className="mb-2 text-[11px] uppercase tracking-wider text-zinc-500">
-                  待检验队列 <span className="text-zinc-400">{view.pending.length}</span>
+                  {t.pendingTitle} <span className="text-zinc-400">{view.pending.length}</span>
                 </h3>
                 {view.pending.length === 0 ? (
-                  <p className="py-4 text-center text-[11px] text-zinc-500">没有待检验的零件</p>
+                  <p className="py-4 text-center text-[11px] text-zinc-500">{t.noPending}</p>
                 ) : (
                   <ul className="flex flex-col gap-1.5">
                     {view.pending.map((job) => (
@@ -215,7 +222,7 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
                                 onClick={() => markGood(job.id)}
                                 className="rounded border border-emerald-600/50 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-300 hover:bg-emerald-500/20"
                               >
-                                合格
+                                {t.markGood}
                               </button>
                               <button
                                 onClick={() => {
@@ -225,7 +232,7 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
                                 }}
                                 className="rounded border border-rose-600/50 bg-rose-500/10 px-2 py-0.5 text-[11px] text-rose-300 hover:bg-rose-500/20"
                               >
-                                报废
+                                {t.markDefect}
                               </button>
                             </div>
                           )}
@@ -234,7 +241,7 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
                         {openJobId === job.id && (
                           <div className="mt-2 border-t border-zinc-800 pt-2">
                             <div className="mb-1 text-[10px] uppercase tracking-wider text-zinc-500">
-                              报废原因（可多选，未选则记为「未查明」）
+                              {t.causeHint}
                             </div>
                             <div className="mb-2 flex flex-wrap gap-1">
                               {ALL_CAUSES.map((cause) => {
@@ -249,7 +256,7 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
                                         : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'
                                     }`}
                                   >
-                                    {CAUSE_LABELS[cause]}
+                                    {labels.cause[cause]}
                                   </button>
                                 );
                               })}
@@ -262,7 +269,7 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
                               >
                                 {ALL_METHODS.map((m) => (
                                   <option key={m} value={m}>
-                                    {METHOD_LABELS[m]}
+                                    {labels.method[m]}
                                   </option>
                                 ))}
                               </select>
@@ -270,13 +277,13 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
                                 onClick={() => markDefect(job.id)}
                                 className="rounded border border-rose-600/60 bg-rose-600/20 px-2 py-1 text-[11px] text-rose-200 hover:bg-rose-600/30"
                               >
-                                提交报废
+                                {t.submitDefect}
                               </button>
                               <button
                                 onClick={resetDraft}
                                 className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-400 hover:bg-zinc-800"
                               >
-                                取消
+                                {t.cancel}
                               </button>
                             </div>
                           </div>
@@ -289,18 +296,21 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
 
               <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
                 <h3 className="mb-2 text-[11px] uppercase tracking-wider text-zinc-500">
-                  报废归因 <span className="text-zinc-400">{view.attribution.scraps} 件</span>
+                  {t.attributionTitle}{' '}
+                  <span className="text-zinc-400">
+                    {view.attribution.scraps} {t.thCount}
+                  </span>
                 </h3>
                 {view.causeRows.length === 0 ? (
-                  <p className="py-4 text-center text-[11px] text-zinc-500">还没有报废记录可归因</p>
+                  <p className="py-4 text-center text-[11px] text-zinc-500">{t.noAttribution}</p>
                 ) : (
                   <table className="w-full text-left text-[11px]">
                     <thead className="text-[10px] uppercase tracking-wider text-zinc-500">
                       <tr>
-                        <th className="pb-1 font-normal">原因</th>
-                        <th className="pb-1 font-normal">件数</th>
-                        <th className="pb-1 font-normal">占比</th>
-                        <th className="pb-1 font-normal">最强证据</th>
+                        <th className="pb-1 font-normal">{t.thCause}</th>
+                        <th className="pb-1 font-normal">{t.thCount}</th>
+                        <th className="pb-1 font-normal">{t.thShare}</th>
+                        <th className="pb-1 font-normal">{t.thEvidence}</th>
                       </tr>
                     </thead>
                     <tbody className="font-mono text-zinc-300">
@@ -316,15 +326,15 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
                   </table>
                 )}
                 <p className="mt-2 text-[10px] leading-snug text-zinc-500">
-                  一件报废可能带上多个原因，所以占比相加未必等于 100%。
+                  {t.multiCauseNote}
                 </p>
               </section>
             </div>
 
             <section>
-              <h3 className="mb-2 text-[11px] uppercase tracking-wider text-zinc-500">机台能力声明（现场叠层后）</h3>
+              <h3 className="mb-2 text-[11px] uppercase tracking-wider text-zinc-500">{t.machinesTitle}</h3>
               {view.machines.length === 0 ? (
-                <p className="py-3 text-center text-[11px] text-zinc-500">还没有绑定机台型号的可判定记录</p>
+                <p className="py-3 text-center text-[11px] text-zinc-500">{t.noMachines}</p>
               ) : (
                 <div className="grid gap-3 lg:grid-cols-2">
                   {view.machines.map((machine) => (
@@ -345,17 +355,17 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
                                 : 'border-amber-700/50 bg-amber-500/10 text-amber-300'
                             }`}
                           >
-                            {machine.publishable ? '可对外声明' : '不可对外声明'}
+                            {machine.publishable ? t.publishable : t.notPublishable}
                           </span>
                         </div>
                       </div>
                       <table className="w-full text-left text-[11px]">
                         <thead className="text-[10px] uppercase tracking-wider text-zinc-500">
                           <tr>
-                            <th className="pb-1 font-normal">能力轴</th>
-                            <th className="pb-1 font-normal">上限</th>
-                            <th className="pb-1 font-normal">状态</th>
-                            <th className="pb-1 font-normal">证据</th>
+                            <th className="pb-1 font-normal">{t.thAxis}</th>
+                            <th className="pb-1 font-normal">{t.thCeiling}</th>
+                            <th className="pb-1 font-normal">{t.thStatus}</th>
+                            <th className="pb-1 font-normal">{t.thEvidence}</th>
                           </tr>
                         </thead>
                         <tbody className="font-mono text-zinc-300">
@@ -396,7 +406,7 @@ export function YieldPanel({ isOpen, onClose }: YieldPanelProps) {
             </section>
 
             <p className="pb-2 text-[10px] leading-relaxed text-zinc-500">
-              完成不等于合格：机器跑完只进入待检验，没人看过的零件一律不计入合格。现场读数只能把机台上限压窄或坐实，不能抬高。
+              {t.footerNote}
             </p>
           </div>
         )}

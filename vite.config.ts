@@ -161,6 +161,14 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      // Dev: the published v1 capability routes (photo → CAD reconstruction) served by the
+      // Express bridge on :3099. Same-origin in production, proxied here in dev so the
+      // browser never needs a CORS preflight against the bridge.
+      "/v1": {
+        target: "http://127.0.0.1:3099",
+        changeOrigin: true,
+        xfwd: true,
+      },
     },
   },
 });

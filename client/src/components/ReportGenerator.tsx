@@ -237,7 +237,9 @@ function buildDesignerIssues(
       );
     } else if (conf < 0.5) {
       issues.push(
-        translate(CONTENT, 'pdf.issue.designer.lowConfidence', lang, { conf: (conf * 100).toFixed(0), prefix: m.minWallThicknessMm != null ? `${m.minWallThicknessMm.toFixed(2)} mm は参考値として表示。` : '' })
+        translate(CONTENT, 'pdf.issue.designer.lowConfidence', lang, { conf: (conf * 100).toFixed(0), prefix: m.minWallThicknessMm != null
+        ? translate(CONTENT, 'issue.designer.minWallPrefix', lang, { mm: m.minWallThicknessMm.toFixed(2) })
+        : '' })
       );
     }
   }
@@ -939,7 +941,7 @@ async function generateDesignerPDF(
 
   if (dims) {
     y = drawDataRow(doc,
-      lang === "ja" ? "サイズ" : "Size",
+      translate(CONTENT, 'pdf.label.size', lang),
       `${dims.x.toFixed(1)} × ${dims.y.toFixed(1)} × ${dims.z.toFixed(1)} mm`,
       y
     );
@@ -950,12 +952,12 @@ async function generateDesignerPDF(
     y
   );
   y = drawDataRow(doc,
-    lang === "ja" ? "推定重量" : "Est. weight",
+    translate(CONTENT, 'pdf.label.weight', lang),
     pt?.materialWeightGrams != null && pt.materialWeightGrams > 0 ? computeWeightRange(pt.materialWeightGrams, lang) : "—",
     y
   );
   y = drawDataRow(doc,
-    lang === "ja" ? "推定印刷時間" : "Est. print time",
+    translate(CONTENT, 'pdf.label.time', lang),
     pt?.estimatedPrintTimeMinutes != null && pt.estimatedPrintTimeMinutes > 0 ? computeTimeRange(pt.estimatedPrintTimeMinutes, lang) : "—",
     y
   );
@@ -1097,7 +1099,7 @@ async function generateDesignerPDF(
     }
     suggestion = parts.length > 0
       ? translate(CONTENT, 'pdf.suggest', lang, { parts: parts.join(lang === 'ja' ? '、' : '; ') })
-      : (lang === "ja" ? "問題点を確認して調整してください" : "Review issues and adjust");
+      : translate(CONTENT, 'pdf.suggest.default', lang);
   }
 
   // ── AI expert review (if run) ──

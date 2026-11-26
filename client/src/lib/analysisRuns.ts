@@ -1,3 +1,4 @@
+import type { ContentLang } from '@shared/i18n/content';
 /**
  * Analysis Run Recorder — one AnalysisRecord per analysis RUN.
  *
@@ -38,6 +39,7 @@ export interface SaveAnalysisRunInput {
     note: string;
     before: UnifiedAnalysis;
   } | null;
+  language?: ContentLang;
   /** Injectable for tests. */
   store?: RecordStore;
   id?: string;
@@ -73,6 +75,7 @@ export async function saveAnalysisRun(
         process: input.process ?? null,
       },
       slicer: input.slicer ?? null,
+      language: input.language,
       repair: input.repair ?? null,
       id: input.id,
       createdAt: input.createdAt,

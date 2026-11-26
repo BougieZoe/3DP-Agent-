@@ -3,7 +3,7 @@ import { ModelData, classifyQuestion, answerLocally } from '@/lib/ruleEngine';
 import { callAI, AIProvider } from '@/lib/apiKeys';
 import { getLLMProvider } from '@/lib/llmAccess';
 import { getAuthSnapshot } from '@/lib/authStore';
-import { CONTENT, translate } from '@shared/i18n/content';
+import { CONTENT, translate, pickLang, type PartialLangDict } from '@shared/i18n/content';
 import { Language } from '@/lib/i18n';
 import { AI_PROVIDER_METADATA } from '@shared/domain/providers';
 import type { Material } from '@shared/domain/material';
@@ -24,7 +24,7 @@ interface ChatPanelProps {
   material?: Material;
 }
 
-const SUGGESTED: Record<Language, string[]> = {
+const SUGGESTED: PartialLangDict<string[]> = {
   en: [
     'Where will this warp or fail first?',
     'Is PETG or PLA the right material?',
@@ -132,6 +132,23 @@ function buildInitialAssessment(model: ModelData, lang: Language): string {
 }
 
 export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATERIAL }: ChatPanelProps) {
+  const [attachments, setAttachments] = useState<File[]>([]);
+
+  // Attachments arriving from ChatDock (file picker / drop / paste).
+  useEffect(() => {
+    const onAttach = (event: Event) => {
+      const detail = (event as CustomEvent<{ files: File[] }>).detail;
+      if (!detail?.files?.length) return;
+      setAttachments((prev) => [...prev, ...detail.files]);
+      setInput((prev) => {
+        const names = detail.files.map((file) => file.name).join(', ');
+        return prev ? `${prev} ${names}` : names;
+      });
+    };
+    window.addEventListener('chat:attach', onAttach);
+    return () => window.removeEventListener('chat:attach', onAttach);
+  }, []);
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
@@ -304,7 +321,7 @@ export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATE
 
       {messages.length <= 1 && (
         <div className="px-3 pb-2 flex flex-wrap gap-1.5 shrink-0">
-          {SUGGESTED[language].map((s, i) => (
+          {pickLang(SUGGESTED, language).map((s, i) => (
             <button
               key={i}
               onClick={() => sendMessage(s)}
@@ -355,7 +372,7 @@ export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATE
           </div>
         </div>
       </div>
-      <div className="px-3 pb-1 text-[10px] font-mono text-muted-foreground/20 text-center">📷 照片分析 coming soon（暂为模拟占位）</div>
+      <div className="px-3 pb-1 text-[10px] font-mono text-muted-foreground/20 text-center">{translate(CONTENT, 'chat.photoAnalysisSoon', language)}</div>
     </div>
   );
 }

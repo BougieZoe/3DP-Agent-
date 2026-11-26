@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { STLUploadHandler, UploadedModel } from '@/components/STLUploadHandler';
+import { LanguageSelect } from '@/components/LanguageSelect';
 import { PRINT_TECHNOLOGIES, PRINT_TECH_BY_ID, type PrintTechnology } from '@/lib/technologies';
 import { useOrders } from '@/hooks/useOrders';
 // Hooks available for future refactoring:
@@ -18,6 +19,7 @@ import { useOrders } from '@/hooks/useOrders';
 const CADWorkspace = lazy(() => import('@/components/CADWorkspace').then(m => ({ default: m.CADWorkspace })));
 const MeshStudio = lazy(() => import('@/components/MeshStudio').then(m => ({ default: m.MeshStudio })));
 const ChatPanel = lazy(() => import('@/components/ChatPanel').then(m => ({ default: m.ChatPanel })));
+import { ChatDock } from '@/components/ChatDock';
 import { AccountModal } from '@/components/AccountModal';
 import { PrivacyModal } from '@/components/PrivacyModal';
 import { InstallButton } from '@/components/InstallButton';
@@ -778,6 +780,7 @@ export default function Home() {
       fileName: uploadedModel.fileName,
       fileHash: uploadedModel.fileHash,
       fileSizeBytes: uploadedModel.fileSizeBytes ?? null,
+      language,
       units: uploadedModel.units,
       material: newMat,
       materialFamily: newMat.technology,
@@ -829,6 +832,7 @@ export default function Home() {
       fileName: uploadedModel.fileName,
       fileHash: uploadedModel.fileHash,
       fileSizeBytes: uploadedModel.fileSizeBytes ?? null,
+      language,
       units: uploadedModel.units,
       material: newMaterial,
       materialFamily: family,
@@ -876,6 +880,7 @@ export default function Home() {
       fileName: uploadedModel.fileName,
       fileHash: uploadedModel.fileHash,
       fileSizeBytes: uploadedModel.fileSizeBytes ?? null,
+      language,
       units: newUnits,
       material,
       materialFamily: material.technology,
@@ -960,6 +965,7 @@ export default function Home() {
       fileName: uploadedModel.fileName,
       fileHash: uploadedModel.fileHash,
       fileSizeBytes: uploadedModel.fileSizeBytes ?? null,
+      language,
       units: uploadedModel.units,
       material,
       materialFamily: material.technology,
@@ -1462,16 +1468,7 @@ export default function Home() {
                   <option key={key} value={key} title={`${m.category} — ${m.description}`}>{m.name}</option>
                 ))}
             </select>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as Language)}
-              title="Language"
-              className="text-xs font-mono px-2 py-1 border border-border rounded-sm bg-background text-muted-foreground hover:text-primary cursor-pointer"
-            >
-              {SUPPORTED_LANGUAGES.map(lang => (
-                <option key={lang} value={lang}>{lang.toUpperCase()}</option>
-              ))}
-            </select>
+            <LanguageSelect language={language} onChange={setLanguage} />
             <InstallButton language={language} />
             <button onClick={() => setShowAccountModal(true)}
               className={`text-xs font-mono px-3 py-1 border rounded-sm transition-all ${
@@ -1568,15 +1565,7 @@ export default function Home() {
                   <option key={key} value={key}>{m.name}</option>
                 ))}
             </select>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as Language)}
-              className="text-[11px] font-mono px-1.5 py-1 border border-border rounded-sm bg-background text-muted-foreground cursor-pointer"
-            >
-              {SUPPORTED_LANGUAGES.map(lang => (
-                <option key={lang} value={lang}>{lang.toUpperCase()}</option>
-              ))}
-            </select>
+            <LanguageSelect language={language} onChange={setLanguage} compact />
           </div>
         </div>
       </header>
@@ -1870,6 +1859,7 @@ export default function Home() {
 
             {/* CHAT TAB — photo diagnosis lives here once a model is loaded;
                 without a model it opens via the standalone DiagnosisModal */}
+            <ChatDock language={language} />
             {tab === 'chat' && modelData && (
               <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
                 <div className="!-mt-5 sm:!-mt-6">
@@ -2810,6 +2800,7 @@ export default function Home() {
       <YieldPanel
         isOpen={showYieldPanel}
         onClose={() => setShowYieldPanel(false)}
+        language={language}
       />
       <AgentExecutionGraph
         isVisible={showAgentGraph}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getAPIKeys, saveAPIKeys, getSelectedProvider, setSelectedProvider } from '@/lib/apiKeys';
 import { Language } from '@/lib/i18n';
+import { pickLang } from '@shared/i18n/content';
 import { AI_PROVIDERS } from '@shared/domain/providers';
 
 interface APIKeyModalProps {
@@ -140,7 +141,7 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
       <div className="bg-card border border-border rounded-lg w-full max-w-md flex flex-col" style={{ maxHeight: '85vh' }}>
         <div className="px-6 pt-6 pb-4 border-b border-border/50">
           <h2 className="text-lg font-semibold">API Configuration</h2>
-          <p className="text-xs text-muted-foreground/60 mt-1">{labels[language].desc1}</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">{pickLang(labels, language).desc1}</p>
         </div>
         <div className="px-6 py-4 flex-1 overflow-y-auto min-h-0">
         
@@ -169,7 +170,7 @@ export function APIKeyModal({ onClose, language }: APIKeyModalProps) {
                     onClick={(e) => { e.preventDefault(); toggleModels(provider.id); }}
                     className="text-[10px] opacity-50 font-normal hover:opacity-80 cursor-pointer"
                   >
-                    [{meta.modelCount} {labels[language].models}]
+                    [{meta.modelCount} {pickLang(labels, language).models}]
                     <span className="ml-1">{isExpanded ? '▼' : '▶'}</span>
                   </button>
                 )}
