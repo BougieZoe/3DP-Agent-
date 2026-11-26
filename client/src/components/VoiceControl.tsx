@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { createVoiceController, type VoiceController } from '@/lib/voiceInput';
+import { createBestVoiceController, type VoiceController } from '@/lib/voiceInput';
 import { parseIntent, getSuggestedCommands, type UserIntent } from '@/lib/intentParser';
 import { executeIntent, type ExecutionContext, type ActionResult } from '@/lib/actionExecutor';
 
@@ -43,7 +43,7 @@ export function VoiceControl({
   // Start listening
   const startListening = useCallback(async () => {
     try {
-      const controller = createVoiceController({ language });
+      const controller = await createBestVoiceController({ language });
       await controller.start();
       voiceRef.current = controller;
       setIsListening(true);

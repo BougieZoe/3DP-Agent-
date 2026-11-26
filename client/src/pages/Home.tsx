@@ -18,6 +18,7 @@ import { useOrders } from '@/hooks/useOrders';
 const CADWorkspace = lazy(() => import('@/components/CADWorkspace').then(m => ({ default: m.CADWorkspace })));
 const MeshStudio = lazy(() => import('@/components/MeshStudio').then(m => ({ default: m.MeshStudio })));
 const ChatPanel = lazy(() => import('@/components/ChatPanel').then(m => ({ default: m.ChatPanel })));
+import { ChatDock } from '@/components/ChatDock';
 import { AccountModal } from '@/components/AccountModal';
 import { PrivacyModal } from '@/components/PrivacyModal';
 import { InstallButton } from '@/components/InstallButton';
@@ -1874,6 +1875,7 @@ export default function Home() {
 
             {/* CHAT TAB — photo diagnosis lives here once a model is loaded;
                 without a model it opens via the standalone DiagnosisModal */}
+            <ChatDock language={language} />
             {tab === 'chat' && modelData && (
               <Suspense fallback={<div className="pt-6 text-xs font-mono text-primary animate-pulse">▋ {t('loading3d')}</div>}>
                 <div className="!-mt-5 sm:!-mt-6">

@@ -10,6 +10,7 @@ import { createSlicerRouter } from "./slicerRouter";
 import { createAnalyzeRouter } from "./analyzeRouter";
 import { createFleetRouter } from "./fleetRouter";
 import { createStepRouter } from "./stepRouter";
+import { createAsrRouter } from "./asrRouter";
 import { createTripoProxyRouter } from "./tripoProxy";
 import { bridgeAuthDecision } from "./loopbackGuard";
 import { relayLLM, relayLLMStream } from "./llmRelay";
@@ -315,6 +316,9 @@ export function createApp() {
   });
 
   // Share report links — public, no auth required
+  // Local open-source ASR (whisper.cpp / MLX Whisper) for voice control.
+  app.use("/api/asr", express.raw({ type: ["audio/*"], limit: "25mb" }), createAsrRouter());
+
   app.use("/api/share", express.json({ limit: "5mb" }), createShareRouter());
 
   // Stripe payment — checkout, webhook, portal

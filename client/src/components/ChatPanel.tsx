@@ -132,6 +132,23 @@ function buildInitialAssessment(model: ModelData, lang: Language): string {
 }
 
 export function ChatPanel({ model, language, onNeedAuth, material = DEFAULT_MATERIAL }: ChatPanelProps) {
+  const [attachments, setAttachments] = useState<File[]>([]);
+
+  // Attachments arriving from ChatDock (file picker / drop / paste).
+  useEffect(() => {
+    const onAttach = (event: Event) => {
+      const detail = (event as CustomEvent<{ files: File[] }>).detail;
+      if (!detail?.files?.length) return;
+      setAttachments((prev) => [...prev, ...detail.files]);
+      setInput((prev) => {
+        const names = detail.files.map((file) => file.name).join(', ');
+        return prev ? `${prev} ${names}` : names;
+      });
+    };
+    window.addEventListener('chat:attach', onAttach);
+    return () => window.removeEventListener('chat:attach', onAttach);
+  }, []);
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
