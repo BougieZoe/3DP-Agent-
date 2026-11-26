@@ -105,13 +105,35 @@ GET /v1/reconstructions/job_9f3
 
 `status` ∈ `queued | running | succeeded | failed | cancelled`.
 
+#### 2.2.1 Outputs are open formats; STEP is derived, not emitted
+
+Photogrammetry engines produce meshes (STL/GLB/OBJ/3MF). STEP is B-rep, so it can only be
+*produced by conversion*, and conversion needs a CAD kernel that may not exist on the host. The
+capability therefore separates the two kinds of output:
+
+- **Engine outputs** — whatever the provider can emit; discoverable via `outputs` on
+  `GET /v1/capabilities/reconstruction`.
+- **Derived outputs** — `step`, advertised under `derived_outputs.step` with its availability
+  and, when unavailable, the reason. A caller can decide *before* submitting whether to ask.
+
+If STEP was requested and cannot be produced:
+
+| When | Response |
+|---|---|
+| Kernel unavailable (known at submit) | `503 STEP_EXPORT_UNAVAILABLE`, no job created, nothing billable |
+| Conversion fails after the engine finished | job `failed` with `STEP_EXPORT_FAILED`; the mesh outputs stay on the job and remain downloadable |
+
+The second row is deliberate: reporting `succeeded` while the requested manufacturable format is
+missing would be exactly the kind of comfortable lie this capability must never tell. Nothing
+that was already produced is discarded.
+
 ### 2.3 Events (CloudEvents 1.0 semantics)
 
 ```json
 {
   "specversion": "1.0",
   "type": "io.3dp.reconstruction.succeeded.v1",
-  "source": "/v1/reconstructions",
+  "source": "urn:3dp:capability:photo-to-cad",
   "id": "evt_77",
   "subject": "job_9f3",
   "data": {
@@ -122,7 +144,24 @@ GET /v1/reconstructions/job_9f3
 ```
 
 Event types always carry a `.v1` suffix. New fields may only be appended in a
-backward-compatible way. Delivery is at-least-once, so handlers must be idempotent on `id`.
+backward-compatible way. `id` is stable per terminal transition, so a consumer that receives the
+same event twice can drop the duplicate.
+
+Delivery semantics in v0.1, stated precisely because they are easy to over-promise:
+
+- **One attempt per terminal transition.** `webhook_url` is accepted at submit, and the event is
+  posted once when the job first reaches `succeeded` / `failed` / `cancelled`. Repeat polls do
+  not re-deliver.
+- **No automatic retry.** The outcome is recorded on the job as
+  `webhook: { configured, last_delivery }`, and `last_delivery.status` is the honest answer.
+  Durability belongs to the caller: polling `GET /v1/reconstructions/:job_id` is idempotent by
+  construction, so a missed callback never loses the result.
+- **A failed callback never fails the job.** The reconstruction did succeed; only the
+  notification did not.
+- **Signed, optionally.** `RECON_WEBHOOK_SECRET` enables an HMAC-SHA256 `x-3dp-signature`
+  header computed over the raw body, so the receiver can reject forged events.
+- **The URL is a bearer secret.** `webhook_url` is never echoed back by the API; only
+  `webhook.configured` and the delivery record are visible.
 
 ### 2.4 Embedding
 
@@ -203,4 +242,5 @@ a stub success is worse than an endpoint that is honestly absent.
 | Version | Date | Change |
 |---|---|---|
 | v0.1 | 2026-11-26 | Initial draft. Photo-to-CAD as first capability; six hard rules; provider abstraction; tenant field reservation. |
+| v0.2 | 2026-11-26 | Added: STEP as a derived output with its own availability channel and two refusal paths; webhook delivery semantics (one attempt, no retry, signed, URL never echoed); `derived_outputs` on the capability descriptor. Additive only — no v1 field changed meaning. |
 *（内容由AI生成，仅供参考）*

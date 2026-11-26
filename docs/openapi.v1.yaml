@@ -73,7 +73,14 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
         '503':
-          $ref: '#/components/responses/EngineUnavailable'
+          description: >
+            Refused before a job was created: either no reconstruction engine is available
+            (ENGINE_NOT_AVAILABLE) or STEP was requested while no CAD kernel can produce it
+            (STEP_EXPORT_UNAVAILABLE). Nothing ran, so nothing is billable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /v1/reconstructions/{job_id}:
     get:
       tags: [reconstruction]
@@ -292,6 +299,56 @@ components:
           type: string
           format: date-time
           example: '2026-11-26T10:02:11Z'
+        output:
+          type: object
+          description: The output spec the caller asked for; echoed so results can be judged against the request.
+          properties:
+            formats:
+              type: array
+              items:
+                type: string
+                enum: [step, stl, glb, 3mf, obj]
+              example: [step, stl]
+            units:
+              type: string
+              enum: [mm, cm, in]
+              example: mm
+        webhook:
+          type: object
+          description: >
+            Callback status. The webhook URL itself is a bearer secret and is never returned
+            once accepted; this object only reports whether one is configured and how the
+            single terminal delivery went.
+          required: [configured]
+          properties:
+            configured:
+              type: boolean
+              example: true
+            last_delivery:
+              allOf:
+                - $ref: '#/components/schemas/WebhookDelivery'
+              nullable: true
+              description: Null until the terminal event has been attempted exactly once.
+    WebhookDelivery:
+      type: object
+      description: Outcome of the single delivery attempt for a job's terminal event.
+      required: [status, at]
+      properties:
+        status:
+          type: string
+          enum: [delivered, failed]
+          example: delivered
+        http_status:
+          type: integer
+          nullable: true
+          example: 204
+        error:
+          type: string
+          example: Webhook responded 502.
+        at:
+          type: string
+          format: date-time
+          example: '2026-11-26T10:02:12Z'
     ReconstructionOutput:
       type: object
       required: [format, bytes]
@@ -411,3 +468,23 @@ components:
           items:
             type: string
           example: [io.3dp.reconstruction.succeeded.v1]
+        derived_outputs:
+          type: object
+          description: >
+            Formats produced by conversion rather than emitted by the engine. Advertised
+            separately so a caller can decide before submitting whether to ask for STEP: a
+            photogrammetry engine outputs meshes, STEP requires a CAD kernel.
+          properties:
+            step:
+              type: object
+              required: [available]
+              properties:
+                available:
+                  type: boolean
+                  example: false
+                kernel:
+                  type: string
+                  example: freecad
+                unavailable_reason:
+                  type: string
+                  example: No FreeCAD kernel found; install FreeCAD ('brew install --cask freecad') or set RECON_STEP_BIN to a runnable freecadcmd.

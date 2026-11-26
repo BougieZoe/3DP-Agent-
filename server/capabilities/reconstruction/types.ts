@@ -131,7 +131,35 @@ export interface ReconstructionJob {
    * Stripped by toPublicJob() before anything leaves the process — it is not contract.
    */
   input_snapshot?: ReconSubmitRequest["input"];
+  /**
+   * @internal Webhook target. Stripped before serialisation: a callback URL is a bearer
+   * secret in practice (its path often carries a token), so it never appears in polling
+   * responses. Consumers see only whether one is configured and how the last attempt went.
+   */
+  webhook_url?: string;
+  webhook_delivery?: WebhookDelivery;
+  /**
+   * @internal What the caller asked to be produced. Drives derived outputs (STEP is a
+   * conversion of a mesh, not something a photogrammetry engine emits) and is echoed to
+   * consumers as `output` so they can confirm what was promised.
+   */
+  output_spec?: ReconSubmitRequest["output"];
 }
+
+/**
+ * Result of the single webhook attempt made when a job reaches a terminal state.
+ *
+ * v1 promises one attempt per terminal transition, not a retry loop: a delivery failure
+ * is reported here so the caller can reconcile, and retries stay a v2 concern (adding them
+ * later is not a breaking change — dropping a promise we made would be).
+ */
+export interface WebhookDelivery {
+  status: "delivered" | "failed";
+  http_status?: number;
+  error?: string;
+  at: string;
+}
+
 
 /**
  * Serialise a job for the wire. Internal fields are removed here, once, rather than
@@ -142,7 +170,21 @@ export function toPublicJob(job: ReconstructionJob): Record<string, unknown> {
   const clone: ReconstructionJob = { ...job };
   delete clone.input_snapshot;
   delete clone.provider_job_id;
-  return { ...clone, usage: clone.usage ?? null };
+  delete clone.webhook_url;
+  delete clone.output_spec;
+  // Presence and outcome are contract; the target itself is not.
+  return {
+    ...clone,
+    usage: clone.usage ?? null,
+    output: {
+      formats: job.output_spec?.formats ?? ["stl"],
+      units: job.output_spec?.units ?? "mm",
+    },
+    webhook: {
+      configured: Boolean(job.webhook_url),
+      last_delivery: job.webhook_delivery ?? null,
+    },
+  };
 }
 
 export interface ProviderCapabilities {

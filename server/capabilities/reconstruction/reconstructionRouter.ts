@@ -24,6 +24,9 @@ import { FileJobStore } from "./jobStore.js";
 import type { JobStore } from "./jobStore.js";
 import { resolveTenantContext } from "./jobStore.js";
 import { createProvider } from "./providerRegistry.js";
+import { resolveStepExporter, stepExportDir } from "./exporters/step.js";
+import type { StepExporter } from "./exporters/step.js";
+import { buildEvent, deliverWebhook, eventTypeFor } from "./webhook.js";
 import {
   CapabilityError,
   RECON_OUTPUT_FORMATS,
@@ -31,6 +34,7 @@ import {
   toPublicJob,
 } from "./types.js";
 import type {
+  JobError,
   JobStatus,
   ReconOutput,
   ReconstructionJob,
@@ -66,6 +70,12 @@ const submitSchema = z.object({
 export interface ReconstructionRouterDeps {
   store: JobStore;
   provider: ReconstructionProvider;
+  /** Root for job data and derived artefacts. Overridable in tests. */
+  rootDir?: string;
+  /** Injected by tests to avoid depending on a CAD kernel being installed. */
+  stepExporter?: StepExporter;
+  /** Injected by tests to observe deliveries without a network round trip. */
+  deliver?: typeof deliverWebhook;
 }
 
 export function defaultDeps(): ReconstructionRouterDeps {
@@ -75,7 +85,22 @@ export function defaultDeps(): ReconstructionRouterDeps {
   return {
     store: new FileJobStore(rootDir),
     provider: createProvider({ workRoot: path.join(rootDir, "work") }),
+    rootDir,
   };
+}
+
+/** Probe the CAD kernel once per router instance; probing shells out, so caching matters. */
+interface StepExporterCache {
+  current?: Promise<StepExporter>;
+}
+
+async function stepExporterFor(
+  deps: ReconstructionRouterDeps,
+  cache: StepExporterCache,
+): Promise<StepExporter> {
+  if (deps.stepExporter) return deps.stepExporter;
+  cache.current ??= resolveStepExporter();
+  return cache.current;
 }
 
 function secondsBetween(fromIso: string, toIso: string): number {
@@ -105,12 +130,111 @@ function buildUsage(
   };
 }
 
+/**
+ * Convert the engine's mesh into STEP when the caller asked for it.
+ *
+ * A photogrammetry engine never emits STEP (it produces meshes, STEP is B-rep), so the
+ * format is delivered by conversion. If the conversion is impossible the job must not claim
+ * success: the caller asked for a manufacturable file, and handing back "succeeded" with a
+ * missing format is the exact class of lie this capability must never tell. Mesh outputs are
+ * still left on the job and stay downloadable, so nothing already produced is thrown away.
+ */
+async function deriveStepOutput(
+  job: ReconstructionJob,
+  deps: ReconstructionRouterDeps,
+  cache: StepExporterCache,
+): Promise<{ outputs: ReconOutput[]; error?: JobError }> {
+  const formats = job.output_spec?.formats ?? ["stl"];
+  if (!formats.includes("step")) return { outputs: job.outputs };
+  if (job.outputs.some((item) => item.format === "step")) return { outputs: job.outputs };
+
+  const source =
+    job.outputs.find((item) => item.format === "stl") ??
+    job.outputs.find((item) => item.format === "obj") ??
+    job.outputs.find((item) => item.format === "glb");
+  if (!source?.path) {
+    return {
+      outputs: job.outputs,
+      error: {
+        code: "STEP_EXPORT_FAILED",
+        message: "No mesh output to convert into STEP.",
+      },
+    };
+  }
+
+  const exporter = await stepExporterFor(deps, cache);
+  const availability = await exporter.availability();
+  if (!availability.available) {
+    return {
+      outputs: job.outputs,
+      error: {
+        code: "STEP_EXPORT_FAILED",
+        message: availability.unavailable_reason ?? "STEP export channel is unavailable.",
+      },
+    };
+  }
+
+  const outPath = path.join(
+    stepExportDir(deps.rootDir ?? process.cwd()),
+    `${job.job_id}.step`,
+  );
+  try {
+    await fs.mkdir(path.dirname(outPath), { recursive: true });
+    await exporter.convert({
+      sourcePath: source.path,
+      units: job.output_spec?.units ?? "mm",
+      outPath,
+    });
+    const stat = await fs.stat(outPath);
+    return {
+      outputs: [
+        ...job.outputs,
+        { format: "step", path: outPath, bytes: stat.size, asset_id: `step_${job.job_id}` },
+      ],
+    };
+  } catch (err) {
+    return {
+      outputs: job.outputs,
+      error: {
+        code: "STEP_EXPORT_FAILED",
+        message: (err as Error).message,
+      },
+    };
+  }
+}
+
+/**
+ * Deliver the terminal event, once.
+ *
+ * `webhook_delivery` doubles as the "already attempted" marker, which is what makes this
+ * idempotent across polls: a job may be settled repeatedly, but the consumer is told once.
+ */
+async function deliverTerminalEvent(
+  job: ReconstructionJob,
+  deps: ReconstructionRouterDeps,
+): Promise<ReconstructionJob> {
+  if (!job.webhook_url || job.webhook_delivery) return job;
+  const type = eventTypeFor(job.status);
+  if (!type) return job;
+
+  const send = deps.deliver ?? deliverWebhook;
+  const delivery = await send({
+    url: job.webhook_url,
+    event: buildEvent(type, job, toPublicJob(job)),
+    secret: process.env.RECON_WEBHOOK_SECRET,
+  });
+  return deps.store.update(job.job_id, { webhook_delivery: delivery });
+}
+
 /** Refresh a running job from the provider and settle it once it reaches a terminal state. */
 async function refreshJob(
   job: ReconstructionJob,
   deps: ReconstructionRouterDeps,
+  cache: StepExporterCache,
 ): Promise<ReconstructionJob> {
-  if (TERMINAL_STATUSES.includes(job.status) || !job.provider_job_id) return job;
+  if (TERMINAL_STATUSES.includes(job.status) || !job.provider_job_id) {
+    return deliverTerminalEvent(job, deps);
+  }
 
   const status = await deps.provider.status(job.provider_job_id, job);
   if (status.state === "running" || status.state === "queued") {
@@ -120,19 +244,32 @@ async function refreshJob(
     });
   }
 
-  const outputs = status.state === "succeeded" ? await deps.provider.collect(job.provider_job_id, job) : [];
-  const usage = buildUsage(job, status.state, outputs);
+  let state: JobStatus = status.state;
+  let error: JobError | undefined =
+    status.state === "failed"
+      ? { code: "ENGINE_FAILED", message: status.message ?? "Reconstruction failed." }
+      : undefined;
+
+  let outputs = status.state === "succeeded" ? await deps.provider.collect(job.provider_job_id, job) : [];
+  if (status.state === "succeeded") {
+    const derived = await deriveStepOutput({ ...job, outputs }, deps, cache);
+    outputs = derived.outputs;
+    if (derived.error) {
+      state = "failed";
+      error = derived.error;
+    }
+  }
+
+  const usage = buildUsage(job, state, outputs);
   const updated = await deps.store.update(job.job_id, {
-    status: status.state,
-    progress: { stage: status.stage ?? status.state, percent: status.percent },
+    status: state,
+    progress: { stage: status.stage ?? state, percent: status.percent },
     outputs,
     usage,
-    ...(status.state === "failed"
-      ? { error: { code: "ENGINE_FAILED", message: status.message ?? "Reconstruction failed." } }
-      : {}),
+    ...(error ? { error } : {}),
   });
   if (!job.usage) await deps.store.appendUsage(usage);
-  return updated;
+  return deliverTerminalEvent(updated, deps);
 }
 
 function sendCapabilityError(res: Response, err: CapabilityError): void {
@@ -144,6 +281,7 @@ export function createReconstructionRouter(
 ): Router {
   const resolved = { ...defaultDeps(), ...overrides };
   const deps: ReconstructionRouterDeps = resolved;
+  const cache: StepExporterCache = {};
   const router = Router();
 
   router.use((_req, res, next) => {
@@ -195,6 +333,22 @@ export function createReconstructionRouter(
         );
       }
 
+      // Refuse before creating a job: a request we cannot honour must not leave a job id
+      // behind for the caller to poll into a confusing failure.
+      const requestedFormats = body.output?.formats ?? ["stl"];
+      if (requestedFormats.includes("step")) {
+        const exporter = await stepExporterFor(deps, cache);
+        const availability = await exporter.availability();
+        if (!availability.available) {
+          throw new CapabilityError(
+            "STEP_EXPORT_UNAVAILABLE",
+            availability.unavailable_reason ??
+              "STEP export was requested but no CAD kernel is available.",
+            503,
+          );
+        }
+      }
+
       const job = await deps.store.create({
         request: body,
         context,
@@ -203,6 +357,8 @@ export function createReconstructionRouter(
       });
       const withInputs = await deps.store.update(job.job_id, {
         input_snapshot: body.input,
+        output_spec: body.output,
+        ...(body.webhook_url ? { webhook_url: body.webhook_url } : {}),
       });
 
       try {
@@ -221,11 +377,12 @@ export function createReconstructionRouter(
             ? err
             : new CapabilityError("ENGINE_FAILED", (err as Error).message, 500);
         const usage = buildUsage(job, "failed", []);
-        await deps.store.update(job.job_id, {
+        const failed = await deps.store.update(job.job_id, {
           status: "failed",
           error: capabilityError.toJSON(),
         });
         await deps.store.appendUsage(usage);
+        await deliverTerminalEvent(failed, deps);
         res.status(capabilityError.httpStatus).json({
           error: capabilityError.toJSON(),
           job_id: job.job_id,
@@ -249,7 +406,7 @@ export function createReconstructionRouter(
           .json({ error: { code: "JOB_NOT_FOUND", message: `No job ${req.params.job_id}` } });
         return;
       }
-      res.json(toPublicJob(await refreshJob(job, deps)));
+      res.json(toPublicJob(await refreshJob(job, deps, cache)));
     } catch (err) {
       if (err instanceof CapabilityError) {
         sendCapabilityError(res, err);
@@ -280,7 +437,7 @@ export function createReconstructionRouter(
         progress: { stage: "cancelled", percent: job.progress.percent },
       });
       if (!job.usage) await deps.store.appendUsage(usage);
-      res.status(202).json(toPublicJob(updated));
+      res.status(202).json(toPublicJob(await deliverTerminalEvent(updated, deps)));
     } catch (err) {
       if (err instanceof CapabilityError) {
         sendCapabilityError(res, err);
@@ -299,7 +456,7 @@ export function createReconstructionRouter(
           .json({ error: { code: "JOB_NOT_FOUND", message: `No job ${req.params.job_id}` } });
         return;
       }
-      const job = await refreshJob(found, deps);
+      const job = await refreshJob(found, deps, cache);
       const format = req.params.format.toLowerCase();
       const output = job.outputs.find((item) => item.format === format);
       if (!output?.path) {
@@ -330,19 +487,33 @@ export function createReconstructionCapabilityRouter(
   overrides: Partial<ReconstructionRouterDeps> = {},
 ): Router {
   const deps: ReconstructionRouterDeps = { ...defaultDeps(), ...overrides };
+  const cache: StepExporterCache = {};
   const router = Router();
 
   router.get("/", async (_req: Request, res: Response) => {
     try {
       const capabilities = await deps.provider.capabilities();
+      const exporter = await stepExporterFor(deps, cache);
+      const step = await exporter.availability();
       res.json({
         capability: "photo-to-cad",
         contract_version: "v1",
         ...capabilities,
+        // Derived outputs are advertised separately from what the engine can emit: a
+        // consumer needs to know STEP is a conversion that may be unavailable here, so it
+        // can decide before submitting whether to ask for it.
+        derived_outputs: {
+          step: {
+            available: step.available,
+            kernel: step.kernel,
+            ...(step.unavailable_reason ? { unavailable_reason: step.unavailable_reason } : {}),
+          },
+        },
         event_types: [
           "io.3dp.reconstruction.queued.v1",
           "io.3dp.reconstruction.succeeded.v1",
           "io.3dp.reconstruction.failed.v1",
+          "io.3dp.reconstruction.cancelled.v1",
         ],
       });
     } catch (err) {
