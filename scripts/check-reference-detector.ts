@@ -40,9 +40,21 @@ function toStl(triangles: Tri[]): Buffer {
 function rectSheet(
   longEdge: number,
   shortEdge: number,
-  opts: { z0?: number; divisions?: number; doubleSided?: boolean } = {}
+  opts: {
+    z0?: number;
+    divisions?: number;
+    doubleSided?: boolean;
+    /**
+     * Normalised [x0, y0, x1, y1] box whose cells are dropped, simulating the holes a real
+     * reconstruction punches through flat surfaces. A box in the middle removes area without
+     * touching the outline; a box against an edge dents the outline.
+     */
+    hole?: [number, number, number, number];
+    /** Drop every Nth border cell, simulating the frayed edge of a real reconstruction. */
+    frayEvery?: number;
+  } = {}
 ): Tri[] {
-  const { z0 = 0, divisions = 12, doubleSided = false } = opts;
+  const { z0 = 0, divisions = 12, doubleSided = false, hole, frayEvery } = opts;
   const out: Tri[] = [];
   const halfL = longEdge / 2;
   const halfS = shortEdge / 2;
@@ -54,6 +66,14 @@ function rectSheet(
       const x1 = x0 + stepX;
       const y0 = -halfS + j * stepY;
       const y1 = y0 + stepY;
+      const onBorder =
+        i === 0 || j === 0 || i === divisions - 1 || j === divisions - 1;
+      if (frayEvery && onBorder && (i * 5 + j * 3) % frayEvery === 0) continue;
+      if (hole) {
+        const cxn = (i + 0.5) / divisions;
+        const cyn = (j + 0.5) / divisions;
+        if (cxn >= hole[0] && cxn <= hole[2] && cyn >= hole[1] && cyn <= hole[3]) continue;
+      }
       const p00: Vec3 = [x0, y0, z0];
       const p10: Vec3 = [x1, y0, z0];
       const p11: Vec3 = [x1, y1, z0];
@@ -212,3 +232,89 @@ const near = (actual: number, expected: number, tol: number, label: string) => {
 }
 
 console.log("\nall detector checks passed");
+
+// 8. A4 whose middle is full of holes — the normal state of a real photogrammetry mesh.
+// The outline is intact, so the sheet must still be usable; only the interior coverage drops.
+{
+  const mmPerUnit = 13.7;
+  const a4 = REFERENCE_SPECS.a4;
+  const r = detectReference(
+    toStl(
+      rectSheet(a4.longMm / mmPerUnit, a4.shortMm / mmPerUnit, {
+        divisions: 24,
+        hole: [0.25, 0.25, 0.75, 0.75],
+      })
+    )
+  );
+  console.log("[8] A4 with holes punched through the middle");
+  assert.equal(r.best?.specId, "a4", `expected a4, got ${r.best?.specId ?? "none"}`);
+  near(r.best!.mmPerUnit, mmPerUnit, 0.1, "mm/unit");
+  assert.ok(
+    r.best!.fill < 0.85,
+    `this case should sit below the old fill gate, got fill ${r.best!.fill.toFixed(3)}`
+  );
+  assert.ok(
+    r.best!.outlineFill > 0.95,
+    `outline should stay intact, got ${r.best!.outlineFill.toFixed(3)}`
+  );
+  console.log(
+    `  ok   fill ${r.best!.fill.toFixed(3)} (below old 0.85 gate) but outline ${r.best!.outlineFill.toFixed(3)}`
+  );
+}
+
+// 9. A4 with a bite taken out of one long edge and a corner — an occluded sheet. The hull
+// dents, so the long edge cannot be trusted and the sheet must be refused.
+{
+  const mmPerUnit = 13.7;
+  const a4 = REFERENCE_SPECS.a4;
+  const r = detectReference(
+    toStl(
+      rectSheet(a4.longMm / mmPerUnit, a4.shortMm / mmPerUnit, {
+        divisions: 24,
+        hole: [0.6, 0.6, 1.1, 1.1],
+      })
+    )
+  );
+  console.log("[9] A4 with an occluded corner");
+  assert.ok(!r.best, `expected no accepted reference, got ${r.best?.specId}`);
+  const near9 = r.closest;
+  assert.ok(near9, "expected a closest candidate for diagnostics");
+  assert.ok(
+    near9!.rejectedBy.includes("outline") || near9!.rejectedBy.includes("aspect"),
+    `expected outline/aspect rejection, got ${near9!.rejectedBy.join(",")}`
+  );
+  console.log(
+    `  ok   rejected by ${near9!.rejectedBy.join(",")} (outline ${near9!.outlineFill.toFixed(3)})`
+  );
+}
+
+// 10. A4 carrying the two artefacts a real reconstruction always adds: holes through the
+// middle, and stray spurs hanging off the outline. The holes must not disqualify the sheet
+// (fill collapses, outline does not) and the spurs must not skew the scale (the hull is
+// simplified before the rectangle is fitted).
+{
+  const mmPerUnit = 13.7;
+  const a4 = REFERENCE_SPECS.a4;
+  const longEdge = a4.longMm / mmPerUnit;
+  const shortEdge = a4.shortMm / mmPerUnit;
+  const spur = (cx: number, cy: number, sizeMm = 4): Tri => {
+    const s = sizeMm / mmPerUnit / 2;
+    return { a: [cx - s, cy - s, 0], b: [cx + s, cy - s, 0], c: [cx, cy + s, 0] };
+  };
+  const mesh = [
+    ...rectSheet(longEdge, shortEdge, { divisions: 24, hole: [0.3, 0.3, 0.6, 0.6] }),
+    // Spurs just outside the long edges, a few millimetres out.
+    spur(0, shortEdge / 2 + 3 / mmPerUnit),
+    spur(-longEdge / 4, shortEdge / 2 + 2.5 / mmPerUnit),
+    spur(longEdge / 4, -shortEdge / 2 - 2.5 / mmPerUnit),
+  ];
+  const r = detectReference(toStl(mesh));
+  console.log("[10] A4 with interior holes and outline spurs");
+  assert.equal(r.best?.specId, "a4", `expected a4, got ${r.best?.specId ?? "none"}`);
+  const aspectErr = Math.abs(r.best!.aspect - a4.aspect) / a4.aspect;
+  assert.ok(aspectErr < 0.02, `spurs skewed the aspect by ${(aspectErr * 100).toFixed(1)}%`);
+  near(r.best!.mmPerUnit, mmPerUnit, 0.2, "mm/unit");
+  console.log(
+    `  ok   fill ${r.best!.fill.toFixed(3)}, outline ${r.best!.outlineFill.toFixed(3)}, aspect err ${(aspectErr * 100).toFixed(1)}%`
+  );
+}

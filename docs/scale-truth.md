@@ -1,3 +1,14 @@
+---
+AIGC:
+    Label: "1"
+    ContentProducer: 001191440300708461136T1XGW3
+    ProduceID: 60511e479f736a9399334d56570e10ac_9916289be97a11f1a20652540072b1e8
+    ReservedCode1: KVcCBr/jW6gv9BsF0L+jsG6cXtsOOQViH7drNXt3hPg4OfcdkW4EsgO9ToNF5S8/0NqMpQms2qPiBF9ldrmyXhi+50xwi+diuPWzQ9ZKFHt6R9Tmir1udUWA+ffJOkzyXDZ1s+s9d/jhrcm7I0+6NWCuGvCmXguJ3s8hjVL+IkgjeR8XEzGh0tZRjjg=
+    ContentPropagator: 001191440300708461136T1XGW3
+    PropagateID: 60511e479f736a9399334d56570e10ac_9916289be97a11f1a20652540072b1e8
+    ReservedCode2: KVcCBr/jW6gv9BsF0L+jsG6cXtsOOQViH7drNXt3hPg4OfcdkW4EsgO9ToNF5S8/0NqMpQms2qPiBF9ldrmyXhi+50xwi+diuPWzQ9ZKFHt6R9Tmir1udUWA+ffJOkzyXDZ1s+s9d/jhrcm7I0+6NWCuGvCmXguJ3s8hjVL+IkgjeR8XEzGh0tZRjjg=
+---
+
 # Scale truth — turning a reconstruction into millimetres
 
 Status: **detector + CLI validated on synthetic meshes with known ground truth; not yet run
@@ -100,7 +111,9 @@ available yet. All numbers below are reproducible with `scripts/scale-truth-fixt
 | same scene at 3× mesh scale | 7.3 | 2.4333 recovered, equivalent to 7.3 |
 | subject only | reject | rejected, closest patch 1.99 aspect |
 | 2:1 rectangle | reject | rejected on aspect |
-| A4 with a quadrant carved out | reject | rejected on fill (81%) |
+| A4 中间挖 25% 的洞（真实重建常态） | accept | accepted, 13.700 mm/unit, fill 0.750 但轮廓 1.000 |
+| A4 缺掉一个角 | reject | rejected on outline (93%) |
+| A4 带内部破洞 + 数毫米外扩毛刺 | accept | accepted, 长宽比误差 0.0% |
 | A4 flush on a coplanar desk | reject | rejected: merged patch has 1.50 aspect |
 | A4 but `--reference card` | reject | rejected, names the mismatch |
 | `--units cm` | factor ÷ 10 | 0.73, re-measure gives 10 mm/unit |
@@ -121,3 +134,4 @@ factor three times smaller and the same physical answer.
 - **The router still does not accept `calibration_board`.** A printed target with four known markers
   would be more robust than a plain rectangle, and is the natural next step; it needs a detector
   that can find four corners, not one rectangle.
+*（内容由AI生成，仅供参考）*

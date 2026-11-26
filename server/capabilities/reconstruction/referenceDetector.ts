@@ -84,8 +84,21 @@ export interface MeshTriangle {
 export interface DetectorOptions {
   /** Relative aspect-ratio error still accepted as "this is that reference". */
   aspectTolerance?: number;
-  /** Minimum fraction of the rectangle that the cluster must actually cover. */
+  /**
+   * Minimum fraction of the rectangle that the cluster must actually cover.
+   *
+   * Kept for diagnostics only: a real photogrammetry reconstruction of a flat sheet comes back
+   * with holes and frayed edges, so `fill` routinely lands far below 1.0 even when the sheet's
+   * outline is fully recovered. Gating on it would reject every real scan. Use
+   * `minEdgeSupport` to judge whether the rectangle is actually bounded.
+   */
   minFill?: number;
+  /**
+   * Minimum convex-hull area as a share of the bounding rectangle. This is the gate that
+   * matters: a reconstruction hollows out the middle of a sheet without touching its convex
+   * hull, so `fill` collapses while this stays at 1.0; an occluded or merged cluster instead
+   * dents the hull, and this drops. */
+  minOutlineFill?: number;
   /** Max RMS distance of cluster vertices from the fitted plane, as a share of long edge. */
   maxPlanarityRatio?: number;
   /** Minimum long-edge length as a share of the mesh's own bounding diagonal. */
@@ -101,6 +114,7 @@ export interface DetectorOptions {
 const DEFAULTS: Required<DetectorOptions> = {
   aspectTolerance: 0.05,
   minFill: 0.85,
+  minOutlineFill: 0.95,
   maxPlanarityRatio: 0.03,
   minScaleRatio: 0.05,
   planeOffsetTolerance: 0.015,
@@ -113,8 +127,13 @@ export interface ReferenceCandidate {
   aspect: number;
   /** |aspect - spec.aspect| / spec.aspect */
   aspectError: number;
-  /** Cluster coverage of its own bounding rectangle, 0..1. */
+  /** Cluster coverage of its own bounding rectangle, 0..1. Diagnostic: real scans have holes. */
   fill: number;
+  /**
+   * Convex-hull area as a share of the bounding rectangle, 0..1. Unaffected by holes in the
+   * middle of a sheet, dented by an occluded outline. This is the gate.
+   */
+  outlineFill: number;
   /** Flatness: RMS out-of-plane deviation / long edge. */
   planarity: number;
   /** Long edge length in mesh units. */
@@ -445,7 +464,12 @@ export function detectReference(
     const rms = Math.sqrt(sq / n);
 
     const hull = convexHull(flat);
-    const rect = minAreaRect(hull);
+    // Fit once roughly to learn the scale, simplify away outline spurs, then fit again.
+    const rough = minAreaRect(hull);
+    const rect =
+      rough && rough.longSide > 0
+        ? minAreaRect(simplifyClosedPolygon(hull, rough.longSide * 0.03)) ?? rough
+        : rough;
     if (!rect || rect.area <= 0 || rect.shortSide <= 0) continue;
 
     const longSide = rect.longSide;
@@ -482,11 +506,15 @@ export function detectReference(
       toWorld(rect.corners[3]),
     ];
 
+    // Holes in the middle of a reconstruction leave the hull intact; an occluded outline dents
+    // it. Comparing hull area against the rectangle separates the two where `fill` cannot.
+    const outlineFill = Math.min(1, Math.abs(polygonArea(hull)) / rect.area);
+
     for (const spec of specs) {
       const aspectError = Math.abs(aspect - spec.aspect) / spec.aspect;
       const rejectedBy: string[] = [];
       if (aspectError > opts.aspectTolerance) rejectedBy.push("aspect");
-      if (fill < opts.minFill) rejectedBy.push("fill");
+      if (outlineFill < opts.minOutlineFill) rejectedBy.push("outline");
       if (planarity > opts.maxPlanarityRatio) rejectedBy.push("planarity");
       if (scaleRatio < opts.minScaleRatio) rejectedBy.push("size");
 
@@ -494,8 +522,8 @@ export function detectReference(
         0,
         Math.min(
           1,
-          (1 - Math.min(1, aspectError / opts.aspectTolerance)) * 0.5 +
-            fill * 0.3 +
+          (1 - Math.min(1, aspectError / opts.aspectTolerance)) * 0.45 +
+            outlineFill * 0.35 +
             (1 - Math.min(1, planarity / opts.maxPlanarityRatio)) * 0.2
         )
       );
@@ -506,6 +534,7 @@ export function detectReference(
         aspect,
         aspectError,
         fill,
+        outlineFill,
         planarity,
         longEdge: longSide,
         shortEdge: shortSide,
@@ -538,4 +567,85 @@ export function detectReference(
     best,
     closest,
   };
+}
+
+/** Shoelace area of a closed polygon, counter-clockwise or not. */
+function polygonArea(poly: Pt2[]): number {
+  if (poly.length < 3) return 0;
+  let sum = 0;
+  for (let i = 0; i < poly.length; i += 1) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    sum += a.x * b.y - b.x * a.y;
+  }
+  return sum / 2;
+}
+
+/** Distance from a point to a segment, used by the polygon simplifier. */
+function pointSegmentDistance(p: Pt2, a: Pt2, b: Pt2): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/**
+ * Ramer–Douglas–Peucker simplification for a closed polygon, split at its two farthest points.
+ *
+ * A reconstruction's outline is ragged: stray triangles push the convex hull out by a few
+ * millimetres at random spots. Fitting a rectangle straight to that hull tilts it, which skews
+ * the aspect ratio and therefore the millimetre scale — a 297 mm sheet comes out as 285 mm.
+ * Simplifying first drops those spurs while keeping the real corners, because a corner deviates
+ * from the chord far more than the tolerance.
+ */
+function simplifyClosedPolygon(poly: Pt2[], tol: number): Pt2[] {
+  if (poly.length < 4 || tol <= 0) return poly;
+  let farA = 0;
+  let farB = 0;
+  let best = -1;
+  for (let i = 0; i < poly.length; i += 1) {
+    for (let j = i + 1; j < poly.length; j += 1) {
+      const d = (poly[i].x - poly[j].x) ** 2 + (poly[i].y - poly[j].y) ** 2;
+      if (d > best) {
+        best = d;
+        farA = i;
+        farB = j;
+      }
+    }
+  }
+  const chain = (from: number, to: number): Pt2[] => {
+    const out: Pt2[] = [];
+    let i = from;
+    for (let guard = 0; guard <= poly.length; guard += 1) {
+      out.push(poly[i]);
+      if (i === to) break;
+      i = (i + 1) % poly.length;
+    }
+    return out;
+  };
+  const rdp = (pts: Pt2[]): Pt2[] => {
+    if (pts.length < 3) return pts;
+    const a = pts[0];
+    const b = pts[pts.length - 1];
+    let idx = -1;
+    let maxD = -1;
+    for (let i = 1; i < pts.length - 1; i += 1) {
+      const d = pointSegmentDistance(pts[i], a, b);
+      if (d > maxD) {
+        maxD = d;
+        idx = i;
+      }
+    }
+    if (idx < 0 || maxD <= tol) return [a, b];
+    const left = rdp(pts.slice(0, idx + 1));
+    const right = rdp(pts.slice(idx));
+    return [...left.slice(0, -1), ...right];
+  };
+  const first = rdp(chain(farA, farB));
+  const second = rdp(chain(farB, farA));
+  const merged = [...first.slice(0, -1), ...second.slice(0, -1)];
+  return merged.length >= 3 ? merged : poly;
 }

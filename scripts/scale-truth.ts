@@ -147,14 +147,18 @@ async function resolveMeshPath(
     fail(`looking up a job id needs --recon-dir or RECON_DATA_DIR`, 4);
   }
   for (const root of roots) {
-    const jobDir = path.join(path.resolve(root), args.input);
-    for (const rel of ["output/mesh.stl", "mesh.stl", "output/model.stl"]) {
-      const candidate = path.join(jobDir, rel);
-      try {
-        await fs.access(candidate);
-        return { meshPath: candidate, jobDir };
-      } catch {
-        /* try the next layout */
+    const base = path.resolve(root);
+    // The router stores jobs under <root>/work/<job_id>/; earlier data dirs kept them flat.
+    const jobDirs = [path.join(base, "work", args.input), path.join(base, args.input)];
+    for (const jobDir of jobDirs) {
+      for (const rel of ["output/mesh.stl", "mesh.stl", "output/model.stl"]) {
+        const candidate = path.join(jobDir, rel);
+        try {
+          await fs.access(candidate);
+          return { meshPath: candidate, jobDir };
+        } catch {
+          /* try the next layout */
+        }
       }
     }
   }
@@ -173,7 +177,8 @@ function describeFailure(result: DetectionResult, args: Args): string[] {
   lines.push(
     `最接近的平面：长宽比 ${closest.aspect.toFixed(2)}（A4 为 ` +
       `${REFERENCE_SPECS.a4.aspect.toFixed(2)}，银行卡为 ${REFERENCE_SPECS.card.aspect.toFixed(2)}），` +
-      `占其外接矩形 ${(closest.fill * 100).toFixed(0)}%，` +
+      `轮廓完整度 ${(closest.outlineFill * 100).toFixed(0)}%（凸包占外接矩形），` +
+      `内部填充 ${(closest.fill * 100).toFixed(0)}%，` +
       `起伏占长边 ${(closest.planarity * 100).toFixed(1)}%。`
   );
   for (const reason of closest.rejectedBy) {
@@ -183,9 +188,9 @@ function describeFailure(result: DetectionResult, args: Args): string[] {
           "→ 比例不符：这块多半是桌面、笔记本顶盖之类的矩形。重拍时让纸张完整入镜、平铺、不与别的矩形边缘重叠。"
         );
         break;
-      case "fill":
+      case "outline":
         lines.push(
-          "→ 形状不是实心矩形（像 L 形或 T 形）：纸上有东西压着，或两处平行面被并成了一块。把纸面清空，并让它与桌面、地面这类共面物体拉开几厘米。"
+          "→ 轮廓缺了一块（凸包塌陷）：纸的四条边没有被完整重建出来，多半是有东西压住了一角，或两处平行面被并成了一块。把纸面清空、完整入镜，并让它与桌面、地面这类共面物体拉开几厘米。"
         );
         break;
       case "planarity":
@@ -224,6 +229,7 @@ interface Report {
     long_edge_units: number;
     short_edge_units: number;
     fill: number;
+    outline_fill: number;
     confidence: number;
     planarity_ratio: number;
   } | null;
@@ -391,6 +397,7 @@ async function main(): Promise<void> {
     long_edge_units: Number(chosen.longEdge.toFixed(6)),
     short_edge_units: Number(chosen.shortEdge.toFixed(6)),
     fill: Number(chosen.fill.toFixed(4)),
+    outline_fill: Number(chosen.outlineFill.toFixed(4)),
     confidence: Number(chosen.confidence.toFixed(4)),
     planarity_ratio: Number(chosen.planarity.toFixed(5)),
   };
@@ -417,7 +424,8 @@ async function main(): Promise<void> {
     );
     console.log(
       `检测    长边 ${chosen.longEdge.toFixed(3)} 单元 × 短边 ` +
-        `${chosen.shortEdge.toFixed(3)} 单元，填充率 ${(chosen.fill * 100).toFixed(1)}%，` +
+        `${chosen.shortEdge.toFixed(3)} 单元，轮廓完整度 ${(chosen.outlineFill * 100).toFixed(1)}%，` +
+        `内部填充 ${(chosen.fill * 100).toFixed(1)}%（真实重建有破洞属正常），` +
         `平面度 ${(chosen.planarity * 100).toFixed(2)}%`
     );
     console.log(
@@ -427,10 +435,10 @@ async function main(): Promise<void> {
     console.log(
       `缩放    顶点 ×${applied.factor.toFixed(6)}，输出单位 ${args.units}`
     );
-    if (chosen.fill < 0.95) {
+    if (chosen.outlineFill < 0.99) {
       console.log(
-        `注意    该平面只填充了外接矩形的 ${(chosen.fill * 100).toFixed(1)}%：纸张边缘可能被遮挡；` +
-          `若长边端点被切掉，换算会整体偏小，建议对照实测尺寸核对。`
+        `注意    该平面轮廓只占外接矩形的 ${(chosen.outlineFill * 100).toFixed(1)}%：` +
+          `纸的一条边可能没重建完整，若长边端点被切掉，换算会整体偏小，建议对照实测尺寸核对。`
       );
     }
     console.log(`输出    ${outPath}`);

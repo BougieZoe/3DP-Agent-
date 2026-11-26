@@ -145,8 +145,52 @@ describe("reference detection", () => {
 
     expect(result.best).toBeUndefined();
     expect(result.closest).toBeDefined();
-    // A sphere's projected coverage is ~pi/4, i.e. it fails the fill gate, not the aspect one.
+    // A sphere's projected coverage is ~pi/4: too round and too weakly outlined to pass.
     expect(result.closest?.fill).toBeLessThan(0.9);
+    expect(result.closest?.outlineFill).toBeLessThan(0.95);
+  });
+
+  it("accepts a sheet with holes punched through its middle", () => {
+    // What a real reconstruction returns: the outline survives, the interior does not. Gating
+    // on coverage (`fill`) would reject every real scan, so the gate is the hull instead.
+    const mmPerUnit = 13.7;
+    const a4 = REFERENCE_SPECS.a4;
+    const sheet = rectSheet(a4.longMm / mmPerUnit, a4.shortMm / mmPerUnit, { divisions: 24 });
+    const holed = sheet.filter((t) => {
+      const cx = (t.a[0] + t.b[0] + t.c[0]) / 3;
+      const cy = (t.a[1] + t.b[1] + t.c[1]) / 3;
+      const nx = cx / (a4.longMm / mmPerUnit / 2);
+      const ny = cy / (a4.shortMm / mmPerUnit / 2);
+      return !(Math.abs(nx) < 0.5 && Math.abs(ny) < 0.5);
+    });
+
+    const result = detectReference(toStl(holed));
+
+    expect(result.best?.specId).toBe("a4");
+    expect(result.best?.mmPerUnit).toBeCloseTo(mmPerUnit, 1);
+    expect(result.best?.fill).toBeLessThan(0.85);
+    expect(result.best?.outlineFill).toBeGreaterThan(0.95);
+  });
+
+  it("rejects a sheet with a bite taken out of its outline", () => {
+    // An occluded sheet still has A4 proportions over its hull, but the long edge is not
+    // bounded by geometry any more, so the millimetre scale cannot be trusted.
+    const mmPerUnit = 13.7;
+    const a4 = REFERENCE_SPECS.a4;
+    const sheet = rectSheet(a4.longMm / mmPerUnit, a4.shortMm / mmPerUnit, { divisions: 24 });
+    const longEdge = a4.longMm / mmPerUnit;
+    const shortEdge = a4.shortMm / mmPerUnit;
+    const bitten = sheet.filter((t) => {
+      const cx = (t.a[0] + t.b[0] + t.c[0]) / 3;
+      const cy = (t.a[1] + t.b[1] + t.c[1]) / 3;
+      return !(cx > longEdge * 0.5 * 0.2 && cy > shortEdge * 0.5 * 0.2);
+    });
+
+    const result = detectReference(toStl(bitten));
+
+    expect(result.best).toBeUndefined();
+    expect(result.closest).toBeDefined();
+    expect(result.closest?.outlineFill).toBeLessThan(0.95);
   });
 
   it("rejects a sheet whose proportions match no physical standard", () => {
