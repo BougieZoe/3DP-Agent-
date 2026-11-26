@@ -20,7 +20,9 @@
     "build:electron:main": "esbuild electron/main.ts --platform=node --format=esm --bundle --external:electron --outfile=dist-electron/main.mjs && esbuild electron/preload.ts --platform=node --format=cjs --bundle --external:electron --outfile=dist-electron/preload.cjs",
     "electron:dev": "pnpm build:electron:main && concurrently -k -n vite,electron -c blue,green \"vite --host\" \"electron .\"",
     "electron:build": "pnpm build && pnpm build:electron:main && electron-builder",
-    "electron:build:dir": "pnpm build && pnpm build:electron:main && electron-builder --dir"
+    "electron:build:dir": "pnpm build && pnpm build:electron:main && electron-builder --dir",
+    "test:detector": "tsx scripts/check-reference-detector.ts",
+    "scale:truth": "tsx scripts/scale-truth.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
