@@ -173,6 +173,29 @@ describe("geometry scaling", () => {
 
     const backup = await fs.readFile(path.join(dir, "mesh.unscaled.stl"));
     expect(measureStl(backup).size[1]).toBeCloseTo(1.1, 5);
+    expect(applied.units).toBe("mm");
+
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("numbers the calibrated mesh in output.units while known_mm stays millimetres", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "scale-units-"));
+    const reference = { kind: "known_dimension", known_mm: 74, axis: "y" } as const;
+
+    for (const [units, mmPerUnit] of [["cm", 10], ["in", 25.4]] as const) {
+      const stlPath = path.join(dir, `mesh-${units}.stl`);
+      await fs.writeFile(stlPath, boxStl(0.37, 1.1, 2.2));
+
+      const applied = await applyScaleReferenceToStlFile(stlPath, reference, units);
+
+      expect(applied.units).toBe(units);
+      // The delivered numbers must read 74 mm expressed in `units`.
+      expect(measureStl(await fs.readFile(stlPath)).size[1]).toBeCloseTo(74 / mmPerUnit, 3);
+      // And the reported factor is the one actually applied, unit conversion included.
+      expect(applied.factor).toBeCloseTo(74 / 1.1 / mmPerUnit, 5);
+
+      await fs.rm(stlPath, { force: true });
+    }
 
     await fs.rm(dir, { recursive: true, force: true });
   });

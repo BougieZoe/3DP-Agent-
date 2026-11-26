@@ -268,7 +268,11 @@ async function applyRequestedScale(
   }
 
   try {
-    const scale = await applyScaleReferenceToStlFile(mesh.path, reference);
+    const scale = await applyScaleReferenceToStlFile(
+      mesh.path,
+      reference,
+      job.output_spec?.units ?? "mm",
+    );
     const stat = await fs.stat(mesh.path);
     return {
       outputs: outputs.map((item) => (item === mesh ? { ...item, bytes: stat.size } : item)),

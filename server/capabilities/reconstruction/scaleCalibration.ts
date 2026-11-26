@@ -26,6 +26,16 @@ const TRIANGLE_BYTES = 50;
 /** Below this the measured extent is numerical noise, not a dimension. */
 const MIN_MEASURABLE_MM = 1e-6;
 
+/**
+ * How many millimetres one unit of `output.units` represents.
+ *
+ * `known_mm` is always millimetres (the request field says so), but the delivered mesh is
+ * numbered in `output.units` — that is what the STEP exporter assumes when it converts to
+ * millimetres, and what any caller reading raw vertex values will assume. Leaving the two
+ * disconnected is how a part arrives 10x or 25.4x off while every field looks right.
+ */
+export const MM_PER_UNIT: Record<"mm" | "cm" | "in", number> = { mm: 1, cm: 10, in: 25.4 };
+
 export const SUPPORTED_SCALE_KINDS = ["known_dimension", "two_point"] as const;
 
 type Vec3 = readonly [number, number, number];
@@ -199,12 +209,19 @@ export function resolveScaleFactor(
 export async function applyScaleReferenceToStlFile(
   stlPath: string,
   ref: ScaleReference,
+  units: "mm" | "cm" | "in" = "mm",
 ): Promise<AppliedScale> {
   const original = await fs.readFile(stlPath);
   const bounds = measureStl(original);
   const { factor, measured_mm, source } = resolveScaleFactor(bounds, ref);
 
-  const scaled = scaleStlBuffer(original, factor, bounds.center);
+  // Calibration answers "how big is this really"; `units` answers "in which numbers do we say
+  // it". Both must be applied here, together, or the STEP exporter will re-scale a mesh it was
+  // already told was already in `units`.
+  const mmPerUnit = MM_PER_UNIT[units];
+  const vertexFactor = factor / mmPerUnit;
+
+  const scaled = scaleStlBuffer(original, vertexFactor, bounds.center);
 
   // Keep the engine's own numbers: a wrong known_mm must be recoverable without re-running
   // the reconstruction, and "I lost the original" is not an acceptable answer.
@@ -223,7 +240,8 @@ export async function applyScaleReferenceToStlFile(
     source,
     known_mm: ref.known_mm,
     measured_mm,
-    factor,
+    units,
+    factor: vertexFactor,
     applied_at: new Date().toISOString(),
   };
 }

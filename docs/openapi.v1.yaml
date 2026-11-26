@@ -385,7 +385,7 @@ components:
     AppliedScale:
       type: object
       description: What calibration was actually done to the geometry — never inferred.
-      required: [source, known_mm, measured_mm, factor, applied_at]
+      required: [source, known_mm, measured_mm, units, factor, applied_at]
       properties:
         source:
           type: string
@@ -393,14 +393,26 @@ components:
           example: axis:x
         known_mm:
           type: number
+          description: The caller's reference length, always in millimetres.
           example: 120.5
         measured_mm:
           type: number
           description: The mesh extent along `source` before scaling, in the engine's own units.
           example: 2.41
+        units:
+          type: string
+          enum: [mm, cm, in]
+          description: >-
+            Unit the delivered mesh is numbered in; mirrors `output.units`. Calibration stays
+            verifiable arithmetically - the mesh extent along `source` equals known_mm divided
+            by the millimetres-per-unit factor of this unit (1 for mm, 10 for cm, 25.4 for in).
+          example: mm
         factor:
           type: number
-          description: known_mm / measured_mm, applied to every vertex about the bounding-box centre.
+          description: >-
+            Multiplier actually applied to every vertex about the bounding-box centre. It
+            already includes the millimetre-to-`units` conversion, so do not convert units
+            again after reading it.
           example: 50.0
         applied_at:
           type: string

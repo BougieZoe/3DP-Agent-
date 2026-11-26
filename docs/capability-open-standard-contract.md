@@ -116,9 +116,16 @@ as an engine hint — which is why it behaves identically for every provider.
 - Anything else (notably `calibration_board`) returns `SCALE_REFERENCE_UNSUPPORTED`. Marker
   detection is unimplemented, and accepting the field while ignoring it would deliver a
   wrongly-sized part with millimetres written on it.
-- A calibrated job reports `scale` (`source`, `known_mm`, `measured_mm`, `factor`,
+- A calibrated job reports `scale` (`source`, `known_mm`, `measured_mm`, `units`, `factor`,
   `applied_at`). A job without `scale` is at the engine's arbitrary scale and must not be
   read as millimetres.
+- `known_mm` is always millimetres. The delivered mesh is numbered in `output.units`, and the
+  two are reconciled in the same step: vertex multiplier is
+  `(known_mm / measured_mm) / MM_PER_UNIT[units]` (`1` mm, `10` cm, `25.4` in). Calibration
+  stays checkable after the fact — the mesh extent along `source` must equal
+  `known_mm / MM_PER_UNIT[units]`. Applying only one of the two would hand back a part that is
+  10x or 25.4x off while every field still looks correct, which is why `units` is reported
+  next to `factor` rather than being left to the caller to remember.
 - The engine's own mesh is kept beside the calibrated one (`*.unscaled.stl`), so a wrong
   `known_mm` is recoverable without re-running a multi-minute reconstruction.
 
@@ -275,5 +282,5 @@ a stub success is worse than an endpoint that is honestly absent.
 |---|---|---|
 | v0.1 | 2026-11-26 | Initial draft. Photo-to-CAD as first capability; six hard rules; provider abstraction; tenant field reservation. |
 | v0.2 | 2026-11-26 | Added: STEP as a derived output with its own availability channel and two refusal paths; webhook delivery semantics (one attempt, no retry, signed, URL never echoed); `derived_outputs` on the capability descriptor. Additive only — no v1 field changed meaning. |
-| v0.3 | 2026-11-26 | Added: `known_dimension` / `two_point` scale calibration applied as a post-reconstruction geometry correction, with `scale` reported on the job and the engine mesh preserved as `*.unscaled.stl`. `calibration_board` still returns `SCALE_REFERENCE_UNSUPPORTED` rather than being silently ignored. Additive only — the only new enum members are `scale_reference.kind` values. |
+| v0.3 | 2026-11-26 | Added: `known_dimension` / `two_point` scale calibration applied as a post-reconstruction geometry correction, with `scale` reported on the job and the engine mesh preserved as `*.unscaled.stl`. `scale.units` ties the calibrated geometry to `output.units`, so a mesh is never numbered in one unit and labelled in another. `calibration_board` still returns `SCALE_REFERENCE_UNSUPPORTED` rather than being silently ignored. Additive only — the only new enum members are `scale_reference.kind` values, plus `scale.units`. |
 *（内容由AI生成，仅供参考）*

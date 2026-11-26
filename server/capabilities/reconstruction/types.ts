@@ -80,10 +80,16 @@ export interface ScaleReference {
 export interface AppliedScale {
   /** `axis:x` | `axis:y` | `axis:z` | `two_point` */
   source: string;
+  /** Always millimetres, as the request field name promises. */
   known_mm: number;
-  /** Extent of the mesh along that source before scaling, in the engine's units. */
+  /** Extent of the mesh along that source before scaling, in the engine's own units. */
   measured_mm: number;
-  /** Multiplier applied to every vertex: known_mm / measured_mm. */
+  /**
+   * Unit the delivered mesh is numbered in. Equal to the job's `output.units`, so a caller can
+   * verify calibration arithmetically: mesh extent along `source` == known_mm / MM_PER_UNIT[units].
+   */
+  units: "mm" | "cm" | "in";
+  /** Multiplier actually applied to every vertex: (known_mm / measured_mm) / MM_PER_UNIT[units]. */
   factor: number;
   applied_at: string;
 }
