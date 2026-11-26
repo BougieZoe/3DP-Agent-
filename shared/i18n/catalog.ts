@@ -7156,6 +7156,78 @@ export const MESSAGES = {
     it: "Regolare i parametri di stampa riduce lo stress termico",
     sv: "Justerade utskriftsparametrar minskar termisk spänning",
   },
+
+  // --- Photo → CAD (v1 reconstruction capability) ----------------------------------
+  "photoToCadCameraStarting": {
+    en: "Starting camera…",
+    ja: "カメラを起動中…",
+    zh: "正在启动摄像头…",
+  },
+  "photoToCadCameraLive": {
+    en: "Live",
+    ja: "ライブ",
+    zh: "实时取景",
+  },
+  "photoToCadCameraDenied": {
+    en: "Camera permission denied.",
+    ja: "カメラの使用が許可されていません。",
+    zh: "摄像头权限被拒绝。",
+  },
+  "photoToCadCameraInsecure": {
+    en: "Camera needs https or localhost.",
+    ja: "カメラには https か localhost が必要です。",
+    zh: "摄像头需要 https 或 localhost 环境。",
+  },
+  "photoToCadCameraUnavailable": {
+    en: "No usable camera found.",
+    ja: "利用できるカメラがありません。",
+    zh: "未找到可用的摄像头。",
+  },
+  "photoToCadCameraFallback": {
+    en: "Use “Add photos” below instead — the rest of the flow is unchanged.",
+    ja: "下の「写真を追加」をご利用ください。以降の流れは同じです。",
+    zh: "请改用下方的「添加照片」，后续流程不变。",
+  },
+  "photoToCadCameraRetry": {
+    en: "Retry",
+    ja: "再試行",
+    zh: "重试",
+  },
+  "photoToCadShutter": {
+    en: "Capture",
+    ja: "撮影",
+    zh: "拍照",
+  },
+  "photoToCadShots": {
+    en: "{count} shots",
+    ja: "{count}枚",
+    zh: "已拍 {count} 张",
+  },
+  "photoToCadRecord": {
+    en: "Record",
+    ja: "録画",
+    zh: "录视频",
+  },
+  "photoToCadRecordStop": {
+    en: "Stop",
+    ja: "停止",
+    zh: "停止",
+  },
+  "photoToCadRecording": {
+    en: "REC {seconds}s",
+    ja: "録画中 {seconds}秒",
+    zh: "录制中 {seconds} 秒",
+  },
+  "photoToCadSwitchCamera": {
+    en: "Switch camera",
+    ja: "カメラ切替",
+    zh: "切换前后",
+  },
+  "photoToCadClipFrames": {
+    en: "Clip sampled into {count} frames for reconstruction",
+    ja: "動画から{count}フレームを再構成用に抽出しました",
+    zh: "视频已抽取 {count} 帧用于重建",
+  },
 } as const;
 
 export type MessageKey = keyof typeof MESSAGES;
