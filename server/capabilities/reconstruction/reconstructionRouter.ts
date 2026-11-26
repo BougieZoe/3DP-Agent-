@@ -90,10 +90,20 @@ export interface ReconstructionRouterDeps {
   deliver?: typeof deliverWebhook;
 }
 
-export function defaultDeps(): ReconstructionRouterDeps {
-  const rootDir = process.env.RECON_DATA_DIR
+/**
+ * Root of everything the reconstruction capability persists: job records, engine work
+ * directories, and uploaded photos. Exported so the upload route writes into the same tree
+ * the submit route reads paths from — a photo stored elsewhere would produce jobs that cannot
+ * be re-run after a restart.
+ */
+export function reconRootDir(): string {
+  return process.env.RECON_DATA_DIR
     ? path.resolve(process.env.RECON_DATA_DIR)
     : path.resolve(process.cwd(), "server/data/capabilities/recon");
+}
+
+export function defaultDeps(): ReconstructionRouterDeps {
+  const rootDir = reconRootDir();
   return {
     store: new FileJobStore(rootDir),
     provider: createProvider({ workRoot: path.join(rootDir, "work") }),
