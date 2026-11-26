@@ -27,6 +27,7 @@ import { createProvider } from "./providerRegistry.js";
 import { resolveStepExporter, stepExportDir } from "./exporters/step.js";
 import type { StepExporter } from "./exporters/step.js";
 import { buildEvent, deliverWebhook, eventTypeFor } from "./webhook.js";
+import { applyScaleReferenceToStlFile } from "./scaleCalibration.js";
 import {
   CapabilityError,
   RECON_OUTPUT_FORMATS,
@@ -34,6 +35,7 @@ import {
   toPublicJob,
 } from "./types.js";
 import type {
+  AppliedScale,
   JobError,
   JobStatus,
   ReconOutput,
@@ -54,7 +56,17 @@ const submitSchema = z.object({
   input: z.object({
     images: z.array(imageSchema).min(1),
     scale_reference: z
-      .object({ kind: z.string().min(1), known_mm: z.number().positive() })
+      .object({
+        kind: z.string().min(1),
+        known_mm: z.number().positive(),
+        // Which mesh extent known_mm measures. Required for known_dimension, ignored otherwise.
+        axis: z.enum(["x", "y", "z"]).optional(),
+        // Two mesh points whose distance is known_mm. Required for two_point.
+        points: z
+          .array(z.object({ x: z.number(), y: z.number(), z: z.number() }))
+          .length(2)
+          .optional(),
+      })
       .optional(),
   }),
   output: z
@@ -226,6 +238,48 @@ async function deliverTerminalEvent(
   return deps.store.update(job.job_id, { webhook_delivery: delivery });
 }
 
+/**
+ * Apply the caller's scale reference to the mesh the engine produced.
+ *
+ * Kept in the router rather than in a provider because it is a property of the contract, not
+ * of an engine: every provider reconstructs up to similarity, so every provider's output must
+ * pass through the same calibration path. A reference that cannot be measured against fails
+ * the job — returning a mesh whose real size is unknown while the request said millimetres is
+ * the failure mode this whole capability must not have.
+ */
+async function applyRequestedScale(
+  job: ReconstructionJob,
+  outputs: ReconOutput[],
+): Promise<{ outputs: ReconOutput[]; scale?: AppliedScale; error?: JobError }> {
+  const reference = job.input_snapshot?.scale_reference;
+  if (!reference) return { outputs };
+  // Already calibrated on an earlier poll: calibration must not compound across polls.
+  if (job.scale) return { outputs };
+
+  const mesh = outputs.find((item) => item.format === "stl" && item.path);
+  if (!mesh?.path) {
+    return {
+      outputs,
+      error: {
+        code: "SCALE_REFERENCE_UNAVAILABLE",
+        message: "A scale_reference was supplied but the engine produced no mesh to calibrate.",
+      },
+    };
+  }
+
+  try {
+    const scale = await applyScaleReferenceToStlFile(mesh.path, reference);
+    const stat = await fs.stat(mesh.path);
+    return {
+      outputs: outputs.map((item) => (item === mesh ? { ...item, bytes: stat.size } : item)),
+      scale,
+    };
+  } catch (err) {
+    if (err instanceof CapabilityError) return { outputs, error: err.toJSON() };
+    return { outputs, error: { code: "SCALE_APPLY_FAILED", message: (err as Error).message } };
+  }
+}
+
 /** Refresh a running job from the provider and settle it once it reaches a terminal state. */
 async function refreshJob(
   job: ReconstructionJob,
@@ -251,12 +305,23 @@ async function refreshJob(
       : undefined;
 
   let outputs = status.state === "succeeded" ? await deps.provider.collect(job.provider_job_id, job) : [];
+  let scale: AppliedScale | undefined;
   if (status.state === "succeeded") {
-    const derived = await deriveStepOutput({ ...job, outputs }, deps, cache);
-    outputs = derived.outputs;
-    if (derived.error) {
+    // Calibrate before deriving STEP: STEP is a conversion of the mesh, so calibrating after
+    // would deliver a millimetre-tagged STEP built from an arbitrary-scale mesh.
+    const calibrated = await applyRequestedScale(job, outputs);
+    outputs = calibrated.outputs;
+    if (calibrated.error) {
       state = "failed";
-      error = derived.error;
+      error = calibrated.error;
+    } else {
+      scale = calibrated.scale ?? job.scale;
+      const derived = await deriveStepOutput({ ...job, outputs }, deps, cache);
+      outputs = derived.outputs;
+      if (derived.error) {
+        state = "failed";
+        error = derived.error;
+      }
     }
   }
 
@@ -266,6 +331,7 @@ async function refreshJob(
     progress: { stage: status.stage ?? state, percent: status.percent },
     outputs,
     usage,
+    ...(scale ? { scale } : {}),
     ...(error ? { error } : {}),
   });
   if (!job.usage) await deps.store.appendUsage(usage);

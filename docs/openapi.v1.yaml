@@ -216,13 +216,39 @@ components:
                     example: overview
             scale_reference:
               type: object
+              description: >
+                Pins the reconstruction to a real-world size. Photogrammetry reconstructs up to
+                similarity, so the reference is applied as a geometry correction after
+                reconstruction; it is not an engine hint. Supported kinds are
+                `known_dimension` and `two_point`. `calibration_board` is not supported in v1:
+                marker detection is not implemented, and guessing a board pose would silently
+                hand back a wrongly-scaled part.
               properties:
                 kind:
                   type: string
-                  example: calibration_board
+                  enum: [known_dimension, two_point]
+                  example: known_dimension
                 known_mm:
                   type: number
-                  example: 50
+                  description: The known length, in millimetres.
+                  example: 120.5
+                axis:
+                  type: string
+                  enum: [x, y, z]
+                  description: Required for kind=known_dimension — the mesh extent known_mm measures.
+                  example: x
+                points:
+                  type: array
+                  description: Required for kind=two_point — the two mesh points whose distance is known_mm.
+                  minItems: 2
+                  maxItems: 2
+                  items:
+                    type: object
+                    properties:
+                      x: { type: number }
+                      y: { type: number }
+                      z: { type: number }
+                    required: [x, y, z]
               required: [kind, known_mm]
         output:
           type: object
@@ -289,6 +315,13 @@ components:
             - $ref: '#/components/schemas/UsageRecord'
           nullable: true
           description: Null until the job reaches a terminal state.
+        scale:
+          allOf:
+            - $ref: '#/components/schemas/AppliedScale'
+          nullable: true
+          description: >
+            Present once a scale reference has been applied to the delivered geometry. Absent
+            means the mesh is at the engine's arbitrary scale — do not assume millimetres.
         error:
           $ref: '#/components/schemas/CapabilityError'
         created_at:
@@ -349,6 +382,30 @@ components:
           type: string
           format: date-time
           example: '2026-11-26T10:02:12Z'
+    AppliedScale:
+      type: object
+      description: What calibration was actually done to the geometry — never inferred.
+      required: [source, known_mm, measured_mm, factor, applied_at]
+      properties:
+        source:
+          type: string
+          description: '`axis:x` | `axis:y` | `axis:z` | `two_point`'
+          example: axis:x
+        known_mm:
+          type: number
+          example: 120.5
+        measured_mm:
+          type: number
+          description: The mesh extent along `source` before scaling, in the engine's own units.
+          example: 2.41
+        factor:
+          type: number
+          description: known_mm / measured_mm, applied to every vertex about the bounding-box centre.
+          example: 50.0
+        applied_at:
+          type: string
+          format: date-time
+          example: '2026-11-26T10:02:10Z'
     ReconstructionOutput:
       type: object
       required: [format, bytes]
@@ -411,7 +468,11 @@ components:
       properties:
         code:
           type: string
-          description: Stable machine-readable identifier.
+          description: >
+            Stable machine-readable identifier. Scale-related values: SCALE_REFERENCE_UNSUPPORTED
+            (kind not calibratable, e.g. calibration_board), SCALE_REFERENCE_INVALID (axis or
+            points missing/malformed), SCALE_REFERENCE_DEGENERATE (selected extent is zero),
+            SCALE_REFERENCE_UNAVAILABLE (no mesh to calibrate), SCALE_APPLY_FAILED.
           example: ENGINE_NOT_AVAILABLE
         message:
           type: string

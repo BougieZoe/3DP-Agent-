@@ -49,9 +49,43 @@ export interface ReconImageInput {
   role?: string;
 }
 
+/**
+ * How the caller pins the reconstruction to a real-world size.
+ *
+ * Photogrammetry engines reconstruct up to similarity: the shape is right, the scale is
+ * arbitrary. A scale reference is therefore applied as a post-reconstruction geometry
+ * correction, not as an engine hint — which is why `known_mm` alone is not enough and the
+ * caller must say *what* that known millimetre figure measures.
+ *
+ * v1 kinds:
+ * - `known_dimension` — `known_mm` is the measured extent along `axis` of the mesh.
+ * - `two_point` — `known_mm` is the distance between `points[0]` and `points[1]`.
+ *
+ * Marker detection (`calibration_board`) is not implemented: engines do not emit it and
+ * guessing a board pose would silently produce a wrongly-scaled part.
+ */
 export interface ScaleReference {
   kind: string;
   known_mm: number;
+  /** Required for kind=known_dimension: which axis of the mesh the known_mm spans. */
+  axis?: "x" | "y" | "z";
+  /** Required for kind=two_point: two vertices of the reconstructed mesh. */
+  points?: Array<{ x: number; y: number; z: number }>;
+}
+
+/**
+ * What was actually done to the geometry, recorded on the job so a consumer can tell a
+ * calibrated model from an arbitrary-scale one without re-measuring the file.
+ */
+export interface AppliedScale {
+  /** `axis:x` | `axis:y` | `axis:z` | `two_point` */
+  source: string;
+  known_mm: number;
+  /** Extent of the mesh along that source before scaling, in the engine's units. */
+  measured_mm: number;
+  /** Multiplier applied to every vertex: known_mm / measured_mm. */
+  factor: number;
+  applied_at: string;
 }
 
 export interface ReconOutputSpec {
@@ -120,6 +154,11 @@ export interface ReconstructionJob {
   engine: JobEngine;
   outputs: ReconOutput[];
   usage: Partial<UsageRecord> | null;
+  /**
+   * Present once a scale reference has been applied to the delivered geometry. Absent means
+   * the mesh is at the engine's arbitrary scale — never assume millimetres without this.
+   */
+  scale?: AppliedScale;
   created_at: string;
   updated_at: string;
   error?: JobError;

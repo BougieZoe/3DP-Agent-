@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { CapabilityError } from "../types.js";
+import { SUPPORTED_SCALE_KINDS } from "../scaleCalibration.js";
 import type {
   ProviderCapabilities,
   ProviderStatus,
@@ -197,11 +198,15 @@ export class ApplePhotogrammetryProvider implements ReconstructionProvider {
     if (!workDir) throw new CapabilityError("REQUEST_INVALID", "Job has no job_id; refusing to run.", 400);
 
     const snapshot = job.input_snapshot;
-    if (snapshot?.scale_reference) {
+    const scaleReference = snapshot?.scale_reference;
+    if (scaleReference && !SUPPORTED_SCALE_KINDS.includes(scaleReference.kind as never)) {
+      // Supported kinds need nothing from the engine: Object Capture always reconstructs up to
+      // similarity, and the scale is applied to the mesh afterwards. Only a reference we cannot
+      // measure against is refused here — accepting it would produce a wrongly-scaled part.
       throw new CapabilityError(
         "SCALE_REFERENCE_UNSUPPORTED",
-        "Object Capture reconstructs at an arbitrary scale and cannot honour scale_reference; " +
-          "omit it until marker-based scale calibration ships.",
+        `scale_reference.kind="${scaleReference.kind}" cannot be applied to an Object Capture mesh. ` +
+          `Supported kinds: ${SUPPORTED_SCALE_KINDS.join(", ")}.`,
         422,
       );
     }

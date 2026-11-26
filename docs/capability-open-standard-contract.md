@@ -70,7 +70,7 @@ Content-Type: application/json
       { "asset_id": "ast_001", "role": "overview" },
       { "asset_id": "ast_002", "role": "detail" }
     ],
-    "scale_reference": { "kind": "calibration_board", "known_mm": 50 }
+    "scale_reference": { "kind": "known_dimension", "known_mm": 120.5, "axis": "x" }
   },
   "output": { "formats": ["step", "stl", "glb"], "units": "mm" },
   "engine_hint": "meshroom",
@@ -104,6 +104,23 @@ GET /v1/reconstructions/job_9f3
 ```
 
 `status` ∈ `queued | running | succeeded | failed | cancelled`.
+
+#### 2.2.0 Scale is calibrated against the caller's own length, or not claimed at all
+
+Photogrammetry reconstructs up to similarity: the shape is right, the size is arbitrary. v1
+therefore treats `scale_reference` as a geometry correction applied after reconstruction, not
+as an engine hint — which is why it behaves identically for every provider.
+
+- `known_dimension` — `known_mm` is the mesh extent along `axis` (`x` / `y` / `z`).
+- `two_point` — `known_mm` is the distance between two mesh points.
+- Anything else (notably `calibration_board`) returns `SCALE_REFERENCE_UNSUPPORTED`. Marker
+  detection is unimplemented, and accepting the field while ignoring it would deliver a
+  wrongly-sized part with millimetres written on it.
+- A calibrated job reports `scale` (`source`, `known_mm`, `measured_mm`, `factor`,
+  `applied_at`). A job without `scale` is at the engine's arbitrary scale and must not be
+  read as millimetres.
+- The engine's own mesh is kept beside the calibrated one (`*.unscaled.stl`), so a wrong
+  `known_mm` is recoverable without re-running a multi-minute reconstruction.
 
 #### 2.2.1 Outputs are open formats; STEP is derived, not emitted
 
@@ -258,4 +275,5 @@ a stub success is worse than an endpoint that is honestly absent.
 |---|---|---|
 | v0.1 | 2026-11-26 | Initial draft. Photo-to-CAD as first capability; six hard rules; provider abstraction; tenant field reservation. |
 | v0.2 | 2026-11-26 | Added: STEP as a derived output with its own availability channel and two refusal paths; webhook delivery semantics (one attempt, no retry, signed, URL never echoed); `derived_outputs` on the capability descriptor. Additive only — no v1 field changed meaning. |
+| v0.3 | 2026-11-26 | Added: `known_dimension` / `two_point` scale calibration applied as a post-reconstruction geometry correction, with `scale` reported on the job and the engine mesh preserved as `*.unscaled.stl`. `calibration_board` still returns `SCALE_REFERENCE_UNSUPPORTED` rather than being silently ignored. Additive only — the only new enum members are `scale_reference.kind` values. |
 *（内容由AI生成，仅供参考）*
